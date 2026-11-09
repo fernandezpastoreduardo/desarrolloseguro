@@ -23,7 +23,20 @@ async function bootstrap(): Promise<void> {
   await app.listen(Number(process.env.DS_API_PORT ?? DEFAULT_PORT), "0.0.0.0");
 }
 
-bootstrap().catch(() => {
-  process.stderr.write("development_security_api_startup_failed\n");
+bootstrap().catch((error: unknown) => {
+  const safeCategory = getSafeStartupFailureCategory(error);
+  process.stderr.write(
+    `development_security_api_startup_failed category=${safeCategory}\n`,
+  );
   process.exitCode = 1;
 });
+
+function getSafeStartupFailureCategory(error: unknown): string {
+  if (!(error instanceof Error)) return "unknown";
+  if (/^[a-z][a-z0-9_]*$/u.test(error.message)) return error.message;
+
+  const code = (error as NodeJS.ErrnoException).code;
+  if (typeof code === "string" && /^[A-Z0-9_]+$/u.test(code)) return code;
+
+  return "unknown";
+}
