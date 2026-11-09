@@ -57,6 +57,7 @@ openssl x509 -req -days 1 \
 printf 'postgresql://ds_api:%s@db:5432/desarrollo_seguro' "$DATABASE_PASSWORD" \
   > "$TEMP_ROOT/secrets/database_url"
 chmod 0444 "$TEMP_ROOT/secrets/database_url"
+chmod 0444 "$TEMP_ROOT/tls/ca.crt" "$TEMP_ROOT/tls/server.crt"
 chmod 0444 "$TEMP_ROOT/tls/server.key"
 # Let the non-root API process traverse the temporary bind-mount directories.
 chmod 0711 "$TEMP_ROOT" "$TEMP_ROOT/tls" "$TEMP_ROOT/secrets"
@@ -127,22 +128,27 @@ done
   exit 1
 }
 
-docker run --detach \
+docker create \
   --name "$API_NAME" \
   --network "$NETWORK_NAME" \
   --label "com.desarrolloseguro.smoke.stack=$STACK_ID" \
-  --mount "type=bind,src=$TEMP_ROOT/secrets/database_url,dst=/run/secrets/database_url,readonly" \
-  --mount "type=bind,src=$TEMP_ROOT/tls/ca.crt,dst=/tmp/development-security-database-ca.crt,readonly" \
-  --mount "type=bind,src=$TEMP_ROOT/tls/server.crt,dst=/tmp/development-security-api.crt,readonly" \
-  --mount "type=bind,src=$TEMP_ROOT/tls/server.key,dst=/tmp/development-security-api.key,readonly" \
   --env NODE_ENV=production \
   --env DS_API_TLS_REQUIRED=true \
   --env DS_API_TLS_CERT_FILE=/tmp/development-security-api.crt \
   --env DS_API_TLS_KEY_FILE=/tmp/development-security-api.key \
-  --env DS_DATABASE_URL_FILE=/run/secrets/database_url \
+  --env DS_DATABASE_URL_FILE=/tmp/development-security-database-url \
   --env DS_DATABASE_TLS_REQUIRED=true \
   --env DS_DATABASE_TLS_CA_FILE=/tmp/development-security-database-ca.crt \
   "$IMAGE" >/dev/null
+docker cp "$TEMP_ROOT/secrets/database_url" \
+  "$API_NAME:/tmp/development-security-database-url" >/dev/null
+docker cp "$TEMP_ROOT/tls/ca.crt" \
+  "$API_NAME:/tmp/development-security-database-ca.crt" >/dev/null
+docker cp "$TEMP_ROOT/tls/server.crt" \
+  "$API_NAME:/tmp/development-security-api.crt" >/dev/null
+docker cp "$TEMP_ROOT/tls/server.key" \
+  "$API_NAME:/tmp/development-security-api.key" >/dev/null
+docker start "$API_NAME" >/dev/null
 
 health_ready=0
 for _ in $(seq 1 60); do

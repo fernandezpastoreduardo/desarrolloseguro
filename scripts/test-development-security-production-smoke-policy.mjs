@@ -13,7 +13,7 @@ const databaseLaunch = smokeScript.match(
   /docker run --detach([\s\S]*?)\n\s*"\$POSTGRES_IMAGE"/u,
 );
 const apiLaunch = smokeScript.match(
-  /docker run --detach([\s\S]*?)\n\s*"\$IMAGE"/u,
+  /docker create([\s\S]*?)\n\s*"\$IMAGE"/u,
 );
 
 assert.ok(
@@ -42,17 +42,21 @@ assert.doesNotMatch(
   /--privileged|--network host|--publish/u,
   "the API smoke container must not gain host or privileged access",
 );
-assert.match(apiLaunch[1], /--mount .*database_url.*readonly/);
-assert.match(apiLaunch[1], /--mount .*database-ca\.crt.*readonly/);
-assert.match(apiLaunch[1], /--mount .*api\.crt.*readonly/);
-assert.match(apiLaunch[1], /--mount .*api\.key.*readonly/);
+assert.match(smokeScript, /docker cp[\s\S]*?database_url[\s\S]*?database-url/u);
+assert.match(smokeScript, /docker cp[\s\S]*?ca\.crt[\s\S]*?database-ca\.crt/u);
+assert.match(smokeScript, /docker cp[\s\S]*?server\.crt[\s\S]*?api\.crt/u);
+assert.match(smokeScript, /docker cp[\s\S]*?server\.key[\s\S]*?api\.key/u);
+assert.match(smokeScript, /docker start "\$API_NAME"/);
 assert.match(apiLaunch[1], /--env NODE_ENV=production/);
 assert.match(smokeScript, /DS_API_TLS_REQUIRED=true/);
 assert.match(smokeScript, /DS_DATABASE_TLS_REQUIRED=true/);
 assert.match(smokeScript, /CREATE ROLE ds_api LOGIN PASSWORD .*NOSUPERUSER/);
 assert.match(smokeScript, /NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION/);
 assert.doesNotMatch(smokeScript, /POSTGRES_USER=ds_api/);
-assert.match(smokeScript, /DS_DATABASE_URL_FILE=\/run\/secrets\/database_url/);
+assert.match(
+  smokeScript,
+  /DS_DATABASE_URL_FILE=\/tmp\/development-security-database-url/,
+);
 assert.match(smokeScript, /hostnossl all all all reject/);
 assert.match(smokeScript, /subjectAltName=DNS:db,DNS:localhost/);
 assert.match(
