@@ -1,6 +1,10 @@
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   assertSafeProductionProvisioningTarget,
+  readProductionProvisioningSettingsFromEnvironment,
   type ProductionProvisioningSettings,
 } from "./production-provision-database.js";
 
@@ -144,5 +148,65 @@ describe("Development Security production bootstrap target guard", () => {
     expect(() => assertSafeProductionProvisioningTarget(null)).toThrow(
       "DS_PRODUCTION_PROVISION_SETTINGS_invalid",
     );
+  });
+
+  it("reads multiline CA certificates while keeping other secrets single-line", () => {
+    const directory = mkdtempSync(join(tmpdir(), "development-security-provision-"));
+    const paths = {
+      adminUrl: join(directory, "admin-url"),
+      apiDatabaseUrl: join(directory, "api-database-url"),
+      migratorPassword: join(directory, "migrator-password"),
+      tlsCa: join(directory, "ca.crt"),
+    };
+    writeFileSync(paths.adminUrl, `${SAFE_ADMIN_URL}\n`);
+    writeFileSync(paths.apiDatabaseUrl, `${SAFE_API_URL}\n`);
+    writeFileSync(paths.migratorPassword, "local-migrator-only\n");
+    writeFileSync(paths.tlsCa, SAFE_CA);
+
+    try {
+      const settings = readProductionProvisioningSettingsFromEnvironment({
+        DS_PRODUCTION_ADMIN_URL_FILE: paths.adminUrl,
+        DS_PRODUCTION_API_DATABASE_URL_FILE: paths.apiDatabaseUrl,
+        DS_PRODUCTION_DATABASE_NAME: "desarrollo_seguro",
+        DS_PRODUCTION_MIGRATOR_PASSWORD_FILE: paths.migratorPassword,
+        DS_PRODUCTION_TLS_CA_FILE: paths.tlsCa,
+        DS_PRODUCTION_BOOTSTRAP_ENABLED: "1",
+      });
+
+      expect(settings.tlsCa).toBe(SAFE_CA);
+      expect(settings.adminUrl).toBe(SAFE_ADMIN_URL);
+      expect(settings.migratorPassword).toBe("local-migrator-only");
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects multiline credentials even when the CA file is valid PEM", () => {
+    const directory = mkdtempSync(join(tmpdir(), "development-security-provision-"));
+    const paths = {
+      adminUrl: join(directory, "admin-url"),
+      apiDatabaseUrl: join(directory, "api-database-url"),
+      migratorPassword: join(directory, "migrator-password"),
+      tlsCa: join(directory, "ca.crt"),
+    };
+    writeFileSync(paths.adminUrl, `${SAFE_ADMIN_URL}\n`);
+    writeFileSync(paths.apiDatabaseUrl, `${SAFE_API_URL}\n`);
+    writeFileSync(paths.migratorPassword, "invalid\ncredential\n");
+    writeFileSync(paths.tlsCa, SAFE_CA);
+
+    try {
+      expect(() =>
+        readProductionProvisioningSettingsFromEnvironment({
+          DS_PRODUCTION_ADMIN_URL_FILE: paths.adminUrl,
+          DS_PRODUCTION_API_DATABASE_URL_FILE: paths.apiDatabaseUrl,
+          DS_PRODUCTION_DATABASE_NAME: "desarrollo_seguro",
+          DS_PRODUCTION_MIGRATOR_PASSWORD_FILE: paths.migratorPassword,
+          DS_PRODUCTION_TLS_CA_FILE: paths.tlsCa,
+          DS_PRODUCTION_BOOTSTRAP_ENABLED: "1",
+        }),
+      ).toThrow("DS_PRODUCTION_PROVISION_SETTINGS_invalid");
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 });

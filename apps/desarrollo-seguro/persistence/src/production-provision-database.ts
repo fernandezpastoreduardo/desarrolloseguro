@@ -163,7 +163,7 @@ export async function provisionProductionDevelopmentSecurityDatabase(
   }
 }
 
-function readSettings(
+export function readProductionProvisioningSettingsFromEnvironment(
   environment: NodeJS.ProcessEnv,
 ): ProductionProvisioningSettings {
   return assertSafeProductionProvisioningTarget({
@@ -175,10 +175,23 @@ function readSettings(
     migratorPassword: readSecretFile(
       environment.DS_PRODUCTION_MIGRATOR_PASSWORD_FILE,
     ),
-    tlsCa: readSecretFile(environment.DS_PRODUCTION_TLS_CA_FILE),
+    tlsCa: readCertificateAuthorityFile(
+      environment.DS_PRODUCTION_TLS_CA_FILE,
+    ),
     bootstrapEnabled: environment.DS_PRODUCTION_BOOTSTRAP_ENABLED,
     testPostgresIsolated: environment.DS_TEST_POSTGRES_ISOLATED,
   });
+}
+
+function readCertificateAuthorityFile(path: string | undefined): string {
+  if (!path) throw new Error(SETTINGS_ERROR);
+  try {
+    const value = readFileSync(path, "utf8");
+    if (!value.trim()) throw new Error(SETTINGS_ERROR);
+    return value;
+  } catch {
+    throw new Error(SETTINGS_ERROR);
+  }
 }
 
 function readSecretFile(path: string | undefined): string {
@@ -440,7 +453,7 @@ if (
 ) {
   try {
     await provisionProductionDevelopmentSecurityDatabase(
-      readSettings(process.env),
+      readProductionProvisioningSettingsFromEnvironment(process.env),
     );
     process.stdout.write("development_security_production_database_ready\n");
   } catch {
