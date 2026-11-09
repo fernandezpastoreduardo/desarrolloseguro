@@ -28,6 +28,8 @@ La migración `003_guarded_worker_operations.sql` registra estos nueve IDs como 
 
 La fase técnica 1 y el endurecimiento local de payload están implementados. El core y las migraciones `004_scan_payload_guards.sql`, `005_controls_v2_route_coverage.sql` y `006_controls_v3_https_headers.sql` limitan `scope` a las rutas exactas anteriores, exigen incluir `/`, rechazan duplicados y aplican el contrato del perfil seleccionado. Las reglas por control fijan métodos y evidencia estructurada; campos no incluidos en la allowlist se descartan, un campo conocido con tipo/valor inválido se rechaza y `summary`/`limitation` se generan a partir del ID/estado en lugar de persistir texto libre. PostgreSQL aislado pasó 65/65 pruebas tras migration 006, 0 omitidas, el 3 de noviembre de 2026. Esta protección local de integridad de payload y persistencia no implementa un executor seguro ni habilita scans.
 
+Los activos, límites de confianza, amenazas y evidencia requerida antes de habilitar el executor se enumeran en [scanner-safety.md](scanner-safety.md). La validación de payload asegura forma y coherencia; no prueba la autenticidad de la observación.
+
 | Control    | Método(s) admitido(s)               | Campos de evidencia permitidos                                                                                     |
 | ---------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | DS-DNS-01  | `DNS` sobre `/`                     | `addressClass` (enum), `aRecordCount` y `aaaaRecordCount` (contadores)                                             |

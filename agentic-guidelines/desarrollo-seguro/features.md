@@ -20,7 +20,7 @@ Un informe identifica hostname, perfil, rutas cubiertas, métodos, resultados, f
 
 Capacidad futura. Antes de activarla deben implementarse el executor y sus límites de red, probar DNS/IP pinning por conexión y redirección, aislar egress IPv4/IPv6 y validar carga y privacidad. No se hacen POST, autenticación, fuzzing, fuerza bruta ni exploración arbitraria.
 
-**Criterios:** cualquier fallo de cobertura, transporte o política deja el control como `unknown`/no evaluable; no se convierte en aprobado.
+**Criterios:** cualquier fallo de cobertura, transporte o política deja el control como `unknown`/no evaluable; no se convierte en aprobado. El modelo de amenazas y los límites de confianza están en [scanner-safety.md](scanner-safety.md); el executor permanece apagado hasta demostrar allí los gates de red, aislamiento y evidencia.
 
 ## F4. Almacenamiento y operación
 

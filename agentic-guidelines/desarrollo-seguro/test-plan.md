@@ -6,7 +6,7 @@ La suite cubre reglas del core, persistencia, API de estado/informe, políticas 
 
 La suite PostgreSQL puede crear/borrar bases y roles globales. En local requiere `DS_TEST_POSTGRES_ISOLATED=1`, URL de loopback sin query/fragmento y base administrativa con prefijo `development_security_test_`. Ejecutarla solo contra un cluster local dedicado. CI usa un servicio PostgreSQL/pgvector efímero.
 
-Las pruebas de políticas TLS generan certificados sintéticos temporales. No demuestran configuración de certificados reales, conectividad de producción, reglas del host, egress, carga ni restauración de backups.
+Las pruebas de políticas TLS generan certificados sintéticos temporales. No demuestran configuración de certificados reales, conectividad de producción, reglas del host, egress, carga ni restauración de backups. El modelo de amenazas y la evidencia exigida para scans están en [scanner-safety.md](scanner-safety.md); las pruebas locales del transporte no sustituyen las pruebas de aislamiento del runtime real.
 
 ## Cobertura a mantener
 
@@ -18,6 +18,7 @@ Las pruebas de políticas TLS generan certificados sintéticos temporales. No de
 | Docker | Servicios, redes internas, loopback-only para web, secretos y volumen exclusivos del proyecto. |
 | TLS | Validación de nombres/CA y configuración de proxy con material sintético. |
 | UI | Flujos accesibles, estados de carga/error, navegación y adaptación móvil. |
+| Executor futuro | Bloqueo real de destinos privados/host/IPv6, DNS rebinding, redirecciones, límites globales y ausencia de tráfico a servicios señuelo en el runtime de despliegue. |
 
 ## Límites
 

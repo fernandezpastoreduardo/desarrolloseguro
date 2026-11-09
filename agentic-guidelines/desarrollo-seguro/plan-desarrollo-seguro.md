@@ -16,10 +16,12 @@ Presentar evidencia reproducible sobre controles observables de páginas públic
 
 La API de solo lectura, la proyección pública de informes, la persistencia, la landing y el portal React están implementados. Las políticas y algunos adaptadores de red tienen pruebas locales. No existe todavía un worker arrancable, executor, scheduler ni escaneo real.
 
+El modelo de amenazas y el contrato local de controles están documentados en [`scanner-safety.md`](scanner-safety.md) y [`controls-and-evidence.md`](controls-and-evidence.md). Esto completa el entregable de diseño documental; no acredita las barreras de red en el VPS ni autentica observaciones de un executor.
+
 ## Entregas siguientes
 
-1. Completar el modelo de amenazas y el contrato versionado de cada control.
-2. Terminar aislamiento de red y política de egress antes de conectar sockets a destinos públicos.
+1. Revisar el modelo de amenazas y el contrato versionado de cada control antes de cualquier activación.
+2. Terminar y demostrar el aislamiento de red y la política de egress en el runtime elegido antes de conectar sockets a destinos públicos.
 3. Añadir admisión de trabajos, límites globales, cola, reintentos y telemetría sin datos sensibles.
 4. Validar una prueba controlada en un entorno desechable, con alcance y límites documentados.
 5. Medir recursos, probar backup/restauración y revisar accesibilidad antes de cualquier publicación amplia.
