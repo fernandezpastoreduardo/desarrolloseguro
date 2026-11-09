@@ -36,17 +36,23 @@ export function resolveHttpsListenerOptions(
     throw new Error(TLS_CONFIGURATION_ERROR);
   }
 
+  let tlsStage = "client_ca";
   try {
     const clientCa = clientCaPath ? readFileSync(clientCaPath) : undefined;
     if (clientCa) {
       validateClientCaBundle(clientCa.toString("utf8"));
     }
+    tlsStage = "api_certificate";
+    const certificate = readFileSync(certificatePath);
+    tlsStage = "api_private_key";
+    const key = readFileSync(privateKeyPath);
     const tlsFiles = {
-      cert: readFileSync(certificatePath),
-      key: readFileSync(privateKeyPath),
+      cert: certificate,
+      key,
       minVersion: TLS_MINIMUM_VERSION,
       ...(clientCa ? { ca: clientCa } : {}),
     } satisfies SecureContextOptions;
+    tlsStage = "secure_context";
     createSecureContext(tlsFiles);
 
     if (clientCaPath) {
@@ -58,13 +64,16 @@ export function resolveHttpsListenerOptions(
     }
     return tlsFiles;
   } catch (error: unknown) {
-    throw new Error(getTlsConfigurationFailureCategory(error), {
+    throw new Error(getTlsConfigurationFailureCategory(error, tlsStage), {
       cause: error,
     });
   }
 }
 
-function getTlsConfigurationFailureCategory(error: unknown): string {
+function getTlsConfigurationFailureCategory(
+  error: unknown,
+  tlsStage: string,
+): string {
   if (typeof error !== "object" || error === null || !("code" in error)) {
     return TLS_CONFIGURATION_ERROR;
   }
@@ -74,7 +83,7 @@ function getTlsConfigurationFailureCategory(error: unknown): string {
     return TLS_CONFIGURATION_ERROR;
   }
 
-  return `${TLS_CONFIGURATION_ERROR}_${code.toLowerCase()}`;
+  return `${TLS_CONFIGURATION_ERROR}_${tlsStage}_${code.toLowerCase()}`;
 }
 
 function validateClientCaBundle(caBundle: string): void {
