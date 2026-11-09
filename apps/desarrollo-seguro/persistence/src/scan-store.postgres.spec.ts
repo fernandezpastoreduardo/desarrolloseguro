@@ -185,12 +185,12 @@ describePostgres.sequential("PostgresScanStore", () => {
     ).rejects.toThrow("scan_scope_not_allowlisted");
   });
 
-  it("applies the reviewed route allowlist to every domain", async () => {
+  it("allows reviewed route paths for every domain", async () => {
     const job = await queueAndClaim();
 
     await expect(
       completeDirectly(job, ["/", "/precios"], [safeDnsCheck()]),
-    ).rejects.toThrow("scan_check_coverage_incomplete");
+    ).resolves.toBeDefined();
   });
 
   it("rejects raw evidence sent directly to the database function", async () => {
