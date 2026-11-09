@@ -132,22 +132,22 @@ docker run --detach \
   --network "$NETWORK_NAME" \
   --label "com.desarrolloseguro.smoke.stack=$STACK_ID" \
   --mount "type=bind,src=$TEMP_ROOT/secrets/database_url,dst=/run/secrets/database_url,readonly" \
-  --mount "type=bind,src=$TEMP_ROOT/tls/ca.crt,dst=/run/tls/database-ca.crt,readonly" \
-  --mount "type=bind,src=$TEMP_ROOT/tls/server.crt,dst=/run/tls/api.crt,readonly" \
-  --mount "type=bind,src=$TEMP_ROOT/tls/server.key,dst=/run/tls/api.key,readonly" \
+  --mount "type=bind,src=$TEMP_ROOT/tls/ca.crt,dst=/tmp/development-security-database-ca.crt,readonly" \
+  --mount "type=bind,src=$TEMP_ROOT/tls/server.crt,dst=/tmp/development-security-api.crt,readonly" \
+  --mount "type=bind,src=$TEMP_ROOT/tls/server.key,dst=/tmp/development-security-api.key,readonly" \
   --env NODE_ENV=production \
   --env DS_API_TLS_REQUIRED=true \
-  --env DS_API_TLS_CERT_FILE=/run/tls/api.crt \
-  --env DS_API_TLS_KEY_FILE=/run/tls/api.key \
+  --env DS_API_TLS_CERT_FILE=/tmp/development-security-api.crt \
+  --env DS_API_TLS_KEY_FILE=/tmp/development-security-api.key \
   --env DS_DATABASE_URL_FILE=/run/secrets/database_url \
   --env DS_DATABASE_TLS_REQUIRED=true \
-  --env DS_DATABASE_TLS_CA_FILE=/run/tls/database-ca.crt \
+  --env DS_DATABASE_TLS_CA_FILE=/tmp/development-security-database-ca.crt \
   "$IMAGE" >/dev/null
 
 health_ready=0
 for _ in $(seq 1 60); do
   if docker exec \
-    --env NODE_EXTRA_CA_CERTS=/run/tls/database-ca.crt \
+    --env NODE_EXTRA_CA_CERTS=/tmp/development-security-database-ca.crt \
     "$API_NAME" node --input-type=module -e '
       const response = await fetch("https://localhost:3001/api/desarrollo-seguro/v1/health");
       const body = await response.json();

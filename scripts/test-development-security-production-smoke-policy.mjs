@@ -57,10 +57,13 @@ assert.match(smokeScript, /hostnossl all all all reject/);
 assert.match(smokeScript, /subjectAltName=DNS:db,DNS:localhost/);
 assert.match(
   smokeScript,
-  /docker exec \\\n\s+--env NODE_EXTRA_CA_CERTS=\/run\/tls\/database-ca\.crt \\\n\s+"\$API_NAME" node --input-type=module -e/u,
+  /docker exec \\\n\s+--env NODE_EXTRA_CA_CERTS=\/tmp\/development-security-database-ca\.crt \\\n\s+"\$API_NAME" node --input-type=module -e/u,
   "the HTTPS probe must run from the API container and trust only the temporary CA",
 );
-assert.match(smokeScript, /NODE_EXTRA_CA_CERTS=\/run\/tls\/database-ca\.crt/);
+assert.match(
+  smokeScript,
+  /NODE_EXTRA_CA_CERTS=\/tmp\/development-security-database-ca\.crt/,
+);
 assert.match(
   smokeScript,
   /fetch\("https:\/\/localhost:3001\/api\/desarrollo-seguro\/v1\/health"\)/,
