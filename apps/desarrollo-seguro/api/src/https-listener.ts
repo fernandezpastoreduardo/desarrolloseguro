@@ -57,9 +57,24 @@ export function resolveHttpsListenerOptions(
       };
     }
     return tlsFiles;
-  } catch {
-    throw new Error(TLS_CONFIGURATION_ERROR);
+  } catch (error: unknown) {
+    throw new Error(getTlsConfigurationFailureCategory(error), {
+      cause: error,
+    });
   }
+}
+
+function getTlsConfigurationFailureCategory(error: unknown): string {
+  if (typeof error !== "object" || error === null || !("code" in error)) {
+    return TLS_CONFIGURATION_ERROR;
+  }
+
+  const code = error.code;
+  if (typeof code !== "string" || !/^[A-Z0-9_]+$/u.test(code)) {
+    return TLS_CONFIGURATION_ERROR;
+  }
+
+  return `${TLS_CONFIGURATION_ERROR}_${code.toLowerCase()}`;
 }
 
 function validateClientCaBundle(caBundle: string): void {
