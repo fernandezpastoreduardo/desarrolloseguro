@@ -1,0 +1,17 @@
+desarrolloseguro.org {
+	encode zstd gzip
+	tls {
+		protocols tls1.2 tls1.3
+	}
+	reverse_proxy development-security-web:8080
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+}
+
+www.desarrolloseguro.org {
+	redir https://desarrolloseguro.org{uri} permanent
+}

@@ -164,31 +164,32 @@ services:
       dockerfile: Dockerfile
       target: development-security-web
     restart: unless-stopped
-    user: "101:101"
+    user: "0:0"
     privileged: false
     cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID]
     security_opt: [no-new-privileges:true]
     pids_limit: 64
     mem_limit: 128m
     cpus: 0.25
     read_only: true
-    ports:
-      - "127.0.0.1:${DEVELOPMENT_SECURITY_WEB_HOST_PORT:-18080}:8080"
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=16m,uid=101,gid=101
-      - /var/run:rw,noexec,nosuid,size=8m,uid=101,gid=101
+      - /var/run:rw,noexec,nosuid,size=8m,uid=101,gid=101,mode=1777
     secrets:
       - internal_tls_ca.crt
     depends_on:
       development-security-api:
         condition: service_healthy
     healthcheck:
-      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8080/desarrollo-seguro/]
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8080/]
       interval: 10s
       timeout: 5s
       retries: 12
     networks:
       development-security-edge: {}
+      development-security-ingress:
+        aliases: [development-security-web]
 
 networks:
   development-security-backend:
@@ -198,6 +199,9 @@ networks:
     ipam:
       config:
         - subnet: 172.29.0.0/24
+  development-security-ingress:
+    name: development-security-ingress
+    external: true
 
 volumes:
   development-security-postgres:

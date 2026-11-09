@@ -13,6 +13,7 @@ import { join } from "node:path";
 
 const COMPOSE_PATH = "compose.production.yaml";
 const NGINX_PATH = "docker/nginx-development-security.conf";
+const CADDY_FRAGMENT_PATH = "docker/Caddyfile.development-security";
 const SECRET_NAMES = [
   "development_security_admin_password",
   "development_security_admin_url",
@@ -25,11 +26,12 @@ const SECRET_NAMES = [
   "internal_tls_ca.crt",
 ];
 
-const [compose, nginx, postgresHba, dockerfile] = await Promise.all([
+const [compose, nginx, postgresHba, dockerfile, caddyFragment] = await Promise.all([
   readFile(COMPOSE_PATH, "utf8"),
   readFile(NGINX_PATH, "utf8"),
   readFile("docker/postgres-pg_hba.conf", "utf8"),
   readFile("Dockerfile", "utf8"),
+  readFile(CADDY_FRAGMENT_PATH, "utf8"),
 ]);
 
 function serviceBlock(serviceName) {
@@ -73,12 +75,30 @@ assert.match(api, /read_only:\s*true/u);
 assert.doesNotMatch(api, /^\s+ports:/mu);
 
 assert.match(web, /target:\s*development-security-web/u);
-assert.match(web, /127\.0\.0\.1:\$\{DEVELOPMENT_SECURITY_WEB_HOST_PORT:-18080\}:8080/u);
 assert.match(web, /internal_tls_ca\.crt/u);
 assert.match(web, /cap_drop:\s*\[ALL\]/u);
+assert.match(web, /user:\s*"0:0"/u);
+assert.match(web, /cap_add:\s*\[CHOWN, SETUID, SETGID\]/u);
+assert.match(web, /\/var\/run:rw,noexec,nosuid,size=8m,uid=101,gid=101,mode=1777/u);
 assert.match(web, /read_only:\s*true/u);
+assert.match(web, /http:\/\/127\.0\.0\.1:8080\//u);
+assert.doesNotMatch(web, /^\s+ports:/mu);
+assert.match(
+  web,
+  /development-security-ingress:\n\s+aliases: \[development-security-web\]/u,
+);
+assert.doesNotMatch(api, /development-security-ingress/u);
+assert.doesNotMatch(database, /development-security-ingress/u);
 assert.match(compose, /development-security-backend:\n    internal: true/u);
 assert.match(compose, /development-security-edge:\n    internal: true/u);
+assert.match(
+  compose,
+  /development-security-ingress:\n    name: development-security-ingress\n    external: true/u,
+);
+assert.match(caddyFragment, /^desarrolloseguro\.org \{/mu);
+assert.match(caddyFragment, /reverse_proxy development-security-web:8080/u);
+assert.match(caddyFragment, /www\.desarrolloseguro\.org \{/u);
+assert.doesNotMatch(caddyFragment, /api:3001|database|grumphya/iu);
 assert.match(compose, /name: development-security-postgres/u);
 assert.doesNotMatch(compose, /grumphya|apps\/api|apps\/web/iu);
 assert.doesNotMatch(compose, /privileged:\s*true/u);
@@ -86,6 +106,15 @@ assert.doesNotMatch(compose, /worker|executor|scan-runner/iu);
 assert.match(nginx, /proxy_pass https:\/\/development-security-api:3001/u);
 assert.match(nginx, /proxy_ssl_verify on/u);
 assert.match(nginx, /proxy_ssl_trusted_certificate \/run\/secrets\/internal_tls_ca\.crt/u);
+assert.match(nginx, /client_body_temp_path \/tmp\/client_temp/u);
+assert.match(nginx, /fastcgi_temp_path \/tmp\/fastcgi_temp/u);
+assert.match(nginx, /proxy_temp_path \/tmp\/proxy_temp/u);
+assert.match(nginx, /scgi_temp_path \/tmp\/scgi_temp/u);
+assert.match(nginx, /uwsgi_temp_path \/tmp\/uwsgi_temp/u);
+assert.match(
+  nginx,
+  /location = \/ \{\s+add_header Cache-Control "no-cache" always;\s+try_files \/desarrollo-seguro\/index\.html =404;\s+\}/u,
+);
 assert.match(nginx, /try_files \$uri \$uri\/ \/app\/index\.html/u);
 assert.match(dockerfile, /FROM nginx:1\.30-alpine AS development-security-web/u);
 assert.match(dockerfile, /FROM node:26\.13\.0-trixie-slim/u);

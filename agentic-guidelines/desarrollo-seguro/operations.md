@@ -9,9 +9,9 @@
 - `development-security-migrate` crea la base `desarrollo_seguro`, roles dedicados y aplica las migraciones.
 - `development-security-database` usa PostgreSQL/pgvector con TLS obligatorio y un volumen propio.
 
-El portal se publica solo en `127.0.0.1:18080` por defecto. La API y la base no tienen puertos de host. Un proxy de borde administrado por el operador puede dirigir el dominio elegido al portal local; sus certificados públicos y su configuración quedan fuera de este Compose. Cambiar el puerto de publicación se hace con `DEVELOPMENT_SECURITY_WEB_HOST_PORT`.
+El portal no publica puertos del host. Un proxy de borde conectado a la red interna dedicada `development-security-ingress` puede llegar solo al servicio web; la API y la base no tienen puertos de host y la API no pertenece a la red de entrada.
 
-Las redes `development-security-backend` y `development-security-edge` y el volumen `development-security-postgres` pertenecen a esta aplicación. No se montan sockets Docker, carpetas de otra aplicación, ni sus redes, tablas o secretos. El backend no tiene salida externa. En esta fase no se despliega el paquete worker ni se ejecutan scans.
+Las redes `development-security-backend` y `development-security-edge` y el volumen `development-security-postgres` pertenecen a esta aplicación. `development-security-ingress` es una red externa dedicada que contiene solo el proxy público y el servicio web; la API y la base de datos no pertenecen a ella. No se montan sockets Docker, carpetas de otra aplicación, ni sus redes, tablas o secretos. El backend no tiene salida externa. En esta fase no se despliega el paquete worker ni se ejecutan scans.
 
 ## Secretos y certificados
 
