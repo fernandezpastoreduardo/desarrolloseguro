@@ -5,6 +5,8 @@ const ALLOWED_PATHS = ["/", "/precios", "/informe"];
 const MONITORED_HOSTNAME = "example.com";
 const NEXT_PROFILE_VERSION = "controls-v2";
 const OBSERVED_AT = "2026-11-02T10:00:00.000Z";
+const MAX_ACCEPTED_EVIDENCE_COUNT = 100_000;
+const MAX_ACCEPTED_CHECK_COUNT = 32;
 
 const SAFE_DNS_CHECK = {
   controlId: "DS-DNS-01",
@@ -645,6 +647,74 @@ describe("sanitizeScanObservations", () => {
         "controls-v1",
         ALLOWED_PATHS,
         [null],
+      ),
+    ).toThrow("scan_check_invalid");
+  });
+
+  it("rejects duplicate checks for the same control, route, and method", () => {
+    expect(() =>
+      sanitizeScanObservations(
+        MONITORED_HOSTNAME,
+        "controls-v1",
+        ["/"],
+        [SAFE_DNS_CHECK, SAFE_DNS_CHECK],
+      ),
+    ).toThrow("scan_check_duplicate");
+  });
+
+  it("bounds the number of checks before processing their contents", () => {
+    expect(() =>
+      sanitizeScanObservations(
+        MONITORED_HOSTNAME,
+        "controls-v1",
+        ["/"],
+        Array.from({ length: MAX_ACCEPTED_CHECK_COUNT + 1 }, () => null),
+      ),
+    ).toThrow("scan_checks_required");
+  });
+
+  it("accepts evidence counts at the documented upper bound and rejects larger values", () => {
+    const checkAtLimit = {
+      ...SAFE_DNS_CHECK,
+      evidence: {
+        addressClass: "public",
+        aRecordCount: MAX_ACCEPTED_EVIDENCE_COUNT,
+        aaaaRecordCount: 0,
+      },
+    };
+    const checkOverLimit = {
+      ...checkAtLimit,
+      evidence: {
+        ...checkAtLimit.evidence,
+        aRecordCount: MAX_ACCEPTED_EVIDENCE_COUNT + 1,
+      },
+    };
+
+    expect(
+      sanitizeScanObservations(
+        MONITORED_HOSTNAME,
+        "controls-v1",
+        ["/"],
+        [checkAtLimit],
+      ).checks[0]?.evidence.aRecordCount,
+    ).toBe(MAX_ACCEPTED_EVIDENCE_COUNT);
+    expect(() =>
+      sanitizeScanObservations(
+        MONITORED_HOSTNAME,
+        "controls-v1",
+        ["/"],
+        [checkOverLimit],
+      ),
+    ).toThrow("scan_evidence_invalid");
+  });
+
+  it("rejects invalid observation dates instead of persisting an invalid Date", () => {
+    expect(() =>
+      sanitizeScanObservations(
+        MONITORED_HOSTNAME,
+        "controls-v1",
+        ["/"],
+        [{ ...SAFE_DNS_CHECK, observedAt: new Date(Number.NaN) }],
       ),
     ).toThrow("scan_check_invalid");
   });
