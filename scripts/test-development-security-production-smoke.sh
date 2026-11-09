@@ -58,6 +58,8 @@ printf 'postgresql://ds_api:%s@db:5432/desarrollo_seguro' "$DATABASE_PASSWORD" \
   > "$TEMP_ROOT/secrets/database_url"
 chmod 0444 "$TEMP_ROOT/secrets/database_url"
 chmod 0444 "$TEMP_ROOT/tls/server.key"
+# Let the non-root API process traverse the temporary bind-mount directories.
+chmod 0711 "$TEMP_ROOT" "$TEMP_ROOT/tls" "$TEMP_ROOT/secrets"
 
 docker network create --internal "$NETWORK_NAME" >/dev/null
 docker run --detach \
