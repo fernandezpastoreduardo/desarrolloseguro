@@ -101,7 +101,7 @@ describePostgres.sequential(
         await targetAdminPool?.end();
         if (targetDatabaseWasAbsent) {
           await adminPool.query(
-            `DROP DATABASE IF EXISTS "${TARGET_DATABASE_NAME}" WITH (FORCE)`,
+            `DROP DATABASE IF EXISTS "${TARGET_DATABASE_NAME}"`,
           );
         }
         if (rolesWereAbsent) {
