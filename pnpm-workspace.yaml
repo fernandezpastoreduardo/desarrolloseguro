@@ -1,0 +1,11 @@
+packages:
+  - apps/desarrollo-seguro/*
+allowBuilds:
+  "@parcel/watcher": false
+  esbuild: true
+overrides:
+  shell-quote: 1.12.0
+  body-parser: 2.4.0
+  multer: 2.5.0
+  qs: 6.16.1
+  minimatch: 11.0.1

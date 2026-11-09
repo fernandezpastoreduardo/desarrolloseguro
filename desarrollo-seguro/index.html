@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="es-ES">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'none'; style-src 'self'; img-src 'self'; form-action 'none'"
+    />
+    <meta
+      name="description"
+      content="Desarrollo Seguro: prácticas explicadas con evidencias, límites y un verificador técnico de superficies web."
+    />
+    <title>Desarrollo Seguro · Prácticas que se pueden explicar</title>
+    <link rel="stylesheet" href="/desarrollo-seguro/styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#contenido">Saltar al contenido</a>
+
+    <header class="site-header">
+      <div class="header-inner">
+        <div class="brand" aria-label="Desarrollo Seguro">
+          <span class="brand-name">Desarrollo <strong>Seguro</strong></span>
+          <span class="prototype-tag">Prototipo académico</span>
+        </div>
+        <nav aria-label="Secciones de Desarrollo Seguro">
+          <a href="#enfoque">Enfoque</a>
+          <a href="#practicas">Prácticas</a>
+          <a href="#caso">Caso de uso</a>
+          <a class="nav-cta" href="#estado"
+            >Estado del verificador <span aria-hidden="true">↘</span></a
+          >
+          <a class="nav-link-seal" href="#estado"
+            >Consultar estado <span aria-hidden="true">↘</span></a
+          >
+          <label class="theme-toggle">
+            <input id="theme-switch" type="checkbox" />
+            <span class="theme-switch-track" aria-hidden="true"></span>
+            <span>Modo oscuro</span>
+          </label>
+        </nav>
+      </div>
+    </header>
+
+    <main id="contenido">
+      <section
+        class="hero section-shell"
+        id="enfoque"
+        aria-labelledby="hero-title"
+      >
+        <div class="hero-copy">
+          <p class="eyebrow">
+            <span class="eyebrow-dot" aria-hidden="true"></span> Seguridad que
+            se entiende
+          </p>
+          <h1 id="hero-title">
+            Desarrollo Seguro: <em>seguridad que se puede explicar.</em>
+          </h1>
+          <p class="hero-lead">
+            Revisamos cómo se construye una aplicación y contamos qué evidencia
+            respalda cada práctica, qué queda fuera y cuándo se comprobó. Sin
+            sellos mágicos. Ya hay suficientes en internet.
+          </p>
+          <a class="button button-primary" href="#estado"
+            >Ver estado y alcance <span aria-hidden="true">↓</span></a
+          >
+          <a class="button button-secondary" href="/desarrollo-seguro/app"
+            >Consultar informes <span aria-hidden="true">↗</span></a
+          >
+          <p class="academic-note">
+            <strong>Prototipo académico ficticio.</strong> Sin certificación
+            oficial ni auditoría independiente. Desarrollo Seguro se ha creado
+            para representar una idea en un TFM.
+          </p>
+        </div>
+        <aside class="hero-card" aria-label="Resumen de la demostración">
+          <div class="hero-card-top">
+            <span class="card-kicker">CASO DE DEMOSTRACIÓN</span>
+            <span class="status-pill"
+              ><span aria-hidden="true">●</span> Prototipo académico</span
+            >
+          </div>
+          <div class="hero-card-bottom">
+            <div>
+              <p class="card-label">Aplicación revisada</p>
+              <h2>Desarrollo Seguro</h2>
+            </div>
+            <span class="seal-id">DS<br />2026</span>
+          </div>
+          <div class="hero-card-rule"></div>
+          <p class="hero-card-caption">
+            Una revisión interna, con límites a la vista. La palabra
+            «certificada» del dibujo no describe este estado.
+          </p>
+        </aside>
+        <div class="hero-footnote" aria-hidden="true">
+          <span>01</span><span>Prácticas sobre el papel y en el código</span>
+        </div>
+      </section>
+
+      <section class="intro-band" aria-label="Principio de trabajo">
+        <div class="section-shell intro-band-inner">
+          <span class="section-number">01 / EL PRINCIPIO</span>
+          <p>
+            La seguridad no se arregla con un adhesivo.
+            <strong>Se diseña, se prueba y se vuelve a mirar.</strong>
+          </p>
+          <span class="asterisk" aria-hidden="true">✳</span>
+        </div>
+      </section>
+
+      <section
+        class="verification-status section-shell"
+        id="estado"
+        aria-labelledby="status-title"
+      >
+        <div class="status-heading">
+          <p class="eyebrow">Estado del proyecto</p>
+          <h2 id="status-title">Sin informes operativos disponibles.</h2>
+          <p>
+            El verificador todavía no consulta sitios ni genera resultados. Lo
+            que sigue es una vista honesta de su preparación y de la información
+            que recibirá una persona cuando pueda solicitar una revisión real.
+          </p>
+        </div>
+        <div class="status-dashboard">
+          <article class="status-summary" aria-label="Estado del servicio">
+            <span class="status-indicator" aria-hidden="true">—</span>
+            <div>
+              <p class="card-kicker">SERVICIO DE VERIFICACIÓN</p>
+              <h3>Aún no está activo</h3>
+              <p>
+                No se han realizado escaneos ni se ha medido ningún dominio.
+              </p>
+            </div>
+          </article>
+          <ul class="status-checklist" aria-label="Preparación del proyecto">
+            <li class="status-row">
+              <span class="status-mark ready" aria-hidden="true">✓</span>
+              <span
+                ><strong>Contratos y persistencia</strong
+                ><small>Implementados y probados en entorno local</small></span
+              >
+              <span class="status-label">Listo en local</span>
+            </li>
+            <li class="status-row">
+              <span class="status-mark ready" aria-hidden="true">✓</span>
+              <span
+                ><strong>Admisión y validación de evidencias</strong
+                ><small
+                  >Rechaza entradas y observaciones fuera del contrato</small
+                ></span
+              >
+              <span class="status-label">Listo en local</span>
+            </li>
+            <li class="status-row">
+              <span class="status-mark waiting" aria-hidden="true">…</span>
+              <span
+                ><strong>Conexión segura y aislamiento de salida</strong
+                ><small
+                  >Faltan executor, firewall de salida probado y medición del
+                  VPS</small
+                ></span
+              >
+              <span class="status-label pending">Pendiente</span>
+            </li>
+            <li class="status-row">
+              <span class="status-mark waiting" aria-hidden="true">…</span>
+              <span
+                ><strong>Interfaz de consulta e informes</strong
+                ><small
+                  >Disponible en el código; aún falta conectarla al despliegue y
+                  a los informes reales</small
+                ></span
+              >
+              <span class="status-label">Listo en local</span>
+            </li>
+          </ul>
+        </div>
+        <div class="report-preview">
+          <div class="report-preview-copy">
+            <p class="eyebrow">Cuando esté operativo</p>
+            <h3>Un informe que enseña qué se comprobó.</h3>
+            <p>
+              Cada resultado tendrá alcance, fecha, evidencia resumida y
+              limitaciones. Si algo no se pudo comprobar, aparecerá como «no
+              evaluable»; nunca como aprobado.
+            </p>
+          </div>
+          <dl class="report-fields">
+            <div>
+              <dt>Dominio</dt>
+              <dd>El sitio solicitado</dd>
+            </div>
+            <div>
+              <dt>Rutas previstas</dt>
+              <dd>/</dd>
+            </div>
+            <div>
+              <dt>Origen de la medición</dt>
+              <dd>Infraestructura de medición indicada en cada informe</dd>
+            </div>
+            <div>
+              <dt>Resultado</dt>
+              <dd>Aprobado, no superado o no evaluable, con evidencias</dd>
+            </div>
+          </dl>
+        </div>
+        <details class="report-details" open>
+          <summary>Qué incluirá un informe y qué falta para ofrecerlo</summary>
+          <div class="report-details-body">
+            <p>
+              El alcance inicial se limita a la portada del dominio consultado.
+              Cada informe indicará las rutas y controles observados, junto con
+              el origen y las limitaciones de la medición.
+            </p>
+            <p>
+              Antes de activar análisis reales faltan pruebas de pinning DNS/IP,
+              aislamiento de red y capacidad. La interfaz de consulta está
+              disponible en <a href="/app/">Desarrollo Seguro</a>, pero el
+              servicio aún no ejecuta análisis ni guarda informes reales. Esta
+              página no muestra fechas, puntuaciones ni resultados ficticios.
+            </p>
+          </div>
+        </details>
+      </section>
+
+      <section
+        class="practices section-shell"
+        id="practicas"
+        aria-labelledby="practices-title"
+      >
+        <div class="section-heading">
+          <p class="eyebrow">Un método sin fuegos artificiales</p>
+          <h2 id="practices-title">
+            Buenas prácticas, con pruebas, límites y fechas.
+          </h2>
+          <p>
+            Las prácticas se describen con evidencia concreta y una limitación
+            visible. Porque «todo controlado» suele ser el principio de una
+            anécdota.
+          </p>
+        </div>
+        <div class="practice-grid">
+          <article class="practice-card">
+            <span class="practice-index">A / 01</span>
+            <div class="practice-icon icon-lock" aria-hidden="true">
+              <span></span>
+            </div>
+            <h3>Seguridad por defecto</h3>
+            <p>
+              Permisos y límites se comprueban en el servidor. Las funciones
+              sensibles no dependen de que alguien encuentre el ajuste correcto.
+            </p>
+            <span class="practice-tag">Acceso · Sesiones · Cuotas</span>
+          </article>
+          <article class="practice-card">
+            <span class="practice-index">A / 02</span>
+            <div class="practice-icon icon-eye" aria-hidden="true">◎</div>
+            <h3>Privacidad con contexto</h3>
+            <p>
+              Se explica qué datos se usan, se ofrecen controles de cuenta y se
+              documenta la retención. El cumplimiento legal requiere una
+              revisión jurídica propia.
+            </p>
+            <span class="practice-tag">Información · Control · Retención</span>
+          </article>
+          <article class="practice-card">
+            <span class="practice-index">A / 03</span>
+            <div class="practice-icon icon-spark" aria-hidden="true">↗</div>
+            <h3>Rendimiento medible</h3>
+            <p>
+              Contenido inicial, recursos e imágenes se revisan por ruta y
+              dispositivo. No declaramos buenos Core Web Vitals sin mediciones
+              que lo respalden.
+            </p>
+            <span class="practice-tag">LCP · CLS · INP</span>
+          </article>
+          <article class="practice-card">
+            <span class="practice-index">A / 04</span>
+            <div class="practice-icon icon-network" aria-hidden="true">
+              <span></span><span></span><span></span>
+            </div>
+            <h3>Sin seguimiento de terceros en las rutas revisadas</h3>
+            <p>
+              En Home, Planes y la ficha de verificación no se cargan analítica
+              ni recursos de terceros en el navegador. La API sí usa OpenAI y
+              correo IONOS para funciones solicitadas.
+            </p>
+            <span class="practice-tag">Recursos propios · Pruebas de red</span>
+          </article>
+        </div>
+        <p class="section-aside">
+          <span aria-hidden="true">↳</span> Que una petición salga del navegador
+          no significa que la aplicación no use proveedores: cada flujo se
+          cuenta con su alcance.
+        </p>
+      </section>
+
+      <section class="case-study" id="caso" aria-labelledby="case-title">
+        <div class="section-shell case-grid">
+          <div class="case-art" aria-hidden="true">
+            <div class="case-orbit orbit-one"></div>
+            <div class="case-orbit orbit-two"></div>
+            <div class="case-document">
+              <span class="document-topline"></span>
+              <span class="document-line long"></span>
+              <span class="document-line"></span>
+              <span class="document-check">✓</span>
+              <span class="document-line short"></span>
+              <span class="document-line short"></span>
+            </div>
+            <span class="case-stamp">REVISIÓN<br />ACOTADA</span>
+            <span class="case-asterisk">✳</span>
+          </div>
+          <div class="case-copy">
+            <p class="eyebrow">Caso de uso · Superficie web pública</p>
+            <h2 id="case-title">Evidencias claras, con sus límites a la vista.</h2>
+            <p class="case-lead">
+              Desarrollo Seguro consulta informes existentes sobre controles
+              observables desde fuera. La consulta no inicia análisis ni convierte
+              una observación técnica en una certificación.
+            </p>
+            <ul class="evidence-list">
+              <li><span class="checkmark" aria-hidden="true">✓</span><span><strong>Alcance explícito.</strong> Cada informe enumera las rutas y los controles comprobados.</span></li>
+              <li><span class="checkmark" aria-hidden="true">✓</span><span><strong>Resultados con evidencia.</strong> Los datos públicos se proyectan sin exponer evidencia privada.</span></li>
+              <li><span class="checkmark" aria-hidden="true">✓</span><span><strong>Límites verificables.</strong> Los controles no observables se presentan como desconocidos o no evaluables.</span></li>
+              <li><span class="checkmark checkmark-pending" aria-hidden="true">↗</span><span><strong>Trabajo pendiente.</strong> El executor de red y las pruebas de aislamiento siguen bloqueados hasta superar sus gates.</span></li>
+            </ul>
+            <p class="case-disclaimer">
+              El estado actual es un prototipo académico. No constituye una
+              certificación, una auditoría independiente ni una garantía de
+              ausencia de vulnerabilidades.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section
+        class="seal-section section-shell"
+        id="estado"
+        aria-labelledby="seal-title"
+      >
+        <div class="seal-panel">
+          <div class="seal-panel-main">
+            <p class="eyebrow eyebrow-light">Estado del verificador</p>
+            <h2 id="seal-title">Consulta sin inventar resultados.</h2>
+            <p>
+              El portal muestra el estado y los informes públicos que ya existen.
+              Una consulta no envía solicitudes al dominio y no crea un análisis.
+            </p>
+            <a class="button button-accent" href="/app/"
+              >Abrir el portal de consulta <span aria-hidden="true">↗</span></a
+            >
+          </div>
+          <div class="seal-preview">
+            <dl>
+              <div><dt>Estado actual</dt><dd>Prototipo académico</dd></div>
+              <div><dt>Informes reales</dt><dd>Ninguno disponible</dd></div>
+              <div><dt>Análisis bajo demanda</dt><dd>No habilitado</dd></div>
+            </dl>
+          </div>
+          <p class="seal-panel-note">
+            Antes de habilitar análisis hay que demostrar el aislamiento de red,
+            la validación de destinos y la capacidad del entorno.
+          </p>
+        </div>
+      </section>
+
+      <section class="limits section-shell" aria-labelledby="limits-title">
+        <div class="limits-heading">
+          <p class="eyebrow">Límites, en tamaño legible</p>
+          <h2 id="limits-title">Lo que este prototipo no te va a vender.</h2>
+        </div>
+        <div class="limits-copy">
+          <p>
+            No es una certificación, un pentest, una auditoría independiente ni
+            un dictamen legal. El estado publicado es una instantánea de una
+            revisión técnica interna; los cambios posteriores no actualizan
+            automáticamente sus evidencias.
+          </p>
+          <p>
+            El distintivo no autentica el sitio donde aparece ni impide que
+            alguien lo copie. Contrasta siempre la dirección web con el dominio
+            que figura en el registro.
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="section-shell footer-inner">
+        <div class="footer-brand">
+          <span class="brand-name">Desarrollo <strong>Seguro</strong></span>
+        </div>
+        <p>
+          Una propuesta académica para contar el trabajo, no para inflar
+          medallas.
+        </p>
+        <a href="#contenido"
+          >Volver al inicio <span aria-hidden="true">↑</span></a
+        >
+      </div>
+      <div class="footer-bottom">
+        © TFM · Prototipo conceptual · Contenido de demostración
+      </div>
+    </footer>
+  </body>
+</html>

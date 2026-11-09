@@ -1,0 +1,28 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      react-runtime-version-updates:
+        applies-to: version-updates
+        patterns:
+          - react
+          - react-dom
+      react-runtime-security-updates:
+        applies-to: security-updates
+        patterns:
+          - react
+          - react-dom
+    ignore:
+      - dependency-name: typescript
+        # typescript-eslint currently supports TypeScript <6.1.0, not TypeScript 7.
+        # Revisit this after the lint parser explicitly supports TypeScript 7.
+        versions: [">=7.0.0"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5

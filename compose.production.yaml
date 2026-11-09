@@ -1,0 +1,224 @@
+services:
+  development-security-database:
+    image: ${DEVELOPMENT_SECURITY_DATABASE_IMAGE:-pgvector/pgvector:0.8.7-pg17}
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ds_bootstrap
+      POSTGRES_PASSWORD_FILE: /run/secrets/development_security_admin_password
+      POSTGRES_DB: postgres
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        install -d -o postgres -g postgres -m 0700 /run/postgresql/development-security-tls
+        install -o postgres -g postgres -m 0644 /run/secrets/development_security_database_tls.crt /run/postgresql/development-security-tls/server.crt
+        install -o postgres -g postgres -m 0600 /run/secrets/development_security_database_tls.key /run/postgresql/development-security-tls/server.key
+        exec docker-entrypoint.sh postgres \
+          -c ssl=on \
+          -c ssl_min_protocol_version=TLSv1.2 \
+          -c ssl_cert_file=/run/postgresql/development-security-tls/server.crt \
+          -c ssl_key_file=/run/postgresql/development-security-tls/server.key \
+          -c hba_file=/etc/postgresql/pg_hba.conf
+    privileged: false
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE, FOWNER]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 100
+    mem_limit: 640m
+    cpus: 0.75
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+      - /run/postgresql:rw,noexec,nosuid,size=16m
+    secrets:
+      - development_security_admin_password
+      - development_security_database_tls.crt
+      - development_security_database_tls.key
+    volumes:
+      - development-security-postgres:/var/lib/postgresql/data
+      - ./docker/postgres-pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U ds_bootstrap -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks:
+      development-security-backend:
+        aliases: [development-security-database]
+
+  development-security-migrate:
+    image: ${DEVELOPMENT_SECURITY_IMAGE:-desarrolloseguro-api:local}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development-security-production
+    restart: "no"
+    user: "0:0"
+    privileged: false
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE, FOWNER]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 64
+    mem_limit: 384m
+    cpus: 0.5
+    read_only: true
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        install -d -o node -g node -m 0700 /run/development-security-secrets
+        install -o node -g node -m 0400 /run/secrets/development_security_admin_url /run/development-security-secrets/admin-url
+        install -o node -g node -m 0400 /run/secrets/development_security_migrator_password /run/development-security-secrets/migrator-password
+        install -o node -g node -m 0400 /run/secrets/development_security_api_database_url /run/development-security-secrets/api-database-url
+        install -o node -g node -m 0444 /run/secrets/internal_tls_ca.crt /run/development-security-secrets/database-ca.crt
+        export DS_PRODUCTION_ADMIN_URL_FILE=/run/development-security-secrets/admin-url
+        export DS_PRODUCTION_MIGRATOR_PASSWORD_FILE=/run/development-security-secrets/migrator-password
+        export DS_PRODUCTION_API_DATABASE_URL_FILE=/run/development-security-secrets/api-database-url
+        export DS_PRODUCTION_TLS_CA_FILE=/run/development-security-secrets/database-ca.crt
+        exec su -p node -s /bin/sh -c 'exec node apps/desarrollo-seguro/persistence/dist/production-provision-database.js'
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+      - /run/development-security-secrets:rw,noexec,nosuid,size=16m
+    environment:
+      NODE_ENV: production
+      DS_PRODUCTION_BOOTSTRAP_ENABLED: "1"
+      DS_PRODUCTION_DATABASE_NAME: desarrollo_seguro
+    secrets:
+      - development_security_admin_url
+      - development_security_migrator_password
+      - development_security_api_database_url
+      - internal_tls_ca.crt
+    depends_on:
+      development-security-database:
+        condition: service_healthy
+    networks: [development-security-backend]
+
+  development-security-api:
+    image: ${DEVELOPMENT_SECURITY_IMAGE:-desarrolloseguro-api:local}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development-security-production
+    restart: unless-stopped
+    user: "0:0"
+    privileged: false
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE, FOWNER]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 96
+    mem_limit: 512m
+    cpus: 0.75
+    read_only: true
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        install -d -o node -g node -m 0700 /run/development-security-secrets
+        install -o node -g node -m 0400 /run/secrets/development_security_api_database_url /run/development-security-secrets/api-database-url
+        install -o node -g node -m 0400 /run/secrets/development_security_api_tls.key /run/development-security-secrets/api-tls.key
+        install -o node -g node -m 0444 /run/secrets/development_security_api_tls.crt /run/development-security-secrets/api-tls.crt
+        install -o node -g node -m 0444 /run/secrets/internal_tls_ca.crt /run/development-security-secrets/database-ca.crt
+        export DS_DATABASE_URL_FILE=/run/development-security-secrets/api-database-url
+        export DS_API_TLS_CERT_FILE=/run/development-security-secrets/api-tls.crt
+        export DS_API_TLS_KEY_FILE=/run/development-security-secrets/api-tls.key
+        export DS_DATABASE_TLS_CA_FILE=/run/development-security-secrets/database-ca.crt
+        export NODE_EXTRA_CA_CERTS=/run/development-security-secrets/database-ca.crt
+        exec su -p node -s /bin/sh -c 'exec node apps/desarrollo-seguro/api/dist/main.js'
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+      - /run/development-security-secrets:rw,noexec,nosuid,size=16m
+    environment:
+      NODE_ENV: production
+      DS_API_PORT: "3001"
+      DS_API_TLS_REQUIRED: "true"
+      DS_DATABASE_URL_FILE_REQUIRED: "true"
+      DS_DATABASE_TLS_REQUIRED: "true"
+      DS_TRUSTED_PROXY_CIDRS: 172.29.0.0/24
+      NODE_EXTRA_CA_CERTS: /run/development-security-secrets/database-ca.crt
+    secrets:
+      - development_security_api_database_url
+      - internal_tls_ca.crt
+      - development_security_api_tls.crt
+      - development_security_api_tls.key
+    depends_on:
+      development-security-migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - --input-type=module
+        - -e
+        - "fetch('https://development-security-api:3001/api/desarrollo-seguro/v1/health').then(response => response.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks:
+      development-security-backend: {}
+      development-security-edge:
+        aliases: [development-security-api]
+
+  development-security-web:
+    image: ${DEVELOPMENT_SECURITY_WEB_IMAGE:-desarrolloseguro-web:local}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development-security-web
+    restart: unless-stopped
+    user: "101:101"
+    privileged: false
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 64
+    mem_limit: 128m
+    cpus: 0.25
+    read_only: true
+    ports:
+      - "127.0.0.1:${DEVELOPMENT_SECURITY_WEB_HOST_PORT:-18080}:8080"
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m,uid=101,gid=101
+      - /var/run:rw,noexec,nosuid,size=8m,uid=101,gid=101
+    secrets:
+      - internal_tls_ca.crt
+    depends_on:
+      development-security-api:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8080/desarrollo-seguro/]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks:
+      development-security-edge: {}
+
+networks:
+  development-security-backend:
+    internal: true
+  development-security-edge:
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.29.0.0/24
+
+volumes:
+  development-security-postgres:
+    name: development-security-postgres
+
+secrets:
+  development_security_admin_password:
+    file: ${DEVELOPMENT_SECURITY_SECRETS_DIR:-./.secrets}/development_security_admin_password
+  development_security_admin_url:
+    file: ${DEVELOPMENT_SECURITY_SECRETS_DIR:-./.secrets}/development_security_admin_url
+  development_security_migrator_password:
+    file: ${DEVELOPMENT_SECURITY_SECRETS_DIR:-./.secrets}/development_security_migrator_password
+  development_security_api_database_url:
+    file: ${DEVELOPMENT_SECURITY_SECRETS_DIR:-./.secrets}/development_security_api_database_url
+  development_security_database_tls.crt:
+    file: ${DEVELOPMENT_SECURITY_SECRETS_DIR:-./.secrets}/development_security_database_tls.crt
+  development_security_database_tls.key:
+    file: ${DEVELOPMENT_SECURITY_SECRETS_DIR:-./.secrets}/development_security_database_tls.key
+  development_security_api_tls.crt:
+    file: ${DEVELOPMENT_SECURITY_SECRETS_DIR:-./.secrets}/development_security_api_tls.crt
+  development_security_api_tls.key:
+    file: ${DEVELOPMENT_SECURITY_SECRETS_DIR:-./.secrets}/development_security_api_tls.key
+  internal_tls_ca.crt:
+    file: ${DEVELOPMENT_SECURITY_SECRETS_DIR:-./.secrets}/internal_tls_ca.crt

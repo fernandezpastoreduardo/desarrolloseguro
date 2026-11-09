@@ -1,0 +1,16 @@
+.git
+.github
+.env
+.env.*
+.secrets/
+.aws/
+.codex/
+.agents/
+.ci-artifacts/
+**/var/avatars/
+**/node_modules
+**/dist
+**/coverage
+**/playwright-report
+**/test-results
+.DS_Store

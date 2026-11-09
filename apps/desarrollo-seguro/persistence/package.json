@@ -1,0 +1,37 @@
+{
+  "name": "@desarrolloseguro/persistence",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/scan-store.d.ts",
+      "import": "./dist/scan-store.js"
+    }
+  },
+  "scripts": {
+    "prebuild": "pnpm --filter @desarrolloseguro/core build",
+    "build": "tsc -p tsconfig.json",
+    "provision-database": "node dist/provision-database.js",
+    "provision-database:production": "node dist/production-provision-database.js",
+    "pretest": "pnpm --filter @desarrolloseguro/core build",
+    "test": "vitest run",
+    "test:postgres": "pnpm --filter @desarrolloseguro/core build && vitest run --config vitest.postgres.config.ts",
+    "pretypecheck": "pnpm --filter @desarrolloseguro/core build",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint src --max-warnings=0"
+  },
+  "dependencies": {
+    "@desarrolloseguro/core": "workspace:*",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.6.5",
+    "@types/pg": "^8.15.5",
+    "eslint": "^10.0.1",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.71.1",
+    "vitest": "^4.1.12"
+  }
+}

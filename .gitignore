@@ -1,0 +1,21 @@
+node_modules/
+dist/
+var/avatars/
+coverage/
+# macOS and NAS sync metadata
+.DS_Store
+
+# Environment files may contain credentials. Keep every variant out of Git.
+.env
+.env.*
+.secrets/
+example.env
+*.local
+playwright-report/
+test-results/
+.ci-artifacts/
+.husky/_/
+*.log
+*.tsbuildinfo
+apps/*/.env*
+!apps/*/.env.example

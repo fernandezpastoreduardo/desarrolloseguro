@@ -1,0 +1,29 @@
+{
+  "name": "@desarrolloseguro/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "prebuild": "pnpm --filter @desarrolloseguro/core build && pnpm --filter @desarrolloseguro/persistence build",
+    "build": "tsc -p tsconfig.json",
+    "pretest": "pnpm --filter @desarrolloseguro/core build && pnpm --filter @desarrolloseguro/persistence build",
+    "test": "vitest run src scripts",
+    "pretypecheck": "pnpm --filter @desarrolloseguro/core build && pnpm --filter @desarrolloseguro/persistence build",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint src scripts --max-warnings=0"
+  },
+  "dependencies": {
+    "@desarrolloseguro/core": "workspace:*",
+    "@desarrolloseguro/persistence": "workspace:*",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.6.5",
+    "@types/pg": "^8.15.5",
+    "eslint": "^10.0.1",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.71.1",
+    "vitest": "^4.1.12"
+  }
+}

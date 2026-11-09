@@ -1,0 +1,29 @@
+# Desarrollo local
+
+## Requisitos
+
+- Node.js 26.13.x (`.nvmrc`) y pnpm 12.5.1.
+- Docker Engine/Desktop con Docker Compose.
+- Para verificaciones PostgreSQL: instancia local y dedicada de PostgreSQL 17 con pgvector.
+
+Instala dependencias y arranca la aplicación:
+
+```sh
+pnpm install
+pnpm dev
+```
+
+Para ejecutar la pila contenerizada independiente, consulta [Producción](production.md). Compose publica únicamente el frontend en `127.0.0.1:18080` por defecto; base de datos y API no publican puertos del host.
+
+## Calidad
+
+```sh
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+```
+
+`pnpm test:postgres` requiere `DS_TEST_POSTGRES_ISOLATED=1` y `DS_TEST_DATABASE_URL` apuntando a un cluster local dedicado. El test puede crear y eliminar bases y roles; no lo dirijas a datos compartidos o de producción.
+
+La configuración del proyecto fija Node/pnpm en `package.json`, `.nvmrc` y `pnpm-lock.yaml`. CI usa las mismas versiones.
