@@ -31,9 +31,6 @@ jobs:
           --health-interval 5s
           --health-timeout 3s
           --health-retries 20
-    env:
-      DS_TEST_POSTGRES_ISOLATED: "1"
-      DS_TEST_DATABASE_URL: postgresql://postgres:development-security-test-admin-password@127.0.0.1:5432/development_security_test_admin
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -51,6 +48,9 @@ jobs:
         run: pnpm ci:verify quality
       - name: Run PostgreSQL integration tests
         run: pnpm ci:verify postgres
+        env:
+          DS_TEST_POSTGRES_ISOLATED: "1"
+          DS_TEST_DATABASE_URL: postgresql://postgres:development-security-test-admin-password@127.0.0.1:5432/development_security_test_admin
       - name: Build the production API image
         run: docker build --pull --target development-security-production --tag desarrolloseguro-api:${{ github.sha }} .
       - name: Smoke test the production API image
