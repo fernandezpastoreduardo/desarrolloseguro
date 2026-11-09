@@ -72,7 +72,10 @@ docker run --detach \
 
 database_ready=0
 for _ in $(seq 1 60); do
-  if docker exec "$DATABASE_NAME" pg_isready -U development_security_smoke_admin -d development_security_smoke_admin >/dev/null 2>&1; then
+  if docker exec "$DATABASE_NAME" psql \
+    -U development_security_smoke_admin \
+    -d development_security_smoke_admin \
+    -Atqc 'SELECT 1' >/dev/null 2>&1; then
     database_ready=1
     break
   fi
@@ -108,7 +111,10 @@ docker restart "$DATABASE_NAME" >/dev/null
 
 tls_ready=0
 for _ in $(seq 1 60); do
-  if docker exec "$DATABASE_NAME" pg_isready -U development_security_smoke_admin -d development_security_smoke_admin >/dev/null 2>&1; then
+  if docker exec "$DATABASE_NAME" psql \
+    -U development_security_smoke_admin \
+    -d development_security_smoke_admin \
+    -Atqc 'SELECT 1' >/dev/null 2>&1; then
     tls_ready=1
     break
   fi
