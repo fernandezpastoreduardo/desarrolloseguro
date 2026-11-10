@@ -10,12 +10,17 @@
     "dev": "pnpm --parallel --filter @desarrolloseguro/api --filter @desarrolloseguro/web dev",
     "build": "pnpm -r build",
     "test": "pnpm --workspace-concurrency=1 -r test",
+    "test:coverage": "pnpm -r build && pnpm --workspace-concurrency=1 -r test:coverage",
     "test:postgres": "pnpm --filter @desarrolloseguro/persistence test:postgres && pnpm --filter @desarrolloseguro/worker test:postgres",
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint",
     "migrations:check": "node scripts/check-migration-registry.mjs",
     "ci:verify": "bash scripts/ci-verify.sh",
     "quality:check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "quality:sonar": "pnpm test:coverage && node scripts/run-sonarqube-local.mjs",
     "sandbox:check": "bash scripts/verify-executor-sandbox.sh"
+  },
+  "devDependencies": {
+    "@sonar/scan": "5.1.0"
   }
 }

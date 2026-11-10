@@ -53,8 +53,9 @@ Antes de mover un componente, comprobar sus imports reales, contar los consumido
 ## Desarrollo
 
 - Usa pnpm exclusivamente. Node y pnpm están fijados en `.node-version` y `package.json`.
+- Sigue TDD para todo cambio de comportamiento: primero prueba nueva o ampliada, ejecútala y confirma un fallo por la razón prevista, implementa el cambio mínimo y repite hasta verde antes de refactorizar. Registra la evidencia roja y verde en el informe del cambio. Consulta [Desarrollo guiado por pruebas](doc/test-driven-development.md).
 - Cada cambio funcional debe incluir pruebas de unidad, integración o navegador acordes con su alcance.
-- Antes de finalizar, ejecuta `pnpm lint`, `pnpm test`, `pnpm typecheck` y `pnpm build` cuando el entorno lo permita; describe cualquier puerta que no se haya podido ejecutar y por qué.
+- Antes de finalizar, ejecuta `pnpm lint`, `pnpm test`, `pnpm typecheck`, `pnpm build`, `pnpm test:coverage` y, si el servicio local está disponible, `pnpm quality:sonar`; describe cualquier puerta que no se haya podido ejecutar y por qué.
 - Conserva los límites y supuestos descritos en `agentic-guidelines/desarrollo-seguro/` y `doc/`; actualiza la documentación afectada junto con el código.
 - Los datos de muestra solo se usan en desarrollo y pruebas. No se presentan como evidencia real.
 

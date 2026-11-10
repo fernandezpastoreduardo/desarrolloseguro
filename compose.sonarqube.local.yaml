@@ -1,0 +1,53 @@
+services:
+  development-security-sonar-database:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: sonarqube
+      POSTGRES_USER: sonar
+      POSTGRES_PASSWORD: ${SONAR_DB_PASSWORD:?Set SONAR_DB_PASSWORD in .env.sonar.local}
+    volumes:
+      - development-security-sonar-database:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U sonar -d sonarqube]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - development-security-sonar-private
+    restart: unless-stopped
+
+  development-security-sonarqube:
+    image: sonarqube:26.10.0.133078-community
+    depends_on:
+      development-security-sonar-database:
+        condition: service_healthy
+    environment:
+      SONAR_JDBC_URL: jdbc:postgresql://development-security-sonar-database:5432/sonarqube
+      SONAR_JDBC_USERNAME: sonar
+      SONAR_JDBC_PASSWORD: ${SONAR_DB_PASSWORD:?Set SONAR_DB_PASSWORD in .env.sonar.local}
+      SONAR_TELEMETRY_ENABLE: "false"
+    ports:
+      - "127.0.0.1:9000:9000"
+    volumes:
+      - development-security-sonarqube-data:/opt/sonarqube/data
+      - development-security-sonarqube-extensions:/opt/sonarqube/extensions
+      - development-security-sonarqube-logs:/opt/sonarqube/logs
+    networks:
+      - development-security-sonar-private
+      - development-security-sonar-loopback
+    restart: unless-stopped
+
+volumes:
+  development-security-sonar-database:
+  development-security-sonarqube-data:
+  development-security-sonarqube-extensions:
+  development-security-sonarqube-logs:
+
+networks:
+  development-security-sonar-private:
+    internal: true
+  development-security-sonar-loopback:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.enable_ip_masquerade: "false"
+      com.docker.network.bridge.host_binding_ipv4: "127.0.0.1"

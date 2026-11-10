@@ -2,6 +2,7 @@ node_modules/
 dist/
 var/avatars/
 coverage/
+.scannerwork/
 # macOS and NAS sync metadata
 .DS_Store
 
@@ -11,6 +12,7 @@ coverage/
 .secrets/
 example.env
 *.local
+!.env.sonar.local.example
 playwright-report/
 test-results/
 .ci-artifacts/

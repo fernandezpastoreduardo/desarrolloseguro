@@ -12,12 +12,14 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage --coverage.reporter=lcov --coverage.reporter=text",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint src --max-warnings=0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^26.6.5",
+    "@vitest/coverage-v8": "4.1.12",
     "eslint": "^10.14.0",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.71.1",

@@ -26,4 +26,6 @@ pnpm build
 
 `pnpm test:postgres` requiere `DS_TEST_POSTGRES_ISOLATED=1` y `DS_TEST_DATABASE_URL` apuntando a un cluster local dedicado. El test puede crear y eliminar bases y roles; no lo dirijas a datos compartidos o de producción.
 
+Para el flujo TDD y el análisis estático privado con SonarQube local, consulta [Desarrollo guiado por pruebas](test-driven-development.md) y [SonarQube Community Build local](sonarqube-local.md).
+
 La configuración del proyecto fija Node/pnpm en `package.json`, `.nvmrc` y `pnpm-lock.yaml`. CI usa las mismas versiones.
