@@ -1,6 +1,10 @@
 import type { LookupAddress } from "node:dns";
+import type { LookupFunction } from "node:net";
 import { describe, expect, it, vi } from "vitest";
-import { createEgressDestinationAuthorizer } from "./egress-destination-policy.js";
+import {
+  createEgressAuthorizedLookup,
+  createEgressDestinationAuthorizer,
+} from "./egress-destination-policy.js";
 
 const HOSTNAME = "sample.example.net";
 const PUBLIC_IPV4: LookupAddress = { address: "93.184.216.34", family: 4 };
@@ -8,6 +12,22 @@ const PUBLIC_IPV6: LookupAddress = {
   address: "2606:4700:4700::1111",
   family: 6,
 };
+
+function runLookup(
+  lookup: LookupFunction,
+  hostname: string,
+  options: { all?: boolean; family?: number } = {},
+) {
+  return new Promise<{
+    error: NodeJS.ErrnoException | null;
+    address: string | LookupAddress[];
+    family?: number;
+  }>((resolve) => {
+    lookup(hostname, options, (error, address, family) => {
+      resolve({ error, address, family });
+    });
+  });
+}
 
 describe("createEgressDestinationAuthorizer", () => {
   it("authorizes the exact job hostname on HTTP and HTTPS and returns pinned addresses", async () => {
@@ -100,5 +120,45 @@ describe("createEgressDestinationAuthorizer", () => {
     await expect(
       authorize({ hostname: HOSTNAME, port: 443 }),
     ).rejects.toThrow("egress_destination_denied");
+  });
+});
+
+describe("createEgressAuthorizedLookup", () => {
+  it("authorizes the exact hostname and port, then returns validated pinned answers", async () => {
+    const authorize = vi.fn().mockResolvedValue([PUBLIC_IPV4, PUBLIC_IPV6]);
+    const lookup = createEgressAuthorizedLookup(HOSTNAME, 443, authorize);
+
+    await expect(runLookup(lookup, ` ${HOSTNAME.toUpperCase()}. `, { all: true })).resolves.toEqual({
+      error: null,
+      address: [PUBLIC_IPV4, PUBLIC_IPV6],
+      family: undefined,
+    });
+    await expect(runLookup(lookup, HOSTNAME, { family: 6 })).resolves.toEqual({
+      error: null,
+      address: PUBLIC_IPV6.address,
+      family: 6,
+    });
+    expect(authorize).toHaveBeenNthCalledWith(1, { hostname: HOSTNAME, port: 443 });
+    expect(authorize).toHaveBeenNthCalledWith(2, { hostname: HOSTNAME, port: 443 });
+  });
+
+  it("fails before authorization if a lookup asks for another hostname", async () => {
+    const authorize = vi.fn().mockResolvedValue([PUBLIC_IPV4]);
+    const lookup = createEgressAuthorizedLookup(HOSTNAME, 80, authorize);
+
+    await expect(runLookup(lookup, "other.example.net")).resolves.toMatchObject({
+      error: { code: "EHOSTUNREACH" },
+    });
+    expect(authorize).not.toHaveBeenCalled();
+  });
+
+  it("does not hand the socket lookup another DNS resolution after authorization fails", async () => {
+    const authorize = vi.fn().mockRejectedValue(new Error("private resolver detail"));
+    const lookup = createEgressAuthorizedLookup(HOSTNAME, 443, authorize);
+
+    await expect(runLookup(lookup, HOSTNAME)).resolves.toMatchObject({
+      error: { code: "EHOSTUNREACH", message: "egress_destination_denied" },
+    });
+    expect(authorize).toHaveBeenCalledExactlyOnceWith({ hostname: HOSTNAME, port: 443 });
   });
 });

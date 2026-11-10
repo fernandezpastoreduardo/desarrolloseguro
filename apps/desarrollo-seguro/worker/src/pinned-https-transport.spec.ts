@@ -76,6 +76,11 @@ describe("requestPinnedHttps", () => {
       serverNames.push(socket.servername || null);
     });
     const lookup = createLoopbackLookup();
+    const lookupRequests: Array<[string, number]> = [];
+    const lookupFactory = vi.fn((hostname: string, port: number) => {
+      lookupRequests.push([hostname, port]);
+      return lookup;
+    });
 
     const result = await requestPinnedHttps(
       {
@@ -87,7 +92,7 @@ describe("requestPinnedHttps", () => {
       },
       {
         ca: FIXTURE_CERTIFICATE,
-        lookupFactory: () => lookup,
+        lookupFactory,
         requestFactory: (options, callback) => {
           requests.push({
             host: (options.headers as Record<string, string | undefined>).host,
@@ -111,6 +116,7 @@ describe("requestPinnedHttps", () => {
     ]);
     expect(serverNames).toEqual([FIXTURE_HOSTNAME]);
     expect(lookup).toHaveBeenCalledOnce();
+    expect(lookupRequests).toEqual([[FIXTURE_HOSTNAME, 443]]);
   });
 
   it("re-resolves and pins the same approved host for each in-scope HTTPS redirect", async () => {

@@ -149,30 +149,6 @@ export function createPinnedLookup(
   };
 }
 
-/** Pins lookup calls to the hostname authorized for one scan job. */
-export function createScopedPinnedLookup(
-  inputHostname: unknown,
-  resolver: PublicDnsResolver = defaultResolver,
-): LookupFunction {
-  const scopedHostname = normalizeHostname(inputHostname);
-  const pinnedLookup = createPinnedLookup(resolver);
-
-  return (hostname, options, callback) => {
-    let normalizedHostname: string;
-    try {
-      normalizedHostname = normalizeHostname(hostname);
-    } catch {
-      failLookup(options.all, callback);
-      return;
-    }
-    if (normalizedHostname !== scopedHostname) {
-      failLookup(options.all, callback);
-      return;
-    }
-    pinnedLookup(scopedHostname, options, callback);
-  };
-}
-
 function getEligibleAddresses(
   addresses: LookupAddress[],
   family: number | "IPv4" | "IPv6" | undefined,

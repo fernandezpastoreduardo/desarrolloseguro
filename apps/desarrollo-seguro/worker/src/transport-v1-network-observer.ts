@@ -1,5 +1,9 @@
 import type { LookupFunction } from "node:net";
 import {
+  createEgressAuthorizedLookup,
+  createEgressDestinationAuthorizer,
+} from "./egress-destination-policy.js";
+import {
   observePublicDns,
   type PublicDnsResolver,
 } from "./pinned-dns-lookup.js";
@@ -22,20 +26,28 @@ const ROOT_PATHS = ["/"] as const;
 
 export type TransportV1NetworkObserverDependencies = {
   dnsResolver?: PublicDnsResolver;
-  lookupFactory?: () => LookupFunction;
+  lookupFactory?: (hostname: string, port: number) => LookupFunction;
   httpRequestFactory?: HttpRequestFactory;
   httpsRequestFactory?: HttpsRequestFactory;
   httpsCa?: string;
 };
 
 /**
- * Collects the reduced profile's evidence using bounded, pinned transports.
- * It is not wired to a worker entrypoint and must run only after process and
- * egress isolation have been implemented and verified.
+ * Collects reduced-profile evidence using bounded transports. The broker
+ * entrypoint supplies this observer; outbound connections still require host
+ * firewall policy and adversarial runtime verification before scans are enabled.
  */
 export function createTransportV1NetworkObserver(
   dependencies: TransportV1NetworkObserverDependencies = {},
 ): TransportV1ObservationSource {
+  const lookupFactory =
+    dependencies.lookupFactory ??
+    ((hostname: string, port: number) =>
+      createEgressAuthorizedLookup(
+        hostname,
+        port,
+        createEgressDestinationAuthorizer(hostname, dependencies.dnsResolver),
+      ));
   return {
     sourceKind: "network",
     async observeDns(hostname, signal) {
@@ -64,7 +76,7 @@ export function createTransportV1NetworkObserver(
             },
             {
               ca: dependencies.httpsCa,
-              lookupFactory: dependencies.lookupFactory,
+              lookupFactory,
               requestFactory: dependencies.httpsRequestFactory,
             },
           ),
@@ -88,7 +100,7 @@ export function createTransportV1NetworkObserver(
             },
             {
               httpsCa: dependencies.httpsCa,
-              lookupFactory: dependencies.lookupFactory,
+              lookupFactory,
               requestFactory: dependencies.httpRequestFactory,
               httpsRequestFactory: dependencies.httpsRequestFactory,
             },
@@ -117,7 +129,7 @@ export function createTransportV1NetworkObserver(
             },
             {
               ca: dependencies.httpsCa,
-              lookupFactory: dependencies.lookupFactory,
+              lookupFactory,
               requestFactory: dependencies.httpsRequestFactory,
             },
           ),

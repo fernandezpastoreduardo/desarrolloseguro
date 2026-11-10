@@ -76,7 +76,12 @@ function createRequestFactory(
 
 function createLookupFactory() {
   const lookup = vi.fn<LookupFunction>();
-  return { lookupFactory: () => lookup, lookup };
+  const lookupRequests: Array<[string, number]> = [];
+  const lookupFactory = vi.fn((hostname: string, port: number) => {
+    lookupRequests.push([hostname, port]);
+    return lookup;
+  });
+  return { lookupFactory, lookup, lookupRequests };
 }
 
 describe("requestPinnedHttpUpgrade", () => {
@@ -99,7 +104,7 @@ describe("requestPinnedHttpUpgrade", () => {
       });
       return request as unknown as ClientRequest;
     });
-    const { lookupFactory } = createLookupFactory();
+    const { lookupFactory, lookupRequests } = createLookupFactory();
 
     const result = await requestPinnedHttpUpgrade(
       {
@@ -123,6 +128,7 @@ describe("requestPinnedHttpUpgrade", () => {
       expect.objectContaining({ protocol: "http:", port: 80, hostname: HOSTNAME }),
       expect.any(Function),
     );
+    expect(lookupRequests).toEqual([[HOSTNAME, 80], [HOSTNAME, 443]]);
     expect(httpsOptions).toEqual([{ port: 443, path: "/" }]);
   });
 

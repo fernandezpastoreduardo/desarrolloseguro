@@ -9,7 +9,10 @@ import {
   normalizeHostname,
 } from "@desarrolloseguro/core";
 import type { SecurityHeaderEvidence } from "@desarrolloseguro/core";
-import { createScopedPinnedLookup } from "./pinned-dns-lookup.js";
+import {
+  createEgressAuthorizedLookup,
+  createEgressDestinationAuthorizer,
+} from "./egress-destination-policy.js";
 import {
   includeTransportMetrics,
   PinnedTransportError,
@@ -51,7 +54,7 @@ export type HttpsRequestFactory = (
 
 export type PinnedHttpsDependencies = {
   ca?: string;
-  lookupFactory?: (hostname: string) => LookupFunction;
+  lookupFactory?: (hostname: string, port: number) => LookupFunction;
   requestFactory?: HttpsRequestFactory;
 };
 
@@ -73,7 +76,12 @@ export async function requestPinnedHttps(
 
   const lookupFactory =
     dependencies.lookupFactory ??
-    ((targetHostname: string) => createScopedPinnedLookup(targetHostname));
+    ((targetHostname: string, port: number) =>
+      createEgressAuthorizedLookup(
+        targetHostname,
+        port,
+        createEgressDestinationAuthorizer(targetHostname),
+      ));
   const requestFactory = dependencies.requestFactory ?? defaultHttpsRequest;
   const deadline = Date.now() + REQUEST_TIMEOUT_MS;
   let currentPath = input.path;
@@ -93,7 +101,7 @@ export async function requestPinnedHttps(
         method: input.method,
         signal: input.signal,
         timeoutMs: remainingMs,
-        lookup: lookupFactory(hostname),
+        lookup: lookupFactory(hostname, HTTPS_PORT),
         requestFactory,
         ca: dependencies.ca,
       });

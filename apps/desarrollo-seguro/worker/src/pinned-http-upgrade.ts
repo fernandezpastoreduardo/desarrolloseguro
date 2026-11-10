@@ -5,7 +5,10 @@ import {
   getCanonicalScanPaths,
   normalizeHostname,
 } from "@desarrolloseguro/core";
-import { createScopedPinnedLookup } from "./pinned-dns-lookup.js";
+import {
+  createEgressAuthorizedLookup,
+  createEgressDestinationAuthorizer,
+} from "./egress-destination-policy.js";
 import {
   requestPinnedHttps,
   type HttpsRequestFactory,
@@ -46,7 +49,7 @@ export type HttpRequestFactory = (
 ) => ClientRequest;
 
 export type PinnedHttpUpgradeDependencies = {
-  lookupFactory?: (hostname: string) => LookupFunction;
+  lookupFactory?: (hostname: string, port: number) => LookupFunction;
   requestFactory?: HttpRequestFactory;
   httpsRequestFactory?: HttpsRequestFactory;
   httpsCa?: string;
@@ -69,14 +72,19 @@ export async function requestPinnedHttpUpgrade(
   try {
     const lookupFactory =
       dependencies.lookupFactory ??
-      ((targetHostname: string) => createScopedPinnedLookup(targetHostname));
+    ((targetHostname: string, port: number) =>
+      createEgressAuthorizedLookup(
+        targetHostname,
+        port,
+        createEgressDestinationAuthorizer(targetHostname),
+      ));
     const httpResult = await makeHttpRequest({
       hostname,
       path: input.path,
       method: input.method,
       signal: scopedSignal.signal,
       timeoutMs: Math.max(1, deadline - Date.now()),
-      lookup: lookupFactory(hostname),
+      lookup: lookupFactory(hostname, HTTP_PORT),
       requestFactory: dependencies.requestFactory ?? defaultHttpRequest,
     });
     const upgradedPath = validateUpgradeLocation(
