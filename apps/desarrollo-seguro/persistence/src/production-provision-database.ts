@@ -17,6 +17,7 @@ const MIGRATOR_ROLE = "ds_migrator";
 const API_ROLE = "ds_api";
 const READ_ROLE = "ds_read";
 const WORKER_ROLE = "ds_worker";
+const RETENTION_ROLE = "ds_retention";
 const PRODUCTION_OPT_IN_ERROR = "DS_PRODUCTION_BOOTSTRAP_ENABLED_required";
 const SETTINGS_ERROR = "DS_PRODUCTION_PROVISION_SETTINGS_invalid";
 const TARGET_ERROR =
@@ -30,6 +31,7 @@ export interface ProductionProvisioningSettings {
   adminUrl: string;
   apiDatabaseUrl: string;
   workerDatabaseUrl: string;
+  retentionDatabaseUrl: string;
   databaseName: string;
   migratorPassword: string;
   tlsCa: string;
@@ -47,6 +49,7 @@ export function assertSafeProductionProvisioningTarget(
     !isNonEmptyString(settings.adminUrl) ||
     !isNonEmptyString(settings.apiDatabaseUrl) ||
     !isNonEmptyString(settings.workerDatabaseUrl) ||
+    !isNonEmptyString(settings.retentionDatabaseUrl) ||
     !isNonEmptyString(settings.databaseName) ||
     !isNonEmptyString(settings.migratorPassword) ||
     !isNonEmptyString(settings.tlsCa) ||
@@ -101,11 +104,20 @@ export function assertSafeProductionProvisioningTarget(
     testMode,
     target,
   );
+  parseRuntimeDatabaseUrl(
+    settings.retentionDatabaseUrl,
+    RETENTION_ROLE,
+    "DS_PRODUCTION_RETENTION_DATABASE_URL_invalid",
+    settings.databaseName,
+    testMode,
+    target,
+  );
 
   return {
     adminUrl: settings.adminUrl,
     apiDatabaseUrl: settings.apiDatabaseUrl,
     workerDatabaseUrl: settings.workerDatabaseUrl,
+    retentionDatabaseUrl: settings.retentionDatabaseUrl,
     databaseName: settings.databaseName,
     migratorPassword: settings.migratorPassword,
     tlsCa: settings.tlsCa,
@@ -146,6 +158,16 @@ export async function provisionProductionDevelopmentSecurityDatabase(
       target,
     ).password,
   );
+  const retentionPassword = decodeURIComponent(
+    parseRuntimeDatabaseUrl(
+      settings.retentionDatabaseUrl,
+      RETENTION_ROLE,
+      "DS_PRODUCTION_RETENTION_DATABASE_URL_invalid",
+      settings.databaseName,
+      testMode,
+      target,
+    ).password,
+  );
 
   try {
     await assertManagedRoleMemberships(adminPool);
@@ -153,10 +175,11 @@ export async function provisionProductionDevelopmentSecurityDatabase(
     await ensureRole(adminPool, MIGRATOR_ROLE, settings.migratorPassword, true);
     await ensureRole(adminPool, API_ROLE, apiPassword, true);
     await ensureRole(adminPool, WORKER_ROLE, workerPassword, true);
+    await ensureRole(adminPool, RETENTION_ROLE, retentionPassword, true);
     await ensureDatabase(adminPool, settings.databaseName);
     await adminPool.query(
       `GRANT CONNECT ON DATABASE ${quoteIdentifier(settings.databaseName)}
-       TO ${READ_ROLE}, ${API_ROLE}, ${WORKER_ROLE}, ${MIGRATOR_ROLE}`,
+       TO ${READ_ROLE}, ${API_ROLE}, ${WORKER_ROLE}, ${RETENTION_ROLE}, ${MIGRATOR_ROLE}`,
     );
     await adminPool.query(
       `REVOKE ALL ON DATABASE ${quoteIdentifier(settings.databaseName)} FROM PUBLIC`,
@@ -200,6 +223,9 @@ export function readProductionProvisioningSettingsFromEnvironment(
     ),
     workerDatabaseUrl: readSecretFile(
       environment.DS_PRODUCTION_WORKER_DATABASE_URL_FILE,
+    ),
+    retentionDatabaseUrl: readSecretFile(
+      environment.DS_PRODUCTION_RETENTION_DATABASE_URL_FILE,
     ),
     databaseName: environment.DS_PRODUCTION_DATABASE_NAME,
     migratorPassword: readSecretFile(
@@ -269,7 +295,10 @@ function parseAdminUrl(adminUrl: string, testMode: boolean): URL {
 
 function parseRuntimeDatabaseUrl(
   databaseUrl: string,
-  expectedRole: typeof API_ROLE | typeof WORKER_ROLE,
+  expectedRole:
+    | typeof API_ROLE
+    | typeof WORKER_ROLE
+    | typeof RETENTION_ROLE,
   invalidUrlCode: string,
   databaseName: string,
   testMode: boolean,
@@ -338,7 +367,8 @@ async function ensureRole(
     | typeof READ_ROLE
     | typeof MIGRATOR_ROLE
     | typeof API_ROLE
-    | typeof WORKER_ROLE,
+    | typeof WORKER_ROLE
+    | typeof RETENTION_ROLE,
   password: string | null,
   login: boolean,
 ): Promise<void> {
@@ -393,7 +423,10 @@ async function assertManagedRoleMemberships(pool: Pool): Promise<void> {
      JOIN pg_roles AS member ON member.oid = membership.member
      WHERE member.rolname = ANY($1) OR granted.rolname = $2
      ORDER BY member.rolname, granted.rolname`,
-    [[READ_ROLE, MIGRATOR_ROLE, API_ROLE, WORKER_ROLE], READ_ROLE],
+    [
+      [READ_ROLE, MIGRATOR_ROLE, API_ROLE, WORKER_ROLE, RETENTION_ROLE],
+      READ_ROLE,
+    ],
   );
   if (
     memberships.rows.some(
@@ -427,9 +460,10 @@ async function ensureDatabase(pool: Pool, databaseName: string): Promise<void> {
 
 async function applyRuntimeGrants(pool: Pool): Promise<void> {
   await pool.query(`
-    GRANT USAGE ON SCHEMA public TO ${READ_ROLE}, ${API_ROLE}, ${WORKER_ROLE};
+    GRANT USAGE ON SCHEMA public TO ${READ_ROLE}, ${API_ROLE}, ${WORKER_ROLE},
+      ${RETENTION_ROLE};
     REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public
-      FROM ${READ_ROLE}, ${API_ROLE}, ${WORKER_ROLE};
+      FROM ${READ_ROLE}, ${API_ROLE}, ${WORKER_ROLE}, ${RETENTION_ROLE};
     GRANT SELECT (hostname, enrollment, profile_version, opted_out_at)
       ON public.ds_domains TO ${READ_ROLE};
     GRANT SELECT (id, hostname, profile_version, state, queued_at)
@@ -442,7 +476,7 @@ async function applyRuntimeGrants(pool: Pool): Promise<void> {
       target_path, method, summary, limitation
     ) ON public.ds_check_results TO ${READ_ROLE};
     REVOKE UPDATE, DELETE, TRUNCATE ON ALL TABLES IN SCHEMA public
-      FROM ${READ_ROLE}, ${API_ROLE}, ${WORKER_ROLE};
+      FROM ${READ_ROLE}, ${API_ROLE}, ${WORKER_ROLE}, ${RETENTION_ROLE};
     REVOKE INSERT ON public.ds_scan_runs, public.ds_check_results,
       public.ds_scan_metrics FROM ${WORKER_ROLE};
     REVOKE UPDATE (state, lease_until, lease_token, attempts, available_at,
@@ -453,6 +487,8 @@ async function applyRuntimeGrants(pool: Pool): Promise<void> {
       public.ds_fail_scan(uuid, uuid, text, integer),
       public.ds_complete_scan(uuid, uuid, timestamptz, text, timestamptz,
         text, jsonb, jsonb, jsonb) TO ${WORKER_ROLE};
+    GRANT EXECUTE ON FUNCTION public.ds_purge_expired_reports(timestamptz)
+      TO ${RETENTION_ROLE};
     ALTER DEFAULT PRIVILEGES FOR ROLE ${MIGRATOR_ROLE} IN SCHEMA public
       REVOKE SELECT ON TABLES FROM ${READ_ROLE};
     ALTER DEFAULT PRIVILEGES FOR ROLE ${MIGRATOR_ROLE} IN SCHEMA public

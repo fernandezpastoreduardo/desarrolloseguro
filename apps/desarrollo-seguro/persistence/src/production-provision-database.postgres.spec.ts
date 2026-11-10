@@ -15,7 +15,8 @@ const TARGET_DATABASE_NAME = "development_security_test_production_bootstrap";
 const MIGRATOR_PASSWORD = "development-security-production-migrator-test-only";
 const API_PASSWORD = "development-security-production-api-test-only";
 const WORKER_PASSWORD = "development-security-production-worker-test-only";
-const ROLE_NAMES = ["ds_read", "ds_migrator", "ds_api", "ds_worker"];
+const RETENTION_PASSWORD = "development-security-production-retention-test-only";
+const ROLE_NAMES = ["ds_read", "ds_migrator", "ds_api", "ds_worker", "ds_retention"];
 const TEST_CA = `-----BEGIN CERTIFICATE-----
 MIICujCCAaKgAwIBAgIJAOGFXHsIB3TxMA0GCSqGSIb3DQEBCwUAMBIxEDAOBgNV
 BAMMB3Rlc3QtY2EwHhcNMjYxMTAzMTUwOTEyWhcNMjYxMTA0MTUwOTEyWjASMRAw
@@ -47,6 +48,7 @@ describePostgres.sequential(
     let adminPool: Pool | undefined;
     let targetPool: Pool | undefined;
     let workerPool: Pool | undefined;
+    let retentionPool: Pool | undefined;
     let targetAdminPool: Pool | undefined;
     let targetDatabaseWasAbsent = false;
     let rolesWereAbsent = false;
@@ -82,6 +84,11 @@ describePostgres.sequential(
       workerUrl.username = "ds_worker";
       workerUrl.password = WORKER_PASSWORD;
       workerPool = new Pool({ connectionString: workerUrl.toString(), max: 1 });
+      const retentionUrl = new URL(ADMIN_DATABASE_URL);
+      retentionUrl.pathname = `/${TARGET_DATABASE_NAME}`;
+      retentionUrl.username = "ds_retention";
+      retentionUrl.password = RETENTION_PASSWORD;
+      retentionPool = new Pool({ connectionString: retentionUrl.toString(), max: 1 });
       const targetAdminUrl = new URL(ADMIN_DATABASE_URL);
       targetAdminUrl.pathname = `/${TARGET_DATABASE_NAME}`;
       targetAdminPool = new Pool({
@@ -93,6 +100,7 @@ describePostgres.sequential(
         adminUrl: ADMIN_DATABASE_URL,
         apiDatabaseUrl: targetUrl.toString(),
         workerDatabaseUrl: workerUrl.toString(),
+        retentionDatabaseUrl: retentionUrl.toString(),
         databaseName: TARGET_DATABASE_NAME,
         migratorPassword: MIGRATOR_PASSWORD,
         tlsCa: TEST_CA,
@@ -107,6 +115,7 @@ describePostgres.sequential(
       try {
         await targetPool?.end();
         await workerPool?.end();
+        await retentionPool?.end();
         await targetAdminPool?.end();
         if (targetDatabaseWasAbsent) {
           await adminPool.query(
@@ -116,7 +125,7 @@ describePostgres.sequential(
         if (rolesWereAbsent) {
           await adminPool.query("REVOKE ds_read FROM ds_api");
           await adminPool.query(
-            "DROP ROLE IF EXISTS ds_worker, ds_api, ds_read, ds_migrator",
+            "DROP ROLE IF EXISTS ds_retention, ds_worker, ds_api, ds_read, ds_migrator",
           );
         }
       } finally {
@@ -135,9 +144,13 @@ describePostgres.sequential(
         worker_superuser: boolean;
         worker_createdb: boolean;
         worker_login: boolean;
+        retention_superuser: boolean;
+        retention_createdb: boolean;
+        retention_login: boolean;
         reader_login: boolean;
         api_member_of_reader: boolean;
         worker_role_exists: boolean;
+        retention_role_exists: boolean;
       }>(
         `SELECT
          (SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname = $1) AS database_owner,
@@ -149,9 +162,13 @@ describePostgres.sequential(
          (SELECT rolsuper FROM pg_roles WHERE rolname = 'ds_worker') AS worker_superuser,
          (SELECT rolcreatedb FROM pg_roles WHERE rolname = 'ds_worker') AS worker_createdb,
          (SELECT rolcanlogin FROM pg_roles WHERE rolname = 'ds_worker') AS worker_login,
+         (SELECT rolsuper FROM pg_roles WHERE rolname = 'ds_retention') AS retention_superuser,
+         (SELECT rolcreatedb FROM pg_roles WHERE rolname = 'ds_retention') AS retention_createdb,
+         (SELECT rolcanlogin FROM pg_roles WHERE rolname = 'ds_retention') AS retention_login,
          (SELECT rolcanlogin FROM pg_roles WHERE rolname = 'ds_read') AS reader_login,
          pg_has_role('ds_api', 'ds_read', 'MEMBER') AS api_member_of_reader,
-         EXISTS(SELECT 1 FROM pg_roles WHERE rolname = 'ds_worker') AS worker_role_exists`,
+         EXISTS(SELECT 1 FROM pg_roles WHERE rolname = 'ds_worker') AS worker_role_exists,
+         EXISTS(SELECT 1 FROM pg_roles WHERE rolname = 'ds_retention') AS retention_role_exists`,
         [TARGET_DATABASE_NAME],
       );
 
@@ -165,9 +182,13 @@ describePostgres.sequential(
         worker_superuser: false,
         worker_createdb: false,
         worker_login: true,
+        retention_superuser: false,
+        retention_createdb: false,
+        retention_login: true,
         reader_login: false,
         api_member_of_reader: true,
         worker_role_exists: true,
+        retention_role_exists: true,
       });
       const migrationCount = await targetAdminPool?.query(
         "SELECT count(*)::integer AS count FROM public.ds_schema_migrations",
@@ -250,6 +271,37 @@ describePostgres.sequential(
       });
     });
 
+    it("grants the retention role only the bounded report purge function", async () => {
+      const access = await retentionPool?.query<{
+        can_purge_reports: boolean;
+        can_execute_worker_functions: boolean;
+        can_read_reports: boolean;
+        can_write_reports: boolean;
+        can_create_objects: boolean;
+      }>(
+        `SELECT
+         has_function_privilege(current_user, 'public.ds_purge_expired_reports(timestamptz)', 'EXECUTE') AS can_purge_reports,
+         (has_function_privilege(current_user, 'public.ds_claim_next_scan(integer)', 'EXECUTE')
+           OR has_function_privilege(current_user, 'public.ds_renew_scan_lease(uuid,uuid,integer)', 'EXECUTE')
+           OR has_function_privilege(current_user, 'public.ds_recover_expired_scan_leases(integer)', 'EXECUTE')
+           OR has_function_privilege(current_user, 'public.ds_fail_scan(uuid,uuid,text,integer)', 'EXECUTE')
+           OR has_function_privilege(current_user, 'public.ds_complete_scan(uuid,uuid,timestamptz,text,timestamptz,text,jsonb,jsonb,jsonb)', 'EXECUTE')) AS can_execute_worker_functions,
+         has_table_privilege(current_user, 'public.ds_scan_runs', 'SELECT') AS can_read_reports,
+         (has_table_privilege(current_user, 'public.ds_scan_runs', 'INSERT')
+           OR has_table_privilege(current_user, 'public.ds_scan_runs', 'UPDATE')
+           OR has_table_privilege(current_user, 'public.ds_scan_runs', 'DELETE')
+           OR has_table_privilege(current_user, 'public.ds_scan_runs', 'TRUNCATE')) AS can_write_reports,
+         has_schema_privilege(current_user, 'public', 'CREATE') AS can_create_objects`,
+      );
+      expect(access?.rows[0]).toEqual({
+        can_purge_reports: true,
+        can_execute_worker_functions: false,
+        can_read_reports: false,
+        can_write_reports: false,
+        can_create_objects: false,
+      });
+    });
+
     it("is idempotent and leaves the expected migration state", async () => {
       if (!ADMIN_DATABASE_URL) return;
       const targetUrl = new URL(ADMIN_DATABASE_URL);
@@ -259,10 +311,14 @@ describePostgres.sequential(
       const workerUrl = new URL(targetUrl);
       workerUrl.username = "ds_worker";
       workerUrl.password = WORKER_PASSWORD;
+      const retentionUrl = new URL(targetUrl);
+      retentionUrl.username = "ds_retention";
+      retentionUrl.password = RETENTION_PASSWORD;
       await provisionProductionDevelopmentSecurityDatabase({
         adminUrl: ADMIN_DATABASE_URL,
         apiDatabaseUrl: targetUrl.toString(),
         workerDatabaseUrl: workerUrl.toString(),
+        retentionDatabaseUrl: retentionUrl.toString(),
         databaseName: TARGET_DATABASE_NAME,
         migratorPassword: MIGRATOR_PASSWORD,
         tlsCa: TEST_CA,

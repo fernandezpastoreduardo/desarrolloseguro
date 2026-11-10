@@ -14,6 +14,8 @@ const SAFE_API_URL =
   "postgresql://ds_api:local-api-only@development-security-database:5432/desarrollo_seguro";
 const SAFE_WORKER_URL =
   "postgresql://ds_worker:local-worker-only@development-security-database:5432/desarrollo_seguro";
+const SAFE_RETENTION_URL =
+  "postgresql://ds_retention:local-retention-only@development-security-database:5432/desarrollo_seguro";
 const SAFE_CA = `-----BEGIN CERTIFICATE-----
 MIICujCCAaKgAwIBAgIJAOGFXHsIB3TxMA0GCSqGSIb3DQEBCwUAMBIxEDAOBgNV
 BAMMB3Rlc3QtY2EwHhcNMjYxMTAzMTUwOTEyWhcNMjYxMTA0MTUwOTEyWjASMRAw
@@ -36,6 +38,7 @@ const SAFE_SETTINGS: ProductionProvisioningSettings = {
   adminUrl: SAFE_ADMIN_URL,
   apiDatabaseUrl: SAFE_API_URL,
   workerDatabaseUrl: SAFE_WORKER_URL,
+  retentionDatabaseUrl: SAFE_RETENTION_URL,
   databaseName: "desarrollo_seguro",
   migratorPassword: "local-migrator-only",
   tlsCa: SAFE_CA,
@@ -117,6 +120,8 @@ describe("Development Security production bootstrap target guard", () => {
           "postgresql://ds_api:local-only@127.0.0.1:5432/development_security_test_production_bootstrap",
         workerDatabaseUrl:
           "postgresql://ds_worker:local-only@127.0.0.1:5432/development_security_test_production_bootstrap",
+        retentionDatabaseUrl:
+          "postgresql://ds_retention:local-only@127.0.0.1:5432/development_security_test_production_bootstrap",
         databaseName: "development_security_test_production_bootstrap",
         testPostgresIsolated: "1",
       }),
@@ -168,18 +173,33 @@ describe("Development Security production bootstrap target guard", () => {
     ).toThrow("DS_PRODUCTION_WORKER_DATABASE_URL_invalid");
   });
 
+  it.each([
+    "postgresql://ds_worker:local-retention-only@development-security-database:5432/desarrollo_seguro",
+    "postgresql://ds_retention:local-retention-only@other-database:5432/desarrollo_seguro",
+    "postgresql://ds_retention:local-retention-only@development-security-database:5432/other_database",
+  ])("rejects an unsafe production retention URL: %s", (retentionDatabaseUrl) => {
+    expect(() =>
+      assertSafeProductionProvisioningTarget({
+        ...SAFE_SETTINGS,
+        retentionDatabaseUrl,
+      }),
+    ).toThrow("DS_PRODUCTION_RETENTION_DATABASE_URL_invalid");
+  });
+
   it("reads multiline CA certificates while keeping other secrets single-line", () => {
     const directory = mkdtempSync(join(tmpdir(), "development-security-provision-"));
     const paths = {
       adminUrl: join(directory, "admin-url"),
       apiDatabaseUrl: join(directory, "api-database-url"),
       workerDatabaseUrl: join(directory, "worker-database-url"),
+      retentionDatabaseUrl: join(directory, "retention-database-url"),
       migratorPassword: join(directory, "migrator-password"),
       tlsCa: join(directory, "ca.crt"),
     };
     writeFileSync(paths.adminUrl, `${SAFE_ADMIN_URL}\n`);
     writeFileSync(paths.apiDatabaseUrl, `${SAFE_API_URL}\n`);
     writeFileSync(paths.workerDatabaseUrl, `${SAFE_WORKER_URL}\n`);
+    writeFileSync(paths.retentionDatabaseUrl, `${SAFE_RETENTION_URL}\n`);
     writeFileSync(paths.migratorPassword, "local-migrator-only\n");
     writeFileSync(paths.tlsCa, SAFE_CA);
 
@@ -188,6 +208,7 @@ describe("Development Security production bootstrap target guard", () => {
         DS_PRODUCTION_ADMIN_URL_FILE: paths.adminUrl,
         DS_PRODUCTION_API_DATABASE_URL_FILE: paths.apiDatabaseUrl,
         DS_PRODUCTION_WORKER_DATABASE_URL_FILE: paths.workerDatabaseUrl,
+        DS_PRODUCTION_RETENTION_DATABASE_URL_FILE: paths.retentionDatabaseUrl,
         DS_PRODUCTION_DATABASE_NAME: "desarrollo_seguro",
         DS_PRODUCTION_MIGRATOR_PASSWORD_FILE: paths.migratorPassword,
         DS_PRODUCTION_TLS_CA_FILE: paths.tlsCa,
@@ -197,6 +218,7 @@ describe("Development Security production bootstrap target guard", () => {
       expect(settings.tlsCa).toBe(SAFE_CA);
       expect(settings.adminUrl).toBe(SAFE_ADMIN_URL);
       expect(settings.workerDatabaseUrl).toBe(SAFE_WORKER_URL);
+      expect(settings.retentionDatabaseUrl).toBe(SAFE_RETENTION_URL);
       expect(settings.migratorPassword).toBe("local-migrator-only");
     } finally {
       rmSync(directory, { recursive: true, force: true });
@@ -209,12 +231,14 @@ describe("Development Security production bootstrap target guard", () => {
       adminUrl: join(directory, "admin-url"),
       apiDatabaseUrl: join(directory, "api-database-url"),
       workerDatabaseUrl: join(directory, "worker-database-url"),
+      retentionDatabaseUrl: join(directory, "retention-database-url"),
       migratorPassword: join(directory, "migrator-password"),
       tlsCa: join(directory, "ca.crt"),
     };
     writeFileSync(paths.adminUrl, `${SAFE_ADMIN_URL}\n`);
     writeFileSync(paths.apiDatabaseUrl, `${SAFE_API_URL}\n`);
     writeFileSync(paths.workerDatabaseUrl, `${SAFE_WORKER_URL}\n`);
+    writeFileSync(paths.retentionDatabaseUrl, `${SAFE_RETENTION_URL}\n`);
     writeFileSync(paths.migratorPassword, "invalid\ncredential\n");
     writeFileSync(paths.tlsCa, SAFE_CA);
 
@@ -224,6 +248,7 @@ describe("Development Security production bootstrap target guard", () => {
           DS_PRODUCTION_ADMIN_URL_FILE: paths.adminUrl,
           DS_PRODUCTION_API_DATABASE_URL_FILE: paths.apiDatabaseUrl,
           DS_PRODUCTION_WORKER_DATABASE_URL_FILE: paths.workerDatabaseUrl,
+          DS_PRODUCTION_RETENTION_DATABASE_URL_FILE: paths.retentionDatabaseUrl,
           DS_PRODUCTION_DATABASE_NAME: "desarrollo_seguro",
           DS_PRODUCTION_MIGRATOR_PASSWORD_FILE: paths.migratorPassword,
           DS_PRODUCTION_TLS_CA_FILE: paths.tlsCa,

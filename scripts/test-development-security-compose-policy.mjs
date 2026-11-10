@@ -20,6 +20,7 @@ const SECRET_NAMES = [
   "development_security_migrator_password",
   "development_security_api_database_url",
   "development_security_worker_database_url",
+  "development_security_retention_database_url",
   "development_security_database_tls.crt",
   "development_security_database_tls.key",
   "development_security_api_tls.crt",
@@ -68,6 +69,7 @@ assert.doesNotMatch(database, /^\s+ports:/mu);
 assert.match(migration, /DS_PRODUCTION_BOOTSTRAP_ENABLED:\s*"1"/u);
 assert.match(migration, /production-provision-database\.js/u);
 assert.match(migration, /DS_PRODUCTION_WORKER_DATABASE_URL_FILE=/u);
+assert.match(migration, /DS_PRODUCTION_RETENTION_DATABASE_URL_FILE=/u);
 assert.match(migration, /service_healthy/u);
 assert.match(compose, /service_completed_successfully/u);
 assert.match(migration, /read_only:\s*true/u);

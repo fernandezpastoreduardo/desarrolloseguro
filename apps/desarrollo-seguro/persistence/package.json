@@ -14,6 +14,7 @@
     "build": "tsc -p tsconfig.json",
     "provision-database": "node dist/provision-database.js",
     "provision-database:production": "node dist/production-provision-database.js",
+    "retention-scheduler": "node dist/retention-scheduler.js",
     "pretest": "pnpm --filter @desarrolloseguro/core build",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage --coverage.reporter=lcov --coverage.reporter=text",
