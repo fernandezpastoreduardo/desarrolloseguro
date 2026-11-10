@@ -10,7 +10,7 @@
     "dev": "pnpm --parallel --filter @desarrolloseguro/api --filter @desarrolloseguro/web dev",
     "build": "pnpm -r build",
     "test": "pnpm --workspace-concurrency=1 -r test",
-    "test:postgres": "pnpm --filter @desarrolloseguro/persistence test:postgres",
+    "test:postgres": "pnpm --filter @desarrolloseguro/persistence test:postgres && pnpm --filter @desarrolloseguro/worker test:postgres",
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint",
     "migrations:check": "node scripts/check-migration-registry.mjs",

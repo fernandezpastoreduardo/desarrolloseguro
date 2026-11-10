@@ -18,10 +18,11 @@ Las pruebas de políticas TLS generan certificados sintéticos temporales. No de
 | Docker | Servicios, redes internas, loopback-only para web, secretos y volumen exclusivos del proyecto. |
 | TLS | Validación de nombres/CA y configuración de proxy con material sintético. |
 | UI | Flujos accesibles, estados de carga/error, navegación y adaptación móvil. |
-| Primitivas, observador y executor local | Validación DNS/IP, pinning TLS, límite de respuesta, HTTP→HTTPS de mismo host/puerto/ruta, señales derivadas, métricas de intentos/bytes recibidos y clasificación segura de errores TLS. La composición y el paso por el procesador se prueban con dependencias sintéticas; no valida firewall ni egress del host. |
+| Primitivas, observador y executor local | Validación DNS/IP, pinning TLS, límite de respuesta, HTTP→HTTPS de mismo host/puerto/ruta con servidores sintéticos loopback, señales derivadas, métricas de intentos/bytes recibidos y clasificación segura de errores TLS. Un DNS que cambia de IP pública a loopback se rechaza antes de la segunda conexión; no valida firewall ni egress del host. |
 | Ensamblador fixture-only | Cobertura exacta de `transport-v1`, errores categóricos sin filtrar detalles y derivación del veredicto; no valida adaptadores de red ni produce tráfico. |
+| Canal de proceso y PostgreSQL | El hijo recibe solo hostname/perfil en un protocolo acotado, con entorno vacío y sin lease; el coordinador valida y persiste el resultado. La suite `pnpm test:postgres` recorre el canal con fixture hasta el informe público en una base opt-in aislada. El canal no prueba sandbox del sistema operativo. |
 | Executor y runtime futuro | Separación de credenciales, bloqueo real de destinos privados/host/IPv6, DNS rebinding, límites globales y ausencia de tráfico a servicios señuelo en el runtime de despliegue. |
 
 ## Límites
 
-El executor de red compuesto no tiene entrada operativa; el worker desplegable y el scheduler no están habilitados. CI no escanea hosts ni accede a sistemas externos. Las pruebas deben usar fixtures y dominios reservados de prueba. Antes de habilitar scans será necesario completar la cobertura de SSRF, DNS rebinding, redirects, pinning por conexión, egress, límites de recursos y privacidad con pruebas aisladas y validación en el runtime elegido.
+El executor de red compuesto no tiene entrada operativa; el worker desplegable y el scheduler no están habilitados. CI no escanea hosts ni accede a sistemas externos. Las pruebas deben usar fixtures y dominios reservados de prueba. Antes de habilitar scans será necesario completar la cobertura de SSRF, DNS rebinding, redirects, pinning por conexión, sandbox del proceso, egress, límites de recursos y privacidad con pruebas aisladas y validación en el runtime elegido.

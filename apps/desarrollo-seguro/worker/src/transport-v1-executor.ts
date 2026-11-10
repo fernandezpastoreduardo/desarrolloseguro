@@ -24,6 +24,11 @@ export type TransportV1ProbeResult = {
   bytesCount: number;
 };
 
+export type TransportV1ScanJob = Pick<
+  ClaimedScanJob,
+  "hostname" | "profileVersion"
+>;
+
 /**
  * Observation boundary for the reduced profile. Implementations must return
  * only derived evidence, never response bodies, raw headers, or IPs.
@@ -59,7 +64,7 @@ export class TransportV1FixtureExecutor {
   ) {}
 
   async execute(
-    job: ClaimedScanJob,
+    job: TransportV1ScanJob,
     signal: AbortSignal,
   ): Promise<
     Omit<ScanRunInput, "jobId" | "leaseToken" | "hostname" | "profileVersion">
@@ -129,7 +134,7 @@ export class TransportV1NetworkExecutor {
   ) {}
 
   async execute(
-    job: ClaimedScanJob,
+    job: TransportV1ScanJob,
     signal: AbortSignal,
   ): Promise<
     Omit<ScanRunInput, "jobId" | "leaseToken" | "hostname" | "profileVersion">

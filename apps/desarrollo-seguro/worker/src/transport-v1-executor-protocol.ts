@@ -1,0 +1,186 @@
+import type { ScanCheck, ScanRunInput } from "@desarrolloseguro/persistence";
+import { normalizeHostname } from "@desarrolloseguro/core";
+
+export const TRANSPORT_V1_EXECUTOR_PROTOCOL_VERSION = 1;
+export const MAX_EXECUTOR_REQUEST_BYTES = 4 * 1024;
+export const MAX_EXECUTOR_RESPONSE_BYTES = 256 * 1024;
+const MAX_TRANSPORT_REQUESTS_PER_SCAN = 24;
+const MAX_TRANSPORT_BYTES_PER_SCAN = 2 * 1024 * 1024;
+const MAX_TRANSPORT_DURATION_MS = 35_000;
+
+export type TransportV1ExecutorRequest = {
+  protocolVersion: 1;
+  requestId: string;
+  hostname: string;
+  profileVersion: "transport-v1";
+};
+
+export type TransportV1ExecutorResponse =
+  | {
+      protocolVersion: 1;
+      requestId: string;
+      result: Omit<
+        ScanRunInput,
+        "jobId" | "leaseToken" | "hostname" | "profileVersion"
+      >;
+    }
+  | {
+      protocolVersion: 1;
+      requestId: string;
+      errorCode: "request_invalid" | "executor_failed";
+    };
+
+export function parseTransportV1ExecutorRequest(
+  value: unknown,
+): TransportV1ExecutorRequest {
+  if (!isRecord(value) || value.protocolVersion !== 1) {
+    throw new Error("executor_request_invalid");
+  }
+  if (
+    typeof value.requestId !== "string" ||
+    !/^[0-9a-f-]{36}$/iu.test(value.requestId) ||
+    value.profileVersion !== "transport-v1"
+  ) {
+    throw new Error("executor_request_invalid");
+  }
+  let hostname: string;
+  try {
+    hostname = normalizeHostname(value.hostname);
+  } catch {
+    throw new Error("executor_request_invalid");
+  }
+  return {
+    protocolVersion: 1,
+    requestId: value.requestId,
+    hostname,
+    profileVersion: "transport-v1",
+  };
+}
+
+export function parseTransportV1ExecutorResponse(
+  value: unknown,
+  expectedRequestId: string,
+): TransportV1ExecutorResponse {
+  if (
+    !isRecord(value) ||
+    value.protocolVersion !== TRANSPORT_V1_EXECUTOR_PROTOCOL_VERSION ||
+    value.requestId !== expectedRequestId
+  ) {
+    throw new Error("executor_response_invalid");
+  }
+  if (value.errorCode === "request_invalid" || value.errorCode === "executor_failed") {
+    return {
+      protocolVersion: 1,
+      requestId: expectedRequestId,
+      errorCode: value.errorCode,
+    };
+  }
+  return {
+    protocolVersion: 1,
+    requestId: expectedRequestId,
+    result: parseExecutorResult(value.result),
+  };
+}
+
+function parseExecutorResult(
+  value: unknown,
+): Omit<ScanRunInput, "jobId" | "leaseToken" | "hostname" | "profileVersion"> {
+  if (!isRecord(value)) throw new Error("executor_result_invalid");
+  const startedAt = parseDate(value.startedAt);
+  const completedAt = parseDate(value.completedAt);
+  if (
+    typeof value.scannerVersion !== "string" ||
+    value.scannerVersion !== "transport-v1-network-adapter-1" ||
+    !isVerdict(value.verdict) ||
+    !Array.isArray(value.scope) ||
+    value.scope.length !== 1 ||
+    value.scope[0] !== "/" ||
+    !Array.isArray(value.checks) ||
+    value.checks.length !== 5 ||
+    !isRecord(value.metrics)
+  ) {
+    throw new Error("executor_result_invalid");
+  }
+  if (completedAt.getTime() < startedAt.getTime()) {
+    throw new Error("executor_result_invalid");
+  }
+  return {
+    scannerVersion: value.scannerVersion,
+    startedAt,
+    completedAt,
+    verdict: value.verdict,
+    scope: value.scope,
+    checks: value.checks.map(parseCheck),
+    metrics: {
+      requestsCount: parseCount(value.metrics.requestsCount, MAX_TRANSPORT_REQUESTS_PER_SCAN),
+      bytesCount: parseCount(value.metrics.bytesCount, MAX_TRANSPORT_BYTES_PER_SCAN),
+      durationMs: parseCount(value.metrics.durationMs, MAX_TRANSPORT_DURATION_MS),
+      pagesCount: parseCount(value.metrics.pagesCount, 0),
+    },
+  };
+}
+
+function parseCheck(value: unknown): ScanCheck {
+  if (
+    !isRecord(value) ||
+    typeof value.controlId !== "string" ||
+    !isCheckStatus(value.status) ||
+    value.required !== true ||
+    typeof value.severity !== "string" ||
+    typeof value.targetPath !== "string" ||
+    typeof value.method !== "string" ||
+    typeof value.summary !== "string" ||
+    typeof value.limitation !== "string" ||
+    !isRecord(value.evidence)
+  ) {
+    throw new Error("executor_result_invalid");
+  }
+  return {
+    controlId: value.controlId,
+    status: value.status,
+    required: true,
+    severity: value.severity,
+    observedAt: parseDate(value.observedAt),
+    targetPath: value.targetPath,
+    method: value.method,
+    summary: value.summary,
+    limitation: value.limitation,
+    evidence: value.evidence,
+  };
+}
+
+function parseDate(value: unknown): Date {
+  if (typeof value !== "string") throw new Error("executor_result_invalid");
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) throw new Error("executor_result_invalid");
+  return date;
+}
+
+function parseCount(value: unknown, maximum: number): number {
+  if (
+    typeof value !== "number" ||
+    !Number.isSafeInteger(value) ||
+    value < 0 ||
+    value > maximum
+  ) {
+    throw new Error("executor_result_invalid");
+  }
+  return value;
+}
+
+function isVerdict(value: unknown): value is ScanRunInput["verdict"] {
+  return value === "pass" || value === "fail" || value === "inconclusive";
+}
+
+function isCheckStatus(value: unknown): value is ScanCheck["status"] {
+  return value === "pass" || value === "fail" || value === "unknown" || value === "not_applicable";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Object.getPrototypeOf(value) === Object.prototype
+  );
+}
