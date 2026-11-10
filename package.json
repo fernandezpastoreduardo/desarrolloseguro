@@ -15,6 +15,7 @@
     "lint": "pnpm -r lint",
     "migrations:check": "node scripts/check-migration-registry.mjs",
     "ci:verify": "bash scripts/ci-verify.sh",
-    "quality:check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+    "quality:check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "sandbox:check": "bash scripts/verify-executor-sandbox.sh"
   }
 }

@@ -22,7 +22,8 @@ Las pruebas de políticas TLS generan certificados sintéticos temporales. No de
 | Ensamblador fixture-only | Cobertura exacta de `transport-v1`, errores categóricos sin filtrar detalles y derivación del veredicto; no valida adaptadores de red ni produce tráfico. |
 | Canal de proceso y PostgreSQL | El hijo recibe solo hostname/perfil en un protocolo acotado, con entorno vacío y sin lease; el coordinador valida y persiste el resultado. La suite `pnpm test:postgres` recorre el canal con fixture hasta el informe público en una base opt-in aislada. El canal no prueba sandbox del sistema operativo. |
 | Fallos y reintentos | El executor no filtra su excepción; la DB solo libera el trabajo con un lease vigente, aplica un máximo de intentos y backoff, y publica únicamente códigos categóricos permitidos. |
-| Executor y runtime futuro | Separación de credenciales, bloqueo real de destinos privados/host/IPv6, DNS rebinding, límites globales y ausencia de tráfico a servicios señuelo en el runtime de despliegue. |
+| Sandbox Linux del executor | CI ejecuta `pnpm sandbox:check`: construye imagen separada y confirma usuario, capacidades, no-new-privileges, filesystem read-only, tmpfs, ausencia de Docker socket/secretos/interfaces/rutas por defecto de red y topes efectivos de cgroup v2; corre sin red y sin montajes del host. También valida el entrypoint real con input rechazado antes de la red. No demuestra política de egress ni aislamiento del VPS. |
+| Executor y runtime futuro | Separación de credenciales, bloqueo real de destinos privados/host/IPv6, DNS rebinding, límites globales y ausencia de tráfico a servicios señuelo en el runtime de despliegue. La prueba `network none` no cubre egress permitido ni firewall del host. |
 
 ## Límites
 

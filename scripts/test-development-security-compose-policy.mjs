@@ -33,6 +33,11 @@ const [compose, nginx, postgresHba, dockerfile, caddyFragment] = await Promise.a
   readFile("Dockerfile", "utf8"),
   readFile(CADDY_FRAGMENT_PATH, "utf8"),
 ]);
+const sandboxVerifier = await readFile(
+  "scripts/verify-executor-sandbox.sh",
+  "utf8",
+);
+const sandboxProbe = await readFile("scripts/executor-sandbox-probe.mjs", "utf8");
 
 function serviceBlock(serviceName) {
   const pattern = new RegExp(
@@ -103,6 +108,26 @@ assert.match(compose, /name: development-security-postgres/u);
 assert.doesNotMatch(compose, /grumphya|apps\/api|apps\/web/iu);
 assert.doesNotMatch(compose, /privileged:\s*true/u);
 assert.doesNotMatch(compose, /worker|executor|scan-runner/iu);
+assert.match(dockerfile, /AS development-security-executor\n/u);
+assert.match(dockerfile, /ENTRYPOINT \["node", "apps\/desarrollo-seguro\/worker\/dist\/transport-v1-executor-child\.js"\]/u);
+assert.match(sandboxVerifier, /--network none/u);
+assert.match(sandboxVerifier, /--read-only/u);
+assert.match(sandboxVerifier, /--cap-drop ALL/u);
+assert.match(sandboxVerifier, /--security-opt no-new-privileges/u);
+assert.match(sandboxVerifier, /--pids-limit 64/u);
+assert.match(sandboxVerifier, /--memory 256m/u);
+assert.match(sandboxVerifier, /--cpus 0\.5/u);
+assert.doesNotMatch(sandboxVerifier, /--volume|--mount|--env|--publish|--privileged/u);
+assert.match(sandboxProbe, /capabilities_not_dropped/u);
+assert.match(sandboxProbe, /root_mount_not_read_only/u);
+assert.match(sandboxProbe, /temporary_mount_not_restricted/u);
+assert.match(sandboxProbe, /docker_socket_unavailable/u);
+assert.match(sandboxProbe, /process_limit_not_applied/u);
+assert.match(sandboxProbe, /memory_limit_not_applied/u);
+assert.match(sandboxProbe, /cpu_limit_not_applied/u);
+assert.match(sandboxProbe, /default_network_route_present/u);
+assert.match(sandboxVerifier, /profileVersion":"controls-v1/u);
+assert.match(sandboxVerifier, /executor_entrypoint_probe_failed/u);
 assert.match(nginx, /proxy_pass https:\/\/development-security-api:3001/u);
 assert.match(nginx, /proxy_ssl_verify on/u);
 assert.match(nginx, /proxy_ssl_trusted_certificate \/run\/secrets\/internal_tls_ca\.crt/u);

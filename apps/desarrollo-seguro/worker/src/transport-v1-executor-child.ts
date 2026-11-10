@@ -38,8 +38,13 @@ async function main(): Promise<void> {
     process.stdout.write(
       `${JSON.stringify({ protocolVersion: 1, requestId, result })}\n`,
     );
-  } catch {
-    writeFailure(requestId, "executor_failed");
+  } catch (error) {
+    writeFailure(
+      requestId,
+      error instanceof Error && error.message === "executor_request_invalid"
+        ? "request_invalid"
+        : "executor_failed",
+    );
     process.exitCode = 1;
   }
 }

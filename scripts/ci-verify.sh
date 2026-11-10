@@ -12,6 +12,7 @@ case "$MODE" in
     pnpm migrations:check
     bash scripts/ci-preflight.sh
     pnpm quality:check
+    pnpm sandbox:check
     ;;
   postgres)
     pnpm test:postgres
