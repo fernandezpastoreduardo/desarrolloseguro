@@ -6,9 +6,9 @@ La cobertura inicial de Vitest se midió con `pnpm test:coverage` el 10 de novie
 | --- | ---: |
 | core | 99.62% |
 | web | 91.41% |
-| persistence | 56.14% |
+| persistence | 56.32% |
 | api | 95.37% |
-| worker | 82.37% |
+| worker | 84.90% |
 
 El agregado ponderado observado fue aproximadamente 82.1% de líneas. Los resultados son un punto de partida, no un objetivo ni una prueba de suficiencia funcional. La primera medición revela que `persistence` es el principal hueco; antes de elevar umbrales globales se revisarán rutas críticas y los tests PostgreSQL.
 
@@ -16,7 +16,9 @@ El primer análisis SonarQube local se completó el 10 de noviembre de 2026. La 
 
 El backlog inicial se revisó y corrigió siguiendo TDD. La clave de test ya no está versionada: se genera con OpenSSL desde `/usr/bin/openssl` dentro de un temporal privado, y una prueba verifica que `PATH` no pueda sustituir el ejecutable. Se corrigió la comparación del fixture del protocolo y se hizo explícito el encadenamiento de promesas del coordinador. Las alertas sobre CIDR de direcciones reservadas y el `try` síncrono del limitador DNS se documentaron en su línea porque esos literales son necesarios para bloquear respuestas no públicas y la promesa ya se gestiona después del `try`.
 
-El último análisis local, tras esas correcciones, registró Quality Gate `PASSED`, 80.8% de cobertura Sonar, 0.0% de duplicación, cero bugs, cero vulnerabilidades, cero code smells y cero security hotspots. No quedan hallazgos abiertos en Sonar.
+El análisis local del 10 de noviembre de 2026 tras añadir el adaptador de telemetría y el runner Docker efímero registró Quality Gate `PASSED`, 81.3% de cobertura Sonar, 89.0% de cobertura nueva, 0.0% de duplicación y cero hallazgos abiertos. Tras conectar el entrypoint del worker y la recuperación periódica de leases, el Quality Gate siguió en `PASSED`; la cobertura Sonar fue 81.2%, con cero bugs, vulnerabilidades, code smells, security hotspots y hallazgos abiertos. La cobertura Vitest del worker fue 84.74%.
+
+La ejecución posterior del 10 de noviembre de 2026, con aprovisionamiento de `ds_worker` y TLS verificado en su configuración, también pasó la Quality Gate. Sonar informó 81.4% de cobertura, 0.7% de duplicación y cero bugs, vulnerabilidades, code smells, security hotspots y hallazgos abiertos. La cobertura Vitest por paquete fue 99.62% en core, 91.41% en web, 56.32% en persistence, 95.37% en API y 84.90% en worker.
 
 Las puertas actuales son:
 

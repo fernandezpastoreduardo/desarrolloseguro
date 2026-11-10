@@ -10,7 +10,7 @@ La regla de alcance está en [AGENTS.md](../../AGENTS.md): el uso real determina
 | `apps/desarrollo-seguro/persistence` | PostgreSQL, migraciones, roles, aprovisionamiento y lectura pública de informes. |
 | `apps/desarrollo-seguro/api` | Endpoints NestJS de estado/informe, validación HTTP y rate limiting. |
 | `apps/desarrollo-seguro/web` | Portal React de solo lectura y proxy de desarrollo. |
-| `apps/desarrollo-seguro/worker` | Políticas y adaptadores probados localmente; no hay un proceso worker arrancable en el stack. |
+| `apps/desarrollo-seguro/worker` | Worker arrancable con rol PostgreSQL limitado, polling serial, telemetría filtrada y cliente de supervisor Unix; permanece fuera del stack desplegado. |
 
 Los paquetes comparten contratos mediante dependencias workspace explícitas. No importan módulos de otros productos ni comparten estado mutable en memoria.
 
@@ -18,7 +18,7 @@ Los paquetes comparten contratos mediante dependencias workspace explícitas. No
 
 La API solo consulta snapshots e informes existentes. Un hostname sin datos devuelve `not_scanned`. Los informes públicos omiten `evidence_json`; las rutas devuelven `Cache-Control: no-store`. El limitador actual es por proceso y se reinicia con la API, por lo que no sustituye un store distribuido si se ejecutan varias instancias.
 
-El portal consulta API bajo `/api/desarrollo-seguro/v1/`; en producción Nginx verifica TLS y hostname del upstream. Compose define contenedores y PostgreSQL propios, con el puerto web limitado a loopback del host. El worker, probe, executor y scheduler no se activan.
+El portal consulta API bajo `/api/desarrollo-seguro/v1/`; en producción Nginx verifica TLS y hostname del upstream. Compose define contenedores y PostgreSQL propios, con el puerto web limitado a loopback del host. El worker ya tiene entrypoint, pero no se incorpora a Compose; probe, executor, supervisor y scheduler no se activan.
 
 ## Extensión
 
