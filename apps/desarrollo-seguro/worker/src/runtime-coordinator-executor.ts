@@ -122,7 +122,7 @@ export class RuntimeCoordinatorExecutor implements ScanExecutor {
       };
 
       signal.addEventListener("abort", onAbort, { once: true });
-      socket.once("connect", () => socket.end(serializedRequest));
+      socket.once("connect", () => socket.write(serializedRequest));
       socket.on("data", (chunk: Buffer) => {
         receivedBytes += chunk.byteLength;
         if (receivedBytes > MAX_EXECUTOR_RESPONSE_BYTES) {

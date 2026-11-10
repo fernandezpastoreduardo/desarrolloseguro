@@ -33,7 +33,15 @@ export type TransportV1ExecutorResponse =
 export function parseTransportV1ExecutorRequest(
   value: unknown,
 ): TransportV1ExecutorRequest {
-  if (!isRecord(value) || value.protocolVersion !== 1) {
+  if (
+    !isRecord(value) ||
+    Reflect.ownKeys(value).length !== 4 ||
+    !Object.hasOwn(value, "protocolVersion") ||
+    !Object.hasOwn(value, "requestId") ||
+    !Object.hasOwn(value, "hostname") ||
+    !Object.hasOwn(value, "profileVersion") ||
+    value.protocolVersion !== 1
+  ) {
     throw new Error("executor_request_invalid");
   }
   if (

@@ -139,11 +139,14 @@ async function startCoordinator(
   const socketPath = join(directory, "coordinator.sock");
   const server = createServer((socket) => {
     const chunks: Buffer[] = [];
+    let responded = false;
     socket.on("data", (chunk) => {
       chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-    });
-    socket.on("end", () => {
-      const request = JSON.parse(Buffer.concat(chunks).toString("utf8")) as Record<string, unknown>;
+      const requestBytes = Buffer.concat(chunks);
+      const newline = requestBytes.indexOf(0x0a);
+      if (responded || newline < 0) return;
+      responded = true;
+      const request = JSON.parse(requestBytes.subarray(0, newline).toString("utf8")) as Record<string, unknown>;
       socket.end(JSON.stringify(respond(request)));
     });
   });
