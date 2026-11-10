@@ -117,7 +117,21 @@ assert.match(sandboxVerifier, /--security-opt no-new-privileges/u);
 assert.match(sandboxVerifier, /--pids-limit 64/u);
 assert.match(sandboxVerifier, /--memory 256m/u);
 assert.match(sandboxVerifier, /--cpus 0\.5/u);
-assert.doesNotMatch(sandboxVerifier, /--volume|--mount|--env|--publish|--privileged/u);
+const verifierWithoutBrokerSocketMounts = sandboxVerifier.replace(
+  /--mount "type=volume,source=\$broker_volume,target=\/run\/development-security-egress(?:,readonly)?"/gu,
+  "",
+);
+assert.equal(
+  sandboxVerifier.match(
+    /--mount "type=volume,source=\$broker_volume,target=\/run\/development-security-egress(?:,readonly)?"/gu,
+  )?.length,
+  4,
+  "Sandbox verifier may mount only the private broker socket volume",
+);
+assert.doesNotMatch(
+  verifierWithoutBrokerSocketMounts,
+  /--volume|--mount|--env|--publish|--privileged/u,
+);
 assert.match(sandboxProbe, /capabilities_not_dropped/u);
 assert.match(sandboxProbe, /root_mount_not_read_only/u);
 assert.match(sandboxProbe, /temporary_mount_not_restricted/u);
