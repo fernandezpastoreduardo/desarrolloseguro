@@ -6,7 +6,12 @@ import {
 
 const ACTIVE_JOB_STATES = ["queued", "running"] as const;
 const MAX_LEASE_DURATION_MS = 5 * 60 * 1000;
-const PROFILE_VERSIONS = ["controls-v1", "controls-v2", "controls-v3"] as const;
+const PROFILE_VERSIONS = [
+  "controls-v1",
+  "controls-v2",
+  "controls-v3",
+  "transport-v1",
+] as const;
 const CHECK_STATUSES = ["pass", "fail", "unknown", "not_applicable"] as const;
 const ENROLLMENTS = ["monitored", "on_demand"] as const;
 const TRIGGERS = ["scheduled", "requested"] as const;

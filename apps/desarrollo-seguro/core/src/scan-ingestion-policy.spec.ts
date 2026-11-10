@@ -28,6 +28,71 @@ const SAFE_DNS_CHECK = {
 };
 
 describe("sanitizeScanObservations", () => {
+  it("accepts exact root-only transport-v1 coverage", () => {
+    const result = sanitizeScanObservations(
+      MONITORED_HOSTNAME,
+      "transport-v1",
+      ["/"],
+      makeTransportV1Checks(),
+    );
+
+    expect(result.checks).toHaveLength(5);
+    expect(result.checks.map(({ controlId, method }) => `${controlId}:${method}`))
+      .toEqual([
+        "DS-DNS-01:DNS",
+        "DS-TLS-01:TLS",
+        "DS-HTTP-01:HEAD",
+        "DS-HTTP-01:GET",
+        "DS-HDR-01:GET",
+      ]);
+    expect(result.checks.every((check) => check.status === "pass")).toBe(true);
+  });
+
+  it("rejects non-root scope and any unmeasured control in transport-v1", () => {
+    expect(() =>
+      sanitizeScanObservations(
+        MONITORED_HOSTNAME,
+        "transport-v1",
+        ["/", "/precios"],
+        makeTransportV1Checks(),
+      ),
+    ).toThrow("scan_scope_not_allowlisted");
+
+    expect(() =>
+      sanitizeScanObservations(
+        MONITORED_HOSTNAME,
+        "transport-v1",
+        ["/"],
+        [
+          ...makeTransportV1Checks(),
+          makeUnknownCheck("DS-PRIV-01", "/", "GET"),
+        ],
+      ),
+    ).toThrow("scan_control_not_allowlisted");
+  });
+
+  it("keeps transport-v1 headers unknown unless evidence says HTTPS", () => {
+    const checks = makeTransportV1Checks().map((check) =>
+      check.controlId === "DS-HDR-01"
+        ? {
+            ...check,
+            evidence: { ...check.evidence, finalScheme: "http" },
+          }
+        : check,
+    );
+
+    const result = sanitizeScanObservations(
+      MONITORED_HOSTNAME,
+      "transport-v1",
+      ["/"],
+      checks,
+    );
+
+    expect(
+      result.checks.find((check) => check.controlId === "DS-HDR-01")?.status,
+    ).toBe("unknown");
+  });
+
   it("requires complete control, route, and method coverage for controls-v2", () => {
     const checks = makeControlsV2Checks(["/", "/precios"]).filter(
       (check) =>
@@ -765,6 +830,61 @@ function makeControlsV3Checks(scope: readonly string[]) {
     if (check.controlId !== "DS-HDR-01") return check;
     return { ...check, evidence: { finalScheme: "https" } };
   });
+}
+
+function makeTransportV1Checks() {
+  const fixtureChecks = [
+    {
+      controlId: "DS-DNS-01",
+      method: "DNS",
+      evidence: { addressClass: "public", aRecordCount: 1, aaaaRecordCount: 0 },
+    },
+    {
+      controlId: "DS-TLS-01",
+      method: "TLS",
+      evidence: {
+        protocol: "TLSv1.3",
+        certificateValid: true,
+        hostnameMatches: true,
+      },
+    },
+    {
+      controlId: "DS-HTTP-01",
+      method: "HEAD",
+      evidence: {
+        statusCode: 200,
+        redirectedToHttps: true,
+        finalScheme: "https",
+      },
+    },
+    {
+      controlId: "DS-HTTP-01",
+      method: "GET",
+      evidence: {
+        statusCode: 200,
+        redirectedToHttps: true,
+        finalScheme: "https",
+      },
+    },
+    {
+      controlId: "DS-HDR-01",
+      method: "GET",
+      evidence: {
+        finalScheme: "https",
+        hsts: true,
+        nosniff: true,
+        frameProtection: true,
+        referrerPolicy: true,
+        csp: true,
+      },
+    },
+  ];
+
+  return fixtureChecks.map((check) => ({
+    ...makeUnknownCheck(check.controlId, "/", check.method),
+    status: "pass",
+    evidence: check.evidence,
+  }));
 }
 
 function makeUnknownCheck(

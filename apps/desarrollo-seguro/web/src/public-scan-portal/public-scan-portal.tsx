@@ -30,7 +30,12 @@ const DOMAIN_STATES = [
   "unavailable",
 ] as const;
 const ENROLLMENTS = ["monitored", "on_demand"] as const;
-const PROFILE_VERSIONS = ["controls-v1", "controls-v2", "controls-v3"] as const;
+const PROFILE_VERSIONS = [
+  "controls-v1",
+  "controls-v2",
+  "controls-v3",
+  "transport-v1",
+] as const;
 const SCAN_VERDICTS = ["pass", "fail", "inconclusive"] as const;
 const SCAN_TRIGGERS = ["scheduled", "requested"] as const;
 const CHECK_STATUSES = ["pass", "fail", "unknown", "not_applicable"] as const;

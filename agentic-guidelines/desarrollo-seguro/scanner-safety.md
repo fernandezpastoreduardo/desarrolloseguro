@@ -1,6 +1,6 @@
 # Seguridad de ejecución de análisis
 
-La función de análisis remoto no está habilitada. La API actual no acepta scans y no hay worker ejecutable ni transporte de red. No activar un executor público hasta implementar y probar las barreras de esta guía.
+La función de análisis remoto no está habilitada. La API actual no acepta scans y no hay un worker ejecutable ni un executor que convierta observaciones de red en resultados. El paquete worker sí contiene primitivas DNS/HTTPS con pruebas locales; su presencia no demuestra el aislamiento de egress ni permite activar análisis. No activar un executor público hasta implementar y probar las barreras de esta guía.
 
 ## Modelo de amenazas y límites de confianza
 
@@ -15,7 +15,7 @@ El activo protegido incluye la red y los servicios del host, la base de datos y 
 | Evidencia fabricada o alterada | Resultado del worker hacia informes públicos y veredictos | Persistencia valida el lease, el esquema y los predicados; la frontera confiable debe derivar los datos de observaciones del transporte y no aceptar estados declarados por el worker | Pruebas de contrato y de extremo a extremo que inyecten datos inválidos; revisión de qué proceso puede escribir resultados |
 | Exposición de datos | Logs, informes o archivos temporales hacia usuarios u operadores no autorizados | No guardar cuerpos, HTML, cookies, tokens ni IP de visitantes; redactar errores y limitar la evidencia persistida a allowlists | Revisar logs, temporales y proyección pública con casos sintéticos |
 
-El despliegue actual reduce el alcance al no desplegar el worker y al mantener API y base en redes internas propias. Esto no demuestra el aislamiento de un futuro executor. En particular, `internal: true` en Compose no acredita por sí solo el bloqueo de tráfico al host, gateway, DNS, IPv6, tráfico reenviado o hairpin. Esas propiedades deben comprobarse en el host y runtime de despliegue escogidos.
+El despliegue actual reduce el alcance al no desplegar el worker y al mantener API y base en redes internas propias. El procesador actual ejecuta cualquier `ScanExecutor` en el mismo proceso que mantiene acceso a persistencia; por tanto, aún no constituye la frontera aislada descrita aquí. Esto no demuestra el aislamiento de un futuro executor. En particular, `internal: true` en Compose no acredita por sí solo el bloqueo de tráfico al host, gateway, DNS, IPv6, tráfico reenviado o hairpin. Esas propiedades deben comprobarse en el host y runtime de despliegue escogidos.
 
 El contrato de controles y evidencia está descrito en [controls-and-evidence.md](controls-and-evidence.md). Valida estructura y coherencia, pero no autentica observaciones. El executor no puede considerarse una fuente confiable hasta que el diseño pruebe cómo obtiene evidencia de conexiones reales y cómo impide que un worker aislado escriba valores inventados.
 

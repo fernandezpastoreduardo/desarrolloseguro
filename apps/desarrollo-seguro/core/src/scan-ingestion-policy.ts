@@ -3,10 +3,12 @@ import { normalizeHostname } from "./scan-policy.js";
 const PROFILE_VERSION_V1 = "controls-v1";
 const PROFILE_VERSION_V2 = "controls-v2";
 const PROFILE_VERSION_V3 = "controls-v3";
+const PROFILE_VERSION_TRANSPORT_V1 = "transport-v1";
 type ProfileVersion =
   | typeof PROFILE_VERSION_V1
   | typeof PROFILE_VERSION_V2
-  | typeof PROFILE_VERSION_V3;
+  | typeof PROFILE_VERSION_V3
+  | typeof PROFILE_VERSION_TRANSPORT_V1;
 const MAX_SCOPE_PATHS = 3;
 const MAX_CHECKS = 32;
 const MAX_EVIDENCE_COUNT = 100_000;
@@ -49,6 +51,12 @@ type ControlContract = {
 const PAGE_PATHS = ALLOWED_SCOPE_PATHS;
 const READ_METHODS = ["GET"] as const;
 const HTTP_METHODS = ["HEAD", "GET"] as const;
+const TRANSPORT_V1_CONTROLS = [
+  "DS-DNS-01",
+  "DS-TLS-01",
+  "DS-HTTP-01",
+  "DS-HDR-01",
+] as const;
 const CONTROLS: Readonly<Record<string, ControlContract>> = {
   "DS-DNS-01": {
     methodsByPath: { "/": ["DNS"] },
@@ -125,6 +133,13 @@ const CONTROLS: Readonly<Record<string, ControlContract>> = {
     },
   },
 };
+const ALL_CONTROL_IDS = Object.keys(CONTROLS);
+const PROFILE_CONTROLS: Readonly<Record<ProfileVersion, readonly string[]>> = {
+  [PROFILE_VERSION_V1]: ALL_CONTROL_IDS,
+  [PROFILE_VERSION_V2]: ALL_CONTROL_IDS,
+  [PROFILE_VERSION_V3]: ALL_CONTROL_IDS,
+  [PROFILE_VERSION_TRANSPORT_V1]: TRANSPORT_V1_CONTROLS,
+};
 
 export function sanitizeScanObservations(
   hostname: unknown,
@@ -138,7 +153,9 @@ export function sanitizeScanObservations(
   }
 
   const allowedPaths = getCanonicalScanPaths(safeHostname);
-  const safeScope = sanitizeScope(scope, allowedPaths);
+  const profilePaths =
+    profileVersion === PROFILE_VERSION_TRANSPORT_V1 ? ["/"] : allowedPaths;
+  const safeScope = sanitizeScope(scope, profilePaths);
   if (
     !Array.isArray(checks) ||
     checks.length === 0 ||
@@ -147,8 +164,9 @@ export function sanitizeScanObservations(
     throw new Error("scan_checks_required");
   }
 
+  const allowedControlIds = PROFILE_CONTROLS[profileVersion];
   const safeChecks = checks.map((check) =>
-    sanitizeCheck(check, safeScope, profileVersion),
+    sanitizeCheck(check, safeScope, profileVersion, allowedControlIds),
   );
   const controlPaths = new Set(
     safeChecks.map(
@@ -160,9 +178,10 @@ export function sanitizeScanObservations(
   }
   if (
     profileVersion === PROFILE_VERSION_V2 ||
-    profileVersion === PROFILE_VERSION_V3
+    profileVersion === PROFILE_VERSION_V3 ||
+    profileVersion === PROFILE_VERSION_TRANSPORT_V1
   ) {
-    assertCompleteCoverage(safeScope, safeChecks);
+    assertCompleteCoverage(safeScope, safeChecks, allowedControlIds);
   }
 
   return { scope: safeScope, checks: safeChecks };
@@ -172,16 +191,20 @@ function isProfileVersion(value: unknown): value is ProfileVersion {
   return (
     value === PROFILE_VERSION_V1 ||
     value === PROFILE_VERSION_V2 ||
-    value === PROFILE_VERSION_V3
+    value === PROFILE_VERSION_V3 ||
+    value === PROFILE_VERSION_TRANSPORT_V1
   );
 }
 
 function assertCompleteCoverage(
   scope: readonly string[],
   checks: readonly SanitizedScanCheck[],
+  allowedControlIds: readonly string[],
 ): void {
   const expectedCoverage = new Set<string>();
-  for (const [controlId, contract] of Object.entries(CONTROLS)) {
+  for (const controlId of allowedControlIds) {
+    const contract = CONTROLS[controlId];
+    if (!contract) throw new Error("scan_profile_not_allowlisted");
     for (const targetPath of scope) {
       const methods = contract.methodsByPath[targetPath] ?? [];
       for (const method of methods) {
@@ -230,11 +253,16 @@ function sanitizeCheck(
   check: unknown,
   scope: readonly string[],
   profileVersion: ProfileVersion,
+  allowedControlIds: readonly string[],
 ): SanitizedScanCheck {
   if (!isPlainRecord(check)) throw new Error("scan_check_invalid");
 
   const controlId = check.controlId;
-  if (typeof controlId !== "string" || !Object.hasOwn(CONTROLS, controlId)) {
+  if (
+    typeof controlId !== "string" ||
+    !allowedControlIds.includes(controlId) ||
+    !Object.hasOwn(CONTROLS, controlId)
+  ) {
     throw new Error("scan_control_not_allowlisted");
   }
   const contract = CONTROLS[controlId];
@@ -302,7 +330,8 @@ function deriveSafeStatus(
 ): SanitizedScanCheck["status"] {
   if (
     (profileVersion === PROFILE_VERSION_V2 ||
-      profileVersion === PROFILE_VERSION_V3) &&
+      profileVersion === PROFILE_VERSION_V3 ||
+      profileVersion === PROFILE_VERSION_TRANSPORT_V1) &&
     controlId === "DS-HTTP-01" &&
     method === "HEAD" &&
     [405, 501].includes(Number(evidence.statusCode)) &&
@@ -312,7 +341,8 @@ function deriveSafeStatus(
     return "unknown";
   }
   if (
-    profileVersion === PROFILE_VERSION_V3 &&
+    (profileVersion === PROFILE_VERSION_V3 ||
+      profileVersion === PROFILE_VERSION_TRANSPORT_V1) &&
     controlId === "DS-HDR-01" &&
     evidence.finalScheme !== "https"
   ) {
@@ -361,7 +391,11 @@ function getRequiredEvidence(
   controlId: string,
 ): readonly string[] | undefined {
   const controlEvidence = REQUIRED_EVIDENCE[controlId];
-  if (profileVersion === PROFILE_VERSION_V3 && controlId === "DS-HDR-01") {
+  if (
+    (profileVersion === PROFILE_VERSION_V3 ||
+      profileVersion === PROFILE_VERSION_TRANSPORT_V1) &&
+    controlId === "DS-HDR-01"
+  ) {
     return [...(controlEvidence ?? []), "finalScheme"];
   }
   return controlEvidence;
@@ -442,7 +476,8 @@ function sanitizeEvidence(
     if (
       key === "finalScheme" &&
       controlId === "DS-HDR-01" &&
-      profileVersion !== PROFILE_VERSION_V3
+      profileVersion !== PROFILE_VERSION_V3 &&
+      profileVersion !== PROFILE_VERSION_TRANSPORT_V1
     ) {
       continue;
     }

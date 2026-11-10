@@ -18,6 +18,7 @@ const MIGRATIONS = [
     version: "006_controls_v3_https_headers",
     file: "006_controls_v3_https_headers.sql",
   },
+  { version: "007_transport_v1", file: "007_transport_v1.sql" },
 ] as const;
 
 const MIGRATION_LOCK_ID = 728194032;

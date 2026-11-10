@@ -185,6 +185,70 @@ describePostgres.sequential("PostgresScanStore", () => {
     ).rejects.toThrow("scan_scope_not_allowlisted");
   });
 
+  it("accepts exact transport-v1 root coverage with five checks", async () => {
+    const job = await queueAndClaim(TEST_NOW, "transport-v1");
+
+    const reportId = await completeDirectly(
+      job,
+      ["/"],
+      makeTransportV1Checks(),
+    );
+
+    const result = await pool.query(
+      `SELECT control_id, target_path, method
+       FROM ds_check_results
+       WHERE run_id = (
+         SELECT id FROM ds_scan_runs
+         WHERE hostname = $1 AND profile_version = 'transport-v1'
+       )
+       ORDER BY control_id, method`,
+      [TEST_HOSTNAME],
+    );
+    expect(result.rows).toEqual([
+      { control_id: "DS-DNS-01", target_path: "/", method: "DNS" },
+      { control_id: "DS-HDR-01", target_path: "/", method: "GET" },
+      { control_id: "DS-HTTP-01", target_path: "/", method: "GET" },
+      { control_id: "DS-HTTP-01", target_path: "/", method: "HEAD" },
+      { control_id: "DS-TLS-01", target_path: "/", method: "TLS" },
+    ]);
+
+    const publicReport = await store.readPublicReport(reportId);
+    expect(publicReport).toMatchObject({
+      id: reportId,
+      profileVersion: "transport-v1",
+      scope: ["/"],
+    });
+    expect(publicReport?.checks).toHaveLength(5);
+    expect(publicReport?.checks[0]).not.toHaveProperty("evidence");
+  });
+
+  it("rejects non-root scope for transport-v1", async () => {
+    const job = await queueAndClaim(TEST_NOW, "transport-v1");
+
+    await expect(
+      completeDirectly(job, ["/", "/precios"], makeTransportV1Checks()),
+    ).rejects.toThrow("scan_scope_not_allowlisted");
+  });
+
+  it("rejects controls outside the transport-v1 profile", async () => {
+    const job = await queueAndClaim(TEST_NOW, "transport-v1");
+    const unsupportedCheck: ScanCheck = {
+      ...CHECK,
+      controlId: "DS-PRIV-01",
+      method: "GET",
+      summary: "Comprobación DS-PRIV-01: unknown.",
+      limitation: "Resultado limitado a las rutas públicas declaradas del perfil transport-v1.",
+      evidence: { thirdPartyAttempts: 0, blockedRequests: 0 },
+    };
+
+    await expect(
+      completeDirectly(job, ["/"], [
+        ...makeTransportV1Checks(),
+        unsupportedCheck,
+      ]),
+    ).rejects.toThrow("scan_check_scope_not_allowlisted");
+  });
+
   it("allows reviewed route paths for every domain", async () => {
     const job = await queueAndClaim();
 
@@ -515,10 +579,13 @@ describePostgres.sequential("PostgresScanStore", () => {
     expect(remaining.rows[0]).toEqual({ runs: 0, checks: 0, metrics: 0 });
   });
 
-  async function queueAndClaim(now: Date = TEST_NOW): Promise<ClaimedScanJob> {
+  async function queueAndClaim(
+    now: Date = TEST_NOW,
+    profileVersion: string = TEST_PROFILE,
+  ): Promise<ClaimedScanJob> {
     await store.ensureFreshScan({
       hostname: TEST_HOSTNAME,
-      profileVersion: TEST_PROFILE,
+      profileVersion,
       trigger: "requested",
       now,
     });
@@ -558,10 +625,11 @@ describePostgres.sequential("PostgresScanStore", () => {
     scope: readonly string[],
     checks: readonly ScanCheck[],
     verdict: "pass" | "inconclusive" = "inconclusive",
-  ): Promise<unknown> {
+  ): Promise<string> {
     const startedAt = new Date();
     const completedAt = new Date(startedAt.getTime() + 1);
-    return pool.query(
+    return pool
+      .query<{ ds_complete_scan: string }>(
       `SELECT ds_complete_scan(
         $1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9::jsonb
       )`,
@@ -581,7 +649,56 @@ describePostgres.sequential("PostgresScanStore", () => {
           pagesCount: 0,
         }),
       ],
-    );
+      )
+      .then((result) => {
+        const reportId = result.rows[0]?.ds_complete_scan;
+        if (!reportId) throw new Error("expected_completed_scan_report_id");
+        return reportId;
+      });
+  }
+
+  function makeTransportV1Checks(): ScanCheck[] {
+    const limitation =
+      "Resultado limitado a las rutas públicas declaradas del perfil transport-v1.";
+    const makeCheck = (
+      controlId: string,
+      method: string,
+      evidence: Record<string, unknown>,
+    ): ScanCheck => ({
+      ...CHECK,
+      controlId,
+      method,
+      summary: `Comprobación ${controlId}: unknown.`,
+      limitation,
+      evidence,
+    });
+    return [
+      makeCheck("DS-DNS-01", "DNS", {
+        addressClass: "public",
+        aRecordCount: 1,
+        aaaaRecordCount: 0,
+      }),
+      makeCheck("DS-TLS-01", "TLS", {
+        protocol: "TLSv1.3",
+        certificateValid: true,
+        hostnameMatches: true,
+      }),
+      ...(["HEAD", "GET"] as const).map((method) =>
+        makeCheck("DS-HTTP-01", method, {
+          statusCode: 200,
+          redirectedToHttps: true,
+          finalScheme: "https",
+        }),
+      ),
+      makeCheck("DS-HDR-01", "GET", {
+        finalScheme: "https",
+        hsts: true,
+        nosniff: true,
+        frameProtection: true,
+        referrerPolicy: true,
+        csp: true,
+      }),
+    ];
   }
 
   function safeDnsCheck(evidence: Record<string, unknown> = {}): ScanCheck {

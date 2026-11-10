@@ -71,7 +71,7 @@ Por tanto, el conjunto completo contiene **10 checks para una ruta, 17 para dos 
 
 En `controls-v2` y `controls-v3`, una respuesta `HEAD` con status 405 o 501 se normaliza a `unknown` cuando la petición sí redirigió a HTTPS y el esquema final es HTTPS. El core deriva `unknown` aunque el payload solicite otro estado, y PostgreSQL solo acepta `unknown` para esa combinación. La regla no declara el control superado. `controls-v1` mantiene su conducta original.
 
-La suite PostgreSQL aislada posterior a migration 006 pasó 65/65, 0 omitidas. Aun así, esta implementación comprueba formato, cobertura y coherencia semántica, no la autenticidad de las observaciones: un worker comprometido podría presentar valores permitidos inventados. La futura frontera confiable del executor debe derivar la evidencia de observaciones reales. No hay probe ni executor, no se realizan solicitudes ni scans y no se ha desplegado o migrado la base productiva. Antes de habilitar ejecución real siguen pendientes DNS/IP pinning, validación en cada conexión/redirección, firewall/egress probado y medición de capacidad del VPS.
+La suite PostgreSQL aislada posterior a migration 006 pasó 65/65, 0 omitidas. Aun así, esta implementación comprueba formato, cobertura y coherencia semántica, no la autenticidad de las observaciones: un worker comprometido podría presentar valores permitidos inventados. El worker tiene adaptadores probados de DNS/IP pinning y HTTPS, pero aún falta el executor que derive la evidencia de controles a partir de esas observaciones y la frontera de proceso sin credenciales. No se realizan solicitudes ni scans reales y no se ha desplegado o migrado la base productiva. Antes de habilitar ejecución siguen pendientes separar executor/persistencia, validar la política efectiva de firewall/egress y medir capacidad del VPS.
 
 ## `controls-v3`: HTTPS explícito para cabeceras
 
@@ -79,7 +79,11 @@ La migración aditiva `006_controls_v3_https_headers.sql` introduce `controls-v3
 
 El core reconoce `finalScheme` para `DS-HDR-01` solo en v3; en v1/v2 la clave sigue fuera del contrato y no cambia su comportamiento histórico. La migración 006 registra el catálogo y las combinaciones control/ruta/método de v3 copiando las reglas de v2. PostgreSQL valida el esquema y bloquea cualquier estado distinto de `unknown` para cabeceras cuyo esquema no sea HTTPS; también exige `finalScheme=https` en su predicado de `pass`. Por tanto la condición existe en la capa de ingesta y en la DB, no depende solo del worker. El historial y la caché permanecen particionados por versión de perfil.
 
-Este guard es una precondición de integridad para el futuro resultado: no demuestra que haya una conexión real ni autentica la evidencia. La migración está en el árbol local y no se ha aplicado a producción. El executor/red continúa bloqueado por pinning y revalidación por conexión/redirección, firewall/egress IPv4/IPv6 y validación de capacidad del VPS; no hay escaneos operativos ni despliegue.
+Este guard es una precondición de integridad para el futuro resultado: no demuestra que haya una conexión real ni autentica la evidencia. La migración está en el árbol local y no se ha aplicado a producción. El flujo de scans continúa bloqueado por la falta de un executor integrado, la separación de credenciales, la demostración de firewall/egress IPv4/IPv6 y la validación de capacidad del VPS; no hay escaneos operativos ni despliegue.
+
+## `transport-v1`: perfil reducido de transporte
+
+La migración aditiva `007_transport_v1.sql` introduce un perfil independiente y limita su scope a la portada `/`. Exige exactamente cinco comprobaciones: DS-DNS-01 `DNS`, DS-TLS-01 `TLS`, DS-HTTP-01 `HEAD` y `GET`, y DS-HDR-01 `GET`. No incluye DS-TLS-02, privacidad ni calidad; sus controles permanecen fuera del informe hasta que existan observadores que produzcan evidencia para ellos. El core y PostgreSQL rechazan rutas fuera de `/`, controles no catalogados, cobertura incompleta y cabeceras con esquema distinto de HTTPS. Los fixtures sintéticos cubren estas reglas y la proyección pública del perfil. No son observaciones de sitios ni habilitan scans.
 
 ## Evaluador local de rúbrica `security-headers-v1`
 

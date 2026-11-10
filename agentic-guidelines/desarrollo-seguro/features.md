@@ -28,6 +28,10 @@ La API, web y PostgreSQL se ejecutan en contenedores independientes con redes, v
 
 **Criterios:** la base no comparte tablas, volúmenes o credenciales con otros sistemas; detener o actualizar este stack no ejecuta cambios en otros proyectos; backup y restauración se prueban sobre una instancia aislada.
 
+## Perfil reducido `transport-v1`
+
+La migración 007 registra un perfil nuevo e inmutable, con alcance solo `/` y cobertura exacta de cinco comprobaciones: DNS, TLS, HTTP HEAD, HTTP GET y cabeceras HTTPS. Excluye privacidad y calidad porque aún no hay observadores para esos controles. Core, persistencia, API y portal reconocen la versión; fixtures sintéticos recorren el procesador, las reglas de ingesta y la representación pública. Esto valida el contrato y el recorrido de datos, no produce observaciones de red reales.
+
 ## Límite actual
 
-No hay worker arrancable, scheduler, admisión de trabajos ni executor de escaneo. La suite automatizada usa fixtures y servicios locales, nunca dominios públicos reales. Ver [scanner-safety.md](scanner-safety.md) y [test-plan.md](test-plan.md) antes de implementar ejecución de red.
+No hay worker arrancable, scheduler ni admisión de trabajos desde la API. El paquete worker aún necesita un executor integrado que obtenga observaciones de las primitivas DNS/HTTPS y una frontera de proceso que separe conexiones de red y credenciales de persistencia. La suite automatizada usa fixtures y servicios locales, nunca dominios públicos reales. Ver [scanner-safety.md](scanner-safety.md) y [test-plan.md](test-plan.md) antes de habilitar ejecución de red.

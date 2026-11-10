@@ -161,6 +161,47 @@ describe("PublicScanService", () => {
     });
   });
 
+  it("projects a transport-v1 fixture report without exposing evidence", async () => {
+    const report = makeReport({
+      profileVersion: "transport-v1",
+      checks: [
+        {
+          controlId: "DS-DNS-01",
+          status: "pass",
+          required: true,
+          severity: "high",
+          observedAt: FIXED_NOW,
+          targetPath: "/",
+          method: "DNS",
+          summary: "Comprobación DS-DNS-01: pass.",
+          limitation:
+            "Resultado limitado a las rutas públicas declaradas del perfil transport-v1.",
+          evidence: { addressClass: "public", aRecordCount: 1 },
+        },
+      ],
+    });
+    const service = new PublicScanService({
+      scanStore: {
+        readPublicDomainSnapshot: vi.fn(),
+        readPublicReport: vi.fn().mockResolvedValue(report),
+      },
+    });
+
+    const publicReport = await service.getReport(REPORT_ID);
+
+    expect(publicReport).toMatchObject({
+      profileVersion: "transport-v1",
+      checks: [
+        {
+          controlId: "DS-DNS-01",
+          method: "DNS",
+          status: "pass",
+        },
+      ],
+    });
+    expect(publicReport.checks[0]).not.toHaveProperty("evidence");
+  });
+
   it.each([
     { expiresAt: "2026-11-03T10:00:00.001Z", expectedState: "fresh" },
     { expiresAt: "2026-11-03T10:00:00.000Z", expectedState: "stale" },

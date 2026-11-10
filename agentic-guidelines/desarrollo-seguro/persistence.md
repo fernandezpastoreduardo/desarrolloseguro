@@ -4,7 +4,7 @@ El paquete `apps/desarrollo-seguro/persistence/` contiene el aprovisionador, mig
 
 Los roles de runtime siguen mínimo privilegio: el rol API lee solo la proyección pública; el worker no tiene lectura directa de resultados y las operaciones de trabajo se exponen mediante funciones controladas. Las migraciones fijan grants, restricciones de integridad y catálogo de perfiles. Las suites PostgreSQL locales comprueban esas reglas.
 
-El endpoint disponible es de lectura y no admite scans. No hay worker ejecutable, scheduler ni executor de red; por tanto, el almacenamiento y sus estructuras de trabajos no implican que se generen informes desde sitios reales. El barrido de expiración está definido en SQL, pero no hay tarea programada.
+El endpoint disponible es de lectura y no admite scans. No hay worker ejecutable, scheduler ni executor compuesto; el paquete worker sí contiene primitivas de DNS/HTTPS y un procesador de leases. El almacenamiento y esas primitivas no implican que se generen informes desde sitios reales. El barrido de expiración está definido en SQL, pero no hay tarea programada.
 
 ## Pruebas PostgreSQL
 

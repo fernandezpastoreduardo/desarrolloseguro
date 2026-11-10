@@ -18,8 +18,9 @@ Las pruebas de políticas TLS generan certificados sintéticos temporales. No de
 | Docker | Servicios, redes internas, loopback-only para web, secretos y volumen exclusivos del proyecto. |
 | TLS | Validación de nombres/CA y configuración de proxy con material sintético. |
 | UI | Flujos accesibles, estados de carga/error, navegación y adaptación móvil. |
-| Executor futuro | Bloqueo real de destinos privados/host/IPv6, DNS rebinding, redirecciones, límites globales y ausencia de tráfico a servicios señuelo en el runtime de despliegue. |
+| Primitivas locales de red | Validación DNS/IP, pinning TLS, límites de respuesta/redirección y fixtures HTTPS aislados. Estas pruebas verifican el código local, no el firewall ni el egress del host. |
+| Executor y runtime futuro | Separación de credenciales, bloqueo real de destinos privados/host/IPv6, DNS rebinding, límites globales y ausencia de tráfico a servicios señuelo en el runtime de despliegue. |
 
 ## Límites
 
-El executor de red, el worker desplegable y el scheduler no están habilitados. CI no escanea hosts ni accede a sistemas externos. Las pruebas deben usar fixtures y dominios reservados de prueba. Antes de implementar scans será necesario cubrir SSRF, DNS rebinding, redirects, pinning por conexión, egress, límites de recursos y privacidad con pruebas de red aisladas.
+El executor de red compuesto, el worker desplegable y el scheduler no están habilitados. CI no escanea hosts ni accede a sistemas externos. Las pruebas deben usar fixtures y dominios reservados de prueba. Antes de habilitar scans será necesario completar la cobertura de SSRF, DNS rebinding, redirects, pinning por conexión, egress, límites de recursos y privacidad con pruebas aisladas y validación en el runtime elegido.

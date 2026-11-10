@@ -50,6 +50,48 @@ const RESULT: Omit<
   },
 };
 
+const TRANSPORT_V1_FIXTURE_RESULT = {
+  ...RESULT,
+  scannerVersion: "fixture-transport-v1",
+  verdict: "pass" as const,
+  metrics: {
+    requestsCount: 2,
+    bytesCount: 0,
+    durationMs: 12,
+    pagesCount: 1,
+  },
+  checks: [
+    makeFixtureCheck("DS-DNS-01", "DNS", {
+      addressClass: "public",
+      aRecordCount: 1,
+      aaaaRecordCount: 0,
+    }),
+    makeFixtureCheck("DS-TLS-01", "TLS", {
+      protocol: "TLSv1.3",
+      certificateValid: true,
+      hostnameMatches: true,
+    }),
+    makeFixtureCheck("DS-HTTP-01", "HEAD", {
+      statusCode: 200,
+      redirectedToHttps: true,
+      finalScheme: "https",
+    }),
+    makeFixtureCheck("DS-HTTP-01", "GET", {
+      statusCode: 200,
+      redirectedToHttps: true,
+      finalScheme: "https",
+    }),
+    makeFixtureCheck("DS-HDR-01", "GET", {
+      finalScheme: "https",
+      hsts: true,
+      nosniff: true,
+      frameProtection: true,
+      referrerPolicy: true,
+      csp: true,
+    }),
+  ],
+};
+
 describe("ScanJobProcessor", () => {
   it("does nothing when the queue is empty", async () => {
     const store = makeStore(null);
@@ -141,6 +183,46 @@ describe("ScanJobProcessor", () => {
     );
     const completed = vi.mocked(store.completeScan).mock.calls[0]?.[0];
     expect(completed?.checks).toHaveLength(10);
+  });
+
+  it("connects transport-v1 fixture observations to a sanitized report", async () => {
+    const transportJob = { ...JOB, profileVersion: "transport-v1" };
+    const store = makeStore(transportJob);
+    const processor = new ScanJobProcessor(store, {
+      execute: vi.fn().mockResolvedValue(TRANSPORT_V1_FIXTURE_RESULT),
+    });
+
+    await expect(processor.processNext()).resolves.toBe("completed");
+
+    const savedReport = vi.mocked(store.completeScan).mock.calls[0]?.[0];
+    expect(savedReport).toMatchObject({
+      profileVersion: "transport-v1",
+      scope: ["/"],
+      verdict: "pass",
+      scannerVersion: "fixture-transport-v1",
+    });
+    expect(savedReport?.checks).toHaveLength(5);
+    expect(savedReport?.checks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          controlId: "DS-DNS-01",
+          method: "DNS",
+          status: "pass",
+        }),
+        expect.objectContaining({
+          controlId: "DS-TLS-01",
+          method: "TLS",
+          status: "pass",
+        }),
+        expect.objectContaining({
+          controlId: "DS-HDR-01",
+          method: "GET",
+          status: "pass",
+          limitation:
+            "Resultado limitado a las rutas públicas declaradas del perfil transport-v1.",
+        }),
+      ]),
+    );
   });
 
   it("validates the claimed hostname before invoking the executor", async () => {
@@ -245,6 +327,25 @@ describe("ScanJobProcessor", () => {
     };
   }
 });
+
+function makeFixtureCheck(
+  controlId: string,
+  method: string,
+  evidence: Record<string, unknown>,
+): ScanCheck {
+  return {
+    controlId,
+    status: "pass",
+    required: true,
+    severity: "high",
+    observedAt: new Date("2026-11-09T10:00:30.000Z"),
+    targetPath: "/",
+    method,
+    summary: "Fixture observation; replaced by sanitizer.",
+    limitation: "Fixture only.",
+    evidence,
+  };
+}
 
 function makeControlsV2Checks(scope: readonly string[]): ScanCheck[] {
   const hostChecks = [

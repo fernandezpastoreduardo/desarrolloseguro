@@ -106,6 +106,31 @@ describe("PublicScanPortal", () => {
     expect(screen.getByText(/origen indicado en el registro/i)).toBeVisible();
   });
 
+  it("accepts and labels a transport-v1 report", async () => {
+    const transportReport = {
+      ...PUBLIC_REPORT,
+      profileVersion: "transport-v1",
+      checks: [
+        {
+          ...PUBLIC_REPORT.checks[0],
+          controlId: "DS-DNS-01",
+          method: "DNS",
+          summary: "Comprobación DS-DNS-01: pass.",
+        },
+      ],
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(Response.json(transportReport)),
+    );
+    window.history.replaceState({}, "", `/?report=${REPORT_ID}`);
+
+    render(<PublicScanPortal />);
+
+    expect(await screen.findByText("transport-v1")).toBeVisible();
+    expect(screen.getByText("Comprobación DS-DNS-01: pass.")).toBeVisible();
+  });
+
   it("renders untrusted report strings as text rather than HTML", async () => {
     const unsafeSummary = '<img src=x onerror="alert(1)">';
     const reportWithUnsafeText = {
