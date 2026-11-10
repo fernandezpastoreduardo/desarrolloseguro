@@ -1,6 +1,17 @@
+import { readFileSync } from "node:fs";
 import { EventEmitter } from "node:events";
 import type { ClientRequest, IncomingMessage } from "node:http";
+import {
+  createServer as createHttpServer,
+  request as defaultHttpRequest,
+} from "node:http";
+import {
+  request as defaultHttpsRequest,
+  createServer as createHttpsServer,
+} from "node:https";
 import { Socket } from "node:net";
+import type { Server as NetServer } from "node:net";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import type { LookupFunction } from "node:net";
 import {
@@ -11,6 +22,15 @@ import type { HttpsRequestFactory } from "./pinned-https-transport.js";
 
 const HOSTNAME = "scan-fixture.example.net";
 const PATHS = ["/"];
+const LOOPBACK_ADDRESS = "127.0.0.1";
+const FIXTURE_CERTIFICATE = readFileSync(
+  fileURLToPath(new URL("../test/fixtures/https-fixture.crt", import.meta.url)),
+  "utf8",
+);
+const FIXTURE_PRIVATE_KEY = readFileSync(
+  fileURLToPath(new URL("../test/fixtures/https-fixture.key", import.meta.url)),
+  "utf8",
+);
 
 function createResponse(
   statusCode: number,
@@ -176,4 +196,105 @@ describe("requestPinnedHttpUpgrade", () => {
     expect(result.requestsCount).toBe(1);
     expect(result.bytesCount).toBe(128);
   });
+
+  it("follows a real local HTTP redirect over a verified HTTPS socket", async () => {
+    const observedHttp: Array<{ host: string | null | undefined; port: number | undefined }> = [];
+    const observedHttps: Array<{ host: string | null | undefined; port: number | undefined }> = [];
+    const secureHostnames: string[] = [];
+    const httpServer = createHttpServer((_request, response) => {
+      response.writeHead(301, { location: `https://${HOSTNAME}/` });
+      response.end();
+    });
+    const httpsServer = createHttpsServer(
+      { cert: FIXTURE_CERTIFICATE, key: FIXTURE_PRIVATE_KEY },
+      (_request, response) => {
+        response.writeHead(200, { "content-type": "text/plain" });
+        response.end("local fixture");
+      },
+    );
+    try {
+      await listen(httpServer);
+      await listen(httpsServer);
+      const httpAddress = httpServer.address();
+      const httpsAddress = httpsServer.address();
+      if (
+        httpAddress === null || typeof httpAddress === "string" ||
+        httpsAddress === null || typeof httpsAddress === "string"
+      ) {
+        throw new Error("fixture_server_address_unavailable");
+      }
+      httpsServer.on("secureConnection", (socket) => {
+        if (socket.servername) secureHostnames.push(socket.servername);
+      });
+      const lookupFactory = () =>
+        ((_hostname, options, callback) => {
+          if (options.all) {
+            callback(null, [{ address: LOOPBACK_ADDRESS, family: 4 }]);
+            return;
+          }
+          callback(null, LOOPBACK_ADDRESS, 4);
+        }) as LookupFunction;
+      const requestFactory: HttpRequestFactory = (options, callback) => {
+        observedHttp.push({
+          host: options.hostname,
+          port: typeof options.port === "number" ? options.port : undefined,
+        });
+        return defaultHttpRequest({ ...options, port: httpAddress.port }, callback);
+      };
+      const httpsRequestFactory: HttpsRequestFactory = (options, callback) => {
+        observedHttps.push({
+          host: options.hostname,
+          port: typeof options.port === "number" ? options.port : undefined,
+        });
+        return defaultHttpsRequest(
+          { ...options, port: httpsAddress.port },
+          callback,
+        );
+      };
+
+      const result = await requestPinnedHttpUpgrade(
+        {
+          hostname: HOSTNAME,
+          path: "/",
+          method: "GET",
+          allowedPaths: PATHS,
+          signal: new AbortController().signal,
+        },
+        {
+          httpsCa: FIXTURE_CERTIFICATE,
+          lookupFactory,
+          requestFactory,
+          httpsRequestFactory,
+        },
+      );
+
+      expect(result).toMatchObject({
+        statusCode: 200,
+        finalScheme: "https",
+        redirectedToHttps: true,
+        tlsAuthorized: true,
+      });
+      expect(observedHttp).toEqual([{ host: HOSTNAME, port: 80 }]);
+      expect(observedHttps).toEqual([{ host: HOSTNAME, port: 443 }]);
+      expect(secureHostnames).toEqual([HOSTNAME]);
+      expect(result.requestsCount).toBe(2);
+      expect(result.bytesCount).toBeGreaterThan(0);
+    } finally {
+      await Promise.all([closeServer(httpServer), closeServer(httpsServer)]);
+    }
+  });
 });
+
+function listen(server: NetServer) {
+  return new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, LOOPBACK_ADDRESS, resolve);
+  });
+}
+
+function closeServer(server: NetServer) {
+  if (!server.listening) return Promise.resolve();
+  return new Promise<void>((resolve, reject) => {
+    server.close((error) => (error ? reject(error) : resolve()));
+  });
+}

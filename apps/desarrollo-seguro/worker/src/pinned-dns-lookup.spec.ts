@@ -217,6 +217,25 @@ describe("createPinnedLookup", () => {
     expect(nextAnswer).toHaveBeenNthCalledWith(2, HOSTNAME);
   });
 
+  it("blocks a hostname that rebinds to a private address on a later lookup", async () => {
+    const resolver = vi
+      .fn()
+      .mockResolvedValueOnce([PUBLIC_IPV4])
+      .mockResolvedValueOnce([{ address: "127.0.0.1", family: 4 }]);
+    const lookup = createPinnedLookup(resolver);
+
+    await expect(runLookup(lookup, HOSTNAME)).resolves.toMatchObject({
+      error: null,
+      address: PUBLIC_IPV4.address,
+    });
+    await expect(runLookup(lookup, HOSTNAME)).resolves.toMatchObject({
+      error: { code: "EHOSTUNREACH" },
+      address: "",
+    });
+
+    expect(resolver).toHaveBeenCalledTimes(2);
+  });
+
   it("fails closed when the DNS resolver errors without exposing its message", async () => {
     const result = await runLookup(
       createPinnedLookup(async () => {
