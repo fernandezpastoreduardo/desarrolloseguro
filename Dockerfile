@@ -93,6 +93,10 @@ USER node
 
 ENTRYPOINT ["node", "apps/desarrollo-seguro/worker/dist/transport-v1-executor-child.js"]
 
+FROM development-security-executor AS development-security-egress-broker
+
+ENTRYPOINT ["node", "apps/desarrollo-seguro/worker/dist/transport-v1-egress-broker-child.js"]
+
 FROM nginx:1.30-alpine AS development-security-web
 
 COPY docker/nginx-development-security.conf /etc/nginx/conf.d/default.conf

@@ -105,6 +105,16 @@ export async function observePublicDns(
   };
 }
 
+/** Resolves every A/AAAA answer and rejects the whole set if any is unsafe. */
+export async function resolvePinnedPublicAddresses(
+  inputHostname: unknown,
+  resolver: PublicDnsResolver = defaultResolver,
+): Promise<readonly LookupAddress[]> {
+  return resolvePublicAddresses(inputHostname, (hostname) =>
+    moduleDnsLookupLimiter.run(() => resolver(hostname)),
+  );
+}
+
 export function createPinnedLookup(
   resolver: PublicDnsResolver = defaultResolver,
 ): LookupFunction {
@@ -136,6 +146,30 @@ export function createPinnedLookup(
       },
       () => failLookup(options.all, callback),
     );
+  };
+}
+
+/** Pins lookup calls to the hostname authorized for one scan job. */
+export function createScopedPinnedLookup(
+  inputHostname: unknown,
+  resolver: PublicDnsResolver = defaultResolver,
+): LookupFunction {
+  const scopedHostname = normalizeHostname(inputHostname);
+  const pinnedLookup = createPinnedLookup(resolver);
+
+  return (hostname, options, callback) => {
+    let normalizedHostname: string;
+    try {
+      normalizedHostname = normalizeHostname(hostname);
+    } catch {
+      failLookup(options.all, callback);
+      return;
+    }
+    if (normalizedHostname !== scopedHostname) {
+      failLookup(options.all, callback);
+      return;
+    }
+    pinnedLookup(scopedHostname, options, callback);
   };
 }
 

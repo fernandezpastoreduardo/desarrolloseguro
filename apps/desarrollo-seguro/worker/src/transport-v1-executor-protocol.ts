@@ -4,8 +4,8 @@ import { normalizeHostname } from "@desarrolloseguro/core";
 export const TRANSPORT_V1_EXECUTOR_PROTOCOL_VERSION = 1;
 export const MAX_EXECUTOR_REQUEST_BYTES = 4 * 1024;
 export const MAX_EXECUTOR_RESPONSE_BYTES = 256 * 1024;
-const MAX_TRANSPORT_REQUESTS_PER_SCAN = 24;
-const MAX_TRANSPORT_BYTES_PER_SCAN = 2 * 1024 * 1024;
+export const MAX_TRANSPORT_REQUESTS_PER_SCAN = 24;
+export const MAX_TRANSPORT_BYTES_PER_SCAN = 2 * 1024 * 1024;
 const MAX_TRANSPORT_DURATION_MS = 35_000;
 
 export type TransportV1ExecutorRequest = {

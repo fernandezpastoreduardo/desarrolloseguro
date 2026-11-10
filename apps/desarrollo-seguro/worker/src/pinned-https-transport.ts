@@ -9,7 +9,7 @@ import {
   normalizeHostname,
 } from "@desarrolloseguro/core";
 import type { SecurityHeaderEvidence } from "@desarrolloseguro/core";
-import { createPinnedLookup } from "./pinned-dns-lookup.js";
+import { createScopedPinnedLookup } from "./pinned-dns-lookup.js";
 import {
   includeTransportMetrics,
   PinnedTransportError,
@@ -51,7 +51,7 @@ export type HttpsRequestFactory = (
 
 export type PinnedHttpsDependencies = {
   ca?: string;
-  lookupFactory?: () => LookupFunction;
+  lookupFactory?: (hostname: string) => LookupFunction;
   requestFactory?: HttpsRequestFactory;
 };
 
@@ -71,7 +71,9 @@ export async function requestPinnedHttps(
     throw new Error("request_aborted");
   }
 
-  const lookupFactory = dependencies.lookupFactory ?? createPinnedLookup;
+  const lookupFactory =
+    dependencies.lookupFactory ??
+    ((targetHostname: string) => createScopedPinnedLookup(targetHostname));
   const requestFactory = dependencies.requestFactory ?? defaultHttpsRequest;
   const deadline = Date.now() + REQUEST_TIMEOUT_MS;
   let currentPath = input.path;
@@ -91,7 +93,7 @@ export async function requestPinnedHttps(
         method: input.method,
         signal: input.signal,
         timeoutMs: remainingMs,
-        lookup: lookupFactory(),
+        lookup: lookupFactory(hostname),
         requestFactory,
         ca: dependencies.ca,
       });

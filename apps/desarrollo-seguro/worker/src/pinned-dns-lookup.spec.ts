@@ -3,6 +3,7 @@ import type { LookupFunction } from "node:net";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createPinnedLookup,
+  createScopedPinnedLookup,
   observePublicDns,
 } from "./pinned-dns-lookup.js";
 
@@ -383,6 +384,34 @@ describe("createPinnedLookup", () => {
     await Promise.all(
       pendingResolutions.slice(1, 2).map(({ promise }) => promise),
     );
+  });
+});
+
+describe("createScopedPinnedLookup", () => {
+  it("rejects lookups for a different host before DNS resolution", async () => {
+    const resolver = vi.fn().mockResolvedValue([PUBLIC_IPV4]);
+    const result = await runLookup(
+      createScopedPinnedLookup(HOSTNAME, resolver),
+      "other.example.net",
+    );
+
+    expect(result.error?.code).toBe("EHOSTUNREACH");
+    expect(resolver).not.toHaveBeenCalled();
+  });
+
+  it("accepts normalized forms of the authorized hostname", async () => {
+    const resolver = vi.fn().mockResolvedValue([PUBLIC_IPV4]);
+    const result = await runLookup(
+      createScopedPinnedLookup(HOSTNAME, resolver),
+      ` ${HOSTNAME.toUpperCase()}. `,
+    );
+
+    expect(result).toMatchObject({
+      error: null,
+      address: PUBLIC_IPV4.address,
+      family: 4,
+    });
+    expect(resolver).toHaveBeenCalledExactlyOnceWith(HOSTNAME);
   });
 });
 

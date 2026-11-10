@@ -2,8 +2,10 @@ import {
   MAX_EXECUTOR_REQUEST_BYTES,
   parseTransportV1ExecutorRequest,
 } from "./transport-v1-executor-protocol.js";
-import { createTransportV1NetworkObserver } from "./transport-v1-network-observer.js";
+import { createUnixSocketObservationSource } from "./transport-v1-egress-ipc.js";
 import { TransportV1NetworkExecutor } from "./transport-v1-executor.js";
+
+const EGRESS_BROKER_SOCKET = "/run/development-security-egress/broker.sock";
 
 async function main(): Promise<void> {
   const chunks: Buffer[] = [];
@@ -27,7 +29,7 @@ async function main(): Promise<void> {
     }
     const request = parseTransportV1ExecutorRequest(input);
     const result = await new TransportV1NetworkExecutor(
-      createTransportV1NetworkObserver(),
+      createUnixSocketObservationSource(EGRESS_BROKER_SOCKET),
     ).execute(
       {
         hostname: request.hostname,

@@ -1,8 +1,10 @@
+import { randomUUID } from "node:crypto";
 import {
   evaluateVerdict,
   sanitizeScanObservations,
 } from "@desarrolloseguro/core";
 import type { ClaimedScanJob, ScanCheck, ScanRunInput } from "@desarrolloseguro/persistence";
+import { createTransportV1EgressBroker } from "./transport-v1-egress-broker.js";
 
 const PROFILE_VERSION = "transport-v1";
 const FIXTURE_SCANNER_VERSION = "transport-v1-fixture-adapter-1";
@@ -144,13 +146,27 @@ export class TransportV1NetworkExecutor {
     }
 
     const startedAt = this.now();
-    const observations = [
-      () => this.source.observeDns(job.hostname, signal),
-      () => this.source.observeTls(job.hostname, signal),
-      () => this.source.observeHttp(job.hostname, "HEAD", signal),
-      () => this.source.observeHttp(job.hostname, "GET", signal),
-      () => this.source.observeHeaders(job.hostname, signal),
-    ];
+    const broker = createTransportV1EgressBroker(job.hostname, this.source);
+    const operations = ["dns", "tls", "http-head", "http-get", "headers"] as const;
+    const observations = operations.map((operation) => async () => {
+      const requestId = randomUUID();
+      const response = await broker(
+        {
+          protocolVersion: 1,
+          requestId,
+          hostname: job.hostname,
+          operation,
+        },
+        signal,
+      );
+      if (
+        response.protocolVersion !== 1 ||
+        response.requestId !== requestId
+      ) {
+        throw new Error("egress_broker_response_invalid");
+      }
+      return response.result;
+    });
     const probes = await observeNetworkProbes(
       observations,
       signal,

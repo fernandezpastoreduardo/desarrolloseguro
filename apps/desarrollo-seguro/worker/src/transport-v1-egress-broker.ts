@@ -1,0 +1,240 @@
+import { normalizeHostname } from "@desarrolloseguro/core";
+import type {
+  TransportV1Evidence,
+  TransportV1ObservationSource,
+  TransportV1ProbeResult,
+} from "./transport-v1-executor.js";
+import {
+  MAX_TRANSPORT_BYTES_PER_SCAN,
+  MAX_TRANSPORT_REQUESTS_PER_SCAN,
+} from "./transport-v1-executor-protocol.js";
+
+const MAX_BROKER_OPERATIONS = 5;
+const MAX_CONCURRENT_BROKER_OPERATIONS = 2;
+const PROBE_OPERATIONS = ["dns", "tls", "http-head", "http-get", "headers"] as const;
+const FORBIDDEN_EVIDENCE_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+
+export type TransportV1ProbeOperation = (typeof PROBE_OPERATIONS)[number];
+
+export type TransportV1BrokerRequest = {
+  protocolVersion: 1;
+  requestId: string;
+  hostname: string;
+  operation: TransportV1ProbeOperation;
+};
+
+export type TransportV1BrokerResponse = {
+  protocolVersion: 1;
+  requestId: string;
+  result: TransportV1ProbeResult;
+};
+
+export type TransportV1EgressBroker = (
+  request: unknown,
+  signal: AbortSignal,
+) => Promise<TransportV1BrokerResponse>;
+
+/**
+ * Applies a per-job, operation-level contract around the network observer.
+ * It is an application policy boundary, not a firewall or process boundary.
+ */
+export function createTransportV1EgressBroker(
+  jobHostnameInput: unknown,
+  source: TransportV1ObservationSource,
+): TransportV1EgressBroker {
+  const jobHostname = normalizeHostname(jobHostnameInput);
+  const startedOperations = new Set<TransportV1ProbeOperation>();
+  const usedRequestIds = new Set<string>();
+  let activeOperations = 0;
+  let totalRequests = 0;
+  let totalBytes = 0;
+  let budgetExceeded = false;
+
+  return async (input, signal) => {
+    const request = parseBrokerRequest(input, jobHostname);
+    if (
+      startedOperations.size >= MAX_BROKER_OPERATIONS ||
+      startedOperations.has(request.operation) ||
+      usedRequestIds.has(request.requestId) ||
+      activeOperations >= MAX_CONCURRENT_BROKER_OPERATIONS ||
+      budgetExceeded
+    ) {
+      throw createBrokerRequestError();
+    }
+
+    startedOperations.add(request.operation);
+    usedRequestIds.add(request.requestId);
+    activeOperations += 1;
+    try {
+      const result = await observeOperation(source, request.operation, jobHostname, signal);
+      if (signal.aborted) {
+        return createBrokerResponse(request.requestId, emptyProbeResult());
+      }
+      const validatedResult = validateProbeResult(result);
+      totalRequests += validatedResult.requestsCount;
+      totalBytes += validatedResult.bytesCount;
+      if (
+        totalRequests > MAX_TRANSPORT_REQUESTS_PER_SCAN ||
+        totalBytes > MAX_TRANSPORT_BYTES_PER_SCAN
+      ) {
+        budgetExceeded = true;
+        return createBrokerResponse(request.requestId, emptyProbeResult());
+      }
+      return createBrokerResponse(request.requestId, validatedResult);
+    } catch {
+      return createBrokerResponse(request.requestId, emptyProbeResult());
+    } finally {
+      activeOperations -= 1;
+    }
+  };
+}
+
+function parseBrokerRequest(
+  input: unknown,
+  jobHostname: string,
+): TransportV1BrokerRequest {
+  if (
+    typeof input !== "object" ||
+    input === null ||
+    Array.isArray(input) ||
+    Object.getPrototypeOf(input) !== Object.prototype
+  ) {
+    throw createBrokerRequestError();
+  }
+
+  const candidate = input as Record<string, unknown>;
+  if (
+    Reflect.ownKeys(candidate).length !== 4 ||
+    !Object.hasOwn(candidate, "protocolVersion") ||
+    !Object.hasOwn(candidate, "requestId") ||
+    !Object.hasOwn(candidate, "hostname") ||
+    !Object.hasOwn(candidate, "operation") ||
+    candidate.protocolVersion !== 1 ||
+    typeof candidate.requestId !== "string" ||
+    !/^[0-9a-f-]{36}$/iu.test(candidate.requestId) ||
+    typeof candidate.operation !== "string" ||
+    !isProbeOperation(candidate.operation)
+  ) {
+    throw createBrokerRequestError();
+  }
+
+  let hostname: string;
+  try {
+    hostname = normalizeHostname(candidate.hostname);
+  } catch {
+    throw createBrokerRequestError();
+  }
+  if (hostname !== jobHostname) {
+    throw createBrokerRequestError();
+  }
+
+  return {
+    protocolVersion: 1,
+    requestId: candidate.requestId,
+    hostname,
+    operation: candidate.operation,
+  };
+}
+
+async function observeOperation(
+  source: TransportV1ObservationSource,
+  operation: TransportV1ProbeOperation,
+  hostname: string,
+  signal: AbortSignal,
+): Promise<TransportV1ProbeResult> {
+  switch (operation) {
+    case "dns":
+      return source.observeDns(hostname, signal);
+    case "tls":
+      return source.observeTls(hostname, signal);
+    case "http-head":
+      return source.observeHttp(hostname, "HEAD", signal);
+    case "http-get":
+      return source.observeHttp(hostname, "GET", signal);
+    case "headers":
+      return source.observeHeaders(hostname, signal);
+  }
+}
+
+function validateProbeResult(input: unknown): TransportV1ProbeResult {
+  if (
+    typeof input !== "object" ||
+    input === null ||
+    Array.isArray(input) ||
+    Object.getPrototypeOf(input) !== Object.prototype
+  ) {
+    throw createBrokerRequestError();
+  }
+
+  const candidate = input as Record<string, unknown>;
+  if (
+    Reflect.ownKeys(candidate).length !== 3 ||
+    !Object.hasOwn(candidate, "evidence") ||
+    !Object.hasOwn(candidate, "requestsCount") ||
+    !Object.hasOwn(candidate, "bytesCount") ||
+    !Number.isSafeInteger(candidate.requestsCount) ||
+    (candidate.requestsCount as number) < 0 ||
+    (candidate.requestsCount as number) > MAX_TRANSPORT_REQUESTS_PER_SCAN ||
+    !Number.isSafeInteger(candidate.bytesCount) ||
+    (candidate.bytesCount as number) < 0 ||
+    (candidate.bytesCount as number) > MAX_TRANSPORT_BYTES_PER_SCAN
+  ) {
+    throw createBrokerRequestError();
+  }
+
+  return {
+    evidence: validateEvidence(candidate.evidence),
+    requestsCount: candidate.requestsCount as number,
+    bytesCount: candidate.bytesCount as number,
+  };
+}
+
+function validateEvidence(input: unknown): TransportV1Evidence {
+  if (
+    typeof input !== "object" ||
+    input === null ||
+    Array.isArray(input) ||
+    Object.getPrototypeOf(input) !== Object.prototype
+  ) {
+    throw createBrokerRequestError();
+  }
+  const candidate = input as Record<string, unknown>;
+  if (Reflect.ownKeys(candidate).length > 32) {
+    throw createBrokerRequestError();
+  }
+
+  const evidence: TransportV1Evidence = {};
+  for (const [key, value] of Object.entries(candidate)) {
+    if (
+      key.length > 64 ||
+      FORBIDDEN_EVIDENCE_KEYS.has(key) ||
+      (typeof value !== "boolean" &&
+        (typeof value !== "number" || !Number.isFinite(value)) &&
+        typeof value !== "string") ||
+      (typeof value === "string" && value.length > 256)
+    ) {
+      throw createBrokerRequestError();
+    }
+    evidence[key] = value;
+  }
+  return evidence;
+}
+
+function isProbeOperation(value: string): value is TransportV1ProbeOperation {
+  return PROBE_OPERATIONS.some((operation) => operation === value);
+}
+
+function createBrokerResponse(
+  requestId: string,
+  result: TransportV1ProbeResult,
+): TransportV1BrokerResponse {
+  return { protocolVersion: 1, requestId, result };
+}
+
+function emptyProbeResult(): TransportV1ProbeResult {
+  return { evidence: {}, requestsCount: 0, bytesCount: 0 };
+}
+
+function createBrokerRequestError(): Error {
+  return new Error("egress_broker_request_invalid");
+}

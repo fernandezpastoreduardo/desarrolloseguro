@@ -5,7 +5,7 @@ import {
   getCanonicalScanPaths,
   normalizeHostname,
 } from "@desarrolloseguro/core";
-import { createPinnedLookup } from "./pinned-dns-lookup.js";
+import { createScopedPinnedLookup } from "./pinned-dns-lookup.js";
 import {
   requestPinnedHttps,
   type HttpsRequestFactory,
@@ -46,7 +46,7 @@ export type HttpRequestFactory = (
 ) => ClientRequest;
 
 export type PinnedHttpUpgradeDependencies = {
-  lookupFactory?: () => LookupFunction;
+  lookupFactory?: (hostname: string) => LookupFunction;
   requestFactory?: HttpRequestFactory;
   httpsRequestFactory?: HttpsRequestFactory;
   httpsCa?: string;
@@ -67,14 +67,16 @@ export async function requestPinnedHttpUpgrade(
   const deadline = Date.now() + REQUEST_TIMEOUT_MS;
   const scopedSignal = createScopedSignal(input.signal, deadline);
   try {
-    const lookupFactory = dependencies.lookupFactory ?? createPinnedLookup;
+    const lookupFactory =
+      dependencies.lookupFactory ??
+      ((targetHostname: string) => createScopedPinnedLookup(targetHostname));
     const httpResult = await makeHttpRequest({
       hostname,
       path: input.path,
       method: input.method,
       signal: scopedSignal.signal,
       timeoutMs: Math.max(1, deadline - Date.now()),
-      lookup: lookupFactory(),
+      lookup: lookupFactory(hostname),
       requestFactory: dependencies.requestFactory ?? defaultHttpRequest,
     });
     const upgradedPath = validateUpgradeLocation(
