@@ -97,6 +97,53 @@ const TRANSPORT_V1_FIXTURE_RESULT = {
 };
 
 describe("ScanJobProcessor", () => {
+  it("emits bounded operational outcome telemetry without job or target data", async () => {
+    const store = makeStore(JOB);
+    const telemetry = vi.fn();
+    const processor = new ScanJobProcessor(
+      store,
+      { execute: vi.fn().mockResolvedValue(RESULT) },
+      () => new Date(),
+      undefined,
+      telemetry,
+    );
+
+    await expect(processor.processNext()).resolves.toBe("completed");
+
+    expect(telemetry).toHaveBeenCalledOnce();
+    const [event] = telemetry.mock.calls[0] ?? [];
+    expect(event).toMatchObject({
+      type: "scan_job_outcome",
+      outcome: "completed",
+    });
+    expect(event?.durationMs).toEqual(expect.any(Number));
+    expect(event?.durationMs).toBeGreaterThanOrEqual(0);
+    expect(Object.keys(event ?? {}).sort()).toEqual([
+      "durationMs",
+      "outcome",
+      "type",
+    ]);
+    expect(JSON.stringify(event)).not.toContain(JOB.hostname);
+    expect(JSON.stringify(event)).not.toContain(JOB.id);
+  });
+
+  it("does not let telemetry failures affect scan outcomes or leak errors", async () => {
+    const store = makeStore(JOB);
+    const telemetry = vi.fn(() => {
+      throw new Error("private telemetry sink detail");
+    });
+    const processor = new ScanJobProcessor(
+      store,
+      { execute: vi.fn().mockResolvedValue(RESULT) },
+      () => new Date(),
+      undefined,
+      telemetry,
+    );
+
+    await expect(processor.processNext()).resolves.toBe("completed");
+    expect(store.completeScan).toHaveBeenCalledOnce();
+  });
+
   it("does nothing when the queue is empty", async () => {
     const store = makeStore(null);
     const executor = { execute: vi.fn() };

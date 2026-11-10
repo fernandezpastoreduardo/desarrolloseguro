@@ -9,6 +9,7 @@ import {
   type ScanJobStore,
   type ScanRunInput,
 } from "@desarrolloseguro/persistence";
+import { performance } from "node:perf_hooks";
 
 export type ScanExecutor = {
   execute(
@@ -18,6 +19,21 @@ export type ScanExecutor = {
     Omit<ScanRunInput, "jobId" | "leaseToken" | "hostname" | "profileVersion">
   >;
 };
+
+export type ScanJobOutcome =
+  | "idle"
+  | "completed"
+  | "lease_lost"
+  | "retrying"
+  | "failed";
+
+export type ScanJobTelemetryEvent = {
+  type: "scan_job_outcome";
+  outcome: ScanJobOutcome;
+  durationMs: number;
+};
+
+export type ScanJobTelemetry = (event: ScanJobTelemetryEvent) => void;
 
 const DEFAULT_LEASE_DURATION_MS = 30_000;
 const HEARTBEAT_INTERVAL_MS = 10_000;
@@ -29,9 +45,22 @@ export class ScanJobProcessor {
     private readonly executor: ScanExecutor,
     private readonly now: () => Date = () => new Date(),
     private readonly heartbeatIntervalMs = HEARTBEAT_INTERVAL_MS,
+    private readonly telemetry?: ScanJobTelemetry,
   ) {}
 
-  async processNext(): Promise<"idle" | "completed" | "lease_lost" | "retrying" | "failed"> {
+  async processNext(): Promise<ScanJobOutcome> {
+    const startedAt = performance.now();
+    try {
+      const outcome = await this.processNextInternal();
+      this.emitOutcome(outcome, startedAt);
+      return outcome;
+    } catch (error) {
+      this.emitOutcome("failed", startedAt);
+      throw error;
+    }
+  }
+
+  private async processNextInternal(): Promise<ScanJobOutcome> {
     const claimed = await this.store.claimNextScan(
       this.now(),
       DEFAULT_LEASE_DURATION_MS,
@@ -121,6 +150,16 @@ export class ScanJobProcessor {
         return "lease_lost";
       }
       throw error;
+    }
+  }
+
+  private emitOutcome(outcome: ScanJobOutcome, startedAt: number): void {
+    if (!this.telemetry) return;
+    const durationMs = Math.max(0, Math.round(performance.now() - startedAt));
+    try {
+      this.telemetry({ type: "scan_job_outcome", outcome, durationMs });
+    } catch {
+      // Telemetry must never change scan processing or expose private errors.
     }
   }
 }
