@@ -4,10 +4,17 @@ import type { RequestOptions } from "node:https";
 import type { LookupFunction } from "node:net";
 import { TLSSocket } from "node:tls";
 import {
+  assessSecurityHeaders,
   getCanonicalScanPaths,
   normalizeHostname,
 } from "@desarrolloseguro/core";
+import type { SecurityHeaderEvidence } from "@desarrolloseguro/core";
 import { createPinnedLookup } from "./pinned-dns-lookup.js";
+import {
+  includeTransportMetrics,
+  PinnedTransportError,
+  safeTransportErrorCode,
+} from "./pinned-transport-error.js";
 
 const HTTPS_PORT = 443;
 const MAX_REDIRECTS = 3;
@@ -31,6 +38,10 @@ export type PinnedHttpsResult = {
   redirectCount: number;
   remoteAddress: string | undefined;
   tlsAuthorized: boolean;
+  tlsProtocol: "TLSv1.2" | "TLSv1.3" | undefined;
+  securityHeaders: SecurityHeaderEvidence | null;
+  requestsCount: number;
+  bytesCount: number;
 };
 
 export type HttpsRequestFactory = (
@@ -64,22 +75,31 @@ export async function requestPinnedHttps(
   const requestFactory = dependencies.requestFactory ?? defaultHttpsRequest;
   const deadline = Date.now() + REQUEST_TIMEOUT_MS;
   let currentPath = input.path;
+  let requestsCount = 0;
+  let bytesCount = 0;
 
   for (let redirectCount = 0; ; redirectCount += 1) {
     const remainingMs = deadline - Date.now();
     if (remainingMs <= 0) {
-      throw new Error("request_timeout");
+      throw new PinnedTransportError("request_timeout", requestsCount, bytesCount);
     }
-    const result = await makeRequest({
-      hostname,
-      path: currentPath,
-      method: input.method,
-      signal: input.signal,
-      timeoutMs: remainingMs,
-      lookup: lookupFactory(),
-      requestFactory,
-      ca: dependencies.ca,
-    });
+    let result: MakeRequestResult;
+    try {
+      result = await makeRequest({
+        hostname,
+        path: currentPath,
+        method: input.method,
+        signal: input.signal,
+        timeoutMs: remainingMs,
+        lookup: lookupFactory(),
+        requestFactory,
+        ca: dependencies.ca,
+      });
+    } catch (error) {
+      throw includeTransportMetrics(error, requestsCount, bytesCount, "https_request_failed");
+    }
+    requestsCount += 1;
+    bytesCount += result.bytesCount;
 
     if (!REDIRECT_STATUS_CODES.has(result.statusCode)) {
       return {
@@ -89,18 +109,34 @@ export async function requestPinnedHttps(
         redirectCount,
         remoteAddress: result.remoteAddress,
         tlsAuthorized: result.tlsAuthorized,
+        tlsProtocol: result.tlsProtocol,
+        securityHeaders: result.securityHeaders,
+        requestsCount,
+        bytesCount,
       };
     }
 
     if (redirectCount >= MAX_REDIRECTS) {
-      throw new Error("redirect_limit_exceeded");
+      throw new PinnedTransportError(
+        "redirect_limit_exceeded",
+        requestsCount,
+        bytesCount,
+      );
     }
-    currentPath = validateRedirect(
-      result.location,
-      hostname,
-      currentPath,
-      allowedPaths,
-    );
+    try {
+      currentPath = validateRedirect(
+        result.location,
+        hostname,
+        currentPath,
+        allowedPaths,
+      );
+    } catch (error) {
+      throw new PinnedTransportError(
+        safeTransportErrorCode(error, "transport_failed"),
+        requestsCount,
+        bytesCount,
+      );
+    }
   }
 }
 
@@ -120,23 +156,34 @@ type MakeRequestResult = {
   location: string | undefined;
   remoteAddress: string | undefined;
   tlsAuthorized: boolean;
+  tlsProtocol: "TLSv1.2" | "TLSv1.3" | undefined;
+  securityHeaders: SecurityHeaderEvidence | null;
+  bytesCount: number;
 };
 
 function makeRequest(input: MakeRequestInput): Promise<MakeRequestResult> {
   return new Promise((resolve, reject) => {
     let settled = false;
     let receivedBytes = 0;
+    let requestStarted = false;
+    let request: ClientRequest | undefined;
     const timeoutHolder: { timer?: NodeJS.Timeout } = {};
-    const finishWithError = (error: Error) => {
+    const finishWithError = (error: unknown) => {
       if (settled) return;
       settled = true;
       if (timeoutHolder.timer !== undefined) clearTimeout(timeoutHolder.timer);
       input.signal.removeEventListener("abort", abortRequest);
-      reject(error);
+      reject(
+        new PinnedTransportError(
+          safeTransportErrorCode(error, "https_request_failed"),
+          requestStarted ? 1 : 0,
+          getReceivedBytesCount(request?.socket, receivedBytes),
+        ),
+      );
     };
     const abortRequest = () => {
-      request.destroy(new Error("request_aborted"));
-      finishWithError(new Error("request_aborted"));
+      request?.destroy();
+      finishWithError("request_aborted");
     };
     const options: RequestOptions = {
       hostname: input.hostname,
@@ -157,7 +204,6 @@ function makeRequest(input: MakeRequestInput): Promise<MakeRequestResult> {
       },
     };
 
-    let request: ClientRequest;
     try {
       request = input.requestFactory(options, (response) => {
         const socket = response.socket;
@@ -165,20 +211,18 @@ function makeRequest(input: MakeRequestInput): Promise<MakeRequestResult> {
         const statusCode = response.statusCode;
         if (statusCode === undefined) {
           response.resume();
-          finishWithError(new Error("invalid_http_response"));
+          finishWithError("invalid_http_response");
           return;
         }
         response.on("data", (chunk: Buffer | string) => {
           receivedBytes += Buffer.byteLength(chunk);
           if (receivedBytes > MAX_RESPONSE_BYTES) {
-            response.destroy(new Error("response_size_limit_exceeded"));
-            request.destroy(new Error("response_size_limit_exceeded"));
-            finishWithError(new Error("response_size_limit_exceeded"));
+            response.destroy();
+            request?.destroy();
+            finishWithError("response_size_limit_exceeded");
           }
         });
-        response.once("error", () =>
-          finishWithError(new Error("https_request_failed")),
-        );
+        response.once("error", () => finishWithError("https_request_failed"));
         response.once("end", () => {
           if (settled) return;
           settled = true;
@@ -191,19 +235,29 @@ function makeRequest(input: MakeRequestInput): Promise<MakeRequestResult> {
             location: getSingleHeader(response, "location"),
             remoteAddress,
             tlsAuthorized: socket instanceof TLSSocket && socket.authorized,
+            tlsProtocol: getTlsProtocol(socket),
+            securityHeaders: assessSecurityHeaders(
+              response.headers,
+              "https",
+            ).evidence,
+            bytesCount: getReceivedBytesCount(socket, receivedBytes),
           });
         });
         response.resume();
       });
     } catch {
-      finishWithError(new Error("https_request_failed"));
+      finishWithError("https_request_failed");
+      return;
+    }
+    if (!request) {
+      finishWithError("https_request_failed");
       return;
     }
 
     input.signal.addEventListener("abort", abortRequest, { once: true });
     timeoutHolder.timer = setTimeout(() => {
-      request.destroy(new Error("request_timeout"));
-      finishWithError(new Error("request_timeout"));
+      request.destroy();
+      finishWithError("request_timeout");
     }, input.timeoutMs);
     request.once("error", (error) =>
       finishWithError(sanitizeRequestError(error)),
@@ -212,8 +266,32 @@ function makeRequest(input: MakeRequestInput): Promise<MakeRequestResult> {
       abortRequest();
       return;
     }
-    request.end();
+    requestStarted = true;
+    try {
+      request.end();
+    } catch {
+      finishWithError("https_request_failed");
+    }
   });
+}
+
+function getTlsProtocol(
+  socket: IncomingMessage["socket"],
+): "TLSv1.2" | "TLSv1.3" | undefined {
+  if (!(socket instanceof TLSSocket)) return undefined;
+  const protocol = socket.getProtocol();
+  if (protocol === "TLSv1.2" || protocol === "TLSv1.3") return protocol;
+  return undefined;
+}
+
+function getReceivedBytesCount(
+  socket: { bytesRead: number } | null | undefined,
+  bodyBytes: number,
+): number {
+  if (!socket || !Number.isSafeInteger(socket.bytesRead) || socket.bytesRead < 0) {
+    return bodyBytes;
+  }
+  return Math.max(bodyBytes, socket.bytesRead);
 }
 
 function validateRedirect(
@@ -296,11 +374,6 @@ function getSingleHeader(
   return undefined;
 }
 
-function sanitizeRequestError(error: Error): Error {
-  if (error.message === "request_aborted") return new Error("request_aborted");
-  if (error.message === "request_timeout") return new Error("request_timeout");
-  if (error.message === "response_size_limit_exceeded") {
-    return new Error("response_size_limit_exceeded");
-  }
-  return new Error("https_request_failed");
+function sanitizeRequestError(error: Error): string {
+  return safeTransportErrorCode(error, "https_request_failed");
 }

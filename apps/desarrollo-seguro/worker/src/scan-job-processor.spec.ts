@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { ScanJobProcessor } from "./scan-job-processor.js";
 import {
+  TransportV1NetworkExecutor,
+  type TransportV1ObservationSource,
+} from "./transport-v1-executor.js";
+import {
   ScanLeaseLostError,
   type ClaimedScanJob,
   type ScanCheck,
@@ -223,6 +227,65 @@ describe("ScanJobProcessor", () => {
         }),
       ]),
     );
+  });
+
+  it("persists network probe evidence and aggregated transport metrics through the processor", async () => {
+    const transportJob = { ...JOB, profileVersion: "transport-v1" };
+    const store = makeStore(transportJob);
+    const source: TransportV1ObservationSource = {
+      sourceKind: "network",
+      observeDns: vi.fn().mockResolvedValue({
+        evidence: { addressClass: "public", aRecordCount: 1, aaaaRecordCount: 0 },
+        requestsCount: 0,
+        bytesCount: 0,
+      }),
+      observeTls: vi.fn().mockResolvedValue({
+        evidence: {
+          protocol: "TLSv1.3",
+          certificateValid: true,
+          hostnameMatches: true,
+        },
+        requestsCount: 1,
+        bytesCount: 8,
+      }),
+      observeHttp: vi
+        .fn()
+        .mockResolvedValue({
+          evidence: {
+            statusCode: 200,
+            redirectedToHttps: true,
+            finalScheme: "https",
+          },
+          requestsCount: 2,
+          bytesCount: 0,
+        }),
+      observeHeaders: vi.fn().mockResolvedValue({
+        evidence: {
+          finalScheme: "https",
+          hsts: true,
+          nosniff: true,
+          frameProtection: true,
+          referrerPolicy: true,
+          csp: true,
+        },
+        requestsCount: 1,
+        bytesCount: 16,
+      }),
+    };
+    const executor = new TransportV1NetworkExecutor(source);
+    const processor = new ScanJobProcessor(store, executor);
+
+    await expect(processor.processNext()).resolves.toBe("completed");
+
+    const savedReport = vi.mocked(store.completeScan).mock.calls[0]?.[0];
+    expect(savedReport).toMatchObject({
+      profileVersion: "transport-v1",
+      verdict: "pass",
+      scannerVersion: "transport-v1-network-adapter-1",
+      metrics: { requestsCount: 6, bytesCount: 24 },
+    });
+    expect(savedReport?.checks).toHaveLength(5);
+    expect(JSON.stringify(savedReport)).not.toContain("93.184.216.34");
   });
 
   it("validates the claimed hostname before invoking the executor", async () => {

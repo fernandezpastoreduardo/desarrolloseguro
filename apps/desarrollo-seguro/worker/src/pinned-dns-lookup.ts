@@ -39,14 +39,16 @@ const BLOCKED_IPV6_CIDRS = [
   "64:ff9b:1::/48",
 ] as const;
 
-type Resolver = (hostname: string) => Promise<readonly LookupAddress[]>;
+export type PublicDnsResolver = (
+  hostname: string,
+) => Promise<readonly LookupAddress[]>;
 type AddressFamily = 4 | 6;
 type ParsedAddress = { family: AddressFamily; value: bigint; bits: number };
 type DnsLookupLimiter = {
   run<T>(operation: () => Promise<T>): Promise<T>;
 };
 
-const defaultResolver: Resolver = async (hostname) =>
+const defaultResolver: PublicDnsResolver = async (hostname) =>
   lookup(hostname, { all: true, order: "verbatim" });
 
 function createDnsLookupLimiter(): DnsLookupLimiter {
@@ -82,10 +84,31 @@ function createDnsLookupLimiter(): DnsLookupLimiter {
 
 const moduleDnsLookupLimiter = createDnsLookupLimiter();
 
+export type PublicDnsObservation = {
+  addressClass: "public";
+  aRecordCount: number;
+  aaaaRecordCount: number;
+};
+
+/** Resolves and validates all answers while returning counts only. */
+export async function observePublicDns(
+  inputHostname: unknown,
+  resolver: PublicDnsResolver = defaultResolver,
+): Promise<PublicDnsObservation> {
+  const addresses = await resolvePublicAddresses(inputHostname, (hostname) =>
+    moduleDnsLookupLimiter.run(() => resolver(hostname)),
+  );
+  return {
+    addressClass: "public",
+    aRecordCount: addresses.filter(({ family }) => family === 4).length,
+    aaaaRecordCount: addresses.filter(({ family }) => family === 6).length,
+  };
+}
+
 export function createPinnedLookup(
-  resolver: Resolver = defaultResolver,
+  resolver: PublicDnsResolver = defaultResolver,
 ): LookupFunction {
-  const limitedResolver: Resolver = (hostname) =>
+  const limitedResolver: PublicDnsResolver = (hostname) =>
     moduleDnsLookupLimiter.run(() => resolver(hostname));
 
   return (hostname, options, callback) => {
@@ -134,7 +157,7 @@ function getEligibleAddresses(
 
 async function resolvePublicAddresses(
   inputHostname: unknown,
-  resolver: Resolver,
+  resolver: PublicDnsResolver,
 ): Promise<LookupAddress[]> {
   const hostname = normalizeHostname(inputHostname);
   const answers = await resolveWithTimeout(resolver(hostname));

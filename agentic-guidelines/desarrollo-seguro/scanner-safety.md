@@ -1,6 +1,6 @@
 # Seguridad de ejecución de análisis
 
-La función de análisis remoto no está habilitada. La API actual no acepta scans y no hay un worker ejecutable ni un executor que convierta observaciones de red en resultados. El paquete worker sí contiene primitivas DNS/HTTPS con pruebas locales; su presencia no demuestra el aislamiento de egress ni permite activar análisis. No activar un executor público hasta implementar y probar las barreras de esta guía.
+La función de análisis remoto no está habilitada. La API actual no acepta scans y no hay un worker ejecutable que tome trabajos y persista resultados. El paquete worker contiene un observador local compuesto de DNS/HTTP/HTTPS con pruebas de dependencias sintéticas; su presencia no demuestra egress aislado ni permite activar análisis. No conectar este observador a trabajos públicos hasta implementar y probar las barreras de esta guía.
 
 ## Modelo de amenazas y límites de confianza
 

@@ -1,7 +1,10 @@
 import type { LookupAddress } from "node:dns";
 import type { LookupFunction } from "node:net";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createPinnedLookup } from "./pinned-dns-lookup.js";
+import {
+  createPinnedLookup,
+  observePublicDns,
+} from "./pinned-dns-lookup.js";
 
 const HOSTNAME = "sample.example.net";
 const PUBLIC_IPV4: LookupAddress = { address: "93.184.216.34", family: 4 };
@@ -361,5 +364,27 @@ describe("createPinnedLookup", () => {
     await Promise.all(
       pendingResolutions.slice(1, 2).map(({ promise }) => promise),
     );
+  });
+});
+
+describe("observePublicDns", () => {
+  it("returns validated family counts without exposing resolved addresses", async () => {
+    const resolver = vi.fn().mockResolvedValue([PUBLIC_IPV4, PUBLIC_IPV6]);
+
+    await expect(observePublicDns(HOSTNAME, resolver)).resolves.toEqual({
+      addressClass: "public",
+      aRecordCount: 1,
+      aaaaRecordCount: 1,
+    });
+    expect(resolver).toHaveBeenCalledExactlyOnceWith(HOSTNAME);
+  });
+
+  it("rejects the full observation when any answer is not public", async () => {
+    await expect(
+      observePublicDns(HOSTNAME, async () => [
+        PUBLIC_IPV4,
+        { address: "127.0.0.1", family: 4 },
+      ]),
+    ).rejects.toThrow("pinned_dns_lookup_failed");
   });
 });

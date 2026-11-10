@@ -336,7 +336,7 @@ describe("requestPinnedHttps", () => {
             httpsRequest({ ...options, port: fixture.port }, callback),
         },
       ),
-    ).rejects.toThrow("https_request_failed");
+    ).rejects.toThrow("tls_certificate_invalid");
   });
 
   it("aborts an in-flight request when its signal is cancelled", async () => {
