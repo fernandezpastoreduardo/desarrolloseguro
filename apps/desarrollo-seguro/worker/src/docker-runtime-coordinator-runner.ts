@@ -1,0 +1,407 @@
+import { randomUUID } from "node:crypto";
+import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import type { ScanRunInput } from "@desarrolloseguro/persistence";
+import {
+  MAX_EXECUTOR_RESPONSE_BYTES,
+  parseTransportV1ExecutorResponse,
+  type TransportV1ExecutorRequest,
+} from "./transport-v1-executor-protocol.js";
+import type { RuntimeCoordinatorRunner } from "./runtime-coordinator-server.js";
+
+const DEFAULT_BROKER_STARTUP_TIMEOUT_MS = 5_000;
+const DOCKER_COMMAND_TIMEOUT_MS = 10_000;
+const EXECUTOR_COMMAND_TIMEOUT_MS = 38_000;
+const BROKER_STOP_TIMEOUT_MS = 3_000;
+const MAX_DOCKER_COMMAND_OUTPUT_BYTES = 256 * 1024;
+const MAX_BROKER_STARTUP_OUTPUT_BYTES = 4 * 1024;
+const EGRESS_SOCKET_DIRECTORY = "/run/development-security-egress";
+const VOLUME_PREFIX = "development-security-job-";
+const BROKER_CONTAINER_PREFIX = "development-security-broker-";
+const EXECUTOR_CONTAINER_PREFIX = "development-security-executor-";
+const IMAGE_REFERENCE = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/u;
+const BROKER_INITIALIZER =
+  `chown 1000:1000 ${EGRESS_SOCKET_DIRECTORY} && chmod 0700 ${EGRESS_SOCKET_DIRECTORY}`;
+
+export type DockerRuntimeCoordinatorRunnerOptions = {
+  executorImage: string;
+  brokerImage: string;
+  dockerBinary?: string;
+  brokerStartupTimeoutMs?: number;
+};
+
+export type DockerRuntimeSession = {
+  execute(
+    request: TransportV1ExecutorRequest,
+    signal: AbortSignal,
+  ): Promise<unknown>;
+  close(): Promise<void>;
+};
+
+export type DockerRuntimeSessionFactory = {
+  create(
+    request: TransportV1ExecutorRequest,
+    signal: AbortSignal,
+  ): Promise<DockerRuntimeSession>;
+};
+
+/** Runs one executor/broker pair, validates its response, and always tears it down. */
+export function createDockerRuntimeCoordinatorRunner(
+  factory: DockerRuntimeSessionFactory,
+): RuntimeCoordinatorRunner {
+  return {
+    async execute(request, signal): Promise<
+      Omit<ScanRunInput, "jobId" | "leaseToken" | "hostname" | "profileVersion">
+    > {
+      if (signal.aborted) throw new Error("request_aborted");
+      let session: DockerRuntimeSession | undefined;
+      try {
+        session = await factory.create(request, signal);
+        if (signal.aborted) throw new Error("request_aborted");
+        const responseInput = await session.execute(request, signal);
+        let response: ReturnType<typeof parseTransportV1ExecutorResponse>;
+        try {
+          response = parseTransportV1ExecutorResponse(responseInput, request.requestId);
+        } catch {
+          throw new Error("executor_response_invalid");
+        }
+        if ("errorCode" in response) throw new Error("executor_failed");
+        return response.result;
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          [
+            "request_aborted",
+            "executor_response_invalid",
+            "executor_failed",
+            "runtime_volume_create_failed",
+            "runtime_volume_prepare_failed",
+            "runtime_broker_start_failed",
+            "runtime_broker_ready_failed",
+            "runtime_coordinator_unavailable",
+            "runtime_cleanup_failed",
+          ].includes(error.message)
+        ) {
+          throw error;
+        }
+        throw new Error(signal.aborted ? "request_aborted" : "executor_failed", { cause: error });
+      } finally {
+        await session?.close();
+      }
+    },
+  };
+}
+
+/** Creates a private, network-disabled Docker runtime for each job. */
+export function createDockerRuntimeSessionFactory(
+  options: DockerRuntimeCoordinatorRunnerOptions,
+): DockerRuntimeSessionFactory {
+  const dockerBinary = options.dockerBinary ?? "docker";
+  const brokerStartupTimeoutMs = options.brokerStartupTimeoutMs ?? DEFAULT_BROKER_STARTUP_TIMEOUT_MS;
+  if (
+    !IMAGE_REFERENCE.test(options.executorImage) ||
+    !IMAGE_REFERENCE.test(options.brokerImage) ||
+    dockerBinary.length === 0 ||
+    !Number.isSafeInteger(brokerStartupTimeoutMs) ||
+    brokerStartupTimeoutMs < 1 ||
+    brokerStartupTimeoutMs > 30_000
+  ) {
+    throw new Error("docker_runtime_config_invalid");
+  }
+
+  return {
+    async create(request, signal): Promise<DockerRuntimeSession> {
+      if (signal.aborted) throw new Error("request_aborted");
+      const runtimeId = randomUUID();
+      const volumeName = `${VOLUME_PREFIX}${runtimeId}`;
+      const brokerName = `${BROKER_CONTAINER_PREFIX}${runtimeId}`;
+      const executorName = `${EXECUTOR_CONTAINER_PREFIX}${runtimeId}`;
+      let volumeMayExist = false;
+      let brokerProcess: ChildProcessWithoutNullStreams | undefined;
+      let executorMayExist = false;
+      let closed = false;
+
+      const close = async () => {
+        if (closed) return;
+        closed = true;
+        let cleanupFailed = false;
+        if (executorMayExist) {
+          const removed = await removeContainer(dockerBinary, executorName);
+          if (!removed) cleanupFailed = true;
+          executorMayExist = false;
+        }
+        if (brokerProcess) {
+          const removed = await removeContainer(dockerBinary, brokerName);
+          const processClosed = await waitForChildClose(brokerProcess, BROKER_STOP_TIMEOUT_MS);
+          if (!removed && !processClosed) cleanupFailed = true;
+          if (!processClosed) brokerProcess.kill("SIGKILL");
+          brokerProcess = undefined;
+        }
+        if (volumeMayExist) {
+          const removed = await removeVolume(dockerBinary, volumeName);
+          if (!removed) cleanupFailed = true;
+          volumeMayExist = false;
+        }
+        if (cleanupFailed) throw new Error("runtime_cleanup_failed");
+      };
+
+      let startupFailureCode = "runtime_volume_create_failed";
+      try {
+        try {
+          await runDocker(dockerBinary, [
+            "volume", "create",
+            "--label", "io.desarrolloseguro.role=ephemeral-runtime",
+            volumeName,
+          ], undefined, signal);
+          volumeMayExist = true;
+        } catch (error) {
+          await removeVolume(dockerBinary, volumeName);
+          throw error;
+        }
+        startupFailureCode = "runtime_volume_prepare_failed";
+        await initializeBrokerVolume(dockerBinary, options.brokerImage, volumeName, signal);
+        startupFailureCode = "runtime_broker_start_failed";
+        brokerProcess = startBroker(
+          dockerBinary,
+          options.brokerImage,
+          brokerName,
+          volumeName,
+          { hostname: request.hostname },
+        );
+        startupFailureCode = "runtime_broker_ready_failed";
+        await waitForBrokerReady(brokerProcess, signal, brokerStartupTimeoutMs);
+      } catch (error) {
+        try {
+          await close();
+        } catch (cleanupError) {
+          throw new Error("runtime_cleanup_failed", { cause: cleanupError });
+        }
+        if (error instanceof Error && error.message === "request_aborted") throw error;
+        throw new Error(startupFailureCode, { cause: error });
+      }
+
+      return {
+        execute: async (executorRequest, executorSignal) => {
+          if (closed || executorSignal.aborted) throw new Error("request_aborted");
+          executorMayExist = true;
+          const output = await runDocker(
+            dockerBinary,
+            executorArguments(options.executorImage, volumeName, executorName),
+            `${JSON.stringify(executorRequest)}\n`,
+            executorSignal,
+            MAX_EXECUTOR_RESPONSE_BYTES,
+            true,
+            EXECUTOR_COMMAND_TIMEOUT_MS,
+          );
+          try {
+            return JSON.parse(output.trim()) as unknown;
+          } catch (error) {
+            throw new Error("executor_response_invalid", { cause: error });
+          }
+        },
+        close,
+      };
+    },
+  };
+}
+
+async function initializeBrokerVolume(
+  dockerBinary: string,
+  brokerImage: string,
+  volumeName: string,
+  signal: AbortSignal,
+): Promise<void> {
+  await runDocker(dockerBinary, [
+    "run", "--rm",
+    "--network", "none",
+    "--user", "0:0",
+    "--mount", `type=volume,source=${volumeName},target=${EGRESS_SOCKET_DIRECTORY}`,
+    "--entrypoint", "/bin/sh",
+    brokerImage,
+    "-c", BROKER_INITIALIZER,
+  ], undefined, signal);
+}
+
+function startBroker(
+  dockerBinary: string,
+  brokerImage: string,
+  brokerName: string,
+  volumeName: string,
+  options: { hostname: string },
+): ChildProcessWithoutNullStreams {
+  const child = spawn(dockerBinary, [
+    "run", "--interactive",
+    "--name", brokerName,
+    ...restrictedContainerArguments(),
+    "--mount", `type=volume,source=${volumeName},target=${EGRESS_SOCKET_DIRECTORY}`,
+    brokerImage,
+  ], { stdio: ["pipe", "pipe", "pipe"] });
+  child.stderr.resume();
+  child.stdin.end(`${JSON.stringify({
+    protocolVersion: 1,
+    hostname: options.hostname,
+    profileVersion: "transport-v1",
+  })}\n`);
+  return child;
+}
+
+function executorArguments(
+  executorImage: string,
+  volumeName: string,
+  executorName: string,
+): string[] {
+  return [
+    "run", "--interactive",
+    "--name", executorName,
+    ...restrictedContainerArguments(),
+    "--mount", `type=volume,source=${volumeName},target=${EGRESS_SOCKET_DIRECTORY},readonly`,
+    executorImage,
+  ];
+}
+
+function restrictedContainerArguments(): string[] {
+  return [
+    "--network", "none",
+    "--read-only",
+    "--user", "1000:1000",
+    "--cap-drop", "ALL",
+    "--security-opt", "no-new-privileges",
+    "--pids-limit", "64",
+    "--memory", "256m",
+    "--cpus", "0.5",
+    "--tmpfs", "/tmp:rw,noexec,nosuid,size=16m,uid=1000,gid=1000",
+  ];
+}
+
+function waitForBrokerReady(
+  child: ChildProcessWithoutNullStreams,
+  signal: AbortSignal,
+  timeoutMs: number,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let receivedBytes = 0;
+    let buffer = "";
+    let settled = false;
+    const timer = setTimeout(() => finish(new Error("runtime_coordinator_unavailable")), timeoutMs);
+    const onAbort = () => finish(new Error("request_aborted"));
+    const finish = (error?: Error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      signal.removeEventListener("abort", onAbort);
+      child.stdout.removeListener("data", onData);
+      child.removeListener("error", onError);
+      child.removeListener("close", onClose);
+      if (error) reject(error);
+      else resolve();
+    };
+    const onData = (chunk: Buffer) => {
+      receivedBytes += chunk.byteLength;
+      if (receivedBytes > MAX_BROKER_STARTUP_OUTPUT_BYTES) {
+        finish(new Error("runtime_coordinator_unavailable"));
+        return;
+      }
+      buffer += chunk.toString("utf8");
+      if (buffer.split(/\r?\n/u).some((line) => line === '{"protocolVersion":1,"state":"ready"}')) {
+        finish();
+      }
+    };
+    const onError = () => finish(new Error("runtime_coordinator_unavailable"));
+    const onClose = () => finish(new Error("runtime_coordinator_unavailable"));
+    child.stdout.on("data", onData);
+    child.once("error", onError);
+    child.once("close", onClose);
+    signal.addEventListener("abort", onAbort, { once: true });
+    if (signal.aborted) onAbort();
+  });
+}
+
+async function runDocker(
+  dockerBinary: string,
+  args: string[],
+  input?: string,
+  signal?: AbortSignal,
+  maxOutputBytes = MAX_DOCKER_COMMAND_OUTPUT_BYTES,
+  allowNonZeroExit = false,
+  timeoutMs = DOCKER_COMMAND_TIMEOUT_MS,
+): Promise<string> {
+  if (signal?.aborted) throw new Error("request_aborted");
+  return new Promise((resolve, reject) => {
+    const child = spawn(dockerBinary, args, { stdio: ["pipe", "pipe", "ignore"] });
+    const chunks: Buffer[] = [];
+    let receivedBytes = 0;
+    let settled = false;
+    const timeout = setTimeout(() => {
+      child.kill("SIGTERM");
+      finish(new Error("docker_command_timeout"));
+    }, timeoutMs);
+    const onAbort = () => {
+      child.kill("SIGTERM");
+      finish(new Error("request_aborted"));
+    };
+    const finish = (error?: Error, output = "") => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      signal?.removeEventListener("abort", onAbort);
+      if (error) reject(error);
+      else resolve(output);
+    };
+    child.stdout.on("data", (chunk: Buffer) => {
+      receivedBytes += chunk.byteLength;
+      if (receivedBytes > maxOutputBytes) {
+        child.kill("SIGTERM");
+        finish(new Error("docker_command_output_too_large"));
+        return;
+      }
+      chunks.push(Buffer.from(chunk));
+    });
+    child.once("error", () => finish(new Error("docker_runtime_unavailable")));
+    child.once("close", (code) => {
+      if (code !== 0 && !allowNonZeroExit) {
+        finish(new Error("docker_runtime_command_failed"));
+        return;
+      }
+      finish(undefined, Buffer.concat(chunks).toString("utf8"));
+    });
+    signal?.addEventListener("abort", onAbort, { once: true });
+    if (signal?.aborted) {
+      onAbort();
+      return;
+    }
+    child.stdin.end(input);
+  });
+}
+
+async function removeContainer(dockerBinary: string, containerName: string): Promise<boolean> {
+  try {
+    await runDocker(dockerBinary, ["rm", "--force", containerName]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function removeVolume(dockerBinary: string, volumeName: string): Promise<boolean> {
+  try {
+    await runDocker(dockerBinary, ["volume", "rm", volumeName]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function waitForChildClose(
+  child: ChildProcessWithoutNullStreams,
+  timeoutMs: number,
+): Promise<boolean> {
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      resolve(false);
+    }, timeoutMs);
+    child.once("close", () => {
+      clearTimeout(timer);
+      resolve(true);
+    });
+  });
+}

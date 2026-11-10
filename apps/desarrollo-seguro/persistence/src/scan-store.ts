@@ -147,6 +147,7 @@ export type ScanRunInput = {
 };
 
 export interface ScanJobStore {
+  recoverExpiredLeases(now: Date, maxAttempts: number): Promise<number>;
   claimNextScan(
     now: Date,
     leaseDurationMs: number,

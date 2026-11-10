@@ -444,6 +444,7 @@ describe("pinned HTTPS transport through the worker processor", () => {
     };
     const persistedRuns: ScanRunInput[] = [];
     const store: ScanJobStore = {
+      recoverExpiredLeases: vi.fn().mockResolvedValue(0),
       claimNextScan: vi.fn().mockResolvedValue(job),
       renewScanLease: vi.fn().mockResolvedValue(true),
       failScan: vi.fn().mockResolvedValue("retrying"),

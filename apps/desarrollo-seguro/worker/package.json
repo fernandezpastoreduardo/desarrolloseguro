@@ -6,6 +6,7 @@
   "scripts": {
     "prebuild": "pnpm --filter @desarrolloseguro/core build && pnpm --filter @desarrolloseguro/persistence build",
     "build": "tsc -p tsconfig.json",
+    "start": "node dist/worker-entrypoint.js",
     "pretest": "pnpm --filter @desarrolloseguro/core build && pnpm --filter @desarrolloseguro/persistence build",
     "test": "vitest run src scripts",
     "test:coverage": "vitest run src scripts --coverage --coverage.reporter=lcov --coverage.reporter=text",

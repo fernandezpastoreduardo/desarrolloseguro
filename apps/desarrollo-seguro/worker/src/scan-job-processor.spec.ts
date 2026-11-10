@@ -153,6 +153,76 @@ describe("ScanJobProcessor", () => {
     expect(executor.execute).not.toHaveBeenCalled();
   });
 
+  it("recovers expired leases before claiming work", async () => {
+    const store = makeStore(null);
+    const processor = new ScanJobProcessor(store, { execute: vi.fn() });
+
+    await expect(processor.processNext()).resolves.toBe("idle");
+
+    expect(store.recoverExpiredLeases).toHaveBeenCalledWith(expect.any(Date), 3);
+    expect(
+      vi.mocked(store.recoverExpiredLeases).mock.invocationCallOrder[0],
+    ).toBeLessThan(vi.mocked(store.claimNextScan).mock.invocationCallOrder[0] ?? 0);
+  });
+
+  it("throttles lease recovery to the configured interval", async () => {
+    const store = makeStore(null);
+    let currentTime = new Date("2026-11-10T10:00:00.000Z");
+    const processor = new ScanJobProcessor(
+      store,
+      { execute: vi.fn() },
+      () => currentTime,
+      undefined,
+      undefined,
+      5_000,
+    );
+
+    await processor.processNext();
+    await processor.processNext();
+    currentTime = new Date(currentTime.getTime() + 4_999);
+    await processor.processNext();
+    expect(store.recoverExpiredLeases).toHaveBeenCalledOnce();
+
+    currentTime = new Date(currentTime.getTime() + 1);
+    await processor.processNext();
+    expect(store.recoverExpiredLeases).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not claim work if expired lease recovery fails", async () => {
+    const store = makeStore(null);
+    vi.mocked(store.recoverExpiredLeases).mockRejectedValue(
+      new Error("private database detail"),
+    );
+    const processor = new ScanJobProcessor(store, { execute: vi.fn() });
+
+    await expect(processor.processNext()).rejects.toThrow("private database detail");
+
+    expect(store.claimNextScan).not.toHaveBeenCalled();
+  });
+
+  it("shares an in-flight recovery across concurrent processor calls", async () => {
+    const store = makeStore(null);
+    let completeRecovery: (() => void) | undefined;
+    vi.mocked(store.recoverExpiredLeases).mockImplementation(
+      () => new Promise((resolve) => {
+        completeRecovery = () => resolve(0);
+      }),
+    );
+    const processor = new ScanJobProcessor(store, { execute: vi.fn() });
+
+    const firstCall = processor.processNext();
+    const secondCall = processor.processNext();
+    await vi.waitFor(() => expect(store.recoverExpiredLeases).toHaveBeenCalledOnce());
+    completeRecovery?.();
+    await expect(Promise.all([firstCall, secondCall])).resolves.toEqual([
+      "idle",
+      "idle",
+    ]);
+
+    expect(store.recoverExpiredLeases).toHaveBeenCalledOnce();
+    expect(store.claimNextScan).toHaveBeenCalledTimes(2);
+  });
+
   it("commits the executor result under the claimed lease", async () => {
     const store = makeStore(JOB);
     const executor = { execute: vi.fn().mockResolvedValue(RESULT) };
@@ -437,10 +507,12 @@ describe("ScanJobProcessor", () => {
 
   function makeStore(job: ClaimedScanJob | null): ScanJobStore & {
     claimNextScan: ReturnType<typeof vi.fn>;
+    recoverExpiredLeases: ReturnType<typeof vi.fn>;
     completeScan: ReturnType<typeof vi.fn>;
   } {
     return {
       claimNextScan: vi.fn().mockResolvedValue(job),
+      recoverExpiredLeases: vi.fn().mockResolvedValue(0),
       renewScanLease: vi.fn().mockResolvedValue(true),
       failScan: vi.fn().mockResolvedValue("retrying"),
       completeScan: vi.fn().mockResolvedValue("run-id"),

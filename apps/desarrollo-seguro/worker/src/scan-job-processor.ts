@@ -38,14 +38,19 @@ export type ScanJobTelemetry = (event: ScanJobTelemetryEvent) => void;
 const DEFAULT_LEASE_DURATION_MS = 30_000;
 const HEARTBEAT_INTERVAL_MS = 10_000;
 const MAX_EXECUTOR_ATTEMPTS = 3;
+const DEFAULT_LEASE_RECOVERY_INTERVAL_MS = 15_000;
 
 export class ScanJobProcessor {
+  private lastLeaseRecoveryAt: number | null = null;
+  private leaseRecoveryInFlight: Promise<void> | null = null;
+
   constructor(
     private readonly store: ScanJobStore,
     private readonly executor: ScanExecutor,
     private readonly now: () => Date = () => new Date(),
     private readonly heartbeatIntervalMs = HEARTBEAT_INTERVAL_MS,
     private readonly telemetry?: ScanJobTelemetry,
+    private readonly leaseRecoveryIntervalMs = DEFAULT_LEASE_RECOVERY_INTERVAL_MS,
   ) {}
 
   async processNext(): Promise<ScanJobOutcome> {
@@ -61,8 +66,10 @@ export class ScanJobProcessor {
   }
 
   private async processNextInternal(): Promise<ScanJobOutcome> {
+    const claimedAt = this.now();
+    await this.recoverExpiredLeasesIfDue(claimedAt);
     const claimed = await this.store.claimNextScan(
-      this.now(),
+      claimedAt,
       DEFAULT_LEASE_DURATION_MS,
     );
     if (!claimed) return "idle";
@@ -151,6 +158,38 @@ export class ScanJobProcessor {
       }
       throw error;
     }
+  }
+
+  private async recoverExpiredLeasesIfDue(now: Date): Promise<void> {
+    const nowMs = now.getTime();
+    if (
+      !Number.isSafeInteger(nowMs) ||
+      !Number.isSafeInteger(this.leaseRecoveryIntervalMs) ||
+      this.leaseRecoveryIntervalMs < 1
+    ) {
+      throw new Error("scan_lease_recovery_configuration_invalid");
+    }
+
+    if (this.leaseRecoveryInFlight) await this.leaseRecoveryInFlight;
+    if (
+      this.lastLeaseRecoveryAt !== null &&
+      nowMs - this.lastLeaseRecoveryAt < this.leaseRecoveryIntervalMs
+    ) {
+      return;
+    }
+
+    const recovery = this.store
+      .recoverExpiredLeases(now, MAX_EXECUTOR_ATTEMPTS)
+      .then(() => {
+        this.lastLeaseRecoveryAt = nowMs;
+      })
+      .finally(() => {
+        if (this.leaseRecoveryInFlight === recovery) {
+          this.leaseRecoveryInFlight = null;
+        }
+      });
+    this.leaseRecoveryInFlight = recovery;
+    await recovery;
   }
 
   private emitOutcome(outcome: ScanJobOutcome, startedAt: number): void {
