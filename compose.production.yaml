@@ -69,10 +69,12 @@ services:
         install -o node -g node -m 0400 /run/secrets/development_security_admin_url /run/development-security-secrets/admin-url
         install -o node -g node -m 0400 /run/secrets/development_security_migrator_password /run/development-security-secrets/migrator-password
         install -o node -g node -m 0400 /run/secrets/development_security_api_database_url /run/development-security-secrets/api-database-url
+        install -o node -g node -m 0400 /run/secrets/development_security_worker_database_url /run/development-security-secrets/worker-database-url
         install -o node -g node -m 0444 /run/secrets/internal_tls_ca.crt /run/development-security-secrets/database-ca.crt
         export DS_PRODUCTION_ADMIN_URL_FILE=/run/development-security-secrets/admin-url
         export DS_PRODUCTION_MIGRATOR_PASSWORD_FILE=/run/development-security-secrets/migrator-password
         export DS_PRODUCTION_API_DATABASE_URL_FILE=/run/development-security-secrets/api-database-url
+        export DS_PRODUCTION_WORKER_DATABASE_URL_FILE=/run/development-security-secrets/worker-database-url
         export DS_PRODUCTION_TLS_CA_FILE=/run/development-security-secrets/database-ca.crt
         exec su -p node -s /bin/sh -c 'exec node apps/desarrollo-seguro/persistence/dist/production-provision-database.js'
     tmpfs:
@@ -86,6 +88,7 @@ services:
       - development_security_admin_url
       - development_security_migrator_password
       - development_security_api_database_url
+      - development_security_worker_database_url
       - internal_tls_ca.crt
     depends_on:
       development-security-database:
@@ -216,6 +219,8 @@ secrets:
     file: ${DEVELOPMENT_SECURITY_SECRETS_DIR:-./.secrets}/development_security_migrator_password
   development_security_api_database_url:
     file: ${DEVELOPMENT_SECURITY_SECRETS_DIR:-./.secrets}/development_security_api_database_url
+  development_security_worker_database_url:
+    file: ${DEVELOPMENT_SECURITY_SECRETS_DIR:-./.secrets}/development_security_worker_database_url
   development_security_database_tls.crt:
     file: ${DEVELOPMENT_SECURITY_SECRETS_DIR:-./.secrets}/development_security_database_tls.crt
   development_security_database_tls.key:

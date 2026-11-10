@@ -19,6 +19,7 @@ const SECRET_NAMES = [
   "development_security_admin_url",
   "development_security_migrator_password",
   "development_security_api_database_url",
+  "development_security_worker_database_url",
   "development_security_database_tls.crt",
   "development_security_database_tls.key",
   "development_security_api_tls.crt",
@@ -66,6 +67,7 @@ assert.doesNotMatch(database, /^\s+ports:/mu);
 
 assert.match(migration, /DS_PRODUCTION_BOOTSTRAP_ENABLED:\s*"1"/u);
 assert.match(migration, /production-provision-database\.js/u);
+assert.match(migration, /DS_PRODUCTION_WORKER_DATABASE_URL_FILE=/u);
 assert.match(migration, /service_healthy/u);
 assert.match(compose, /service_completed_successfully/u);
 assert.match(migration, /read_only:\s*true/u);
@@ -107,7 +109,10 @@ assert.doesNotMatch(caddyFragment, /api:3001|database|grumphya/iu);
 assert.match(compose, /name: development-security-postgres/u);
 assert.doesNotMatch(compose, /grumphya|apps\/api|apps\/web/iu);
 assert.doesNotMatch(compose, /privileged:\s*true/u);
-assert.doesNotMatch(compose, /worker|executor|scan-runner/iu);
+assert.doesNotMatch(
+  compose,
+  /^\s{2}(?:development-security-)?(?:worker|executor|scan-runner):/mu,
+);
 assert.match(dockerfile, /AS development-security-executor\n/u);
 assert.match(dockerfile, /ENTRYPOINT \["node", "apps\/desarrollo-seguro\/worker\/dist\/transport-v1-executor-child\.js"\]/u);
 assert.match(sandboxVerifier, /--network none/u);

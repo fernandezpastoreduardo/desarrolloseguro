@@ -15,7 +15,7 @@ Para el Caddy existente del VPS, añade el contenido de [`docker/Caddyfile.devel
 
 ## Arranque
 
-Provisiona en `.secrets/` los archivos requeridos por la sección `secrets` del Compose: credenciales de administrador, migrador y API, certificados TLS de base y API, y CA interna. Mantén los archivos fuera de Git y con permisos restrictivos. Después:
+Provisiona en `.secrets/` los archivos requeridos por la sección `secrets` del Compose: credenciales de administrador, migrador, API y worker, certificados TLS de base y API, y CA interna. La credencial `ds_worker` solo recibe las funciones SQL necesarias para claims, heartbeat, recuperación, fallo y finalización; no lee ni escribe directamente los informes y no puede purgarlos. El proceso worker sigue fuera del Compose y no se activa con este bootstrap. Mantén los archivos fuera de Git y con permisos restrictivos. Después:
 
 ```sh
 docker compose -f compose.production.yaml config --quiet

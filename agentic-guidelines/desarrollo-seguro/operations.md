@@ -21,11 +21,12 @@ Compose lee todos los secretos desde `.secrets/` o desde `DEVELOPMENT_SECURITY_S
 - `development_security_admin_url`
 - `development_security_migrator_password`
 - `development_security_api_database_url`
+- `development_security_worker_database_url`
 - `development_security_database_tls.crt` y `.key`
 - `development_security_api_tls.crt` y `.key`
 - `internal_tls_ca.crt`
 
-La CA raíz se mantiene fuera del contenedor y del repositorio. `scripts/generate-development-security-tls.sh <ca-offline-dir> <secrets-dir>` firma certificados de servidor para `development-security-database` y `development-security-api`; no crea una CA ni reemplaza archivos existentes. Protege las claves privadas y limita sus permisos. En la URL administrativa y de API usa `sslmode=verify-full` y el nombre DNS del servicio correspondiente.
+La CA raíz se mantiene fuera del contenedor y del repositorio. `scripts/generate-development-security-tls.sh <ca-offline-dir> <secrets-dir>` firma certificados de servidor para `development-security-database` y `development-security-api`; no crea una CA ni reemplaza archivos existentes. Protege las claves privadas y limita sus permisos. Los clientes cargan la CA y verifican hostname/TLS 1.2+ mediante la configuración `ssl` de `pg`; las URLs de aplicación no llevan parámetros adicionales. El worker futuro debe montar `internal_tls_ca.crt` como `DS_WORKER_DATABASE_TLS_CA_FILE`.
 
 El aprovisionador es una operación de una sola ejecución con `DS_PRODUCTION_BOOTSTRAP_ENABLED=1`. Revisa las URLs, contraseñas, CA y respaldo del volumen antes de levantar el stack. No reutilices una base de otro proyecto ni apuntes el aprovisionador de producción a una base de pruebas.
 

@@ -4,7 +4,7 @@ El paquete `apps/desarrollo-seguro/persistence/` contiene el aprovisionador, mig
 
 Los roles de runtime siguen mínimo privilegio: el rol API lee solo la proyección pública; el worker no tiene lectura directa de resultados y las operaciones de trabajo se exponen mediante funciones controladas. Las migraciones fijan grants, restricciones de integridad y catálogo de perfiles. Las suites PostgreSQL locales comprueban esas reglas.
 
-El endpoint disponible es de lectura y no admite scans. No hay worker coordinador ejecutable ni scheduler. El paquete worker contiene el executor de red en un proceso hijo sin store/lease y el coordinador con el store; su canal fixture recorre el procesador hasta un informe público en PostgreSQL aislado mediante `pnpm test:postgres`. El almacenamiento y esas primitivas no implican que se generen informes desde sitios reales. El barrido de expiración está definido en SQL, pero no hay tarea programada.
+El endpoint disponible es de lectura y no admite scans. Existe un entrypoint worker, que usa `ds_worker` desde un fichero secreto, polling serial, recuperación periódica de leases vencidos y el cliente del supervisor Unix; Compose aún no lo arranca. El worker no recibe permisos de lectura directa de resultados ni acceso Docker. El canal fixture recorre el procesador hasta un informe público en PostgreSQL aislado mediante `pnpm test:postgres`. Esto no implica que se generen informes desde sitios reales. El purgado de informes expirados está definido en SQL y reservado al rol migrator; falta programarlo como tarea de mantenimiento.
 
 ## Pruebas PostgreSQL
 

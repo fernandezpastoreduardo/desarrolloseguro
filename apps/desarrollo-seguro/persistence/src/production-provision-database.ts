@@ -16,6 +16,7 @@ const ROLE_COMMENT = "development_security: managed role v1";
 const MIGRATOR_ROLE = "ds_migrator";
 const API_ROLE = "ds_api";
 const READ_ROLE = "ds_read";
+const WORKER_ROLE = "ds_worker";
 const PRODUCTION_OPT_IN_ERROR = "DS_PRODUCTION_BOOTSTRAP_ENABLED_required";
 const SETTINGS_ERROR = "DS_PRODUCTION_PROVISION_SETTINGS_invalid";
 const TARGET_ERROR =
@@ -28,6 +29,7 @@ const PEM_CERTIFICATE_PATTERN =
 export interface ProductionProvisioningSettings {
   adminUrl: string;
   apiDatabaseUrl: string;
+  workerDatabaseUrl: string;
   databaseName: string;
   migratorPassword: string;
   tlsCa: string;
@@ -44,6 +46,7 @@ export function assertSafeProductionProvisioningTarget(
     settings.bootstrapEnabled !== BOOTSTRAP_ENABLED_VALUE ||
     !isNonEmptyString(settings.adminUrl) ||
     !isNonEmptyString(settings.apiDatabaseUrl) ||
+    !isNonEmptyString(settings.workerDatabaseUrl) ||
     !isNonEmptyString(settings.databaseName) ||
     !isNonEmptyString(settings.migratorPassword) ||
     !isNonEmptyString(settings.tlsCa) ||
@@ -82,8 +85,18 @@ export function assertSafeProductionProvisioningTarget(
       throw new Error(ADMIN_URL_ERROR);
     }
   }
-  parseApiDatabaseUrl(
+  parseRuntimeDatabaseUrl(
     settings.apiDatabaseUrl,
+    API_ROLE,
+    "DS_PRODUCTION_API_DATABASE_URL_invalid",
+    settings.databaseName,
+    testMode,
+    target,
+  );
+  parseRuntimeDatabaseUrl(
+    settings.workerDatabaseUrl,
+    WORKER_ROLE,
+    "DS_PRODUCTION_WORKER_DATABASE_URL_invalid",
     settings.databaseName,
     testMode,
     target,
@@ -92,6 +105,7 @@ export function assertSafeProductionProvisioningTarget(
   return {
     adminUrl: settings.adminUrl,
     apiDatabaseUrl: settings.apiDatabaseUrl,
+    workerDatabaseUrl: settings.workerDatabaseUrl,
     databaseName: settings.databaseName,
     migratorPassword: settings.migratorPassword,
     tlsCa: settings.tlsCa,
@@ -113,8 +127,20 @@ export async function provisionProductionDevelopmentSecurityDatabase(
     ...tls,
   });
   const apiPassword = decodeURIComponent(
-    parseApiDatabaseUrl(
+    parseRuntimeDatabaseUrl(
       settings.apiDatabaseUrl,
+      API_ROLE,
+      "DS_PRODUCTION_API_DATABASE_URL_invalid",
+      settings.databaseName,
+      testMode,
+      target,
+    ).password,
+  );
+  const workerPassword = decodeURIComponent(
+    parseRuntimeDatabaseUrl(
+      settings.workerDatabaseUrl,
+      WORKER_ROLE,
+      "DS_PRODUCTION_WORKER_DATABASE_URL_invalid",
       settings.databaseName,
       testMode,
       target,
@@ -126,10 +152,11 @@ export async function provisionProductionDevelopmentSecurityDatabase(
     await ensureRole(adminPool, READ_ROLE, null, false);
     await ensureRole(adminPool, MIGRATOR_ROLE, settings.migratorPassword, true);
     await ensureRole(adminPool, API_ROLE, apiPassword, true);
+    await ensureRole(adminPool, WORKER_ROLE, workerPassword, true);
     await ensureDatabase(adminPool, settings.databaseName);
     await adminPool.query(
       `GRANT CONNECT ON DATABASE ${quoteIdentifier(settings.databaseName)}
-       TO ${READ_ROLE}, ${API_ROLE}, ${MIGRATOR_ROLE}`,
+       TO ${READ_ROLE}, ${API_ROLE}, ${WORKER_ROLE}, ${MIGRATOR_ROLE}`,
     );
     await adminPool.query(
       `REVOKE ALL ON DATABASE ${quoteIdentifier(settings.databaseName)} FROM PUBLIC`,
@@ -157,7 +184,7 @@ export async function provisionProductionDevelopmentSecurityDatabase(
       `GRANT USAGE, CREATE ON SCHEMA public TO ${MIGRATOR_ROLE}`,
     );
     await runDevelopmentSecurityMigrations(migratorPool);
-    await applyApiRuntimeGrants(migratorPool);
+    await applyRuntimeGrants(migratorPool);
   } finally {
     await migratorPool.end();
   }
@@ -170,6 +197,9 @@ export function readProductionProvisioningSettingsFromEnvironment(
     adminUrl: readSecretFile(environment.DS_PRODUCTION_ADMIN_URL_FILE),
     apiDatabaseUrl: readSecretFile(
       environment.DS_PRODUCTION_API_DATABASE_URL_FILE,
+    ),
+    workerDatabaseUrl: readSecretFile(
+      environment.DS_PRODUCTION_WORKER_DATABASE_URL_FILE,
     ),
     databaseName: environment.DS_PRODUCTION_DATABASE_NAME,
     migratorPassword: readSecretFile(
@@ -237,17 +267,19 @@ function parseAdminUrl(adminUrl: string, testMode: boolean): URL {
   return parsed;
 }
 
-function parseApiDatabaseUrl(
-  apiDatabaseUrl: string,
+function parseRuntimeDatabaseUrl(
+  databaseUrl: string,
+  expectedRole: typeof API_ROLE | typeof WORKER_ROLE,
+  invalidUrlCode: string,
   databaseName: string,
   testMode: boolean,
   adminUrl: URL,
 ): URL {
   let parsed: URL;
   try {
-    parsed = new URL(apiDatabaseUrl);
+    parsed = new URL(databaseUrl);
   } catch {
-    throw new Error("DS_PRODUCTION_API_DATABASE_URL_invalid");
+    throw new Error(invalidUrlCode);
   }
   const loopbackHosts = new Set(["localhost", "127.0.0.1", "::1"]);
   const hostname = parsed.hostname.replace(/^\[|\]$/gu, "").toLowerCase();
@@ -261,12 +293,12 @@ function parseApiDatabaseUrl(
     !exactHostIsValid ||
     (!testMode && parsed.port !== "5432") ||
     parsed.pathname !== `/${databaseName}` ||
-    decodeURIComponent(parsed.username) !== API_ROLE ||
+    decodeURIComponent(parsed.username) !== expectedRole ||
     !parsed.password ||
     parsed.search ||
     parsed.hash
   ) {
-    throw new Error("DS_PRODUCTION_API_DATABASE_URL_invalid");
+    throw new Error(invalidUrlCode);
   }
   return parsed;
 }
@@ -302,7 +334,11 @@ function resolveTlsConfiguration(ca: string): Pick<PoolConfig, "ssl"> {
 
 async function ensureRole(
   pool: Pool,
-  roleName: typeof READ_ROLE | typeof MIGRATOR_ROLE | typeof API_ROLE,
+  roleName:
+    | typeof READ_ROLE
+    | typeof MIGRATOR_ROLE
+    | typeof API_ROLE
+    | typeof WORKER_ROLE,
   password: string | null,
   login: boolean,
 ): Promise<void> {
@@ -357,7 +393,7 @@ async function assertManagedRoleMemberships(pool: Pool): Promise<void> {
      JOIN pg_roles AS member ON member.oid = membership.member
      WHERE member.rolname = ANY($1) OR granted.rolname = $2
      ORDER BY member.rolname, granted.rolname`,
-    [[READ_ROLE, MIGRATOR_ROLE, API_ROLE], READ_ROLE],
+    [[READ_ROLE, MIGRATOR_ROLE, API_ROLE, WORKER_ROLE], READ_ROLE],
   );
   if (
     memberships.rows.some(
@@ -389,11 +425,11 @@ async function ensureDatabase(pool: Pool, databaseName: string): Promise<void> {
   }
 }
 
-async function applyApiRuntimeGrants(pool: Pool): Promise<void> {
+async function applyRuntimeGrants(pool: Pool): Promise<void> {
   await pool.query(`
-    GRANT USAGE ON SCHEMA public TO ${READ_ROLE}, ${API_ROLE};
+    GRANT USAGE ON SCHEMA public TO ${READ_ROLE}, ${API_ROLE}, ${WORKER_ROLE};
     REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public
-      FROM ${READ_ROLE}, ${API_ROLE};
+      FROM ${READ_ROLE}, ${API_ROLE}, ${WORKER_ROLE};
     GRANT SELECT (hostname, enrollment, profile_version, opted_out_at)
       ON public.ds_domains TO ${READ_ROLE};
     GRANT SELECT (id, hostname, profile_version, state, queued_at)
@@ -406,7 +442,17 @@ async function applyApiRuntimeGrants(pool: Pool): Promise<void> {
       target_path, method, summary, limitation
     ) ON public.ds_check_results TO ${READ_ROLE};
     REVOKE UPDATE, DELETE, TRUNCATE ON ALL TABLES IN SCHEMA public
-      FROM ${READ_ROLE}, ${API_ROLE};
+      FROM ${READ_ROLE}, ${API_ROLE}, ${WORKER_ROLE};
+    REVOKE INSERT ON public.ds_scan_runs, public.ds_check_results,
+      public.ds_scan_metrics FROM ${WORKER_ROLE};
+    REVOKE UPDATE (state, lease_until, lease_token, attempts, available_at,
+      finished_at, public_error_code) ON public.ds_scan_jobs FROM ${WORKER_ROLE};
+    GRANT EXECUTE ON FUNCTION public.ds_claim_next_scan(integer),
+      public.ds_renew_scan_lease(uuid, uuid, integer),
+      public.ds_recover_expired_scan_leases(integer),
+      public.ds_fail_scan(uuid, uuid, text, integer),
+      public.ds_complete_scan(uuid, uuid, timestamptz, text, timestamptz,
+        text, jsonb, jsonb, jsonb) TO ${WORKER_ROLE};
     ALTER DEFAULT PRIVILEGES FOR ROLE ${MIGRATOR_ROLE} IN SCHEMA public
       REVOKE SELECT ON TABLES FROM ${READ_ROLE};
     ALTER DEFAULT PRIVILEGES FOR ROLE ${MIGRATOR_ROLE} IN SCHEMA public

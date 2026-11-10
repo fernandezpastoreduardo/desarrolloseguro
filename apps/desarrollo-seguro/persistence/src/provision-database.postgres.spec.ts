@@ -176,6 +176,7 @@ describePostgres.sequential(
         worker_can_update_state: boolean;
         worker_can_update_hostname: boolean;
         worker_can_execute_completion: boolean;
+        worker_can_execute_lease_recovery: boolean;
         migrator_can_execute_retention: boolean;
         api_can_execute_retention: boolean;
         worker_can_execute_retention: boolean;
@@ -216,6 +217,7 @@ describePostgres.sequential(
          has_column_privilege('ds_worker', 'ds_scan_jobs', 'state', 'UPDATE') AS worker_can_update_state,
          has_column_privilege('ds_worker', 'ds_scan_jobs', 'hostname', 'UPDATE') AS worker_can_update_hostname,
          has_function_privilege('ds_worker', 'public.ds_complete_scan(uuid,uuid,timestamp with time zone,text,timestamp with time zone,text,jsonb,jsonb,jsonb)', 'EXECUTE') AS worker_can_execute_completion,
+         has_function_privilege('ds_worker', 'public.ds_recover_expired_scan_leases(integer)', 'EXECUTE') AS worker_can_execute_lease_recovery,
          has_function_privilege('ds_migrator', 'public.ds_purge_expired_reports(timestamp with time zone)', 'EXECUTE') AS migrator_can_execute_retention,
          has_function_privilege('ds_api', 'public.ds_purge_expired_reports(timestamp with time zone)', 'EXECUTE') AS api_can_execute_retention,
          has_function_privilege('ds_worker', 'public.ds_purge_expired_reports(timestamp with time zone)', 'EXECUTE') AS worker_can_execute_retention,
@@ -253,6 +255,7 @@ describePostgres.sequential(
         worker_can_update_state: false,
         worker_can_update_hostname: false,
         worker_can_execute_completion: true,
+        worker_can_execute_lease_recovery: true,
         migrator_can_execute_retention: true,
         api_can_execute_retention: false,
         worker_can_execute_retention: false,
