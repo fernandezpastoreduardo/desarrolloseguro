@@ -452,6 +452,7 @@ describe("pinned HTTPS transport through the worker processor", () => {
     const store: ScanJobStore = {
       claimNextScan: vi.fn().mockResolvedValue(job),
       renewScanLease: vi.fn().mockResolvedValue(true),
+      failScan: vi.fn().mockResolvedValue("retrying"),
       completeScan: vi.fn(async (input) => {
         persistedRuns.push(input);
         return "fixture-run-id";

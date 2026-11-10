@@ -369,14 +369,23 @@ describe("ScanJobProcessor", () => {
     expect(store.completeScan).not.toHaveBeenCalled();
   });
 
-  it("propagates executor failures without attempting to persist a report", async () => {
+  it("schedules executor failures for bounded retry without persisting a report", async () => {
     const store = makeStore(JOB);
     const processor = new ScanJobProcessor(store, {
-      execute: vi.fn().mockRejectedValue(new Error("probe_failed")),
+      execute: vi.fn().mockRejectedValue(new Error("sensitive diagnostic")),
     });
 
-    await expect(processor.processNext()).rejects.toThrow("probe_failed");
+    await expect(processor.processNext()).resolves.toBe("retrying");
     expect(store.completeScan).not.toHaveBeenCalled();
+    expect(store.failScan).toHaveBeenCalledWith(
+      JOB.id,
+      JOB.leaseToken,
+      "executor_failed",
+      3,
+    );
+    expect(JSON.stringify(vi.mocked(store.failScan).mock.calls)).not.toContain(
+      "sensitive diagnostic",
+    );
   });
 
   function makeStore(job: ClaimedScanJob | null): ScanJobStore & {
@@ -386,6 +395,7 @@ describe("ScanJobProcessor", () => {
     return {
       claimNextScan: vi.fn().mockResolvedValue(job),
       renewScanLease: vi.fn().mockResolvedValue(true),
+      failScan: vi.fn().mockResolvedValue("retrying"),
       completeScan: vi.fn().mockResolvedValue("run-id"),
     };
   }

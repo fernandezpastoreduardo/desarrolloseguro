@@ -14,13 +14,14 @@ Las pruebas de políticas TLS generan certificados sintéticos temporales. No de
 | --- | --- |
 | Core | Validación de hostname, perfil/scope, normalización y reglas de veredicto. |
 | API | Validación de entrada, respuestas de estado/informe, rate limiting y errores públicos. |
-| Persistencia | Migraciones, constraints, leases, concurrencia, proyección pública y mínimos privilegios. |
+| Persistencia | Migraciones, constraints, leases, concurrencia entre dominios bajo un límite global, reintentos con backoff, códigos de error allowlist, proyección pública y mínimos privilegios. |
 | Docker | Servicios, redes internas, loopback-only para web, secretos y volumen exclusivos del proyecto. |
 | TLS | Validación de nombres/CA y configuración de proxy con material sintético. |
 | UI | Flujos accesibles, estados de carga/error, navegación y adaptación móvil. |
 | Primitivas, observador y executor local | Validación DNS/IP, pinning TLS, límite de respuesta, HTTP→HTTPS de mismo host/puerto/ruta con servidores sintéticos loopback, señales derivadas, métricas de intentos/bytes recibidos y clasificación segura de errores TLS. Un DNS que cambia de IP pública a loopback se rechaza antes de la segunda conexión; no valida firewall ni egress del host. |
 | Ensamblador fixture-only | Cobertura exacta de `transport-v1`, errores categóricos sin filtrar detalles y derivación del veredicto; no valida adaptadores de red ni produce tráfico. |
 | Canal de proceso y PostgreSQL | El hijo recibe solo hostname/perfil en un protocolo acotado, con entorno vacío y sin lease; el coordinador valida y persiste el resultado. La suite `pnpm test:postgres` recorre el canal con fixture hasta el informe público en una base opt-in aislada. El canal no prueba sandbox del sistema operativo. |
+| Fallos y reintentos | El executor no filtra su excepción; la DB solo libera el trabajo con un lease vigente, aplica un máximo de intentos y backoff, y publica únicamente códigos categóricos permitidos. |
 | Executor y runtime futuro | Separación de credenciales, bloqueo real de destinos privados/host/IPv6, DNS rebinding, límites globales y ausencia de tráfico a servicios señuelo en el runtime de despliegue. |
 
 ## Límites

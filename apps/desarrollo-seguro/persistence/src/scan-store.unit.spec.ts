@@ -174,6 +174,44 @@ describe("PostgresScanStore unit behavior", () => {
     expect(query).not.toHaveBeenCalled();
   });
 
+  it("rejects unsafe failure categories and retry limits before querying", async () => {
+    const query = vi.fn();
+    const store = new PostgresScanStore(makePool({ query }));
+
+    await expect(
+      store.failScan("job-id", "lease-token", "executor_failed", 0),
+    ).rejects.toThrow("invalid_scan_max_attempts");
+    await expect(
+      store.failScan("job-id", "lease-token", "executor_failed", 11),
+    ).rejects.toThrow("invalid_scan_max_attempts");
+    await expect(
+      store.failScan(
+        "job-id",
+        "lease-token",
+        "private_error_message" as "executor_failed",
+        3,
+      ),
+    ).rejects.toThrow("invalid_scan_failure_code");
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it("calls only the guarded failure transition with a fixed category", async () => {
+    const query = vi.fn().mockResolvedValue({
+      rows: [{ ds_fail_scan: "retrying" }],
+    });
+    const store = new PostgresScanStore(makePool({ query }));
+
+    await expect(
+      store.failScan("job-id", "lease-token", "executor_failed", 3),
+    ).resolves.toBe("retrying");
+    expect(query).toHaveBeenCalledWith("SELECT ds_fail_scan($1, $2, $3, $4)", [
+      "job-id",
+      "lease-token",
+      "executor_failed",
+      3,
+    ]);
+  });
+
   it("rejects a report whose verdict does not match required controls before opening a transaction", async () => {
     const connect = vi.fn();
     const store = new PostgresScanStore(makePool({ connect }));

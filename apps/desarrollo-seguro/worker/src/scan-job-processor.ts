@@ -21,6 +21,7 @@ export type ScanExecutor = {
 
 const DEFAULT_LEASE_DURATION_MS = 30_000;
 const HEARTBEAT_INTERVAL_MS = 10_000;
+const MAX_EXECUTOR_ATTEMPTS = 3;
 
 export class ScanJobProcessor {
   constructor(
@@ -30,7 +31,7 @@ export class ScanJobProcessor {
     private readonly heartbeatIntervalMs = HEARTBEAT_INTERVAL_MS,
   ) {}
 
-  async processNext(): Promise<"idle" | "completed" | "lease_lost"> {
+  async processNext(): Promise<"idle" | "completed" | "lease_lost" | "retrying" | "failed"> {
     const claimed = await this.store.claimNextScan(
       this.now(),
       DEFAULT_LEASE_DURATION_MS,
@@ -71,14 +72,30 @@ export class ScanJobProcessor {
     let result: Omit<
       ScanRunInput,
       "jobId" | "leaseToken" | "hostname" | "profileVersion"
-    >;
+    > | undefined;
+    let executorFailed = false;
     try {
       result = await this.executor.execute(claimed, abortController.signal);
+    } catch {
+      executorFailed = true;
     } finally {
       clearInterval(heartbeatTimer);
       await heartbeatInFlight;
     }
     if (leaseLost) return "lease_lost";
+    if (executorFailed || result === undefined) {
+      try {
+        return await this.store.failScan(
+          claimed.id,
+          claimed.leaseToken,
+          "executor_failed",
+          MAX_EXECUTOR_ATTEMPTS,
+        );
+      } catch (error) {
+        if (error instanceof ScanLeaseLostError) return "lease_lost";
+        throw error;
+      }
+    }
     const observations = sanitizeScanObservations(
       claimed.hostname,
       claimed.profileVersion,

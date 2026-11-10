@@ -98,6 +98,33 @@ describePostgres.sequential("PostgresScanStore", () => {
     expect(claims.filter(Boolean)).toHaveLength(1);
   });
 
+  it("enforces one global running scan across different domains", async () => {
+    const otherHostname = "other.sample.example.net";
+    await store.ensureDomain(otherHostname, "monitored", TEST_PROFILE);
+    await Promise.all(
+      [TEST_HOSTNAME, otherHostname].map((hostname) =>
+        store.ensureFreshScan({
+          hostname,
+          profileVersion: TEST_PROFILE,
+          trigger: "requested",
+          now: TEST_NOW,
+        }),
+      ),
+    );
+
+    const claims = await Promise.all(
+      Array.from({ length: 8 }, () =>
+        store.claimNextScan(TEST_NOW, TEST_LEASE_MS),
+      ),
+    );
+    expect(claims.filter(Boolean)).toHaveLength(1);
+
+    const running = await pool.query(
+      "SELECT count(*)::integer AS count FROM ds_scan_jobs WHERE state = 'running'",
+    );
+    expect(running.rows[0].count).toBe(1);
+  });
+
   it("reuses only reports younger than 60 minutes", async () => {
     const first = await queueAndClaim();
     const reportId = await complete(first);
@@ -483,6 +510,40 @@ describePostgres.sequential("PostgresScanStore", () => {
     expect(result.rows[0]).toEqual({
       state: "failed",
       public_error_code: "worker_lease_expired",
+    });
+  });
+
+  it("releases executor failures into bounded backoff and rejects stale leases", async () => {
+    const first = await queueAndClaim();
+    await expect(
+      store.failScan(first.id, first.leaseToken, "executor_failed", MAX_ATTEMPTS),
+    ).resolves.toBe("retrying");
+    const queued = await pool.query(
+      "SELECT state, lease_token, available_at, public_error_code FROM ds_scan_jobs WHERE id = $1",
+      [first.id],
+    );
+    expect(queued.rows[0].state).toBe("queued");
+    expect(queued.rows[0].lease_token).toBeNull();
+    expect(new Date(queued.rows[0].available_at).getTime()).toBeGreaterThan(Date.now());
+    expect(queued.rows[0].public_error_code).toBeNull();
+
+    await expect(
+      store.failScan(first.id, first.leaseToken, "executor_failed", MAX_ATTEMPTS),
+    ).rejects.toThrow(ScanLeaseLostError);
+
+    await pool.query("UPDATE ds_scan_jobs SET available_at = clock_timestamp() WHERE id = $1", [first.id]);
+    const second = await store.claimNextScan(new Date(), TEST_LEASE_MS);
+    if (!second) throw new Error("expected_retry_claim");
+    await expect(
+      store.failScan(second.id, second.leaseToken, "executor_failed", MAX_ATTEMPTS),
+    ).resolves.toBe("failed");
+    const failed = await pool.query(
+      "SELECT state, public_error_code FROM ds_scan_jobs WHERE id = $1",
+      [first.id],
+    );
+    expect(failed.rows[0]).toEqual({
+      state: "failed",
+      public_error_code: "executor_failed",
     });
   });
 

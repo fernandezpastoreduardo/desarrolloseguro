@@ -6,6 +6,8 @@ import {
 
 const ACTIVE_JOB_STATES = ["queued", "running"] as const;
 const MAX_LEASE_DURATION_MS = 5 * 60 * 1000;
+const MAX_SCAN_ATTEMPTS = 10;
+const SCAN_FAILURE_CODES = ["executor_failed"] as const;
 const PROFILE_VERSIONS = [
   "controls-v1",
   "controls-v2",
@@ -48,6 +50,8 @@ const PUBLIC_CHECKS_LATERAL = `LEFT JOIN LATERAL (
 export type ScanTrigger = "scheduled" | "requested";
 export type ScanEnrollment = "monitored" | "on_demand";
 export type ScanJobState = "queued" | "running" | "completed" | "failed";
+export type ScanFailureCode = (typeof SCAN_FAILURE_CODES)[number];
+export type ScanFailureDisposition = "retrying" | "failed";
 export type ScanVerdict = "pass" | "fail" | "inconclusive";
 export type CheckStatus = "pass" | "fail" | "unknown" | "not_applicable";
 export type PublicScanStatus = CheckStatus;
@@ -153,6 +157,12 @@ export interface ScanJobStore {
     now: Date,
     leaseDurationMs: number,
   ): Promise<boolean>;
+  failScan(
+    jobId: string,
+    leaseToken: string,
+    failureCode: ScanFailureCode,
+    maxAttempts: number,
+  ): Promise<ScanFailureDisposition>;
   completeScan(input: ScanRunInput): Promise<string>;
 }
 
@@ -378,6 +388,37 @@ export class PostgresScanStore implements ScanJobStore {
       [jobId, leaseToken, leaseDurationMs],
     );
     return result.rows[0]?.ds_renew_scan_lease ?? false;
+  }
+
+  async failScan(
+    jobId: string,
+    leaseToken: string,
+    failureCode: ScanFailureCode,
+    maxAttempts: number,
+  ): Promise<ScanFailureDisposition> {
+    if (!SCAN_FAILURE_CODES.includes(failureCode)) {
+      throw new Error("invalid_scan_failure_code");
+    }
+    if (!Number.isSafeInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > MAX_SCAN_ATTEMPTS) {
+      throw new Error("invalid_scan_max_attempts");
+    }
+    let result: { rows: Array<{ ds_fail_scan: string }> };
+    try {
+      result = await this.pool.query<{ ds_fail_scan: string }>(
+        "SELECT ds_fail_scan($1, $2, $3, $4)",
+        [jobId, leaseToken, failureCode, maxAttempts],
+      );
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("scan_lease_lost")) {
+        throw new ScanLeaseLostError();
+      }
+      throw error;
+    }
+    const disposition = result.rows[0]?.ds_fail_scan;
+    if (disposition !== "retrying" && disposition !== "failed") {
+      throw new Error("invalid_scan_failure_disposition");
+    }
+    return disposition;
   }
 
   async completeScan(input: ScanRunInput): Promise<string> {

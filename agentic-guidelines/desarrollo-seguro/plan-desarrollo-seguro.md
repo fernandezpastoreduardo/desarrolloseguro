@@ -20,7 +20,7 @@ El modelo de amenazas y el contrato local de controles están documentados en [`
 
 ## Entregas siguientes
 
-1. Añadir admisión de trabajos, límites globales, cuotas, reintentos y telemetría sin datos sensibles, manteniendo la API pública de solo lectura hasta probar esos límites.
+1. Añadir admisión de trabajos, límites globales, cuotas, reintentos y telemetría sin datos sensibles, manteniendo la API pública de solo lectura hasta probar esos límites. Se añadió transición SQL protegida por lease para fallos del executor, tres intentos máximos, backoff exponencial acotado a 60 segundos y un único código público permitido (`executor_failed`). La migración 009 serializa los claims y limita a un scan global en ejecución, probado entre dominios distintos. Falta todavía diseñar la admisión desde el producto y telemetría operativa; la API permanece de solo lectura.
 2. Construir y demostrar aislamiento de usuario/filesystem/red y política de egress en un runtime desechable antes de conectar el hijo a dominios públicos.
 3. Validar una prueba controlada con alcance documentado, medir recursos y probar backup/restauración. El despliegue real solo llega después de superar esos gates.
 
