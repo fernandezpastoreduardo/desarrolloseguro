@@ -10,6 +10,8 @@ if [[ "$(docker info --format '{{.OSType}}')" != "linux" ]]; then
   exit 2
 fi
 
+pnpm --filter @desarrolloseguro/worker build
+
 image_tag="development-security-executor-sandbox-check:$(date +%s)-$$"
 broker_image_tag="development-security-egress-broker-sandbox-check:$(date +%s)-$$"
 broker_container="development-security-egress-broker-check-$$"
@@ -30,6 +32,9 @@ trap cleanup EXIT
 
 docker build --target development-security-executor --tag "$image_tag" .
 docker build --target development-security-egress-broker --tag "$broker_image_tag" .
+DS_RUNTIME_EXECUTOR_IMAGE="$image_tag" \
+  DS_RUNTIME_BROKER_IMAGE="$broker_image_tag" \
+  node apps/desarrollo-seguro/worker/scripts/runtime-coordinator-docker-smoke.mjs
 docker run --rm \
   --network none \
   --read-only \
