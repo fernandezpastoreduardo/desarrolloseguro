@@ -15,7 +15,7 @@ Para el Caddy existente del VPS, añade el contenido de [`docker/Caddyfile.devel
 
 ## Arranque
 
-Provisiona en `.secrets/` los archivos requeridos por la sección `secrets` del Compose: credenciales de administrador, migrador, API y worker, certificados TLS de base y API, y CA interna. La credencial `ds_worker` solo recibe las funciones SQL necesarias para claims, heartbeat, recuperación, fallo y finalización; no lee ni escribe directamente los informes y no puede purgarlos. El proceso worker sigue fuera del Compose y no se activa con este bootstrap. Mantén los archivos fuera de Git y con permisos restrictivos. Después:
+Provisiona en `.secrets/` los archivos requeridos por la sección `secrets` del Compose: credenciales de administrador, migrador, API, worker y retención, certificados TLS de base y API, y CA interna. `ds_worker` solo recibe funciones de cola y finalización; `ds_retention` solo recibe `ds_purge_expired_reports`, que impide borrar informes con menos de 90 días. Los dos procesos siguen fuera del Compose. El scheduler `pnpm --filter @desarrolloseguro/persistence retention-scheduler` ejecuta el ciclo al arrancar y luego cada 24 horas; necesita `DS_RETENTION_DATABASE_URL_FILE` y, en producción, `DS_RETENTION_DATABASE_TLS_CA_FILE`. Mantén los archivos fuera de Git y con permisos restrictivos. Después:
 
 ```sh
 docker compose -f compose.production.yaml config --quiet

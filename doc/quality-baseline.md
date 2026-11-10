@@ -1,16 +1,16 @@
 # Verificación y cobertura
 
-La cobertura inicial de Vitest se midió con `pnpm test:coverage` el 10 de noviembre de 2026. Son porcentajes de líneas por paquete; `persistence` y `worker` tienen suites PostgreSQL aisladas que no entran en esta ejecución de Vitest normal.
+La cobertura Vitest de la última ejecución se midió con `pnpm test:coverage` el 10 de noviembre de 2026. Son porcentajes de líneas por paquete; `persistence` y `worker` tienen suites PostgreSQL aisladas que no entran en esta ejecución de Vitest normal.
 
 | Paquete | Líneas cubiertas |
 | --- | ---: |
 | core | 99.62% |
 | web | 91.41% |
-| persistence | 56.32% |
+| persistence | 59.75% |
 | api | 95.37% |
 | worker | 84.90% |
 
-El agregado ponderado observado fue aproximadamente 82.1% de líneas. Los resultados son un punto de partida, no un objetivo ni una prueba de suficiencia funcional. La primera medición revela que `persistence` es el principal hueco; antes de elevar umbrales globales se revisarán rutas críticas y los tests PostgreSQL.
+El agregado ponderado observado fue aproximadamente 83.4% de líneas. Los resultados son un punto de partida, no un objetivo ni una prueba de suficiencia funcional. `persistence` continúa siendo el principal hueco; antes de elevar umbrales globales se revisarán rutas críticas y los tests PostgreSQL.
 
 El primer análisis SonarQube local se completó el 10 de noviembre de 2026. La Quality Gate quedó `PASSED`; inicialmente registró 80.5% de cobertura Sonar, 0.0% de duplicación, 4 bugs, 1 vulnerabilidad, 18 code smells y 0 security hotspots. La cobertura de Sonar usa su propio modelo de líneas y no coincide necesariamente con el agregado ponderado de Vitest.
 
@@ -18,7 +18,7 @@ El backlog inicial se revisó y corrigió siguiendo TDD. La clave de test ya no 
 
 El análisis local del 10 de noviembre de 2026 tras añadir el adaptador de telemetría y el runner Docker efímero registró Quality Gate `PASSED`, 81.3% de cobertura Sonar, 89.0% de cobertura nueva, 0.0% de duplicación y cero hallazgos abiertos. Tras conectar el entrypoint del worker y la recuperación periódica de leases, el Quality Gate siguió en `PASSED`; la cobertura Sonar fue 81.2%, con cero bugs, vulnerabilidades, code smells, security hotspots y hallazgos abiertos. La cobertura Vitest del worker fue 84.74%.
 
-La ejecución posterior del 10 de noviembre de 2026, con aprovisionamiento de `ds_worker` y TLS verificado en su configuración, también pasó la Quality Gate. Sonar informó 81.4% de cobertura, 0.7% de duplicación y cero bugs, vulnerabilidades, code smells, security hotspots y hallazgos abiertos. La cobertura Vitest por paquete fue 99.62% en core, 91.41% en web, 56.32% en persistence, 95.37% en API y 84.90% en worker.
+La ejecución posterior del 10 de noviembre de 2026, con aprovisionamiento de `ds_worker` y TLS verificado en su configuración, pasó la Quality Gate. La siguiente ejecución, al añadir scheduler y rol `ds_retention`, también quedó `PASSED`: Sonar informó 81.3% de cobertura, 0.7% de duplicación y cero bugs, vulnerabilidades, code smells, security hotspots y hallazgos abiertos. La cobertura Vitest por paquete fue 99.62% en core, 91.41% en web, 59.75% en persistence, 95.37% en API y 84.90% en worker. Las suites PostgreSQL aisladas pasan aparte; 71 pruebas que necesitan base dedicada se omiten en `pnpm test`.
 
 Las puertas actuales son:
 

@@ -7,9 +7,9 @@ Desarrollo Seguro es una aplicación independiente en desarrollo para observar c
 - La API ofrece lecturas públicas de estado e informes existentes. Ambas son `GET`, aplican límites por proceso, responden con `Cache-Control: no-store` y no inician trabajos.
 - El portal React consulta esas rutas; si no hay un informe, muestra `not_scanned`. No inventa una evaluación.
 - La persistencia PostgreSQL, las migraciones, los permisos de roles y la proyección pública están implementados. El stack de Compose crea una base y un volumen propios.
-- El paquete worker contiene un proceso arrancable (`pnpm --filter @desarrolloseguro/worker start`) que compone PostgreSQL con rol `ds_worker`, el procesador de leases, recuperación periódica de leases vencidos, telemetría filtrada y el cliente del supervisor por socket Unix. Requiere secreto por fichero e identidad/permisos del socket explícitos. No está incluido en Compose; no hay supervisor con egress habilitado, scheduler de retención ni admisión pública, así que esta capacidad no activa análisis reales.
+- El paquete worker contiene un proceso arrancable (`pnpm --filter @desarrolloseguro/worker start`) que compone PostgreSQL con rol `ds_worker`, el procesador de leases, recuperación periódica de leases vencidos, telemetría filtrada y el cliente del supervisor por socket Unix. Un proceso separado programa el purgado diario de informes con más de 90 días mediante el rol `ds_retention`. Ambos requieren secretos por fichero y permanecen fuera de Compose; no hay supervisor con egress habilitado ni admisión pública, así que estas capacidades no activan análisis reales.
 
-El stack Compose publica el portal en `127.0.0.1:18080`; API y PostgreSQL no exponen puertos al host. Usa una red y un volumen propios. El despliegue no incluye worker, cola ni scheduler.
+El stack Compose publica el portal en `127.0.0.1:18080`; API y PostgreSQL no exponen puertos al host. Usa una red y un volumen propios. El despliegue no incluye worker ni scheduler.
 
 ## Límites de las afirmaciones
 
