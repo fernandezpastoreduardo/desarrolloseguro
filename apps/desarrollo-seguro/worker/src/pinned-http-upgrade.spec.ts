@@ -1,5 +1,5 @@
-import { readFileSync } from "node:fs";
 import { EventEmitter } from "node:events";
+import { createRequire } from "node:module";
 import type { ClientRequest, IncomingMessage } from "node:http";
 import {
   createServer as createHttpServer,
@@ -11,7 +11,6 @@ import {
 } from "node:https";
 import { Socket } from "node:net";
 import type { Server as NetServer } from "node:net";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import type { LookupFunction } from "node:net";
 import {
@@ -23,14 +22,11 @@ import type { HttpsRequestFactory } from "./pinned-https-transport.js";
 const HOSTNAME = "scan-fixture.example.net";
 const PATHS = ["/"];
 const LOOPBACK_ADDRESS = "127.0.0.1";
-const FIXTURE_CERTIFICATE = readFileSync(
-  fileURLToPath(new URL("../test/fixtures/https-fixture.crt", import.meta.url)),
-  "utf8",
-);
-const FIXTURE_PRIVATE_KEY = readFileSync(
-  fileURLToPath(new URL("../test/fixtures/https-fixture.key", import.meta.url)),
-  "utf8",
-);
+const { createEphemeralHttpsFixture } = createRequire(import.meta.url)(
+  "../test/fixtures/https-fixture.cjs",
+) as { createEphemeralHttpsFixture: () => { certificate: string; privateKey: string } };
+const { certificate: FIXTURE_CERTIFICATE, privateKey: FIXTURE_PRIVATE_KEY } =
+  createEphemeralHttpsFixture();
 
 function createResponse(
   statusCode: number,

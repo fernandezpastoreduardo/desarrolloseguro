@@ -1,12 +1,11 @@
-import { readFileSync } from "node:fs";
 import {
   createServer as createHttpsServer,
   request as httpsRequest,
   type RequestOptions,
 } from "node:https";
+import { createRequire } from "node:module";
 import type { LookupFunction } from "node:net";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getCanonicalScanPaths } from "@desarrolloseguro/core";
 import type {
@@ -23,22 +22,11 @@ import {
 const FIXTURE_HOSTNAME = "scan-fixture.example.net";
 const FIXTURE_ROOT_PATH = "/";
 const FIXTURE_SAFE_PATH = "/precios";
-const FIXTURE_CERTIFICATE_PATH = new URL(
-  "../test/fixtures/https-fixture.crt",
-  import.meta.url,
-);
-const FIXTURE_PRIVATE_KEY_PATH = new URL(
-  "../test/fixtures/https-fixture.key",
-  import.meta.url,
-);
-const FIXTURE_CERTIFICATE = readFileSync(
-  fileURLToPath(FIXTURE_CERTIFICATE_PATH),
-  "utf8",
-);
-const FIXTURE_PRIVATE_KEY = readFileSync(
-  fileURLToPath(FIXTURE_PRIVATE_KEY_PATH),
-  "utf8",
-);
+const { createEphemeralHttpsFixture } = createRequire(import.meta.url)(
+  "../test/fixtures/https-fixture.cjs",
+) as { createEphemeralHttpsFixture: () => { certificate: string; privateKey: string } };
+const { certificate: FIXTURE_CERTIFICATE, privateKey: FIXTURE_PRIVATE_KEY } =
+  createEphemeralHttpsFixture();
 const FIXTURE_REQUEST_PATHS = [FIXTURE_ROOT_PATH, FIXTURE_SAFE_PATH];
 const LOOPBACK_ADDRESS = "127.0.0.1";
 const LOOPBACK_FAMILY = 4;

@@ -69,6 +69,18 @@ describe("createPinnedLookup", () => {
     });
   });
 
+  it("maps a synchronously throwing resolver to the generic lookup error", async () => {
+    const resolver = vi.fn(() => {
+      throw new Error("private resolver detail");
+    });
+
+    const result = await runLookup(createPinnedLookup(resolver));
+
+    expect(result.error?.code).toBe("EHOSTUNREACH");
+    expect(result.address).toBe("");
+    expect(resolver).toHaveBeenCalledOnce();
+  });
+
   it.each([
     ["unspecified", "0.0.0.0", 4],
     ["loopback", "127.0.0.1", 4],

@@ -14,6 +14,8 @@ Presentar evidencia reproducible sobre controles observables de páginas públic
 
 ## Estado
 
+**Pausa de features completada el 10 de noviembre de 2026.** TDD queda establecido como método de trabajo. SonarQube Community Build está autoalojado solo en el equipo local, con cobertura, Quality Gate y telemetría desactivada; no se instala en el VPS, no se integra en la web pública ni requiere acceso a Grumphya. La línea base inicial y el resultado del triage están registrados en [`doc/quality-baseline.md`](../../doc/quality-baseline.md); el último análisis no tiene hallazgos abiertos.
+
 La API de solo lectura, la proyección pública de informes, la persistencia, la landing y el portal React están implementados. El worker contiene el procesador por lease, el observador y executor `transport-v1`, y un canal JSON a un proceso hijo que no recibe lease ni variables de entorno. El coordinador valida el resultado y mantiene persistencia. Las primeras dos iteraciones se completaron: HTTP→HTTPS local, TLS con certificado fixture, DNS rebinding sintético y recorrido child→processor→informe público en PostgreSQL temporal aislado. El hijo todavía comparte usuario y filesystem; no hay sandbox de sistema operativo, coordinador arrancable, scheduler ni escaneos reales.
 
 El modelo de amenazas y el contrato local de controles están documentados en [`scanner-safety.md`](scanner-safety.md) y [`controls-and-evidence.md`](controls-and-evidence.md). Esto completa el entregable de diseño documental; no acredita las barreras de red en el VPS ni autentica observaciones de un executor.

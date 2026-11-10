@@ -11,32 +11,32 @@ const LOOKUP_FAILURE_MESSAGE = "pinned_dns_lookup_failed";
 
 const BLOCKED_IPV4_CIDRS = [
   "0.0.0.0/8",
-  "10.0.0.0/8",
-  "100.64.0.0/10",
+  "10.0.0.0/8", // NOSONAR -- Reserved CIDR range required to block non-public DNS answers.
+  "100.64.0.0/10", // NOSONAR -- Reserved CIDR range required to block non-public DNS answers.
   "127.0.0.0/8",
-  "169.254.0.0/16",
-  "172.16.0.0/12",
-  "192.0.0.0/24",
+  "169.254.0.0/16", // NOSONAR -- Reserved CIDR range required to block non-public DNS answers.
+  "172.16.0.0/12", // NOSONAR -- Reserved CIDR range required to block non-public DNS answers.
+  "192.0.0.0/24", // NOSONAR -- Reserved CIDR range required to block non-public DNS answers.
   "192.0.2.0/24",
-  "192.88.99.0/24",
-  "192.168.0.0/16",
-  "198.18.0.0/15",
+  "192.88.99.0/24", // NOSONAR -- Reserved CIDR range required to block non-public DNS answers.
+  "192.168.0.0/16", // NOSONAR -- Reserved CIDR range required to block non-public DNS answers.
+  "198.18.0.0/15", // NOSONAR -- Reserved CIDR range required to block non-public DNS answers.
   "198.51.100.0/24",
   "203.0.113.0/24",
-  "224.0.0.0/4",
-  "240.0.0.0/4",
+  "224.0.0.0/4", // NOSONAR -- Reserved CIDR range required to block non-public DNS answers.
+  "240.0.0.0/4", // NOSONAR -- Reserved CIDR range required to block non-public DNS answers.
 ] as const;
 
-const IPV6_GLOBAL_UNICAST_CIDR = "2000::/3";
+const IPV6_GLOBAL_UNICAST_CIDR = "2000::/3"; // NOSONAR -- Global-unicast reference for public IPv6 classification.
 const BLOCKED_IPV6_CIDRS = [
-  "100::/64",
-  "100:0:0:1::/64",
-  "2001::/23",
+  "100::/64", // NOSONAR -- Reserved CIDR range required to block non-public DNS answers.
+  "100:0:0:1::/64", // NOSONAR -- Reserved CIDR range required to block non-public DNS answers.
+  "2001::/23", // NOSONAR -- Reserved CIDR range required to block non-public DNS answers.
   "2001:db8::/32",
-  "2002::/16",
-  "3fff::/20",
-  "64:ff9b::/96",
-  "64:ff9b:1::/48",
+  "2002::/16", // NOSONAR -- Reserved CIDR range required to block non-public DNS answers.
+  "3fff::/20", // NOSONAR -- Reserved CIDR range required to block non-public DNS answers.
+  "64:ff9b::/96", // NOSONAR -- Reserved CIDR range required to block non-public DNS answers.
+  "64:ff9b:1::/48", // NOSONAR -- Reserved CIDR range required to block non-public DNS answers.
 ] as const;
 
 export type PublicDnsResolver = (
@@ -61,7 +61,7 @@ function createDnsLookupLimiter(): DnsLookupLimiter {
 
       activeLookups += 1;
       let result: Promise<T>;
-      try {
+      try { // NOSONAR -- catches synchronous throws; promise rejection is handled below.
         result = operation();
       } catch {
         activeLookups -= 1;

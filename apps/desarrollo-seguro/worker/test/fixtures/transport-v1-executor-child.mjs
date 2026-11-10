@@ -5,7 +5,11 @@ if (process.env.DS_TEST_EXECUTOR_SECRET) process.exit(41);
 
 const request = JSON.parse(input);
 const expectedKeys = ["hostname", "profileVersion", "protocolVersion", "requestId"];
-if (Object.keys(request).sort().join(",") !== expectedKeys.sort().join(",")) {
+const compareKeys = (left, right) => left.localeCompare(right);
+if (
+  Object.keys(request).sort(compareKeys).join(",") !==
+  expectedKeys.sort(compareKeys).join(",")
+) {
   process.exit(42);
 }
 

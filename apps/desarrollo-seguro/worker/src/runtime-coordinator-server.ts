@@ -199,47 +199,43 @@ function handleRequest(
       controller.abort();
       sendFailure(socket, request.requestId);
     }, EXECUTION_TIMEOUT_MS);
-    let execution: ReturnType<RuntimeCoordinatorRunner["execute"]>;
-    try {
-      execution = runner.execute(request, controller.signal);
-    } catch {
-      sendFailure(socket, request.requestId);
-      finish();
-      return;
-    }
-    const task = execution.then(
-      (result) => {
+    const task = Promise.resolve()
+      .then(() => runner.execute(request, controller.signal))
+      .then(
+        (result) => {
+          executionSettled = true;
+          clearTimeout(executionTimer);
+          if (!controller.signal.aborted && !socket.destroyed) {
+            const response = parseTransportV1ExecutorResponse(
+              {
+                protocolVersion: 1,
+                requestId: request.requestId,
+                result: JSON.parse(JSON.stringify(result)) as unknown,
+              },
+              request.requestId,
+            );
+            sendResponse(socket, response);
+          }
+          finish();
+        },
+        () => {
+          executionSettled = true;
+          clearTimeout(executionTimer);
+          if (!controller.signal.aborted && !socket.destroyed) {
+            sendFailure(socket, request.requestId);
+          }
+          finish();
+        },
+      )
+      .catch(() => {
         executionSettled = true;
         clearTimeout(executionTimer);
-        if (!controller.signal.aborted && !socket.destroyed) {
-          const response = parseTransportV1ExecutorResponse(
-            {
-              protocolVersion: 1,
-              requestId: request.requestId,
-              result: JSON.parse(JSON.stringify(result)) as unknown,
-            },
-            request.requestId,
-          );
-          sendResponse(socket, response);
-        }
+        if (!socket.destroyed) sendFailure(socket, request.requestId);
         finish();
-      },
-      () => {
-        executionSettled = true;
-        clearTimeout(executionTimer);
-        if (!controller.signal.aborted && !socket.destroyed) {
-          sendFailure(socket, request.requestId);
-        }
-        finish();
-      },
-    ).catch(() => {
-      executionSettled = true;
-      clearTimeout(executionTimer);
-      if (!socket.destroyed) sendFailure(socket, request.requestId);
-      finish();
-    }).finally(() => {
-      activeTasks.delete(task);
-    });
+      })
+      .finally(() => {
+        activeTasks.delete(task);
+      });
     activeTasks.add(task);
   }
 }
