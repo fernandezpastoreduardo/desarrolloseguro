@@ -170,7 +170,7 @@ services:
       dockerfile: Dockerfile
       target: development-security-runtime-coordinator
     restart: unless-stopped
-    user: "0:0"
+    user: "0:1000"
     privileged: false
     cap_drop: [ALL]
     cap_add: [CHOWN, FOWNER]

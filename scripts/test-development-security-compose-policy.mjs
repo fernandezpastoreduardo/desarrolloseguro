@@ -109,6 +109,7 @@ assert.match(worker, /development-security-backend/u);
 assert.doesNotMatch(worker, /docker\.sock|development-security-egress|ports:/u);
 assert.match(runtimeCoordinator, /target:\s*development-security-runtime-coordinator/u);
 assert.match(runtimeCoordinator, /network_mode:\s*none/u);
+assert.match(runtimeCoordinator, /user:\s*"0:1000"/u);
 assert.match(runtimeCoordinator, /\/var\/run\/docker\.sock:\/var\/run\/docker\.sock/u);
 assert.match(runtimeCoordinator, /\/usr\/bin\/docker:\/usr\/bin\/docker:ro/u);
 assert.match(runtimeCoordinator, /DS_RUNTIME_DOCKER_BINARY:\s*\/usr\/bin\/docker/u);
