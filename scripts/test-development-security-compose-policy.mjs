@@ -151,6 +151,11 @@ assert.match(sandboxVerifier, /--security-opt no-new-privileges/u);
 assert.match(sandboxVerifier, /--pids-limit 64/u);
 assert.match(sandboxVerifier, /--memory 256m/u);
 assert.match(sandboxVerifier, /--cpus 0\.5/u);
+assert.match(
+  sandboxVerifier,
+  /--entrypoint \/bin\/busybox[\s\S]+stat -c '%a %u %g %F'/u,
+  "the broker socket check must use the BusyBox utility available in Alpine images",
+);
 const verifierWithoutBrokerSocketMounts = sandboxVerifier.replace(
   /--mount "type=volume,source=\$broker_volume,target=\/run\/development-security-egress(?:,readonly)?"/gu,
   "",

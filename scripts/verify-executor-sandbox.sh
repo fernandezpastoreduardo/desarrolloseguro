@@ -148,9 +148,9 @@ fi
 socket_metadata="$(docker run --rm \
   --network none \
   --mount "type=volume,source=$broker_volume,target=/run/development-security-egress,readonly" \
-  --entrypoint /usr/bin/stat \
+  --entrypoint /bin/busybox \
   "$broker_image_tag" \
-  --format '%a %u %g %F' /run/development-security-egress/broker.sock)"
+  stat -c '%a %u %g %F' /run/development-security-egress/broker.sock)"
 if [[ "$socket_metadata" != '660 1000 1000 socket' ]]; then
   printf 'Unexpected broker socket metadata: %s\n' "$socket_metadata" >&2
   printf 'egress_broker_socket_permissions_invalid\n' >&2
