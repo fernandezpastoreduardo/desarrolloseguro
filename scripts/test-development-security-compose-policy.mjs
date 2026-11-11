@@ -190,7 +190,8 @@ assert.match(
 );
 assert.match(nginx, /try_files \$uri \$uri\/ \/app\/index\.html/u);
 assert.match(dockerfile, /FROM nginx:1\.30-alpine AS development-security-web/u);
-assert.match(dockerfile, /FROM node:26\.13\.0-trixie-slim/u);
+assert.match(dockerfile, /FROM node:26\.13\.0-alpine3\.24 AS node-base/u);
+assert.match(dockerfile, /RUN apk upgrade --no-cache/u);
 assert.match(postgresHba, /^hostnossl all all all reject$/mu);
 
 const composeCli = spawnSync("docker", ["compose", "version"], {

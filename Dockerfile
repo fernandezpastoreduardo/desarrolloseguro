@@ -1,8 +1,6 @@
-FROM node:26.13.0-trixie-slim AS node-base
+FROM node:26.13.0-alpine3.24 AS node-base
 
-RUN apt-get update \
-  && apt-get upgrade -y --no-install-recommends \
-  && rm -rf /var/lib/apt/lists/*
+RUN apk upgrade --no-cache
 
 WORKDIR /workspace
 
