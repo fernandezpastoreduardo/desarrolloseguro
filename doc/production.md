@@ -28,6 +28,8 @@ scripts/configure-development-security-egress-firewall.sh verify
 scripts/deploy-development-security-analysis.sh
 ```
 
+Para dominios alojados en este VPS, el firewall permite solo desde `br-ds-egress` las conexiones cuyo destino original sea `DS_HOST_PUBLIC_IPV4` en TCP 80/443. Docker las entrega al proxy web público compartido. Esto hace accesibles las webs públicas servidas por ese proxy desde el analizador; no permite acceso a SSH, correo, bases de datos ni CI. Si cambia la IP pública, define `DS_HOST_PUBLIC_IPV4` al aplicar y verificar el firewall.
+
 `deploy-development-security-analysis.sh` verifica primero la red y el firewall, construye las imágenes worker/executor/broker y actualiza solo los servicios worker, coordinador y web del proyecto Compose `desarrollo-seguro`. Así se publica el portal actualizado para probar la recepción del informe; la API, PostgreSQL, el proxy y los servicios de otras aplicaciones no se reconstruyen ni reinician. No conecta el worker a la red de egress ni monta el socket Docker en él. El coordinador es el único servicio que monta `/var/run/docker.sock` y el CLI Docker del host en modo de solo lectura; su socket Unix de control se comparte con el worker mediante un volumen dedicado. Al instalar esta política por primera vez, valida primero el bloqueo de loopback, redes privadas, el host e IPv6 contra señuelos; verifica HTTP/HTTPS solo desde la red de egress.
 
 Para actualizar el resto de servicios o iniciar una instalación nueva, conserva además el flujo habitual:

@@ -4,6 +4,7 @@ set -euo pipefail
 readonly BRIDGE_NAME="br-ds-egress"
 readonly CHAIN_NAME="DS_DEVSEC_EGRESS"
 readonly NETWORK_NAME="development-security-egress"
+readonly HOST_PUBLIC_IPV4="${DS_HOST_PUBLIC_IPV4:-31.70.130.181}"
 readonly PRIVATE_CIDRS=(
   0.0.0.0/8
   10.0.0.0/8
@@ -61,8 +62,15 @@ apply_ipv4_rules() {
   done
   iptables -A "$CHAIN_NAME" -p tcp -m multiport --dports 80,443 -j RETURN
   iptables -A "$CHAIN_NAME" -j DROP
+  # A scan may target a public domain hosted on this VPS. Docker DNATs these
+  # connections to the shared public reverse proxy, so allow only the original
+  # VPS IPv4 destination and web ports before the private-network deny rules.
   delete_rule iptables DOCKER-USER -i "$BRIDGE_NAME" -j "$CHAIN_NAME"
+  delete_rule iptables DOCKER-USER -i "$BRIDGE_NAME" -p tcp -m conntrack --ctorigdst "$HOST_PUBLIC_IPV4" --ctorigdstport 80 -j ACCEPT
+  delete_rule iptables DOCKER-USER -i "$BRIDGE_NAME" -p tcp -m conntrack --ctorigdst "$HOST_PUBLIC_IPV4" --ctorigdstport 443 -j ACCEPT
   iptables -I DOCKER-USER 1 -i "$BRIDGE_NAME" -j "$CHAIN_NAME"
+  iptables -I DOCKER-USER 1 -i "$BRIDGE_NAME" -p tcp -m conntrack --ctorigdst "$HOST_PUBLIC_IPV4" --ctorigdstport 80 -j ACCEPT
+  iptables -I DOCKER-USER 1 -i "$BRIDGE_NAME" -p tcp -m conntrack --ctorigdst "$HOST_PUBLIC_IPV4" --ctorigdstport 443 -j ACCEPT
   delete_rule iptables INPUT -i "$BRIDGE_NAME" -j DROP
   iptables -I INPUT 1 -i "$BRIDGE_NAME" -j DROP
 }
@@ -78,6 +86,8 @@ apply_ipv6_rules() {
 
 verify_ipv4_rules() {
   iptables -C DOCKER-USER -i "$BRIDGE_NAME" -j "$CHAIN_NAME"
+  iptables -C DOCKER-USER -i "$BRIDGE_NAME" -p tcp -m conntrack --ctorigdst "$HOST_PUBLIC_IPV4" --ctorigdstport 80 -j ACCEPT
+  iptables -C DOCKER-USER -i "$BRIDGE_NAME" -p tcp -m conntrack --ctorigdst "$HOST_PUBLIC_IPV4" --ctorigdstport 443 -j ACCEPT
   iptables -C INPUT -i "$BRIDGE_NAME" -j DROP
   iptables -C "$CHAIN_NAME" -p tcp -m multiport --dports 80,443 -j RETURN
   iptables -C "$CHAIN_NAME" -j DROP
@@ -109,6 +119,8 @@ case "$mode" in
     ;;
   remove)
     delete_rule iptables DOCKER-USER -i "$BRIDGE_NAME" -j "$CHAIN_NAME"
+    delete_rule iptables DOCKER-USER -i "$BRIDGE_NAME" -p tcp -m conntrack --ctorigdst "$HOST_PUBLIC_IPV4" --ctorigdstport 80 -j ACCEPT
+    delete_rule iptables DOCKER-USER -i "$BRIDGE_NAME" -p tcp -m conntrack --ctorigdst "$HOST_PUBLIC_IPV4" --ctorigdstport 443 -j ACCEPT
     delete_rule iptables INPUT -i "$BRIDGE_NAME" -j DROP
     if iptables -S "$CHAIN_NAME" >/dev/null 2>&1; then
       iptables -F "$CHAIN_NAME"
