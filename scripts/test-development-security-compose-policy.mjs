@@ -55,6 +55,8 @@ const database = serviceBlock("development-security-database");
 const migration = serviceBlock("development-security-migrate");
 const api = serviceBlock("development-security-api");
 const web = serviceBlock("development-security-web");
+const worker = serviceBlock("development-security-worker");
+const runtimeCoordinator = serviceBlock("development-security-runtime-coordinator");
 
 assert.match(database, /pgvector\/pgvector:0\.8\.7-pg17/u);
 assert.match(database, /development-security-postgres:\/var\/lib\/postgresql\/data/u);
@@ -98,23 +100,40 @@ assert.match(
 );
 assert.doesNotMatch(api, /development-security-ingress/u);
 assert.doesNotMatch(database, /development-security-ingress/u);
+assert.match(worker, /target:\s*development-security-worker/u);
+assert.match(worker, /development_security_worker_database_url/u);
+assert.match(worker, /internal_tls_ca\.crt/u);
+assert.match(worker, /DS_WORKER_DATABASE_TLS_REQUIRED=true/u);
+assert.match(worker, /development-security-runtime:\/run\/development-security:ro/u);
+assert.match(worker, /development-security-backend/u);
+assert.doesNotMatch(worker, /docker\.sock|development-security-egress|ports:/u);
+assert.match(runtimeCoordinator, /target:\s*development-security-runtime-coordinator/u);
+assert.match(runtimeCoordinator, /network_mode:\s*none/u);
+assert.match(runtimeCoordinator, /\/var\/run\/docker\.sock:\/var\/run\/docker\.sock/u);
+assert.match(runtimeCoordinator, /development-security-runtime:\/run\/development-security/u);
+assert.doesNotMatch(runtimeCoordinator, /development-security-ingress|development-security-backend|ports:/u);
+assert.match(runtimeCoordinator, /DS_RUNTIME_EGRESS_NETWORK:\s*development-security-egress/u);
+assert.match(runtimeCoordinator, /cap_drop:\s*\[ALL\]/u);
+assert.match(runtimeCoordinator, /read_only:\s*true/u);
 assert.match(compose, /development-security-backend:\n    internal: true/u);
 assert.match(compose, /development-security-edge:\n    internal: true/u);
 assert.match(
   compose,
   /development-security-ingress:\n    name: development-security-ingress\n    external: true/u,
 );
+assert.match(
+  compose,
+  /development-security-analysis-egress:\n    name: development-security-egress\n    external: true/u,
+);
 assert.match(caddyFragment, /^desarrolloseguro\.org \{/mu);
 assert.match(caddyFragment, /reverse_proxy development-security-web:8080/u);
 assert.match(caddyFragment, /www\.desarrolloseguro\.org \{/u);
 assert.doesNotMatch(caddyFragment, /api:3001|database|grumphya/iu);
 assert.match(compose, /name: development-security-postgres/u);
+assert.match(dockerfile, /AS development-security-worker\n/u);
+assert.match(dockerfile, /AS development-security-runtime-coordinator\n/u);
 assert.doesNotMatch(compose, /grumphya|apps\/api|apps\/web/iu);
 assert.doesNotMatch(compose, /privileged:\s*true/u);
-assert.doesNotMatch(
-  compose,
-  /^\s{2}(?:development-security-)?(?:worker|executor|scan-runner):/mu,
-);
 assert.match(dockerfile, /AS development-security-executor\n/u);
 assert.match(dockerfile, /ENTRYPOINT \["node", "apps\/desarrollo-seguro\/worker\/dist\/transport-v1-executor-child\.js"\]/u);
 assert.match(sandboxVerifier, /--network none/u);

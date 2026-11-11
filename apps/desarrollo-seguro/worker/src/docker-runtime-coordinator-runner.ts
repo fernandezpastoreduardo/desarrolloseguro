@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { isAbsolute } from "node:path";
 import type { ScanRunInput } from "@desarrolloseguro/persistence";
 import {
   MAX_EXECUTOR_RESPONSE_BYTES,
@@ -19,6 +20,7 @@ const VOLUME_PREFIX = "development-security-job-";
 const BROKER_CONTAINER_PREFIX = "development-security-broker-";
 const EXECUTOR_CONTAINER_PREFIX = "development-security-executor-";
 const IMAGE_REFERENCE = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/u;
+const NETWORK_REFERENCE = /^(?:none|[A-Za-z0-9][A-Za-z0-9_.-]{0,127})$/u;
 const BROKER_INITIALIZER =
   `chown 1000:1000 ${EGRESS_SOCKET_DIRECTORY} && chmod 0700 ${EGRESS_SOCKET_DIRECTORY}`;
 
@@ -26,6 +28,8 @@ export type DockerRuntimeCoordinatorRunnerOptions = {
   executorImage: string;
   brokerImage: string;
   dockerBinary?: string;
+  dockerSocketPath?: string;
+  brokerNetwork?: string;
   brokerStartupTimeoutMs?: number;
 };
 
@@ -96,11 +100,15 @@ export function createDockerRuntimeSessionFactory(
   options: DockerRuntimeCoordinatorRunnerOptions,
 ): DockerRuntimeSessionFactory {
   const dockerBinary = options.dockerBinary ?? "docker";
+  const dockerSocketPath = options.dockerSocketPath ?? "/var/run/docker.sock";
+  const brokerNetwork = options.brokerNetwork ?? "none";
   const brokerStartupTimeoutMs = options.brokerStartupTimeoutMs ?? DEFAULT_BROKER_STARTUP_TIMEOUT_MS;
   if (
     !IMAGE_REFERENCE.test(options.executorImage) ||
     !IMAGE_REFERENCE.test(options.brokerImage) ||
     dockerBinary.length === 0 ||
+    !isAbsolute(dockerSocketPath) ||
+    !NETWORK_REFERENCE.test(brokerNetwork) ||
     !Number.isSafeInteger(brokerStartupTimeoutMs) ||
     brokerStartupTimeoutMs < 1 ||
     brokerStartupTimeoutMs > 30_000
@@ -125,19 +133,19 @@ export function createDockerRuntimeSessionFactory(
         closed = true;
         let cleanupFailed = false;
         if (executorMayExist) {
-          const removed = await removeContainer(dockerBinary, executorName);
+          const removed = await removeContainer(dockerBinary, executorName, dockerSocketPath);
           if (!removed) cleanupFailed = true;
           executorMayExist = false;
         }
         if (brokerProcess) {
-          const removed = await removeContainer(dockerBinary, brokerName);
+          const removed = await removeContainer(dockerBinary, brokerName, dockerSocketPath);
           const processClosed = await waitForChildClose(brokerProcess, BROKER_STOP_TIMEOUT_MS);
           if (!removed && !processClosed) cleanupFailed = true;
           if (!processClosed) brokerProcess.kill("SIGKILL");
           brokerProcess = undefined;
         }
         if (volumeMayExist) {
-          const removed = await removeVolume(dockerBinary, volumeName);
+          const removed = await removeVolume(dockerBinary, volumeName, dockerSocketPath);
           if (!removed) cleanupFailed = true;
           volumeMayExist = false;
         }
@@ -151,18 +159,26 @@ export function createDockerRuntimeSessionFactory(
             "volume", "create",
             "--label", "io.desarrolloseguro.role=ephemeral-runtime",
             volumeName,
-          ], undefined, signal);
+          ], undefined, signal, undefined, undefined, undefined, dockerSocketPath);
           volumeMayExist = true;
         } catch (error) {
-          await removeVolume(dockerBinary, volumeName);
+          await removeVolume(dockerBinary, volumeName, dockerSocketPath);
           throw error;
         }
         startupFailureCode = "runtime_volume_prepare_failed";
-        await initializeBrokerVolume(dockerBinary, options.brokerImage, volumeName, signal);
+        await initializeBrokerVolume(
+          dockerBinary,
+          dockerSocketPath,
+          options.brokerImage,
+          volumeName,
+          signal,
+        );
         startupFailureCode = "runtime_broker_start_failed";
         brokerProcess = startBroker(
           dockerBinary,
           options.brokerImage,
+          dockerSocketPath,
+          brokerNetwork,
           brokerName,
           volumeName,
           { hostname: request.hostname },
@@ -191,6 +207,7 @@ export function createDockerRuntimeSessionFactory(
             MAX_EXECUTOR_RESPONSE_BYTES,
             true,
             EXECUTOR_COMMAND_TIMEOUT_MS,
+            dockerSocketPath,
           );
           try {
             return JSON.parse(output.trim()) as unknown;
@@ -206,6 +223,7 @@ export function createDockerRuntimeSessionFactory(
 
 async function initializeBrokerVolume(
   dockerBinary: string,
+  dockerSocketPath: string,
   brokerImage: string,
   volumeName: string,
   signal: AbortSignal,
@@ -218,23 +236,25 @@ async function initializeBrokerVolume(
     "--entrypoint", "/bin/sh",
     brokerImage,
     "-c", BROKER_INITIALIZER,
-  ], undefined, signal);
+  ], undefined, signal, undefined, undefined, undefined, dockerSocketPath);
 }
 
 function startBroker(
   dockerBinary: string,
   brokerImage: string,
+  dockerSocketPath: string,
+  brokerNetwork: string,
   brokerName: string,
   volumeName: string,
   options: { hostname: string },
 ): ChildProcessWithoutNullStreams {
-  const child = spawn(dockerBinary, [
+  const child = spawn(dockerBinary, dockerCommandArguments(dockerSocketPath, [
     "run", "--interactive",
     "--name", brokerName,
-    ...restrictedContainerArguments(),
+    ...restrictedContainerArguments(brokerNetwork),
     "--mount", `type=volume,source=${volumeName},target=${EGRESS_SOCKET_DIRECTORY}`,
     brokerImage,
-  ], { stdio: ["pipe", "pipe", "pipe"] });
+  ]), { stdio: ["pipe", "pipe", "pipe"] });
   child.stderr.resume();
   child.stdin.end(`${JSON.stringify({
     protocolVersion: 1,
@@ -252,15 +272,15 @@ function executorArguments(
   return [
     "run", "--interactive",
     "--name", executorName,
-    ...restrictedContainerArguments(),
+    ...restrictedContainerArguments("none"),
     "--mount", `type=volume,source=${volumeName},target=${EGRESS_SOCKET_DIRECTORY},readonly`,
     executorImage,
   ];
 }
 
-function restrictedContainerArguments(): string[] {
+function restrictedContainerArguments(network: string): string[] {
   return [
-    "--network", "none",
+    "--network", network,
     "--read-only",
     "--user", "1000:1000",
     "--cap-drop", "ALL",
@@ -323,10 +343,13 @@ async function runDocker(
   maxOutputBytes = MAX_DOCKER_COMMAND_OUTPUT_BYTES,
   allowNonZeroExit = false,
   timeoutMs = DOCKER_COMMAND_TIMEOUT_MS,
+  dockerSocketPath = "/var/run/docker.sock",
 ): Promise<string> {
   if (signal?.aborted) throw new Error("request_aborted");
   return new Promise((resolve, reject) => {
-    const child = spawn(dockerBinary, args, { stdio: ["pipe", "pipe", "ignore"] });
+    const child = spawn(dockerBinary, dockerCommandArguments(dockerSocketPath, args), {
+      stdio: ["pipe", "pipe", "ignore"],
+    });
     const chunks: Buffer[] = [];
     let receivedBytes = 0;
     let settled = false;
@@ -372,22 +395,52 @@ async function runDocker(
   });
 }
 
-async function removeContainer(dockerBinary: string, containerName: string): Promise<boolean> {
+async function removeContainer(
+  dockerBinary: string,
+  containerName: string,
+  dockerSocketPath: string,
+): Promise<boolean> {
   try {
-    await runDocker(dockerBinary, ["rm", "--force", containerName]);
+    await runDocker(
+      dockerBinary,
+      ["rm", "--force", containerName],
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      dockerSocketPath,
+    );
     return true;
   } catch {
     return false;
   }
 }
 
-async function removeVolume(dockerBinary: string, volumeName: string): Promise<boolean> {
+async function removeVolume(
+  dockerBinary: string,
+  volumeName: string,
+  dockerSocketPath: string,
+): Promise<boolean> {
   try {
-    await runDocker(dockerBinary, ["volume", "rm", volumeName]);
+    await runDocker(
+      dockerBinary,
+      ["volume", "rm", volumeName],
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      dockerSocketPath,
+    );
     return true;
   } catch {
     return false;
   }
+}
+
+function dockerCommandArguments(dockerSocketPath: string, args: string[]): string[] {
+  return ["--host", `unix://${dockerSocketPath}`, ...args];
 }
 
 function waitForChildClose(

@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import "./public-scan-portal.css";
 
 const API_ROOT = "/api/desarrollo-seguro/v1";
@@ -25,6 +25,10 @@ const ANALYSIS_REQUEST_MESSAGES: Record<string, string> = {
   capacity_reached: "La cola de análisis está completa. Inténtalo más tarde.",
   unavailable: "Este dominio no está disponible para análisis.",
   error: "No se ha podido registrar la solicitud. Inténtalo más tarde.",
+  poll_error:
+    "No se pudo actualizar el estado automáticamente. Consulta el dominio de nuevo dentro de un momento.",
+  poll_timeout:
+    "Todavía no hay un informe nuevo. Consulta el dominio de nuevo dentro de un momento.",
 };
 const ANALYSIS_REQUEST_STATES = [
   "queued",
@@ -37,6 +41,8 @@ const ANALYSIS_REQUEST_STATES = [
 const ACCEPT_JSON_HEADER = "application/json";
 const RETRY_AFTER_HEADER = "Retry-After";
 const MAX_RETRY_AFTER_SECONDS = 3_600;
+const ANALYSIS_STATUS_POLL_INTERVAL_MS = 5_000;
+const MAX_ANALYSIS_STATUS_POLLS = 24;
 const REPORT_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const DOMAIN_STATES = [
@@ -65,7 +71,9 @@ type PortalState = "idle" | "loading" | "ready" | "error";
 type AnalysisRequestState =
   | (typeof ANALYSIS_REQUEST_STATES)[number]
   | "loading"
-  | "error";
+  | "error"
+  | "poll_error"
+  | "poll_timeout";
 type DomainState = (typeof DOMAIN_STATES)[number];
 type Enrollment = (typeof ENROLLMENTS)[number];
 type ProfileVersion = (typeof PROFILE_VERSIONS)[number];
@@ -131,10 +139,78 @@ export function PublicScanPortal() {
   const [authorizationConfirmed, setAuthorizationConfirmed] = useState(false);
   const [analysisRequestState, setAnalysisRequestState] =
     useState<AnalysisRequestState | null>(null);
+  const analysisStatusPollCount = useRef(0);
+  const reportBeforeAnalysisId = useRef<string | null>(null);
 
   useEffect(() => {
     if (reportId) void loadReport(reportId);
   }, [reportId]);
+
+  useEffect(() => {
+    if (
+      !status ||
+      (analysisRequestState !== "queued" && analysisRequestState !== "running")
+    ) {
+      return;
+    }
+
+    const controller = new AbortController();
+    let pollTimer: number | undefined;
+
+    const pollStatus = async () => {
+      analysisStatusPollCount.current += 1;
+      try {
+        const response = await fetch(
+          `${API_ROOT}/domains/${encodeURIComponent(status.hostname)}/status`,
+          {
+            method: "GET",
+            headers: { Accept: ACCEPT_JSON_HEADER },
+            credentials: "omit",
+            cache: "no-store",
+            signal: controller.signal,
+          },
+        );
+        if (!response.ok) throw new Error("invalid_status_response");
+        const payload: unknown = await readPublicJson(response);
+        if (!isDomainStatus(payload)) throw new Error("invalid_status_response");
+
+        setStatus(payload);
+        setReport(payload.lastReport);
+        if (
+          payload.lastReport &&
+          payload.lastReport.id !== reportBeforeAnalysisId.current
+        ) {
+          setAnalysisRequestState(null);
+          return;
+        }
+        if (payload.state === "unavailable") {
+          setAnalysisRequestState("unavailable");
+          return;
+        }
+
+        if (analysisStatusPollCount.current >= MAX_ANALYSIS_STATUS_POLLS) {
+          setAnalysisRequestState("poll_timeout");
+          return;
+        }
+        pollTimer = window.setTimeout(
+          () => void pollStatus(),
+          ANALYSIS_STATUS_POLL_INTERVAL_MS,
+        );
+      } catch {
+        if (!controller.signal.aborted) setAnalysisRequestState("poll_error");
+      }
+    };
+
+    pollTimer = window.setTimeout(
+      () => void pollStatus(),
+      ANALYSIS_STATUS_POLL_INTERVAL_MS,
+    );
+
+    return () => {
+      controller.abort();
+      if (pollTimer !== undefined) window.clearTimeout(pollTimer);
+    };
+  }, [analysisRequestState, status]);
 
   async function loadReport(id: string) {
     setState("loading");
@@ -219,6 +295,8 @@ export function PublicScanPortal() {
 
   async function requestAnalysis() {
     if (!status || !authorizationConfirmed || state === "loading") return;
+    analysisStatusPollCount.current = 0;
+    reportBeforeAnalysisId.current = status.lastReport?.id ?? null;
     setAnalysisRequestState("loading");
     try {
       const response = await fetch(
@@ -250,13 +328,19 @@ export function PublicScanPortal() {
 
   return (
     <main className="ds-portal" data-theme={darkTheme ? "dark" : "light"}>
+      <a className="ds-portal__skip-link" href="#ds-portal-heading">
+        Saltar al contenido
+      </a>
       <header className="ds-portal__topbar">
         <a
           className="ds-portal__brand"
           href="/"
           aria-label="Desarrollo Seguro, volver a presentación"
         >
-          <span>Desarrollo Seguro</span>
+          <span className="ds-portal__brand-name">
+            Desarrollo <strong>Seguro</strong>
+          </span>
+          <span className="ds-portal__brand-note">Consulta de informes</span>
         </a>
         <button
           className="ds-portal__theme"
@@ -269,12 +353,14 @@ export function PublicScanPortal() {
       </header>
 
       <section className="ds-portal__hero" aria-labelledby="ds-portal-heading">
-        <p className="ds-portal__eyebrow">Observación técnica acotada</p>
-        <h1 id="ds-portal-heading">¿Qué se ve desde fuera?</h1>
-        <p className="ds-portal__intro">
-          Consulta el estado y los controles observados de un dominio. Esta
-          lectura no inicia un análisis.
-        </p>
+        <div className="ds-portal__hero-copy">
+          <p className="ds-portal__eyebrow">Observación técnica acotada</p>
+          <h1 id="ds-portal-heading">¿Qué se ve desde fuera?</h1>
+          <p className="ds-portal__intro">
+            Consulta el estado y los controles observados de un dominio. Esta
+            lectura no inicia un análisis.
+          </p>
+        </div>
         <form className="ds-portal__search" onSubmit={submitDomain} noValidate>
           <label htmlFor={DOMAIN_INPUT_ID}>Dominio que quieres consultar</label>
           <div className="ds-portal__search-row">
@@ -297,6 +383,10 @@ export function PublicScanPortal() {
             dominio.
           </span>
         </form>
+        <div className="ds-portal__hero-footnote" aria-hidden="true">
+          <span>01</span>
+          <span>Consulta del estado guardado de un dominio</span>
+        </div>
       </section>
 
       {state === "error" && (
@@ -310,6 +400,11 @@ export function PublicScanPortal() {
       )}
       {state === "ready" && !status && report && (
         <ReportResult report={report} />
+      )}
+      {status?.state === "updating" && analysisRequestState && (
+        <p className="ds-portal__analysis-status" role="status">
+          {getAnalysisRequestMessage(analysisRequestState)}
+        </p>
       )}
       {state === "ready" && status?.state === "not_scanned" && (
         <section
@@ -349,9 +444,7 @@ export function PublicScanPortal() {
             </div>
           ) : (
             <p className="ds-portal__analysis-status" role="status">
-              {analysisRequestState === "loading"
-                ? "Registrando la solicitud…"
-                : ANALYSIS_REQUEST_MESSAGES[analysisRequestState]}
+              {getAnalysisRequestMessage(analysisRequestState)}
             </p>
           )}
         </section>
@@ -684,6 +777,11 @@ function getEmptyStateMessage(state: string): string {
   if (state === "updating") return UPDATING_WITHOUT_REPORT_MESSAGE;
   if (state === "unavailable") return UNAVAILABLE_DOMAIN_MESSAGE;
   return NO_REPORT_MESSAGE;
+}
+
+function getAnalysisRequestMessage(state: AnalysisRequestState): string {
+  if (state === "loading") return "Registrando la solicitud…";
+  return ANALYSIS_REQUEST_MESSAGES[state] ?? GENERIC_ERROR;
 }
 
 function getReadErrorMessage(response: Response): string {

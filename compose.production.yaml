@@ -163,6 +163,97 @@ services:
       development-security-edge:
         aliases: [development-security-api]
 
+  development-security-runtime-coordinator:
+    image: ${DEVELOPMENT_SECURITY_RUNTIME_IMAGE:-desarrolloseguro-runtime:local}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development-security-runtime-coordinator
+    restart: unless-stopped
+    user: "0:0"
+    privileged: false
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 64
+    mem_limit: 128m
+    cpus: 0.25
+    read_only: true
+    network_mode: none
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        install -d -o root -g node -m 2750 /run/development-security
+        exec node apps/desarrollo-seguro/worker/dist/runtime-coordinator-entrypoint.js
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    environment:
+      NODE_ENV: production
+      DS_RUNTIME_COORDINATOR_SOCKET: /run/development-security/runtime-coordinator.sock
+      DS_RUNTIME_COORDINATOR_UID: "0"
+      DS_RUNTIME_COORDINATOR_GID: "1000"
+      DS_RUNTIME_EXECUTOR_IMAGE: desarrolloseguro-executor:local
+      DS_RUNTIME_BROKER_IMAGE: desarrolloseguro-egress-broker:local
+      DS_RUNTIME_DOCKER_SOCKET: /var/run/docker.sock
+      DS_RUNTIME_EGRESS_NETWORK: development-security-egress
+    volumes:
+      - development-security-runtime:/run/development-security
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: [CMD, node, -e, "require('node:fs').statSync('/run/development-security/runtime-coordinator.sock')"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+
+  development-security-worker:
+    image: ${DEVELOPMENT_SECURITY_WORKER_IMAGE:-desarrolloseguro-worker:local}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development-security-worker
+    restart: unless-stopped
+    user: "0:0"
+    privileged: false
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE, FOWNER]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 64
+    mem_limit: 256m
+    cpus: 0.5
+    read_only: true
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        install -d -o node -g node -m 0700 /run/development-security-secrets
+        install -o node -g node -m 0400 /run/secrets/development_security_worker_database_url /run/development-security-secrets/worker-database-url
+        install -o node -g node -m 0444 /run/secrets/internal_tls_ca.crt /run/development-security-secrets/database-ca.crt
+        export DS_WORKER_DATABASE_URL_FILE=/run/development-security-secrets/worker-database-url
+        export DS_WORKER_DATABASE_TLS_CA_FILE=/run/development-security-secrets/database-ca.crt
+        export DS_WORKER_DATABASE_TLS_REQUIRED=true
+        export DS_RUNTIME_COORDINATOR_SOCKET=/run/development-security/runtime-coordinator.sock
+        export DS_RUNTIME_COORDINATOR_UID=0
+        export DS_RUNTIME_COORDINATOR_GID=1000
+        exec su -p node -s /bin/sh -c 'exec node apps/desarrollo-seguro/worker/dist/worker-entrypoint.js'
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+      - /run/development-security-secrets:rw,noexec,nosuid,size=16m
+    environment:
+      NODE_ENV: production
+      DS_WORKER_IDLE_DELAY_MS: "1000"
+      DS_WORKER_ERROR_DELAY_MS: "5000"
+    secrets:
+      - development_security_worker_database_url
+      - internal_tls_ca.crt
+    depends_on:
+      development-security-migrate:
+        condition: service_completed_successfully
+      development-security-runtime-coordinator:
+        condition: service_healthy
+    volumes:
+      - development-security-runtime:/run/development-security:ro
+    networks:
+      - development-security-backend
+
   development-security-web:
     image: ${DEVELOPMENT_SECURITY_WEB_IMAGE:-desarrolloseguro-web:local}
     build:
@@ -208,10 +299,15 @@ networks:
   development-security-ingress:
     name: development-security-ingress
     external: true
+  development-security-analysis-egress:
+    name: development-security-egress
+    external: true
 
 volumes:
   development-security-postgres:
     name: development-security-postgres
+  development-security-runtime:
+    name: development-security-runtime
 
 secrets:
   development_security_admin_password:

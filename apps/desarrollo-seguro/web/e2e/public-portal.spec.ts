@@ -70,3 +70,73 @@ test("searches a domain and requests an authorized analysis without third-party 
   await expect(page.getByRole("status")).toHaveText("Solicitud añadida a la cola de análisis.");
   expect(externalRequests).toEqual([]);
 });
+
+test("shows the report when an authorized analysis finishes", async ({ page }) => {
+  let statusReads = 0;
+  await page.route("**/domains/report.example/status", async (route) => {
+    statusReads += 1;
+    const state = statusReads === 3 ? "updating" : "not_scanned";
+    const response = {
+      hostname: "report.example",
+      enrollment: "on_demand",
+      state,
+      activeJobId: state === "updating" ? "123e4567-e89b-42d3-a456-426614174000" : null,
+      lastReport: null,
+      checkedAt: "2026-11-11T00:00:00.000Z",
+    };
+    const completedResponse = {
+      ...response,
+      state: "fresh",
+      activeJobId: null,
+      lastReport: {
+        id: "123e4567-e89b-42d3-a456-426614174000",
+        hostname: "report.example",
+        profileVersion: "controls-v3",
+        scannerVersion: "scanner-v1",
+        vantage: "same_vps",
+        trigger: "requested",
+        startedAt: "2026-11-11T00:00:00.000Z",
+        completedAt: "2026-11-11T00:01:00.000Z",
+        expiresAt: "2026-11-11T01:01:00.000Z",
+        verdict: "pass",
+        scope: ["/"],
+        checks: [
+          {
+            controlId: "DS-HDR-01",
+            status: "pass",
+            required: true,
+            severity: "high",
+            observedAt: "2026-11-11T00:01:00.000Z",
+            targetPath: "/",
+            method: "GET",
+            summary: "La cabecera de seguridad está presente.",
+            limitation: "Solo se observó la portada.",
+          },
+        ],
+      },
+    };
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify(statusReads >= 4 ? completedResponse : response),
+    });
+  });
+  await page.route("**/analysis-requests", async (route) =>
+    route.fulfill({
+      status: 202,
+      contentType: "application/json",
+      body: JSON.stringify({ hostname: "report.example", state: "queued" }),
+    }),
+  );
+
+  await page.goto("/");
+  await page.getByRole("textbox", { name: "Dominio que quieres consultar" }).fill("report.example");
+  await page.getByRole("button", { name: "Consultar informe" }).click();
+  await page.getByRole("checkbox", { name: /tengo autorización/i }).check();
+  await page.getByRole("button", { name: "Solicitar análisis" }).click();
+  await expect(page.getByRole("status")).toHaveText("Solicitud añadida a la cola de análisis.");
+
+  await expect.poll(() => statusReads, { timeout: 25_000 }).toBe(4);
+
+  await expect(page.getByRole("heading", { name: "Informe vigente" })).toBeVisible();
+  await expect(page.getByText("Controles observados aprobados")).toBeVisible();
+});

@@ -32,6 +32,10 @@ FROM development AS development-security-executor-build
 
 RUN pnpm --filter @desarrolloseguro/worker build
 
+FROM development AS development-security-worker-build
+
+RUN pnpm --filter @desarrolloseguro/worker build
+
 FROM pnpm-base AS development-security-production-dependencies
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -96,6 +100,39 @@ ENTRYPOINT ["node", "apps/desarrollo-seguro/worker/dist/transport-v1-executor-ch
 FROM development-security-executor AS development-security-egress-broker
 
 ENTRYPOINT ["node", "apps/desarrollo-seguro/worker/dist/transport-v1-egress-broker-child.js"]
+
+FROM pnpm-base AS development-security-worker-dependencies
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/desarrollo-seguro/api/package.json apps/desarrollo-seguro/api/package.json
+COPY apps/desarrollo-seguro/core/package.json apps/desarrollo-seguro/core/package.json
+COPY apps/desarrollo-seguro/persistence/package.json apps/desarrollo-seguro/persistence/package.json
+COPY apps/desarrollo-seguro/web/package.json apps/desarrollo-seguro/web/package.json
+COPY apps/desarrollo-seguro/worker/package.json apps/desarrollo-seguro/worker/package.json
+RUN pnpm install --prod --filter @desarrolloseguro/worker... --frozen-lockfile --ignore-scripts
+
+FROM node-base AS development-security-worker
+
+ENV NODE_ENV=production
+
+COPY --from=development-security-worker-dependencies --chown=node:node /workspace/node_modules /workspace/node_modules
+COPY --from=development-security-worker-dependencies --chown=node:node /workspace/apps/desarrollo-seguro/worker/node_modules /workspace/apps/desarrollo-seguro/worker/node_modules
+COPY --from=development-security-worker-build --chown=node:node /workspace/apps/desarrollo-seguro/worker/dist /workspace/apps/desarrollo-seguro/worker/dist
+COPY --from=development-security-worker-build --chown=node:node /workspace/apps/desarrollo-seguro/worker/package.json /workspace/apps/desarrollo-seguro/worker/package.json
+COPY --from=development-security-worker-build --chown=node:node /workspace/apps/desarrollo-seguro/core/dist /workspace/apps/desarrollo-seguro/core/dist
+COPY --from=development-security-worker-build --chown=node:node /workspace/apps/desarrollo-seguro/core/package.json /workspace/apps/desarrollo-seguro/core/package.json
+COPY --from=development-security-worker-build --chown=node:node /workspace/apps/desarrollo-seguro/persistence/dist /workspace/apps/desarrollo-seguro/persistence/dist
+COPY --from=development-security-worker-build --chown=node:node /workspace/apps/desarrollo-seguro/persistence/package.json /workspace/apps/desarrollo-seguro/persistence/package.json
+
+USER node
+
+ENTRYPOINT ["node", "apps/desarrollo-seguro/worker/dist/worker-entrypoint.js"]
+
+FROM development-security-worker AS development-security-runtime-coordinator
+
+USER root:root
+
+ENTRYPOINT ["node", "apps/desarrollo-seguro/worker/dist/runtime-coordinator-entrypoint.js"]
 
 FROM nginx:1.30-alpine AS development-security-web
 

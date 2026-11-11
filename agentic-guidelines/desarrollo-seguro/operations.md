@@ -8,10 +8,12 @@
 - `development-security-api` expone su endpoint HTTPS solo en la red privada del stack.
 - `development-security-migrate` crea la base `desarrollo_seguro`, roles dedicados y aplica las migraciones.
 - `development-security-database` usa PostgreSQL/pgvector con TLS obligatorio y un volumen propio.
+- `development-security-worker` consume los trabajos pendientes, con acceso solo a la red interna de base de datos y al socket Unix del coordinador.
+- `development-security-runtime-coordinator` no tiene red; es el único servicio autorizado a usar el socket Docker del VPS.
 
 El portal no publica puertos del host. Un proxy de borde conectado a la red interna dedicada `development-security-ingress` puede llegar solo al servicio web; la API y la base no tienen puertos de host y la API no pertenece a la red de entrada.
 
-Las redes `development-security-backend` y `development-security-edge` y el volumen `development-security-postgres` pertenecen a esta aplicación. `development-security-ingress` es una red externa dedicada que contiene solo el proxy público y el servicio web; la API y la base de datos no pertenecen a ella. No se montan sockets Docker, carpetas de otra aplicación, ni sus redes, tablas o secretos. El backend no tiene salida externa. En esta fase no se despliega el paquete worker ni se ejecutan scans.
+Las redes `development-security-backend` y `development-security-edge` y el volumen `development-security-postgres` pertenecen a esta aplicación. `development-security-ingress` es una red externa dedicada que contiene solo el proxy público y el servicio web; la API y la base de datos no pertenecen a ella. `development-security-egress` solo se asigna a brokers efímeros; el worker y los servicios web/API/base no están conectados a ella. El executor usa `network none`. No se montan sockets Docker, carpetas de otra aplicación, ni sus redes, tablas o secretos dentro del worker.
 
 ## Secretos y certificados
 
@@ -55,3 +57,7 @@ No añadas `--volumes` a una parada normal. El volumen es el almacenamiento pers
 El recolector `apps/desarrollo-seguro/worker/scripts/measure-vps-capacity.mjs` solo consulta recursos locales. Sin `--health-url`, no genera solicitudes de red. Su resultado no sustituye una prueba de carga ni autoriza un scan.
 
 La ejecución real permanece deshabilitada. El paquete worker tiene un executor `transport-v1` que deriva los controles desde DNS/IP pinning y transportes HTTP/HTTPS acotados, y un canal hijo que no transmite las credenciales del coordinador. El proceso aún comparte usuario y filesystem y no dispone de una jaula de red o sistema de archivos. Antes de activar scans hacen falta demostrar la política de egress por destino con pruebas IPv4/IPv6 contra servicios señuelo, aplicar límites globales de solicitudes/bytes/tiempo, medir capacidad y revisar el resultado público. Un fallo de esos gates debe dejar la respuesta como no evaluable, nunca como aprobado.
+
+El coordinador arranca como `development-security-runtime-coordinator` en Compose, con `network_mode: none`. Requiere `DS_RUNTIME_COORDINATOR_SOCKET`, UID/GID, `DS_RUNTIME_EXECUTOR_IMAGE` y `DS_RUNTIME_BROKER_IMAGE`; opcionalmente acepta rutas absolutas `DS_RUNTIME_DOCKER_BINARY` y `DS_RUNTIME_DOCKER_SOCKET` (por defecto `/usr/bin/docker` y `/var/run/docker.sock`). Fija el daemon mediante `docker --host unix://…`, sin usar el contexto Docker del usuario. El socket Docker da control equivalente a root: solo este proceso lo monta. El worker accede por un socket Unix con UID 0, GID 1000 y modo `0660`; el directorio compartido impide escritura de otros usuarios.
+
+`scripts/create-development-security-egress-network.sh` crea una bridge sin IPv6 y con el nombre fijo `br-ds-egress`. `scripts/configure-development-security-egress-firewall.sh` instala reglas limitadas a esa interfaz: salida TCP 80/443, denegación de destinos reservados/privados, bloqueo de entrada al host y bloqueo de forwarding IPv6. Nunca vacía cadenas generales ni toca UFW. Antes de activar el tráfico real, valida estas reglas con servicios señuelo en las redes internas de Desarrollo Seguro; la prueba debe fallar al acceder a host, loopback, RFC1918, link-local y IPv6, y permitir únicamente el acceso web previsto. El procedimiento operativo está en [production.md](../../doc/production.md).

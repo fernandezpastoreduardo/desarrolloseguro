@@ -13,6 +13,7 @@ const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }));
 vi.mock("node:child_process", () => ({ spawn: spawnMock }));
 
 const dockerCalls: string[][] = [];
+const dockerHostArguments: string[][] = [];
 const dockerBehavior = {
   failVolumeCreate: false,
   failBrokerInitialization: false,
@@ -27,6 +28,7 @@ const dockerBehavior = {
 
 beforeEach(() => {
   dockerCalls.length = 0;
+  dockerHostArguments.length = 0;
   activeBroker = undefined;
   Object.assign(dockerBehavior, {
     failVolumeCreate: false,
@@ -41,6 +43,10 @@ beforeEach(() => {
   });
   spawnMock.mockReset();
   spawnMock.mockImplementation((_binary: string, args: string[]) => {
+    if (args[0] === "--host") {
+      dockerHostArguments.push(args.slice(0, 2));
+      args = args.slice(2);
+    }
     dockerCalls.push([...args]);
     const nameIndex = args.indexOf("--name");
     const containerName = nameIndex >= 0 ? args[nameIndex + 1] : undefined;
@@ -217,6 +223,10 @@ describe("createDockerRuntimeSessionFactory", () => {
       args[args.indexOf("--name") + 1]?.startsWith("development-security-broker-"));
     const executorRun = dockerCalls.find((args) => args[0] === "run" && args.includes("--name") &&
       args[args.indexOf("--name") + 1]?.startsWith("development-security-executor-"));
+    expect(dockerHostArguments.length).toBeGreaterThan(0);
+    expect(dockerHostArguments.every(([flag, socket]) =>
+      flag === "--host" && socket === "unix:///var/run/docker.sock",
+    )).toBe(true);
     expect(brokerRun).toContain("none");
     expect(executorRun).toContain("none");
     expect(executorRun?.find((argument) => argument.includes("target=/run/development-security-egress")))
@@ -225,10 +235,31 @@ describe("createDockerRuntimeSessionFactory", () => {
     expect(dockerCalls.some((args) => args[0] === "volume" && args[1] === "rm")).toBe(true);
   });
 
+  it("connects only the broker to the configured dedicated egress network", async () => {
+    const runner = createDockerRuntimeCoordinatorRunner(createDockerRuntimeSessionFactory({
+      executorImage: "development-security-executor:test",
+      brokerImage: "development-security-egress-broker:test",
+      brokerNetwork: "development-security-egress",
+    }));
+
+    await expect(runner.execute(REQUEST, new AbortController().signal)).resolves.toMatchObject({
+      verdict: "inconclusive",
+    });
+
+    const brokerRun = dockerCalls.find((args) => args[0] === "run" && args.includes("--name") &&
+      args[args.indexOf("--name") + 1]?.startsWith("development-security-broker-"));
+    const executorRun = dockerCalls.find((args) => args[0] === "run" && args.includes("--name") &&
+      args[args.indexOf("--name") + 1]?.startsWith("development-security-executor-"));
+    expect(brokerRun?.[brokerRun.indexOf("--network") + 1]).toBe("development-security-egress");
+    expect(executorRun?.[executorRun.indexOf("--network") + 1]).toBe("none");
+  });
+
   it.each([
     ["executor image", { executorImage: "--privileged", brokerImage: "broker:test" }],
     ["broker image", { executorImage: "executor:test", brokerImage: "bad image" }],
     ["startup timeout", { executorImage: "executor:test", brokerImage: "broker:test", brokerStartupTimeoutMs: 30_001 }],
+    ["relative Docker socket", { executorImage: "executor:test", brokerImage: "broker:test", dockerSocketPath: "docker.sock" }],
+    ["invalid broker network", { executorImage: "executor:test", brokerImage: "broker:test", brokerNetwork: "bad network" }],
   ])("rejects invalid %s configuration before invoking Docker", (_label, options) => {
     expect(() => createDockerRuntimeSessionFactory(options)).toThrow("docker_runtime_config_invalid");
     expect(spawnMock).not.toHaveBeenCalled();
