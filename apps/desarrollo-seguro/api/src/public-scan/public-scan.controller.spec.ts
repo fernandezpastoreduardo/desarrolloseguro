@@ -1,10 +1,11 @@
 import "reflect-metadata";
-import { RequestMethod } from "@nestjs/common";
+import { HttpStatus, RequestMethod } from "@nestjs/common";
 import {
   HEADERS_METADATA,
   GUARDS_METADATA,
   METHOD_METADATA,
   PATH_METADATA,
+  HTTP_CODE_METADATA,
 } from "@nestjs/common/constants";
 import { describe, expect, it } from "vitest";
 import { PublicScanController } from "./public-scan.controller.js";
@@ -33,6 +34,22 @@ describe("PublicScanController routes", () => {
     expect(Reflect.getMetadata(PATH_METADATA, handler)).toBe(route);
     expect(Reflect.getMetadata(METHOD_METADATA, handler)).toBe(
       RequestMethod.GET,
+    );
+    expect(Reflect.getMetadata(HEADERS_METADATA, handler)).toEqual([
+      { name: CACHE_CONTROL_HEADER, value: NO_STORE_VALUE },
+    ]);
+  });
+
+  it("exposes an explicit, non-cacheable POST route for analysis requests", () => {
+    const handler = PublicScanController.prototype.requestAnalysis;
+    expect(Reflect.getMetadata(PATH_METADATA, handler)).toBe(
+      "domains/:hostname/analysis-requests",
+    );
+    expect(Reflect.getMetadata(METHOD_METADATA, handler)).toBe(
+      RequestMethod.POST,
+    );
+    expect(Reflect.getMetadata(HTTP_CODE_METADATA, handler)).toBe(
+      HttpStatus.ACCEPTED,
     );
     expect(Reflect.getMetadata(HEADERS_METADATA, handler)).toEqual([
       { name: CACHE_CONTROL_HEADER, value: NO_STORE_VALUE },

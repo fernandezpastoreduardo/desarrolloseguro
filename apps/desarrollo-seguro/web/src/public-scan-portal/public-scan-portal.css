@@ -180,6 +180,7 @@
 }
 
 .ds-portal__search input:focus-visible,
+.ds-portal__analysis-request input:focus-visible,
 .ds-portal button:focus-visible,
 .ds-portal a:focus-visible {
   outline: 3px solid #d15a97;
@@ -299,6 +300,44 @@
   padding-left: 12px;
   color: var(--ds-muted);
   line-height: 1.55;
+}
+.ds-portal__analysis-request {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 22px;
+}
+.ds-portal__analysis-request label {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: var(--ds-ink);
+  line-height: 1.5;
+}
+.ds-portal__analysis-request input {
+  width: 18px;
+  height: 18px;
+  margin-top: 3px;
+  accent-color: var(--ds-teal);
+}
+.ds-portal__analysis-request button {
+  border: 2px solid var(--ds-ink);
+  border-radius: 14px;
+  padding: 11px 16px;
+  background: var(--ds-teal);
+  color: var(--ds-teal-dark);
+  cursor: pointer;
+  font-weight: 900;
+}
+.ds-portal__analysis-request button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.ds-portal__analysis-status {
+  margin-top: 20px;
+  color: var(--ds-ink);
+  font-weight: 700;
 }
 .ds-portal__footer {
   display: flex;

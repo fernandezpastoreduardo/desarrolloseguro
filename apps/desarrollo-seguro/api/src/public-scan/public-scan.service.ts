@@ -7,6 +7,7 @@ import {
 } from "@nestjs/common";
 import { normalizeHostname } from "@desarrolloseguro/core";
 import {
+  type EnsureScanResult,
   type PostgresScanStore,
   type PublicDomainSnapshot,
   type PublicScanReport,
@@ -17,6 +18,8 @@ import { REPORT_ID_PATTERN } from "./public-scan.constants.js";
 
 const PUBLIC_STORAGE_ERROR = "development_security_unavailable";
 const PUBLIC_SCAN_READ_FAILED = "PUBLIC_SCAN_READ_FAILED";
+const PUBLIC_SCAN_ADMISSION_FAILED = "PUBLIC_SCAN_ADMISSION_FAILED";
+const ANALYSIS_AUTHORIZATION_REQUIRED = "analysis_authorization_required";
 
 export type PublicDomainState =
   "fresh" | "updating" | "stale" | "not_scanned" | "unavailable";
@@ -55,10 +58,19 @@ export type PublicDomainStatus = {
   checkedAt: string;
 };
 
+export type PublicAnalysisRequestState = EnsureScanResult["kind"];
+
+export type PublicAnalysisRequest = {
+  hostname: string;
+  state: PublicAnalysisRequestState;
+};
+
 type PublicReadStore = Pick<
   PostgresScanStore,
   "readPublicDomainSnapshot" | "readPublicReport"
->;
+> & {
+  requestOnDemandScan?: (hostname: string) => Promise<EnsureScanResult>;
+};
 
 @Injectable()
 export class PublicScanService {
@@ -120,6 +132,40 @@ export class PublicScanService {
       throw new ServiceUnavailableException(PUBLIC_STORAGE_ERROR);
     }
   }
+
+  async requestAnalysis(
+    input: unknown,
+    body: unknown,
+  ): Promise<PublicAnalysisRequest> {
+    const hostname = normalizeRequestHostname(input);
+    if (!isAuthorizedAnalysisRequest(body)) {
+      throw new BadRequestException(ANALYSIS_AUTHORIZATION_REQUIRED);
+    }
+    const requestOnDemandScan = this.store.scanStore.requestOnDemandScan;
+    if (!requestOnDemandScan) {
+      this.logger.error(PUBLIC_SCAN_ADMISSION_FAILED);
+      throw new ServiceUnavailableException(PUBLIC_STORAGE_ERROR);
+    }
+
+    try {
+      const result = await requestOnDemandScan(hostname);
+      return { hostname, state: result.kind };
+    } catch {
+      this.logger.error(PUBLIC_SCAN_ADMISSION_FAILED);
+      throw new ServiceUnavailableException(PUBLIC_STORAGE_ERROR);
+    }
+  }
+}
+
+function isAuthorizedAnalysisRequest(value: unknown): boolean {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Object.keys(value).length === 1 &&
+    "authorized" in value &&
+    value.authorized === true
+  );
 }
 
 function normalizeRequestHostname(input: unknown): string {

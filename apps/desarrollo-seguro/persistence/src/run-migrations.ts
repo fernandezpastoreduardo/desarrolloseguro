@@ -21,6 +21,14 @@ const MIGRATIONS = [
   { version: "007_transport_v1", file: "007_transport_v1.sql" },
   { version: "008_bounded_scan_retries", file: "008_bounded_scan_retries.sql" },
   { version: "009_single_global_scan_slot", file: "009_single_global_scan_slot.sql" },
+  {
+    version: "010_shared_scan_admission_quotas",
+    file: "010_shared_scan_admission_quotas.sql",
+  },
+  {
+    version: "011_harden_scan_admission",
+    file: "011_harden_scan_admission.sql",
+  },
 ] as const;
 
 const MIGRATION_LOCK_ID = 728194032;

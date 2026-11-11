@@ -1,10 +1,9 @@
-import type { Pool, PoolClient } from "pg";
+import type { Pool } from "pg";
 import {
   evaluateVerdict,
   sanitizeScanObservations,
 } from "@desarrolloseguro/core";
 
-const ACTIVE_JOB_STATES = ["queued", "running"] as const;
 const MAX_LEASE_DURATION_MS = 5 * 60 * 1000;
 const MAX_SCAN_ATTEMPTS = 10;
 const SCAN_FAILURE_CODES = ["executor_failed"] as const;
@@ -97,12 +96,12 @@ export type EnsureScanInput = {
   hostname: string;
   profileVersion: string;
   trigger: ScanTrigger;
-  now: Date;
 };
 
 export type EnsureScanResult =
   | { kind: "cached"; reportId: string }
-  | { kind: "queued" | "running"; jobId: string };
+  | { kind: "queued" | "running"; jobId: string }
+  | { kind: "rate_limited" | "capacity_reached" | "unavailable" };
 
 export type ClaimedScanJob = {
   id: string;
@@ -260,69 +259,22 @@ export class PostgresScanStore implements ScanJobStore {
   }
 
   async ensureFreshScan(input: EnsureScanInput): Promise<EnsureScanResult> {
-    const client = await this.pool.connect();
-    try {
-      await client.query("BEGIN");
-      const fresh = await client.query<{ id: string }>(
-        `SELECT id FROM ds_scan_runs
-         WHERE hostname = $1 AND profile_version = $2
-           AND completed_at <= $3
-           AND completed_at > $3 - interval '60 minutes'
-         ORDER BY completed_at DESC LIMIT 1`,
-        [input.hostname, input.profileVersion, input.now],
-      );
-      if (fresh.rows[0]) {
-        await client.query("COMMIT");
-        return { kind: "cached", reportId: fresh.rows[0].id };
-      }
+    const result = await this.pool.query<{
+      outcome: string;
+      entity_id: string | null;
+    }>(
+      "SELECT outcome, entity_id FROM ds_ensure_fresh_scan($1, $2, $3)",
+      [input.hostname, input.profileVersion, input.trigger],
+    );
+    return parseScanAdmission(result.rows[0]);
+  }
 
-      const existing = await client.query<{
-        id: string;
-        state: "queued" | "running";
-      }>(
-        `SELECT id, state FROM ds_scan_jobs
-         WHERE hostname = $1 AND profile_version = $2 AND state = ANY($3)
-         LIMIT 1 FOR UPDATE`,
-        [input.hostname, input.profileVersion, ACTIVE_JOB_STATES],
-      );
-      if (existing.rows[0]) {
-        await client.query("COMMIT");
-        return {
-          kind: existing.rows[0].state,
-          jobId: existing.rows[0].id,
-        };
-      }
-
-      const inserted = await client.query<{ id: string }>(
-        `INSERT INTO ds_scan_jobs(
-           hostname, profile_version, trigger, state, queued_at, available_at
-         ) VALUES($1, $2, $3, 'queued', $4, $4)
-         ON CONFLICT(hostname, profile_version)
-           WHERE state IN ('queued', 'running') DO NOTHING
-         RETURNING id`,
-        [input.hostname, input.profileVersion, input.trigger, input.now],
-      );
-      if (inserted.rows[0]) {
-        await client.query("COMMIT");
-        return { kind: "queued", jobId: inserted.rows[0].id };
-      }
-
-      const raced = await findActiveJob(
-        client,
-        input.hostname,
-        input.profileVersion,
-      );
-      if (!raced) {
-        throw new Error("active_scan_job_missing_after_conflict");
-      }
-      await client.query("COMMIT");
-      return { kind: raced.state, jobId: raced.id };
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
-    }
+  async requestOnDemandScan(hostname: string): Promise<EnsureScanResult> {
+    const result = await this.pool.query<{
+      outcome: string;
+      entity_id: string | null;
+    }>("SELECT outcome, entity_id FROM ds_request_on_demand_scan($1)", [hostname]);
+    return parseScanAdmission(result.rows[0]);
   }
 
   async claimNextScan(
@@ -462,21 +414,28 @@ export class PostgresScanStore implements ScanJobStore {
   }
 }
 
-async function findActiveJob(
-  client: PoolClient,
-  hostname: string,
-  profileVersion: string,
-): Promise<{ id: string; state: "queued" | "running" } | null> {
-  const result = await client.query<{
-    id: string;
-    state: "queued" | "running";
-  }>(
-    `SELECT id, state FROM ds_scan_jobs
-     WHERE hostname = $1 AND profile_version = $2 AND state = ANY($3)
-     LIMIT 1`,
-    [hostname, profileVersion, ACTIVE_JOB_STATES],
-  );
-  return result.rows[0] ?? null;
+function parseScanAdmission(admission: {
+  outcome: string;
+  entity_id: string | null;
+} | undefined): EnsureScanResult {
+  if (!admission) throw new Error("scan_admission_result_missing");
+  if (admission.outcome === "cached" && admission.entity_id) {
+    return { kind: "cached", reportId: admission.entity_id };
+  }
+  if (
+    (admission.outcome === "queued" || admission.outcome === "running") &&
+    admission.entity_id
+  ) {
+    return { kind: admission.outcome, jobId: admission.entity_id };
+  }
+  if (
+    admission.outcome === "rate_limited" ||
+    admission.outcome === "capacity_reached" ||
+    admission.outcome === "unavailable"
+  ) {
+    return { kind: admission.outcome };
+  }
+  throw new Error("invalid_scan_admission_result");
 }
 
 function parsePublicScanReport(row: Record<string, unknown>): PublicScanReport {

@@ -1,6 +1,6 @@
 # Seguridad de ejecución de análisis
 
-La función de análisis remoto no está habilitada. La API actual no acepta scans. Existe un entrypoint worker local que puede reclamar trabajos y persistir resultados, pero no forma parte del despliegue; su cliente falla cerrado si no encuentra un supervisor con socket confiable. El paquete worker contiene además un observador compuesto DNS/HTTP/HTTPS y pruebas locales. Esto no demuestra política de egress en runtime ni permite activar análisis desde el producto. No conectar este observador a trabajos públicos hasta implementar y probar las barreras de esta guía.
+La API pública permite solicitar un análisis de un dominio con autorización explícita y aplica admisión, idempotencia, enfriamiento y cuotas compartidas en PostgreSQL. La solicitud solo queda en cola: el worker no forma parte del despliegue, por lo que aún no se ejecutan análisis ni se generan informes nuevos desde esta ruta. El cliente worker falla cerrado si no encuentra un supervisor con socket confiable. El paquete worker contiene un observador DNS/HTTP/HTTPS y pruebas locales, pero eso no demuestra política de egress en el runtime del VPS. No conectar el worker a solicitudes públicas hasta implementar y probar las barreras de esta guía.
 
 ## Modelo de amenazas y límites de confianza
 

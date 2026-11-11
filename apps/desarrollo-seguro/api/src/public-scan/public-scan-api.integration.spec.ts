@@ -11,6 +11,7 @@ import { parseTrustedProxyCidrs } from "../trusted-proxy-cidrs.js";
 
 const API_PREFIX = "api/desarrollo-seguro/v1";
 const STATUS_PATH = "domains/example.com/status";
+const ANALYSIS_REQUEST_PATH = "domains/example.com/analysis-requests";
 const REPORT_ID = "123e4567-e89b-42d3-a456-426614174000";
 const CLIENT_IP_HEADER = "X-Forwarded-For";
 const RATE_LIMIT = 60;
@@ -25,9 +26,11 @@ const STATUS_BODY = {
   checkedAt: "2026-11-03T00:00:00.000Z",
 };
 const REPORT_BODY = { id: REPORT_ID, hostname: "example.com" };
+const ANALYSIS_REQUEST_BODY = { hostname: "example.com", state: "queued" };
 const service = {
   getDomainStatus: vi.fn().mockResolvedValue(STATUS_BODY),
   getReport: vi.fn().mockResolvedValue(REPORT_BODY),
+  requestAnalysis: vi.fn().mockResolvedValue(ANALYSIS_REQUEST_BODY),
 };
 
 @Controller()
@@ -71,6 +74,28 @@ describe("public scan API over HTTP", () => {
     expect(reportResponse.status).toBe(200);
     expect(reportResponse.headers.get("cache-control")).toBe("no-store");
     await expect(reportResponse.json()).resolves.toEqual(REPORT_BODY);
+  });
+
+  it("accepts an explicit analysis request without cacheable responses", async () => {
+    app = await createTestApplication(undefined);
+    const baseUrl = await app.getUrl();
+
+    const response = await fetch(
+      `${baseUrl}/${API_PREFIX}/${ANALYSIS_REQUEST_PATH}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ authorized: true }),
+      },
+    );
+
+    expect(response.status).toBe(202);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    await expect(response.json()).resolves.toEqual(ANALYSIS_REQUEST_BODY);
+    expect(service.requestAnalysis).toHaveBeenCalledWith(
+      "example.com",
+      { authorized: true },
+    );
   });
 
   it("does not trust forwarded IPs unless the proxy address is configured", async () => {

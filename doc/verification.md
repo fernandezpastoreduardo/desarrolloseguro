@@ -4,4 +4,4 @@ Las comprobaciones principales son `pnpm lint`, `pnpm typecheck`, `pnpm test`, `
 
 Los tests PostgreSQL validan el esquema y operaciones contra un cluster aislado; no son una prueba de despliegue. Las políticas de Compose y TLS validan configuración y material sintético, no certificados de producción, conectividad pública, firewall, carga ni recuperación de copias.
 
-El portal público de evaluación de sitios y su executor de escaneo no están habilitados. Ningún resultado actual debe interpretarse como certificado, auditoría independiente o garantía de seguridad de un sitio.
+La interfaz y la API permiten solicitar y poner en cola un análisis autorizado, pero el worker no forma parte del despliegue y no se realizan conexiones a los dominios solicitados. El análisis con fixture en PostgreSQL aislado no usa red externa. Ningún resultado debe interpretarse como certificado, auditoría independiente o garantía de seguridad de un sitio.

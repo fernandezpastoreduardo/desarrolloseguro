@@ -45,6 +45,68 @@ describe("PublicScanService", () => {
     expect(readPublicDomainSnapshot).toHaveBeenCalledWith("example.com");
   });
 
+  it("requires explicit authorization before requesting an on-demand analysis", async () => {
+    const requestOnDemandScan = vi.fn().mockResolvedValue({ kind: "queued" });
+    const service = new PublicScanService({
+      scanStore: { readPublicDomainSnapshot: vi.fn(), readPublicReport: vi.fn(), requestOnDemandScan },
+    });
+
+    await expect(
+      service.requestAnalysis("example.com", { authorized: false }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(requestOnDemandScan).not.toHaveBeenCalled();
+  });
+
+  it("does not accept client-selected scan profiles or options", async () => {
+    const requestOnDemandScan = vi.fn();
+    const service = new PublicScanService({
+      scanStore: {
+        readPublicDomainSnapshot: vi.fn(),
+        readPublicReport: vi.fn(),
+        requestOnDemandScan,
+      },
+    });
+
+    await expect(
+      service.requestAnalysis("example.com", {
+        authorized: true,
+        profileVersion: "controls-v1",
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(requestOnDemandScan).not.toHaveBeenCalled();
+  });
+
+  it("normalizes authorized analysis requests and returns only the public state", async () => {
+    const requestOnDemandScan = vi.fn().mockResolvedValue({
+      kind: "queued",
+      jobId: "internal-job-id",
+    });
+    const service = new PublicScanService({
+      scanStore: { readPublicDomainSnapshot: vi.fn(), readPublicReport: vi.fn(), requestOnDemandScan },
+    });
+
+    await expect(
+      service.requestAnalysis(" EXAMPLE.COM. ", { authorized: true }),
+    ).resolves.toEqual({ hostname: "example.com", state: "queued" });
+    expect(requestOnDemandScan).toHaveBeenCalledWith("example.com");
+  });
+
+  it("does not expose storage errors from analysis admission", async () => {
+    const requestOnDemandScan = vi.fn().mockRejectedValue(
+      new Error("private database credentials"),
+    );
+    const service = new PublicScanService({
+      scanStore: { readPublicDomainSnapshot: vi.fn(), readPublicReport: vi.fn(), requestOnDemandScan },
+    });
+
+    await expect(
+      service.requestAnalysis("example.com", { authorized: true }),
+    ).rejects.toMatchObject({
+      status: 503,
+      message: "development_security_unavailable",
+    });
+  });
+
   it("marks active work as updating while keeping its prior report historical", async () => {
     const report = makeReport();
     const service = new PublicScanService({

@@ -305,10 +305,10 @@ async function applyRuntimeGrants(pool: Pool): Promise<void> {
       run_id, control_id, status, required, severity, observed_at,
       target_path, method, summary, limitation
     ) ON public.ds_check_results TO ds_read;
-    GRANT INSERT (hostname, enrollment, profile_version)
-      ON public.ds_domains TO ds_api;
-    GRANT INSERT (hostname, profile_version, trigger, state, queued_at, available_at)
-      ON public.ds_scan_jobs TO ds_api;
+    GRANT EXECUTE ON FUNCTION ds_ensure_fresh_scan(text, text, text)
+      TO ds_api;
+    GRANT EXECUTE ON FUNCTION public.ds_request_on_demand_scan(text)
+      TO ds_api;
     REVOKE UPDATE, DELETE, TRUNCATE ON ALL TABLES IN SCHEMA public
       FROM ds_read, ds_api, ds_worker;
     REVOKE INSERT ON ds_scan_runs, ds_check_results, ds_scan_metrics FROM ds_worker;

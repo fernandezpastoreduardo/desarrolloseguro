@@ -69,12 +69,15 @@ describePostgres.sequential("PostgresScanStore", () => {
         hostname: TEST_HOSTNAME,
         profileVersion: TEST_PROFILE,
         trigger: "requested",
-        now: TEST_NOW,
       }),
     );
     const results = await Promise.all(requests);
     const jobIds = new Set(
-      results.map((result) => result.kind !== "cached" && result.jobId),
+      results.flatMap((result) =>
+        result.kind === "queued" || result.kind === "running"
+          ? [result.jobId]
+          : [],
+      ),
     );
 
     expect(jobIds.size).toBe(1);
@@ -82,12 +85,158 @@ describePostgres.sequential("PostgresScanStore", () => {
     expect(results.every((result) => result.kind === "queued")).toBe(true);
   });
 
+  it("caps the shared waiting queue when callers race across domains", async () => {
+    const hostnames = Array.from(
+      { length: 12 },
+      (_, index) => `quota-${index}.example.net`,
+    );
+    await Promise.all(
+      hostnames.map((hostname) =>
+        store.ensureDomain(hostname, "on_demand", TEST_PROFILE),
+      ),
+    );
+
+    const results = await Promise.all(
+      hostnames.map((hostname) =>
+        store.ensureFreshScan({
+          hostname,
+          profileVersion: TEST_PROFILE,
+          trigger: "requested",
+        }),
+      ),
+    );
+    const queuedCount = await pool.query<{ count: number }>(
+      "SELECT count(*)::integer AS count FROM ds_scan_jobs WHERE state = 'queued'",
+    );
+
+    expect(results.map(({ kind }) => kind)).toContain("capacity_reached");
+    expect(results.filter(({ kind }) => kind === "queued")).toHaveLength(10);
+    expect(queuedCount.rows[0]?.count).toBe(10);
+  });
+
+  it("limits repeat admission to once per domain and profile every 24 hours", async () => {
+    const job = await queueAndClaim();
+    const staleCompletedAt = new Date(Date.now() - 61 * 60 * 1000);
+    await complete(
+      job,
+      [CHECK],
+      new Date(staleCompletedAt.getTime() - 60_000),
+      staleCompletedAt,
+    );
+
+    const withinWindow = await store.ensureFreshScan({
+      hostname: TEST_HOSTNAME,
+      profileVersion: TEST_PROFILE,
+      trigger: "requested",
+    });
+    await pool.query(
+      `UPDATE ds_scan_jobs SET queued_at = clock_timestamp() - interval '24 hours 1 second'
+       WHERE hostname = $1 AND profile_version = $2`,
+      [TEST_HOSTNAME, TEST_PROFILE],
+    );
+    const afterWindow = await store.ensureFreshScan({
+      hostname: TEST_HOSTNAME,
+      profileVersion: TEST_PROFILE,
+      trigger: "requested",
+    });
+
+    expect(withinWindow).toEqual({ kind: "rate_limited" });
+    expect(afterWindow.kind).toBe("queued");
+  });
+
+  it("does not admit scans for unknown or opted-out domains", async () => {
+    const unknown = await store.ensureFreshScan({
+      hostname: "not-enrolled.example.net",
+      profileVersion: TEST_PROFILE,
+      trigger: "requested",
+    });
+    await pool.query(
+      "UPDATE ds_domains SET opted_out_at = clock_timestamp() WHERE hostname = $1",
+      [TEST_HOSTNAME],
+    );
+    const optedOut = await store.ensureFreshScan({
+      hostname: TEST_HOSTNAME,
+      profileVersion: TEST_PROFILE,
+      trigger: "requested",
+    });
+
+    expect(unknown).toEqual({ kind: "unavailable" });
+    expect(optedOut).toEqual({ kind: "unavailable" });
+    const queued = await pool.query(
+      "SELECT count(*)::integer AS count FROM ds_scan_jobs WHERE state = 'queued'",
+    );
+    expect(queued.rows[0]?.count).toBe(0);
+  });
+
+  it("admits requested scans for on-demand domains but not scheduled scans", async () => {
+    const hostname = "on-demand.example.net";
+    await store.ensureDomain(hostname, "on_demand", TEST_PROFILE);
+
+    const scheduled = await store.ensureFreshScan({
+      hostname,
+      profileVersion: TEST_PROFILE,
+      trigger: "scheduled",
+    });
+    const requested = await store.ensureFreshScan({
+      hostname,
+      profileVersion: TEST_PROFILE,
+      trigger: "requested",
+    });
+
+    expect(scheduled).toEqual({ kind: "unavailable" });
+    expect(requested.kind).toBe("queued");
+  });
+
+  it("enrolls a new domain and admits it atomically as on-demand", async () => {
+    const hostname = "new-on-demand.example.net";
+
+    const requested = await store.requestOnDemandScan(hostname);
+    const snapshot = await store.readPublicDomainSnapshot(hostname);
+    const repeated = await store.requestOnDemandScan(hostname);
+
+    expect(requested.kind).toBe("queued");
+    expect(snapshot).toMatchObject({
+      hostname,
+      enrollment: "on_demand",
+      profileVersion: "transport-v1",
+      optedOut: false,
+    });
+    expect(repeated).toEqual(requested);
+  });
+
+  it("does not reactivate a domain that opted out of analysis", async () => {
+    await pool.query(
+      "UPDATE ds_domains SET opted_out_at = clock_timestamp() WHERE hostname = $1",
+      [TEST_HOSTNAME],
+    );
+
+    await expect(store.requestOnDemandScan(TEST_HOSTNAME)).resolves.toEqual({
+      kind: "unavailable",
+    });
+  });
+
+  it("caps the number of on-demand domains stored in PostgreSQL", async () => {
+    await pool.query(
+      `INSERT INTO ds_domains(hostname, enrollment, profile_version)
+       SELECT 'stored-' || number::text || '.example.net', 'on_demand', 'transport-v1'
+       FROM generate_series(1, 1000) AS number`,
+    );
+
+    const result = await store.requestOnDemandScan("overflow.example.net");
+    const overflowRow = await pool.query(
+      "SELECT count(*)::integer AS count FROM ds_domains WHERE hostname = $1",
+      ["overflow.example.net"],
+    );
+
+    expect(result).toEqual({ kind: "capacity_reached" });
+    expect(overflowRow.rows[0]?.count).toBe(0);
+  });
+
   it("gives a queued job to only one concurrent worker", async () => {
     await store.ensureFreshScan({
       hostname: TEST_HOSTNAME,
       profileVersion: TEST_PROFILE,
       trigger: "requested",
-      now: TEST_NOW,
     });
     const claims = await Promise.all(
       Array.from({ length: 10 }, () =>
@@ -107,7 +256,6 @@ describePostgres.sequential("PostgresScanStore", () => {
           hostname,
           profileVersion: TEST_PROFILE,
           trigger: "requested",
-          now: TEST_NOW,
         }),
       ),
     );
@@ -129,21 +277,32 @@ describePostgres.sequential("PostgresScanStore", () => {
     const first = await queueAndClaim();
     const reportId = await complete(first);
 
-    const beforeExpiry = await store.ensureFreshScan({
+    const fresh = await store.ensureFreshScan({
       hostname: TEST_HOSTNAME,
       profileVersion: TEST_PROFILE,
       trigger: "requested",
-      now: new Date(TEST_NOW.getTime() + 60 * 60 * 1000 - 1),
-    });
-    const atExpiry = await store.ensureFreshScan({
-      hostname: TEST_HOSTNAME,
-      profileVersion: TEST_PROFILE,
-      trigger: "requested",
-      now: new Date(TEST_NOW.getTime() + 60 * 60 * 1000),
     });
 
-    expect(beforeExpiry).toEqual({ kind: "cached", reportId });
-    expect(atExpiry.kind).toBe("queued");
+    expect(fresh).toEqual({ kind: "cached", reportId });
+  });
+
+  it("does not reuse reports at least 60 minutes old", async () => {
+    const job = await queueAndClaim();
+    const staleCompletedAt = new Date(Date.now() - 61 * 60 * 1000);
+    await complete(
+      job,
+      [CHECK],
+      new Date(staleCompletedAt.getTime() - 60_000),
+      staleCompletedAt,
+    );
+
+    const expired = await store.ensureFreshScan({
+      hostname: TEST_HOSTNAME,
+      profileVersion: TEST_PROFILE,
+      trigger: "requested",
+    });
+
+    expect(expired.kind).toBe("rate_limited");
   });
 
   it("reads a public domain report without returning persisted evidence", async () => {
@@ -197,11 +356,10 @@ describePostgres.sequential("PostgresScanStore", () => {
       hostname: TEST_HOSTNAME,
       profileVersion: "controls-v2",
       trigger: "requested",
-      now: new Date(),
     });
 
     expect(reportId).toBeTruthy();
-    expect(changedProfile.kind).toBe("queued");
+    expect(changedProfile.kind).toBe("rate_limited");
   });
 
   it("rejects a direct database completion outside the profile path allowlist", async () => {
@@ -213,7 +371,7 @@ describePostgres.sequential("PostgresScanStore", () => {
   });
 
   it("accepts exact transport-v1 root coverage with five checks", async () => {
-    const job = await queueAndClaim(TEST_NOW, "transport-v1");
+    const job = await queueAndClaim("transport-v1");
 
     const reportId = await completeDirectly(
       job,
@@ -250,7 +408,7 @@ describePostgres.sequential("PostgresScanStore", () => {
   });
 
   it("rejects non-root scope for transport-v1", async () => {
-    const job = await queueAndClaim(TEST_NOW, "transport-v1");
+    const job = await queueAndClaim("transport-v1");
 
     await expect(
       completeDirectly(job, ["/", "/precios"], makeTransportV1Checks()),
@@ -258,7 +416,7 @@ describePostgres.sequential("PostgresScanStore", () => {
   });
 
   it("rejects controls outside the transport-v1 profile", async () => {
-    const job = await queueAndClaim(TEST_NOW, "transport-v1");
+    const job = await queueAndClaim("transport-v1");
     const unsupportedCheck: ScanCheck = {
       ...CHECK,
       controlId: "DS-PRIV-01",
@@ -368,9 +526,17 @@ describePostgres.sequential("PostgresScanStore", () => {
       completeDirectly(job, ["/"], [makeHttpCheck(599)]),
     ).resolves.toBeDefined();
 
-    const invalidJob = await queueAndClaim();
+    const invalidHostname = "invalid-status.example.net";
+    await store.ensureDomain(invalidHostname, "on_demand", TEST_PROFILE);
+    await store.ensureFreshScan({
+      hostname: invalidHostname,
+      profileVersion: TEST_PROFILE,
+      trigger: "requested",
+    });
+    const claimedJob = await store.claimNextScan(TEST_NOW, TEST_LEASE_MS);
+    if (!claimedJob) throw new Error("expected_claimed_scan");
     await expect(
-      completeDirectly(invalidJob, ["/"], [makeHttpCheck(600)]),
+      completeDirectly(claimedJob, ["/"], [makeHttpCheck(600)]),
     ).rejects.toThrow("scan_evidence_invalid");
   });
 
@@ -641,16 +807,14 @@ describePostgres.sequential("PostgresScanStore", () => {
   });
 
   async function queueAndClaim(
-    now: Date = TEST_NOW,
     profileVersion: string = TEST_PROFILE,
   ): Promise<ClaimedScanJob> {
     await store.ensureFreshScan({
       hostname: TEST_HOSTNAME,
       profileVersion,
       trigger: "requested",
-      now,
     });
-    const job = await store.claimNextScan(now, TEST_LEASE_MS);
+    const job = await store.claimNextScan(TEST_NOW, TEST_LEASE_MS);
     if (!job) throw new Error("expected_claimed_scan");
     return job;
   }

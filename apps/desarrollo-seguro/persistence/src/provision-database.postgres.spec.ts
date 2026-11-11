@@ -171,7 +171,13 @@ describePostgres.sequential(
         api_can_select_lease_token: boolean;
         api_can_select_metrics: boolean;
         api_can_insert_jobs: boolean;
-        api_can_insert_job_columns: boolean;
+        api_can_insert_domains: boolean;
+        api_can_execute_scan_admission: boolean;
+        api_can_execute_on_demand_request: boolean;
+        worker_can_execute_scan_admission: boolean;
+        worker_can_execute_on_demand_request: boolean;
+        public_can_execute_scan_admission: boolean;
+        public_can_execute_on_demand_request: boolean;
         api_can_write_reports: boolean;
         worker_can_update_state: boolean;
         worker_can_update_hostname: boolean;
@@ -207,12 +213,23 @@ describePostgres.sequential(
          has_column_privilege('ds_api', 'public.ds_scan_jobs', 'lease_token', 'SELECT') AS api_can_select_lease_token,
          has_table_privilege('ds_api', 'public.ds_scan_metrics', 'SELECT') AS api_can_select_metrics,
          has_table_privilege('ds_api', 'ds_scan_jobs', 'INSERT') AS api_can_insert_jobs,
-         (has_column_privilege('ds_api', 'public.ds_scan_jobs', 'hostname', 'INSERT')
-           AND has_column_privilege('ds_api', 'public.ds_scan_jobs', 'profile_version', 'INSERT')
-           AND has_column_privilege('ds_api', 'public.ds_scan_jobs', 'trigger', 'INSERT')
-           AND has_column_privilege('ds_api', 'public.ds_scan_jobs', 'state', 'INSERT')
-           AND has_column_privilege('ds_api', 'public.ds_scan_jobs', 'queued_at', 'INSERT')
-           AND has_column_privilege('ds_api', 'public.ds_scan_jobs', 'available_at', 'INSERT')) AS api_can_insert_job_columns,
+         has_table_privilege('ds_api', 'ds_domains', 'INSERT') AS api_can_insert_domains,
+         has_function_privilege('ds_api', 'public.ds_ensure_fresh_scan(text,text,text)', 'EXECUTE') AS api_can_execute_scan_admission,
+         has_function_privilege('ds_api', 'public.ds_request_on_demand_scan(text)', 'EXECUTE') AS api_can_execute_on_demand_request,
+         has_function_privilege('ds_worker', 'public.ds_ensure_fresh_scan(text,text,text)', 'EXECUTE') AS worker_can_execute_scan_admission,
+         has_function_privilege('ds_worker', 'public.ds_request_on_demand_scan(text)', 'EXECUTE') AS worker_can_execute_on_demand_request,
+         EXISTS (
+           SELECT 1 FROM pg_proc AS routine
+           CROSS JOIN LATERAL aclexplode(coalesce(routine.proacl, acldefault('f', routine.proowner))) AS privilege
+           WHERE routine.oid = 'public.ds_ensure_fresh_scan(text,text,text)'::regprocedure
+             AND privilege.grantee = 0 AND privilege.privilege_type = 'EXECUTE'
+         ) AS public_can_execute_scan_admission,
+         EXISTS (
+           SELECT 1 FROM pg_proc AS routine
+           CROSS JOIN LATERAL aclexplode(coalesce(routine.proacl, acldefault('f', routine.proowner))) AS privilege
+           WHERE routine.oid = 'public.ds_request_on_demand_scan(text)'::regprocedure
+             AND privilege.grantee = 0 AND privilege.privilege_type = 'EXECUTE'
+         ) AS public_can_execute_on_demand_request,
          has_table_privilege('ds_api', 'ds_scan_runs', 'INSERT') AS api_can_write_reports,
          has_column_privilege('ds_worker', 'ds_scan_jobs', 'state', 'UPDATE') AS worker_can_update_state,
          has_column_privilege('ds_worker', 'ds_scan_jobs', 'hostname', 'UPDATE') AS worker_can_update_hostname,
@@ -250,7 +267,13 @@ describePostgres.sequential(
         api_can_select_lease_token: false,
         api_can_select_metrics: false,
         api_can_insert_jobs: false,
-        api_can_insert_job_columns: true,
+        api_can_insert_domains: false,
+        api_can_execute_scan_admission: true,
+        api_can_execute_on_demand_request: true,
+        worker_can_execute_scan_admission: false,
+        worker_can_execute_on_demand_request: false,
+        public_can_execute_scan_admission: false,
+        public_can_execute_on_demand_request: false,
         api_can_write_reports: false,
         worker_can_update_state: false,
         worker_can_update_hostname: false,
@@ -354,7 +377,7 @@ describePostgres.sequential(
       const result = await targetAdminPool?.query(
         "SELECT count(*)::integer AS migration_count FROM public.ds_schema_migrations",
       );
-      expect(result?.rows[0].migration_count).toBe(9);
+      expect(result?.rows[0].migration_count).toBe(11);
 
       const client = await targetAdminPool!.connect();
       try {

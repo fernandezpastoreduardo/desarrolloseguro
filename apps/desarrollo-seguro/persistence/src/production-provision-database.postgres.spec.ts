@@ -193,7 +193,7 @@ describePostgres.sequential(
       const migrationCount = await targetAdminPool?.query(
         "SELECT count(*)::integer AS count FROM public.ds_schema_migrations",
       );
-      expect(migrationCount?.rows[0]?.count).toBe(9);
+      expect(migrationCount?.rows[0]?.count).toBe(11);
     });
 
     it("applies column-scoped runtime grants and does not grant schema ownership to the API", async () => {
@@ -203,6 +203,14 @@ describePostgres.sequential(
         api_cannot_read_lease_token: boolean;
         api_cannot_select_all_metrics: boolean;
         api_cannot_insert_jobs: boolean;
+        api_cannot_insert_domains: boolean;
+        api_can_execute_scan_admission: boolean;
+        api_can_execute_on_demand_request: boolean;
+        worker_cannot_execute_scan_admission: boolean;
+        worker_cannot_execute_on_demand_request: boolean;
+        retention_cannot_execute_scan_admission: boolean;
+        public_cannot_execute_scan_admission: boolean;
+        public_cannot_execute_on_demand_request: boolean;
         api_cannot_create_objects: boolean;
         api_is_not_table_owner: boolean;
       }>(
@@ -212,6 +220,24 @@ describePostgres.sequential(
          NOT has_column_privilege('ds_api', 'public.ds_scan_jobs', 'lease_token', 'SELECT') AS api_cannot_read_lease_token,
          NOT has_table_privilege('ds_api', 'public.ds_scan_metrics', 'SELECT') AS api_cannot_select_all_metrics,
          NOT has_column_privilege('ds_api', 'public.ds_scan_jobs', 'hostname', 'INSERT') AS api_cannot_insert_jobs,
+         NOT has_table_privilege('ds_api', 'public.ds_domains', 'INSERT') AS api_cannot_insert_domains,
+         has_function_privilege('ds_api', 'public.ds_ensure_fresh_scan(text,text,text)', 'EXECUTE') AS api_can_execute_scan_admission,
+         has_function_privilege('ds_api', 'public.ds_request_on_demand_scan(text)', 'EXECUTE') AS api_can_execute_on_demand_request,
+         NOT has_function_privilege('ds_worker', 'public.ds_ensure_fresh_scan(text,text,text)', 'EXECUTE') AS worker_cannot_execute_scan_admission,
+         NOT has_function_privilege('ds_worker', 'public.ds_request_on_demand_scan(text)', 'EXECUTE') AS worker_cannot_execute_on_demand_request,
+         NOT has_function_privilege('ds_retention', 'public.ds_ensure_fresh_scan(text,text,text)', 'EXECUTE') AS retention_cannot_execute_scan_admission,
+         NOT EXISTS (
+           SELECT 1 FROM pg_proc AS procedure
+           CROSS JOIN LATERAL aclexplode(coalesce(procedure.proacl, acldefault('f', procedure.proowner))) AS privilege
+           WHERE procedure.oid = 'public.ds_ensure_fresh_scan(text,text,text)'::regprocedure
+             AND privilege.grantee = 0 AND privilege.privilege_type = 'EXECUTE'
+         ) AS public_cannot_execute_scan_admission,
+         NOT EXISTS (
+           SELECT 1 FROM pg_proc AS routine
+           CROSS JOIN LATERAL aclexplode(coalesce(routine.proacl, acldefault('f', routine.proowner))) AS privilege
+           WHERE routine.oid = 'public.ds_request_on_demand_scan(text)'::regprocedure
+             AND privilege.grantee = 0 AND privilege.privilege_type = 'EXECUTE'
+         ) AS public_cannot_execute_on_demand_request,
          NOT has_schema_privilege('ds_api', 'public', 'CREATE') AS api_cannot_create_objects,
          NOT EXISTS (
            SELECT 1 FROM pg_class AS relation
@@ -227,6 +253,14 @@ describePostgres.sequential(
         api_cannot_read_lease_token: true,
         api_cannot_select_all_metrics: true,
         api_cannot_insert_jobs: true,
+        api_cannot_insert_domains: true,
+        api_can_execute_scan_admission: true,
+        api_can_execute_on_demand_request: true,
+        worker_cannot_execute_scan_admission: true,
+        worker_cannot_execute_on_demand_request: true,
+        retention_cannot_execute_scan_admission: true,
+        public_cannot_execute_scan_admission: true,
+        public_cannot_execute_on_demand_request: true,
         api_cannot_create_objects: true,
         api_is_not_table_owner: true,
       });
@@ -328,7 +362,7 @@ describePostgres.sequential(
       const migrationCount = await targetAdminPool?.query(
         "SELECT count(*)::integer AS count FROM public.ds_schema_migrations",
       );
-      expect(migrationCount?.rows[0]?.count).toBe(9);
+      expect(migrationCount?.rows[0]?.count).toBe(11);
     });
   },
 );

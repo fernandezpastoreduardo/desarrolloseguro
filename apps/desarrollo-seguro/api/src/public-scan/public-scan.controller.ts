@@ -1,6 +1,17 @@
-import { Controller, Get, Header, Param, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  Header,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  UseGuards,
+} from "@nestjs/common";
 import {
   PublicScanService,
+  type PublicAnalysisRequest,
   type PublicDomainStatus,
   type PublicReport,
 } from "./public-scan.service.js";
@@ -19,6 +30,16 @@ export class PublicScanController {
     @Param("hostname") hostname: string,
   ): Promise<PublicDomainStatus> {
     return this.scans.getDomainStatus(hostname);
+  }
+
+  @Post("domains/:hostname/analysis-requests")
+  @HttpCode(HttpStatus.ACCEPTED)
+  @Header("Cache-Control", CACHE_CONTROL_NO_STORE)
+  requestAnalysis(
+    @Param("hostname") hostname: string,
+    @Body() body: unknown,
+  ): Promise<PublicAnalysisRequest> {
+    return this.scans.requestAnalysis(hostname, body);
   }
 
   @Get("reports/:reportId")

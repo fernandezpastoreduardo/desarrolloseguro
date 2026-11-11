@@ -17,6 +17,23 @@ const UPDATING_WITHOUT_REPORT_MESSAGE =
   "Hay una actualización en curso. Vuelve a consultar dentro de un momento.";
 const UNAVAILABLE_DOMAIN_MESSAGE =
   "Este dominio no está disponible para consulta pública.";
+const ANALYSIS_REQUEST_MESSAGES: Record<string, string> = {
+  queued: "Solicitud añadida a la cola de análisis.",
+  running: "El análisis de este dominio ya está en curso.",
+  cached: "Ya hay un informe reciente disponible. Vuelve a consultar el dominio.",
+  rate_limited: "Ya se solicitó un análisis para este dominio en las últimas 24 horas.",
+  capacity_reached: "La cola de análisis está completa. Inténtalo más tarde.",
+  unavailable: "Este dominio no está disponible para análisis.",
+  error: "No se ha podido registrar la solicitud. Inténtalo más tarde.",
+};
+const ANALYSIS_REQUEST_STATES = [
+  "queued",
+  "running",
+  "cached",
+  "rate_limited",
+  "capacity_reached",
+  "unavailable",
+] as const;
 const ACCEPT_JSON_HEADER = "application/json";
 const RETRY_AFTER_HEADER = "Retry-After";
 const MAX_RETRY_AFTER_SECONDS = 3_600;
@@ -45,6 +62,10 @@ const PUBLIC_SCOPE_PATHS = ["/", "/precios", "/informe"] as const;
 const MAX_REPORT_CHECKS = 32;
 
 type PortalState = "idle" | "loading" | "ready" | "error";
+type AnalysisRequestState =
+  | (typeof ANALYSIS_REQUEST_STATES)[number]
+  | "loading"
+  | "error";
 type DomainState = (typeof DOMAIN_STATES)[number];
 type Enrollment = (typeof ENROLLMENTS)[number];
 type ProfileVersion = (typeof PROFILE_VERSIONS)[number];
@@ -107,6 +128,9 @@ export function PublicScanPortal() {
   const [report, setReport] = useState<PublicReport | null>(null);
   const [message, setMessage] = useState("");
   const [darkTheme, setDarkTheme] = useState(false);
+  const [authorizationConfirmed, setAuthorizationConfirmed] = useState(false);
+  const [analysisRequestState, setAnalysisRequestState] =
+    useState<AnalysisRequestState | null>(null);
 
   useEffect(() => {
     if (reportId) void loadReport(reportId);
@@ -160,6 +184,8 @@ export function PublicScanPortal() {
     }
 
     setDomain(hostname);
+    setAuthorizationConfirmed(false);
+    setAnalysisRequestState(null);
     setState("loading");
     setMessage("");
     setReport(null);
@@ -188,6 +214,37 @@ export function PublicScanPortal() {
       setReport(null);
       setState("error");
       setMessage(publicError);
+    }
+  }
+
+  async function requestAnalysis() {
+    if (!status || !authorizationConfirmed || state === "loading") return;
+    setAnalysisRequestState("loading");
+    try {
+      const response = await fetch(
+        `${API_ROOT}/domains/${encodeURIComponent(status.hostname)}/analysis-requests`,
+        {
+          method: "POST",
+          headers: {
+            Accept: ACCEPT_JSON_HEADER,
+            "Content-Type": "application/json",
+          },
+          credentials: "omit",
+          cache: "no-store",
+          body: JSON.stringify({ authorized: true }),
+        },
+      );
+      if (!response.ok) throw new Error("invalid_analysis_request_response");
+      const payload: unknown = await readPublicJson(response);
+      if (
+        !isAnalysisRequest(payload) ||
+        payload.hostname !== status.hostname
+      ) {
+        throw new Error("invalid_analysis_request_response");
+      }
+      setAnalysisRequestState(payload.state);
+    } catch {
+      setAnalysisRequestState("error");
     }
   }
 
@@ -266,9 +323,37 @@ export function PublicScanPortal() {
             controles observados.
           </p>
           <p className="ds-portal__disclaimer">
-            Esta consulta no inicia un análisis ni comprueba el dominio en
-            tiempo real.
+            La consulta solo lee información guardada. Solicitar un análisis
+            enviará las comprobaciones GET/HEAD limitadas del perfil, sin
+            credenciales, formularios ni exploración de rutas adicionales.
           </p>
+          {analysisRequestState === null ? (
+            <div className="ds-portal__analysis-request">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={authorizationConfirmed}
+                  onChange={(event) =>
+                    setAuthorizationConfirmed(event.currentTarget.checked)
+                  }
+                />
+                Confirmo que tengo autorización para solicitar este análisis.
+              </label>
+              <button
+                type="button"
+                disabled={!authorizationConfirmed}
+                onClick={() => void requestAnalysis()}
+              >
+                Solicitar análisis
+              </button>
+            </div>
+          ) : (
+            <p className="ds-portal__analysis-status" role="status">
+              {analysisRequestState === "loading"
+                ? "Registrando la solicitud…"
+                : ANALYSIS_REQUEST_MESSAGES[analysisRequestState]}
+            </p>
+          )}
         </section>
       )}
       <footer className="ds-portal__footer">
@@ -469,6 +554,19 @@ function isPublicReport(value: unknown): value is PublicReport {
     return false;
   }
   return true;
+}
+
+function isAnalysisRequest(
+  value: unknown,
+): value is { hostname: string; state: (typeof ANALYSIS_REQUEST_STATES)[number] } {
+  return (
+    isRecord(value) &&
+    isBoundedString(value.hostname, 253) &&
+    typeof value.state === "string" &&
+    ANALYSIS_REQUEST_STATES.includes(
+      value.state as (typeof ANALYSIS_REQUEST_STATES)[number],
+    )
+  );
 }
 
 function isPublicCheck(value: unknown): value is PublicCheck {

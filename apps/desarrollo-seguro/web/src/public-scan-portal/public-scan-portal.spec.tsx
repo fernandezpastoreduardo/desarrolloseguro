@@ -6,6 +6,8 @@ import { PublicScanPortal } from "../index.js";
 const DOMAIN_INPUT_NAME = "Dominio que quieres consultar";
 const SEARCH_BUTTON_NAME = "Consultar informe";
 const STATUS_ENDPOINT = "/api/desarrollo-seguro/v1/domains/example.com/status";
+const ANALYSIS_REQUEST_ENDPOINT =
+  "/api/desarrollo-seguro/v1/domains/example.com/analysis-requests";
 const REPORT_SUMMARY = "La cabecera de seguridad está presente.";
 const RATE_LIMIT_MESSAGE = "Espera un minuto y vuelve a intentarlo.";
 const REPORT_ID = "123e4567-e89b-42d3-a456-426614174000";
@@ -44,17 +46,22 @@ describe("PublicScanPortal", () => {
     vi.unstubAllGlobals();
   });
 
-  it("shows an honest empty state when the API reports that a domain has not been scanned", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      Response.json({
-        hostname: "example.com",
-        enrollment: "on_demand",
-        state: "not_scanned",
-        activeJobId: null,
-        lastReport: null,
-        checkedAt: "2026-11-03T08:00:00.000Z",
-      }),
-    );
+  it("lets an authorized user request a bounded analysis for an unscanned domain", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({
+          hostname: "example.com",
+          enrollment: "on_demand",
+          state: "not_scanned",
+          activeJobId: null,
+          lastReport: null,
+          checkedAt: "2026-11-03T08:00:00.000Z",
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({ hostname: "example.com", state: "queued" }, { status: 202 }),
+      );
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
 
@@ -74,9 +81,25 @@ describe("PublicScanPortal", () => {
     expect(
       await screen.findByRole("heading", { name: "Aún no hay un informe" }),
     ).toBeVisible();
-    expect(
-      screen.getByText(/esta consulta no inicia un análisis/i),
-    ).toBeVisible();
+    expect(screen.getByText(/la consulta solo lee información guardada/i)).toBeVisible();
+    const authorization = screen.getByRole("checkbox", {
+      name: /tengo autorización para solicitar este análisis/i,
+    });
+    const requestButton = screen.getByRole("button", {
+      name: "Solicitar análisis",
+    });
+    expect(requestButton).toBeDisabled();
+    await user.click(authorization);
+    await user.click(requestButton);
+
+    expect(fetchMock).toHaveBeenLastCalledWith(ANALYSIS_REQUEST_ENDPOINT, {
+      method: "POST",
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      credentials: "omit",
+      cache: "no-store",
+      body: JSON.stringify({ authorized: true }),
+    });
+    expect(await screen.findByText(/solicitud añadida a la cola/i)).toBeVisible();
   });
 
   it("shows the stored checks and makes a stale report visibly historical", async () => {

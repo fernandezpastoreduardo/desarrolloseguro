@@ -13,11 +13,12 @@ Las pruebas de políticas TLS generan certificados sintéticos temporales. No de
 | Área | Comprobaciones |
 | --- | --- |
 | Core | Validación de hostname, perfil/scope, normalización y reglas de veredicto. |
-| API | Validación de entrada, respuestas de estado/informe, rate limiting y errores públicos. |
-| Persistencia | Migraciones, constraints, leases, concurrencia entre dominios bajo un límite global, reintentos con backoff, códigos de error allowlist, proyección pública y mínimos privilegios. |
+| API | Validación de entrada, respuestas de estado/informe y solicitud autorizada, rate limiting y errores públicos seguros. |
+| Persistencia | Migraciones, constraints, leases, concurrencia entre dominios, cuotas atómicas (10 en cola, 1 en ejecución, 24 h por dominio, 1000 altas on-demand), reintentos, proyección pública y mínimos privilegios. |
 | Docker | Servicios, redes internas, loopback-only para web, secretos y volumen exclusivos del proyecto. |
 | TLS | Validación de nombres/CA y configuración de proxy con material sintético. |
 | UI | Flujos accesibles, estados de carga/error, navegación y adaptación móvil. |
+| Navegador real | Playwright con Chromium arranca Vite localmente y comprueba el portal, cambio de tema, búsqueda de un dominio y solicitud autorizada encolada mediante API simulada; no realiza solicitudes a terceros. Ejecutar con `pnpm test:e2e`; CI instala Chromium y corre estas pruebas. No sustituye pruebas de API, accesibilidad completa ni recorrido con backend real. |
 | Primitivas, observador y executor local | Validación DNS/IP, lookup fijado al hostname exacto del trabajo, pinning TLS, límite de respuesta, HTTP→HTTPS de mismo host/puerto/ruta con servidores sintéticos loopback, señales derivadas, métricas de intentos/bytes recibidos y clasificación segura de errores TLS. Un DNS que cambia de IP pública a loopback se rechaza antes de la segunda conexión; no valida firewall ni egress del host. |
 | Ensamblador fixture-only | Cobertura exacta de `transport-v1`, errores categóricos sin filtrar detalles y derivación del veredicto; no valida adaptadores de red ni produce tráfico. |
 | Canal de proceso y PostgreSQL | El hijo recibe solo hostname/perfil en un protocolo acotado, con entorno vacío y sin lease; el coordinador valida y persiste el resultado. La suite `pnpm test:postgres` recorre el canal con fixture hasta el informe público en una base opt-in aislada. El canal no prueba sandbox del sistema operativo. |
@@ -34,4 +35,4 @@ Las pruebas de políticas TLS generan certificados sintéticos temporales. No de
 
 ## Límites
 
-El executor de red compuesto tiene un entrypoint worker local y existe un scheduler de retención, pero ninguno se incluye en el despliegue y no hay admisión pública. CI no escanea hosts ni accede a sistemas externos. Las pruebas deben usar fixtures y dominios reservados de prueba. Antes de habilitar scans será necesario demostrar firewall/egress efectivo, bloqueo de destinos privados, sandbox del proceso, límites de recursos y privacidad en el runtime elegido.
+El executor de red compuesto tiene un entrypoint worker local y existe un scheduler de retención, pero ninguno se incluye en el despliegue. La interfaz permite solicitar una admisión mediante API; CI no ejecuta esos análisis ni accede a sistemas externos. Las pruebas de UI simulan la respuesta de admisión y verifican que no hay solicitudes de terceros; las pruebas PostgreSQL verifican cuotas y el alta transaccional. El flujo fixture del worker comprueba persistencia sin egress. Antes de habilitar scans reales será necesario demostrar firewall/egress efectivo, bloqueo de destinos privados, sandbox del proceso, límites de recursos y privacidad en el runtime elegido.

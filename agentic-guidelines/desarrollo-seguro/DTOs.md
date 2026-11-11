@@ -6,8 +6,11 @@ Los DTOs son contratos HTTP. No exponen filas SQL, `evidence_json`, `lease_token
 
 - `GET /api/desarrollo-seguro/v1/domains/:hostname/status`
 - `GET /api/desarrollo-seguro/v1/reports/:reportId`
+- `POST /api/desarrollo-seguro/v1/domains/:hostname/analysis-requests`
 
 Ambas rutas son de solo lectura, aplican `Cache-Control: no-store` y un limitador por proceso. La API normaliza el hostname; un hostname inválido da 400. Un UUID mal formado o un informe inexistente da 404. Si la persistencia falla, responde con un error público genérico y registra solo un código seguro.
+
+La ruta `POST` también aplica `Cache-Control: no-store`, limitador por proceso y hostname normalizado. Solo acepta `{ "authorized": true }`; no acepta perfil, rutas, métodos ni destinos en el body. Responde 202 con `{ hostname, state }`, donde `state` es `queued`, `running`, `cached`, `rate_limited`, `capacity_reached` o `unavailable`. El cliente no recibe IDs internos del trabajo. La función de PostgreSQL alta como `on_demand` un hostname nuevo con `transport-v1` y encola en la misma transacción; mantiene un máximo de 1000 dominios on-demand registrados, 10 trabajos en espera y una nueva admisión por hostname cada 24 horas. La API no puede insertar directamente en las tablas. La respuesta `queued` confirma que se registró la petición, no que el worker esté operativo ni que haya conectado con el dominio.
 
 ## Estado del dominio
 
@@ -62,6 +65,6 @@ type PublicReport = {
 
 `same_vps` identifica la ubicación de observación y no significa evaluación independiente. Las rutas y métodos publicados proceden del perfil, no de parámetros de la petición. El informe no existe todavía si no hay una ejecución completa previa.
 
-## Capacidad futura
+## Límites operativos
 
-No hay endpoint de admisión de escaneo, búsqueda de hostname con ejecución ni scheduler en servicio. Antes de añadirlos, definir DTOs versionados, validación por allowlist, cuotas en almacenamiento compartido, idempotencia y límites de red en [features.md](features.md) y [scanner-safety.md](scanner-safety.md). No reutilizar contratos de una aplicación anterior.
+La solicitud pública ya está conectada a la primitiva compartida, pero worker, supervisor y executor siguen fuera de Compose y el runner local usa `network none`. La ruta solo encola; no se ha habilitado tráfico hacia dominios. Antes de activar el worker deben cerrarse las pruebas de egress con servicios señuelo, revisar límites de carga/privacidad y probar backup/restauración según [scanner-safety.md](scanner-safety.md).

@@ -43,12 +43,10 @@ describeIsolatedPostgres.sequential("transport-v1 child process and PostgreSQL",
   });
 
   it("sends a credential-free child result through lease validation into a public report", async () => {
-    const now = new Date();
     const queued: EnsureScanResult = await store.ensureFreshScan({
       hostname: TEST_HOSTNAME,
       profileVersion: "transport-v1",
       trigger: "requested",
-      now,
     });
     expect(queued.kind).toBe("queued");
 

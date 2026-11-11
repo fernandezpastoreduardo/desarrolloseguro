@@ -489,6 +489,10 @@ async function applyRuntimeGrants(pool: Pool): Promise<void> {
         text, jsonb, jsonb, jsonb) TO ${WORKER_ROLE};
     GRANT EXECUTE ON FUNCTION public.ds_purge_expired_reports(timestamptz)
       TO ${RETENTION_ROLE};
+    GRANT EXECUTE ON FUNCTION public.ds_ensure_fresh_scan(text, text, text)
+      TO ${API_ROLE};
+    GRANT EXECUTE ON FUNCTION public.ds_request_on_demand_scan(text)
+      TO ${API_ROLE};
     ALTER DEFAULT PRIVILEGES FOR ROLE ${MIGRATOR_ROLE} IN SCHEMA public
       REVOKE SELECT ON TABLES FROM ${READ_ROLE};
     ALTER DEFAULT PRIVILEGES FOR ROLE ${MIGRATOR_ROLE} IN SCHEMA public
