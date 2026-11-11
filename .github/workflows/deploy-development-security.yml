@@ -19,7 +19,7 @@ concurrency:
 jobs:
   deploy:
     if: github.ref == 'refs/heads/main' && inputs.deploy
-    runs-on: [self-hosted, linux, x64, desarrollo-seguro-deploy]
+    runs-on: ubuntu-24.04
     environment: desarrollo-seguro-production
     timeout-minutes: 45
     steps:
@@ -28,5 +28,33 @@ jobs:
         with:
           persist-credentials: false
           clean: true
+      - name: Prepare restricted SSH access
+        shell: bash
+        env:
+          DS_DEPLOY_SSH_KEY: ${{ secrets.DS_DEPLOY_SSH_KEY }}
+          DS_DEPLOY_KNOWN_HOSTS: ${{ secrets.DS_DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -d -m 0700 "$RUNNER_TEMP/desarrollo-seguro-ssh"
+          printf '%s\n' "$DS_DEPLOY_SSH_KEY" > "$RUNNER_TEMP/desarrollo-seguro-ssh/id_ed25519"
+          printf '%s\n' "$DS_DEPLOY_KNOWN_HOSTS" > "$RUNNER_TEMP/desarrollo-seguro-ssh/known_hosts"
+          chmod 0600 "$RUNNER_TEMP/desarrollo-seguro-ssh/id_ed25519" "$RUNNER_TEMP/desarrollo-seguro-ssh/known_hosts"
       - name: Deploy only Desarrollo Seguro
-        run: sudo --non-interactive -- "$GITHUB_WORKSPACE/scripts/deploy-development-security-analysis.sh"
+        shell: bash
+        env:
+          DS_DEPLOY_HOST: ${{ secrets.DS_DEPLOY_HOST }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$DS_DEPLOY_HOST" ]]; then
+            printf 'development_security_deploy_host_not_configured\n' >&2
+            exit 2
+          fi
+          git archive --format=tar "$GITHUB_SHA" |
+            ssh \
+              -i "$RUNNER_TEMP/desarrollo-seguro-ssh/id_ed25519" \
+              -o IdentitiesOnly=yes \
+              -o BatchMode=yes \
+              -o StrictHostKeyChecking=yes \
+              -o "UserKnownHostsFile=$RUNNER_TEMP/desarrollo-seguro-ssh/known_hosts" \
+              "dsdeploy@$DS_DEPLOY_HOST" "deploy $GITHUB_SHA"
+          curl --fail --silent --show-error --max-time 15 https://desarrolloseguro.org/app/ --output /dev/null
+          curl --fail --silent --show-error --max-time 15 https://desarrolloseguro.org/api/desarrollo-seguro/v1/health --output /dev/null
