@@ -30,7 +30,7 @@ assert.match(workflow, /persist-credentials: false/u);
 assert.match(workflow, /environment: desarrollo-seguro-production/u);
 assert.match(
   workflow,
-  /sudo --non-interactive -- \.\/scripts\/deploy-development-security-analysis\.sh/u,
+  /sudo --non-interactive -- "\$GITHUB_WORKSPACE\/scripts\/deploy-development-security-analysis\.sh"/u,
 );
 assert.doesNotMatch(workflow, /^\s+(push|pull_request):/mu);
 assert.doesNotMatch(workflow, /grumphya|caddy reload|compose down/iu);

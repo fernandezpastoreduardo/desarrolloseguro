@@ -29,4 +29,4 @@ jobs:
           persist-credentials: false
           clean: true
       - name: Deploy only Desarrollo Seguro
-        run: sudo --non-interactive -- ./scripts/deploy-development-security-analysis.sh
+        run: sudo --non-interactive -- "$GITHUB_WORKSPACE/scripts/deploy-development-security-analysis.sh"
