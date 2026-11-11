@@ -1,10 +1,18 @@
 FROM node:26.13.0-trixie-slim AS node-base
 
+RUN apt-get update \
+  && apt-get upgrade -y --no-install-recommends \
+  && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /workspace
 
 FROM node-base AS pnpm-base
 
 RUN npm install --global pnpm@12.5.1
+
+FROM node-base AS node-runtime-base
+
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 FROM pnpm-base AS development
 
@@ -46,7 +54,7 @@ COPY apps/desarrollo-seguro/web/package.json apps/desarrollo-seguro/web/package.
 COPY apps/desarrollo-seguro/worker/package.json apps/desarrollo-seguro/worker/package.json
 RUN pnpm install --prod --filter @desarrolloseguro/api... --frozen-lockfile --ignore-scripts
 
-FROM node-base AS development-security-production
+FROM node-runtime-base AS development-security-production
 
 ENV NODE_ENV=production \
     DS_API_PORT=3001 \
@@ -81,7 +89,7 @@ COPY apps/desarrollo-seguro/web/package.json apps/desarrollo-seguro/web/package.
 COPY apps/desarrollo-seguro/worker/package.json apps/desarrollo-seguro/worker/package.json
 RUN pnpm install --prod --filter @desarrolloseguro/worker... --frozen-lockfile --ignore-scripts
 
-FROM node-base AS development-security-executor
+FROM node-runtime-base AS development-security-executor
 
 ENV NODE_ENV=production
 
@@ -111,7 +119,7 @@ COPY apps/desarrollo-seguro/web/package.json apps/desarrollo-seguro/web/package.
 COPY apps/desarrollo-seguro/worker/package.json apps/desarrollo-seguro/worker/package.json
 RUN pnpm install --prod --filter @desarrolloseguro/worker... --frozen-lockfile --ignore-scripts
 
-FROM node-base AS development-security-worker
+FROM node-runtime-base AS development-security-worker
 
 ENV NODE_ENV=production
 
@@ -136,6 +144,8 @@ USER root:root
 ENTRYPOINT ["node", "apps/desarrollo-seguro/worker/dist/runtime-coordinator-entrypoint.js"]
 
 FROM nginx:1.30-alpine AS development-security-web
+
+RUN apk upgrade --no-cache
 
 COPY docker/nginx-development-security.conf /etc/nginx/conf.d/default.conf
 COPY --from=development-security-build /workspace/apps/desarrollo-seguro/web/dist /usr/share/nginx/html/app

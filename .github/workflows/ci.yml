@@ -168,22 +168,28 @@ jobs:
           report_dir="$RUNNER_TEMP/desarrollo-seguro-trivy-reports"
           mkdir -p "$report_dir"
           scan_failed=0
+          if ! node --test scripts/trivy-report-summary.spec.mjs; then
+            scan_failed=1
+          fi
           for component in api web worker runtime executor egress-broker; do
             image="desarrolloseguro-${component}:${IMAGE_REVISION}"
             report="$report_dir/${component}.json"
             printf 'Scanning image: %s\n' "$image"
             if ! trivy image \
               --scanners vuln \
-              --vuln-type os,library \
+              --pkg-types os,library \
               --severity HIGH,CRITICAL \
               --timeout 15m \
               --format json \
               --output "$report" \
-              --exit-code 1 \
+              --exit-code 0 \
               "$image"; then
               scan_failed=1
             fi
           done
+          if ! node scripts/trivy-report-summary.mjs "$report_dir"; then
+            scan_failed=1
+          fi
           exit "$scan_failed"
       - name: Preserve vulnerability scan reports
         if: always()
