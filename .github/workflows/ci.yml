@@ -257,5 +257,5 @@ jobs:
             https://desarrolloseguro.org/app/ --output /dev/null
           curl --retry 10 --retry-delay 5 --retry-all-errors --fail --silent --show-error --max-time 15 \
             https://desarrolloseguro.org/api/desarrollo-seguro/v1/health --output /dev/null
-      - name: Verify canonical domain redirect and live Grumphya scan
+      - name: Verify canonical www redirect and live Grumphya scan
         run: node scripts/smoke-public-domain-scan.mjs

@@ -56,23 +56,23 @@ export function validateCompletedReport(status, previousReportId) {
   return report;
 }
 
-export function validateCanonicalRedirect(responseStatus, location) {
+export function validateWwwRedirect(responseStatus, location) {
   if (![301, 302, 307, 308].includes(responseStatus) || typeof location !== "string") {
-    throw new Error("development_security_com_redirect_missing");
+    throw new Error("development_security_www_redirect_missing");
   }
   let destination;
   try {
-    destination = new URL(location, "https://desarrolloseguro.com/");
+    destination = new URL(location, "https://www.desarrolloseguro.org/");
   } catch {
-    throw new Error("development_security_com_redirect_invalid");
+    throw new Error("development_security_www_redirect_invalid");
   }
   if (
     destination.protocol !== "https:" ||
     destination.hostname !== CANONICAL_DOMAIN ||
     destination.port !== "" ||
-    destination.pathname !== "/desarrollo-seguro/"
+    destination.pathname !== "/"
   ) {
-    throw new Error("development_security_com_redirect_bad_target");
+    throw new Error("development_security_www_redirect_bad_target");
   }
   return destination;
 }
@@ -88,11 +88,11 @@ async function fetchJson(path, init = {}) {
 }
 
 async function runSmoke() {
-  const comResponse = await fetch("https://desarrolloseguro.com/", {
+  const wwwResponse = await fetch("https://www.desarrolloseguro.org/", {
     redirect: "manual",
     signal: AbortSignal.timeout(15_000),
   });
-  validateCanonicalRedirect(comResponse.status, comResponse.headers.get("location"));
+  validateWwwRedirect(wwwResponse.status, wwwResponse.headers.get("location"));
 
   const initialStatus = await fetchJson(`domains/${VALIDATION_HOSTNAME}/status`);
   const previousReportId = initialStatus?.lastReport?.id ?? null;

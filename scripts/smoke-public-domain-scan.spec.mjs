@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  validateCanonicalRedirect,
+  validateWwwRedirect,
   validateCompletedReport,
 } from "./smoke-public-domain-scan.mjs";
 
@@ -51,14 +51,18 @@ test("accepts a refreshed domain-v1 report with observations and scoring", () =>
   assert.equal(report.ethicsAssessment.score, 82);
 });
 
-test("accepts only the canonical HTTPS redirect without an exposed port or app path", () => {
+test("accepts www HTTPS redirect to the canonical domain without an exposed port", () => {
   assert.equal(
-    validateCanonicalRedirect(301, "https://desarrolloseguro.org/desarrollo-seguro/").href,
-    "https://desarrolloseguro.org/desarrollo-seguro/",
+    validateWwwRedirect(301, "https://desarrolloseguro.org/").href,
+    "https://desarrolloseguro.org/",
   );
   assert.throws(
-    () => validateCanonicalRedirect(301, "https://desarrolloseguro.org:8080/desarrollo-seguro/"),
-    { message: "development_security_com_redirect_bad_target" },
+    () => validateWwwRedirect(301, "https://desarrolloseguro.org:8080/"),
+    { message: "development_security_www_redirect_bad_target" },
+  );
+  assert.throws(
+    () => validateWwwRedirect(200, null),
+    { message: "development_security_www_redirect_missing" },
   );
 });
 

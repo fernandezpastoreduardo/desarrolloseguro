@@ -87,12 +87,13 @@ assert.match(liveScanSmoke, /profileVersion !== "domain-v1"/u);
 assert.match(liveScanSmoke, /scannerVersion !== "domain-v1-network-adapter-1"/u);
 assert.match(liveScanSmoke, /conclusiveChecks\.length < 4/u);
 assert.match(liveScanSmoke, /assessment\.score/u);
-assert.match(liveScanSmoke, /development_security_com_redirect_bad_target/u);
+assert.match(liveScanSmoke, /development_security_www_redirect_bad_target/u);
 assert.match(liveScanSmoke, /destination\.port !== ""/u);
+assert.doesNotMatch(liveScanSmoke, /desarrolloseguro\.com/u);
 assert.match(domainProfileMigration, /SET profile_version = 'domain-v1'/u);
 assert.match(domainProfileMigration, /WHERE profile_version = 'transport-v1'/u);
 assert.doesNotMatch(
-  workflow.replace("Verify canonical domain redirect and live Grumphya scan", ""),
+  workflow.replace("Verify canonical www redirect and live Grumphya scan", ""),
   /grumphya|caddy reload|compose down/iu,
 );
 
