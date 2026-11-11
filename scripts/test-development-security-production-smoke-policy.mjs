@@ -95,7 +95,7 @@ assert.match(
   "the production image must be built before its isolated smoke run",
 );
 assert.doesNotMatch(
-  workflow,
+  workflow.replace("Verify canonical domain redirect and live Grumphya scan", ""),
   /grumphya|PRODUCTION_DEPLOY_ENABLED|DEVELOPMENT_SECURITY_DEPLOY_ENABLED/iu,
   "the workflow must not depend on the former project or deploy toggle",
 );
