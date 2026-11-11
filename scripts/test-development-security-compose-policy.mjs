@@ -116,6 +116,7 @@ assert.match(runtimeCoordinator, /development-security-runtime:\/run\/developmen
 assert.doesNotMatch(runtimeCoordinator, /development-security-ingress|development-security-backend|ports:/u);
 assert.match(runtimeCoordinator, /DS_RUNTIME_EGRESS_NETWORK:\s*development-security-egress/u);
 assert.match(runtimeCoordinator, /cap_drop:\s*\[ALL\]/u);
+assert.match(runtimeCoordinator, /cap_add:\s*\[CHOWN, FOWNER\]/u);
 assert.match(runtimeCoordinator, /read_only:\s*true/u);
 assert.match(compose, /development-security-backend:\n    internal: true/u);
 assert.match(compose, /development-security-edge:\n    internal: true/u);
