@@ -14,12 +14,13 @@ Las pruebas de políticas TLS generan certificados sintéticos temporales. No de
 | --- | --- |
 | Core | Validación de hostname, perfil/scope, normalización y reglas de veredicto. |
 | API | Validación de entrada, respuestas de estado/informe y solicitud autorizada, rate limiting y errores públicos seguros. |
-| Persistencia | Migraciones, constraints, leases, concurrencia entre dominios, cuotas atómicas (10 en cola, 1 en ejecución, 24 h por dominio, 1000 altas on-demand), reintentos, proyección pública y mínimos privilegios. |
+| Persistencia | Migraciones, constraints, leases, concurrencia entre dominios, cuotas atómicas (10 en cola, 1 en ejecución, enfriamiento de 24 h temporalmente desactivado para pruebas, 1000 altas on-demand), reintentos, proyección pública y mínimos privilegios. |
 | Docker | Servicios, redes internas, loopback-only para web, secretos y volumen exclusivos del proyecto. |
 | TLS | Validación de nombres/CA y configuración de proxy con material sintético. |
 | UI | Flujos accesibles, estados de carga/error, navegación y adaptación móvil. |
 | Navegador real | Playwright con Chromium arranca Vite localmente y comprueba el portal, cambio de tema, búsqueda, solicitud autorizada y actualización automática hasta que aparece un informe nuevo mediante API simulada; no realiza solicitudes a terceros. El sondeo se limita a 24 consultas cada cinco segundos. Ejecutar con `pnpm test:e2e`; CI instala Chromium y corre estas pruebas. No sustituye pruebas de API, accesibilidad completa ni recorrido con backend real. |
 | Primitivas, observador y executor local | Validación DNS/IP, lookup fijado al hostname exacto del trabajo, pinning TLS, límite de respuesta, HTTP→HTTPS de mismo host/puerto/ruta con servidores sintéticos loopback, señales derivadas, métricas de intentos/bytes recibidos y clasificación segura de errores TLS. Un DNS que cambia de IP pública a loopback se rechaza antes de la segunda conexión; no valida firewall ni egress del host. |
+| IPC del broker | Executor `transport-v1` completo contra broker Unix con cinco checks permitidos, dos observaciones simultáneas y conexiones que cierran asincrónicamente; no permite encolar pruebas fuera del contrato. |
 | Ensamblador fixture-only | Cobertura exacta de `transport-v1`, errores categóricos sin filtrar detalles y derivación del veredicto; no valida adaptadores de red ni produce tráfico. |
 | Canal de proceso y PostgreSQL | El hijo recibe solo hostname/perfil en un protocolo acotado, con entorno vacío y sin lease; el coordinador valida y persiste el resultado. La suite `pnpm test:postgres` recorre el canal con fixture hasta el informe público en una base opt-in aislada. El canal no prueba sandbox del sistema operativo. |
 | Fallos y reintentos | El executor no filtra su excepción; la DB solo libera el trabajo con un lease vigente, aplica un máximo de intentos y backoff, y publica únicamente códigos categóricos permitidos. |

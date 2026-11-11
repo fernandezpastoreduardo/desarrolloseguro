@@ -20,7 +20,10 @@ import {
 
 const MAX_IPC_REQUEST_BYTES = 4 * 1024;
 const MAX_IPC_RESPONSE_BYTES = 32 * 1024;
-const MAX_IPC_CONNECTIONS = 2;
+// Allow one short-lived connection per bounded probe. Completed client sockets
+// can remain open briefly while their close events propagate; the broker still
+// limits active network observations to two at a time.
+const MAX_IPC_CONNECTIONS = 5;
 const IPC_TIMEOUT_MS = 15_000;
 const FORBIDDEN_EVIDENCE_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 /** Starts a per-job broker on a Unix domain socket with restrictive permissions. */

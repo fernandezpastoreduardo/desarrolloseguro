@@ -2,6 +2,7 @@ import { chmod, mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { TransportV1NetworkExecutor } from "./transport-v1-executor.js";
 import type { TransportV1ObservationSource } from "./transport-v1-executor.js";
 import {
   createUnixSocketObservationSource,
@@ -33,6 +34,66 @@ function makeSource(): TransportV1ObservationSource {
 }
 
 describe("transport-v1 egress IPC", () => {
+  it("completes all five checks through the IPC broker under the executor concurrency limit", async () => {
+    const path = await socketPath();
+    const source: TransportV1ObservationSource = {
+      sourceKind: "network",
+      observeDns: vi.fn().mockResolvedValue({
+        evidence: { addressClass: "public", aRecordCount: 1, aaaaRecordCount: 0 },
+        requestsCount: 0,
+        bytesCount: 0,
+      }),
+      observeTls: vi.fn().mockResolvedValue({
+        evidence: { protocol: "TLSv1.3", certificateValid: true, hostnameMatches: true },
+        requestsCount: 1,
+        bytesCount: 12,
+      }),
+      observeHttp: vi.fn().mockResolvedValue({
+        evidence: { statusCode: 200, redirectedToHttps: true, finalScheme: "https" },
+        requestsCount: 1,
+        bytesCount: 12,
+      }),
+      observeHeaders: vi.fn().mockResolvedValue({
+        evidence: {
+          finalScheme: "https",
+          hsts: true,
+          nosniff: true,
+          frameProtection: true,
+          referrerPolicy: true,
+          csp: true,
+        },
+        requestsCount: 1,
+        bytesCount: 12,
+      }),
+    };
+    const broker = await listenTransportV1EgressBroker(path, HOSTNAME, source);
+    try {
+      const executor = new TransportV1NetworkExecutor(
+        createUnixSocketObservationSource(path),
+      );
+      const result = await executor.execute(
+        { hostname: HOSTNAME, profileVersion: "transport-v1" },
+        new AbortController().signal,
+      );
+
+      expect(result.verdict).toBe("pass");
+      expect(result.checks).toHaveLength(5);
+      expect(result.checks.map(({ status }) => status)).toEqual([
+        "pass",
+        "pass",
+        "pass",
+        "pass",
+        "pass",
+      ]);
+      expect(source.observeDns).toHaveBeenCalledOnce();
+      expect(source.observeTls).toHaveBeenCalledOnce();
+      expect(source.observeHttp).toHaveBeenCalledTimes(2);
+      expect(source.observeHeaders).toHaveBeenCalledOnce();
+    } finally {
+      await broker.close();
+    }
+  });
+
   it("exchanges the five bounded profile operations through the Unix socket", async () => {
     const path = await socketPath();
     const source = makeSource();
