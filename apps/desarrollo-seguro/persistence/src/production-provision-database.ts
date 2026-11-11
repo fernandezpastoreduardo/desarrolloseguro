@@ -466,7 +466,10 @@ async function applyRuntimeGrants(pool: Pool): Promise<void> {
       FROM ${READ_ROLE}, ${API_ROLE}, ${WORKER_ROLE}, ${RETENTION_ROLE};
     GRANT SELECT (hostname, enrollment, profile_version, opted_out_at)
       ON public.ds_domains TO ${READ_ROLE};
-    GRANT SELECT (id, hostname, profile_version, state, queued_at)
+    GRANT SELECT (
+      id, hostname, profile_version, state, queued_at, finished_at,
+      public_error_code
+    )
       ON public.ds_scan_jobs TO ${READ_ROLE};
     GRANT SELECT (id, hostname, profile_version, scanner_version, vantage,
       trigger, started_at, completed_at, expires_at, verdict, scope_json)
@@ -475,8 +478,10 @@ async function applyRuntimeGrants(pool: Pool): Promise<void> {
       run_id, control_id, status, required, severity, observed_at,
       target_path, method, summary, limitation
     ) ON public.ds_check_results TO ${READ_ROLE};
+    GRANT SELECT, INSERT ON public.ds_report_badges TO ${API_ROLE};
     REVOKE UPDATE, DELETE, TRUNCATE ON ALL TABLES IN SCHEMA public
       FROM ${READ_ROLE}, ${API_ROLE}, ${WORKER_ROLE}, ${RETENTION_ROLE};
+    GRANT UPDATE (revoked_at) ON public.ds_report_badges TO ${API_ROLE};
     REVOKE INSERT ON public.ds_scan_runs, public.ds_check_results,
       public.ds_scan_metrics FROM ${WORKER_ROLE};
     REVOKE UPDATE (state, lease_until, lease_token, attempts, available_at,

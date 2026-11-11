@@ -296,7 +296,10 @@ async function applyRuntimeGrants(pool: Pool): Promise<void> {
       FROM ds_read, ds_api, ds_worker;
     GRANT SELECT (hostname, enrollment, profile_version, opted_out_at)
       ON public.ds_domains TO ds_read;
-    GRANT SELECT (id, hostname, profile_version, state, queued_at)
+    GRANT SELECT (
+      id, hostname, profile_version, state, queued_at, finished_at,
+      public_error_code
+    )
       ON public.ds_scan_jobs TO ds_read;
     GRANT SELECT (id, hostname, profile_version, scanner_version, vantage,
       trigger, started_at, completed_at, expires_at, verdict, scope_json)
@@ -306,13 +309,13 @@ async function applyRuntimeGrants(pool: Pool): Promise<void> {
       target_path, method, summary, limitation
     ) ON public.ds_check_results TO ds_read;
     GRANT SELECT, INSERT ON public.ds_report_badges TO ds_api;
-    GRANT UPDATE (revoked_at) ON public.ds_report_badges TO ds_api;
     GRANT EXECUTE ON FUNCTION ds_ensure_fresh_scan(text, text, text)
       TO ds_api;
     GRANT EXECUTE ON FUNCTION public.ds_request_on_demand_scan(text)
       TO ds_api;
     REVOKE UPDATE, DELETE, TRUNCATE ON ALL TABLES IN SCHEMA public
       FROM ds_read, ds_api, ds_worker;
+    GRANT UPDATE (revoked_at) ON public.ds_report_badges TO ds_api;
     REVOKE INSERT ON ds_scan_runs, ds_check_results, ds_scan_metrics FROM ds_worker;
     REVOKE UPDATE (state, lease_until, lease_token, attempts, available_at,
       finished_at, public_error_code) ON ds_scan_jobs FROM ds_worker;

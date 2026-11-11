@@ -75,7 +75,7 @@ describePostgres.sequential("PostgresScanStore", () => {
       `INSERT INTO ds_scan_runs(job_id, hostname, profile_version, scanner_version,
         vantage, trigger, started_at, completed_at, expires_at, verdict, scope_json)
        VALUES ($1, $2, 'domain-v1', 'test', 'same_vps', 'requested', now(), now(),
-        now() + interval '60 minutes', 'pass', '[]'::jsonb) RETURNING id`,
+        now() + interval '60 minutes', 'pass', '["/"]'::jsonb) RETURNING id`,
       [job.rows[0].id, hostname],
     );
     const tokenHash = "a".repeat(64);

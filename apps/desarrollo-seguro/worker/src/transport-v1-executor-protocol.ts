@@ -85,7 +85,7 @@ export function parseTransportV1ExecutorResponse(
   }
   if (
     value.errorCode === "request_invalid" ||
-    (typeof value.errorCode === "string" && SCAN_FAILURE_CODES.includes(value.errorCode as ScanFailureCode))
+    isScanFailureCode(value.errorCode)
   ) {
     return {
       protocolVersion: 1,
@@ -98,6 +98,10 @@ export function parseTransportV1ExecutorResponse(
     requestId: expectedRequestId,
     result: parseExecutorResult(value.result, profileVersion),
   };
+}
+
+function isScanFailureCode(value: unknown): value is ScanFailureCode {
+  return typeof value === "string" && SCAN_FAILURE_CODES.includes(value as ScanFailureCode);
 }
 
 function parseExecutorResult(

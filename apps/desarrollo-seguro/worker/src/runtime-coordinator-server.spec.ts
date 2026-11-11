@@ -18,6 +18,14 @@ afterEach(async () => {
 });
 
 describe("runtime coordinator server", () => {
+  it("rejects unsafe error codes in executor responses", () => {
+    expect(() => parseTransportV1ExecutorResponse({
+      protocolVersion: 1,
+      requestId: "11111111-1111-4111-8111-111111111111",
+      errorCode: "permission denied: /secret",
+    }, "11111111-1111-4111-8111-111111111111")).toThrow("executor_result_invalid");
+  });
+
   it("runs a validated request and returns a correlated bounded result", async () => {
     expect(() => parseTransportV1ExecutorResponse({
       protocolVersion: 1,

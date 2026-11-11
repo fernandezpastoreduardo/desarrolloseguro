@@ -162,6 +162,38 @@ describe("createDockerRuntimeCoordinatorRunner", () => {
     expect(close).toHaveBeenCalledOnce();
   });
 
+  it("reports a safe cleanup category when closing the runtime fails", async () => {
+    const factory: DockerRuntimeSessionFactory = {
+      create: vi.fn().mockResolvedValue({
+        execute: vi.fn().mockResolvedValue({
+          protocolVersion: 1,
+          requestId: REQUEST.requestId,
+          result: JSON.parse(JSON.stringify(makeResult())) as unknown,
+        }),
+        close: vi.fn().mockRejectedValue(new Error("private volume path")),
+      }),
+    };
+    const runner = createDockerRuntimeCoordinatorRunner(factory);
+
+    await expect(runner.execute(REQUEST, new AbortController().signal)).rejects.toThrow(
+      "runtime_volume_failed",
+    );
+  });
+
+  it("preserves the execution failure when cleanup also fails", async () => {
+    const factory: DockerRuntimeSessionFactory = {
+      create: vi.fn().mockResolvedValue({
+        execute: vi.fn().mockRejectedValue(new Error("broker_failed")),
+        close: vi.fn().mockRejectedValue(new Error("private volume path")),
+      }),
+    };
+    const runner = createDockerRuntimeCoordinatorRunner(factory);
+
+    await expect(runner.execute(REQUEST, new AbortController().signal)).rejects.toThrow(
+      "broker_failed",
+    );
+  });
+
   it("closes the runtime when execution is cancelled", async () => {
     const close = vi.fn().mockResolvedValue(undefined);
     const factory: DockerRuntimeSessionFactory = {

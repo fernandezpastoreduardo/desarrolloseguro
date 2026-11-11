@@ -169,6 +169,9 @@ describePostgres.sequential(
         api_can_select_public_check_columns: boolean;
         api_can_select_raw_evidence: boolean;
         api_can_select_lease_token: boolean;
+        api_can_select_failure_code: boolean;
+        api_can_issue_badges: boolean;
+        api_can_revoke_badges: boolean;
         api_can_select_metrics: boolean;
         api_can_insert_jobs: boolean;
         api_can_insert_domains: boolean;
@@ -211,6 +214,9 @@ describePostgres.sequential(
          has_column_privilege('ds_api', 'public.ds_check_results', 'summary', 'SELECT') AS api_can_select_public_check_columns,
          has_column_privilege('ds_api', 'public.ds_check_results', 'evidence_json', 'SELECT') AS api_can_select_raw_evidence,
          has_column_privilege('ds_api', 'public.ds_scan_jobs', 'lease_token', 'SELECT') AS api_can_select_lease_token,
+         has_column_privilege('ds_api', 'public.ds_scan_jobs', 'public_error_code', 'SELECT') AS api_can_select_failure_code,
+         has_table_privilege('ds_api', 'public.ds_report_badges', 'INSERT') AS api_can_issue_badges,
+         has_column_privilege('ds_api', 'public.ds_report_badges', 'revoked_at', 'UPDATE') AS api_can_revoke_badges,
          has_table_privilege('ds_api', 'public.ds_scan_metrics', 'SELECT') AS api_can_select_metrics,
          has_table_privilege('ds_api', 'ds_scan_jobs', 'INSERT') AS api_can_insert_jobs,
          has_table_privilege('ds_api', 'ds_domains', 'INSERT') AS api_can_insert_domains,
@@ -265,6 +271,9 @@ describePostgres.sequential(
         api_can_select_public_check_columns: true,
         api_can_select_raw_evidence: false,
         api_can_select_lease_token: false,
+        api_can_select_failure_code: true,
+        api_can_issue_badges: true,
+        api_can_revoke_badges: true,
         api_can_select_metrics: false,
         api_can_insert_jobs: false,
         api_can_insert_domains: false,

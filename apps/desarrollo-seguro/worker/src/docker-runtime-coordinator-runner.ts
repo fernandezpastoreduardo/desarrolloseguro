@@ -62,6 +62,13 @@ export function createDockerRuntimeCoordinatorRunner(
     > {
       if (signal.aborted) throw new Error("request_aborted");
       let session: DockerRuntimeSession | undefined;
+      let result:
+        | Omit<
+            ScanRunInput,
+            "jobId" | "leaseToken" | "hostname" | "profileVersion"
+          >
+        | undefined;
+      let executionError: unknown;
       try {
         session = await factory.create(request, signal);
         if (signal.aborted) throw new Error("request_aborted");
@@ -83,17 +90,23 @@ export function createDockerRuntimeCoordinatorRunner(
               : response.errorCode,
           );
         }
-        return response.result;
+        result = response.result;
       } catch (error) {
-        if (signal.aborted) throw new Error("request_aborted", { cause: error });
-        throw new Error(getRuntimeFailureCode(error), { cause: error });
-      } finally {
-        try {
-          await session?.close();
-        } catch (error: unknown) {
-          throw new Error("runtime_volume_failed", { cause: error });
+        executionError = error;
+      }
+      try {
+        await session?.close();
+      } catch (cleanupError: unknown) {
+        if (executionError === undefined) {
+          executionError = new Error("runtime_volume_failed", { cause: cleanupError });
         }
       }
+      if (executionError !== undefined) {
+        if (signal.aborted) throw new Error("request_aborted", { cause: executionError });
+        throw new Error(getRuntimeFailureCode(executionError), { cause: executionError });
+      }
+      if (!session || !result) throw new Error("executor_failed");
+      return result;
     },
   };
 }
