@@ -117,6 +117,7 @@ ENV NODE_ENV=production
 
 COPY --from=development-security-worker-dependencies --chown=node:node /workspace/node_modules /workspace/node_modules
 COPY --from=development-security-worker-dependencies --chown=node:node /workspace/apps/desarrollo-seguro/worker/node_modules /workspace/apps/desarrollo-seguro/worker/node_modules
+COPY --from=development-security-worker-dependencies --chown=node:node /workspace/apps/desarrollo-seguro/persistence/node_modules /workspace/apps/desarrollo-seguro/persistence/node_modules
 COPY --from=development-security-worker-build --chown=node:node /workspace/apps/desarrollo-seguro/worker/dist /workspace/apps/desarrollo-seguro/worker/dist
 COPY --from=development-security-worker-build --chown=node:node /workspace/apps/desarrollo-seguro/worker/package.json /workspace/apps/desarrollo-seguro/worker/package.json
 COPY --from=development-security-worker-build --chown=node:node /workspace/apps/desarrollo-seguro/core/dist /workspace/apps/desarrollo-seguro/core/dist

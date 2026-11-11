@@ -135,6 +135,10 @@ assert.match(caddyFragment, /www\.desarrolloseguro\.org \{/u);
 assert.doesNotMatch(caddyFragment, /api:3001|database|grumphya/iu);
 assert.match(compose, /name: development-security-postgres/u);
 assert.match(dockerfile, /AS development-security-worker\n/u);
+assert.match(
+  dockerfile,
+  /development-security-worker-dependencies --chown=node:node \/workspace\/apps\/desarrollo-seguro\/persistence\/node_modules \/workspace\/apps\/desarrollo-seguro\/persistence\/node_modules/u,
+);
 assert.match(dockerfile, /AS development-security-runtime-coordinator\n/u);
 assert.doesNotMatch(compose, /grumphya|apps\/api|apps\/web/iu);
 assert.doesNotMatch(compose, /privileged:\s*true/u);
