@@ -86,12 +86,12 @@ assert.doesNotMatch(
 );
 assert.match(
   workflow,
-  /Smoke test the production API image\n\s+run: bash scripts\/test-development-security-production-smoke\.sh desarrolloseguro-api:\$\{\{ github\.sha \}\}/,
+  /Smoke test production API image\n\s+run: bash scripts\/test-development-security-production-smoke\.sh "desarrolloseguro-api:\$\{GITHUB_SHA\}"/,
   "the smoke must exercise the image built from this workflow revision",
 );
 assert.match(
   workflow,
-  /Build the production API image[\s\S]*?Smoke test the production API image/u,
+  /Build production images[\s\S]*?--target development-security-production[\s\S]*?Smoke test production API image/u,
   "the production image must be built before its isolated smoke run",
 );
 assert.doesNotMatch(
