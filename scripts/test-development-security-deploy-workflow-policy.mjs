@@ -63,7 +63,9 @@ for (const target of [
 }
 assert.match(workflow, /aquasecurity\/setup-trivy@[a-f0-9]{40}/u);
 assert.match(workflow, /--severity HIGH,CRITICAL/u);
-assert.match(workflow, /--vuln-type os,library/u);
+assert.match(workflow, /--pkg-types os,library/u);
+assert.doesNotMatch(workflow, /--vuln-type/u);
+assert.match(workflow, /node scripts\/trivy-report-summary\.mjs/u);
 assert.match(workflow, /retention-days: 14/u);
 assert.match(
   workflow,
