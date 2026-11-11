@@ -1,5 +1,6 @@
 node_modules/
 dist/
+/apps/desarrollo-seguro/web/public/site.css
 var/avatars/
 coverage/
 .scannerwork/

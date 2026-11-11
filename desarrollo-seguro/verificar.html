@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="es-ES">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow, noarchive" />
+    <meta name="referrer" content="no-referrer" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; form-action 'none'" />
+    <meta name="description" content="Verificación pública de un sello vinculado a un informe de dominio." />
+    <title>Verificar sello · Desarrollo Seguro</title>
+    <link rel="stylesheet" href="/app/site.css" />
+    <script type="module" src="/desarrollo-seguro/verificar.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#contenido">Saltar al contenido</a>
+    <header class="site-header">
+      <a class="brand" href="index.html" aria-label="Desarrollo Seguro, inicio"><span class="brand-mark" aria-hidden="true">DS</span><span>DESARROLLO<strong>SEGURO</strong></span></a>
+      <nav class="main-nav" aria-label="Navegación principal"><a href="index.html">Inicio</a><a href="metodologia.html">Metodología</a><a href="privacidad.html">Privacidad y alcance</a><a href="sello.html">Sello e informes</a></nav>
+      <a class="header-cta" href="/app/">Abrir el buscador <span aria-hidden="true">↗</span></a>
+    </header>
+    <main id="contenido" class="page-shell">
+      <section class="inner-hero">
+        <p class="eyebrow"><span class="eyebrow-dot" aria-hidden="true"></span> COMPROBACIÓN PÚBLICA</p>
+        <h1>Verificación del <em>sello.</em></h1>
+        <p class="inner-lead">El estado se consulta en Desarrollo Seguro al abrir esta página. Si no se puede confirmar ahora, el sello no se considera válido.</p>
+      </section>
+      <section class="seal-content" aria-labelledby="verification-title">
+        <div class="seal-caveat" role="status" aria-live="polite">
+          <span aria-hidden="true">●</span>
+          <div><p class="eyebrow">ESTADO DE VERIFICACIÓN</p><h2 id="verification-result" data-state="pending">Comprobando sello…</h2></div>
+        </div>
+        <h2 id="verification-title">Informe asociado</h2>
+        <dl class="verification-details">
+          <div><dt>Dominio</dt><dd id="verification-hostname">Cargando…</dd></div>
+          <div><dt>Identificador del informe</dt><dd id="verification-report-id">Cargando…</dd></div>
+        </dl>
+        <a id="verification-report-link" class="button button-primary" href="#" hidden>Consultar informe original <span aria-hidden="true">↗</span></a>
+        <p class="inner-lead">La respuesta comprueba la firma aleatoria, el dominio, el informe, su vigencia y que no se haya revocado. No es una certificación ni garantiza la seguridad completa del sitio.</p>
+      </section>
+    </main>
+    <footer class="site-footer"><div class="page-shell footer-main"><a class="brand brand-footer" href="index.html"><span class="brand-mark" aria-hidden="true">DS</span><span>DESARROLLO<strong>SEGURO</strong></span></a><p>Informes técnicos con evidencia, alcance y límites visibles.</p><nav aria-label="Navegación del pie"><a href="sello.html">Sello e informes</a><a href="/app/">Buscador</a></nav></div><div class="footer-bottom">© Desarrollo Seguro · desarrolloseguro.org</div></footer>
+  </body>
+</html>

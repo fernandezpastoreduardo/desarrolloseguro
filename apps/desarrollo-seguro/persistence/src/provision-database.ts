@@ -305,6 +305,8 @@ async function applyRuntimeGrants(pool: Pool): Promise<void> {
       run_id, control_id, status, required, severity, observed_at,
       target_path, method, summary, limitation
     ) ON public.ds_check_results TO ds_read;
+    GRANT SELECT, INSERT ON public.ds_report_badges TO ds_api;
+    GRANT UPDATE (revoked_at) ON public.ds_report_badges TO ds_api;
     GRANT EXECUTE ON FUNCTION ds_ensure_fresh_scan(text, text, text)
       TO ds_api;
     GRANT EXECUTE ON FUNCTION public.ds_request_on_demand_scan(text)

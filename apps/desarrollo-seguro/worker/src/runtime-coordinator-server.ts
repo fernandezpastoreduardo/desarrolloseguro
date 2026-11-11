@@ -1,7 +1,11 @@
 import { chmod, lstat, stat, unlink } from "node:fs/promises";
 import { createServer, type Server, type Socket } from "node:net";
 import { dirname } from "node:path";
-import type { ScanRunInput } from "@desarrolloseguro/persistence";
+import {
+  SCAN_FAILURE_CODES,
+  type ScanFailureCode,
+  type ScanRunInput,
+} from "@desarrolloseguro/persistence";
 import {
   MAX_EXECUTOR_REQUEST_BYTES,
   MAX_EXECUTOR_RESPONSE_BYTES,
@@ -219,19 +223,19 @@ function handleRequest(
           }
           finish();
         },
-        () => {
+        (error: unknown) => {
           executionSettled = true;
           clearTimeout(executionTimer);
           if (!controller.signal.aborted && !socket.destroyed) {
-            sendFailure(socket, request.requestId);
+            sendFailure(socket, request.requestId, getRuntimeFailureCode(error));
           }
           finish();
         },
       )
-      .catch(() => {
+      .catch((error: unknown) => {
         executionSettled = true;
         clearTimeout(executionTimer);
-        if (!socket.destroyed) sendFailure(socket, request.requestId);
+        if (!socket.destroyed) sendFailure(socket, request.requestId, getRuntimeFailureCode(error));
         finish();
       })
       .finally(() => {
@@ -256,13 +260,23 @@ function sendResponse(
 function sendFailure(
   socket: Socket,
   requestId: string,
-  errorCode: "request_invalid" | "executor_failed" = "executor_failed",
+  errorCode: "request_invalid" | ScanFailureCode = "executor_failed",
 ): void {
   socket.end(JSON.stringify({
     protocolVersion: 1,
     requestId,
     errorCode,
   }));
+}
+
+function getRuntimeFailureCode(error: unknown): ScanFailureCode {
+  if (
+    error instanceof Error &&
+    SCAN_FAILURE_CODES.includes(error.message as ScanFailureCode)
+  ) {
+    return error.message as ScanFailureCode;
+  }
+  return "executor_failed";
 }
 
 function getRequestId(input: unknown): string | null {

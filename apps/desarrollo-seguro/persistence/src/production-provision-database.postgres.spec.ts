@@ -193,7 +193,7 @@ describePostgres.sequential(
       const migrationCount = await targetAdminPool?.query(
         "SELECT count(*)::integer AS count FROM public.ds_schema_migrations",
       );
-      expect(migrationCount?.rows[0]?.count).toBe(15);
+      expect(migrationCount?.rows[0]?.count).toBe(17);
     });
 
     it("applies column-scoped runtime grants and does not grant schema ownership to the API", async () => {
@@ -204,6 +204,9 @@ describePostgres.sequential(
         api_cannot_select_all_metrics: boolean;
         api_cannot_insert_jobs: boolean;
         api_cannot_insert_domains: boolean;
+        api_can_issue_badges: boolean;
+        api_can_revoke_badges: boolean;
+        api_cannot_change_badge_expiry: boolean;
         api_can_execute_scan_admission: boolean;
         api_can_execute_on_demand_request: boolean;
         worker_cannot_execute_scan_admission: boolean;
@@ -221,6 +224,9 @@ describePostgres.sequential(
          NOT has_table_privilege('ds_api', 'public.ds_scan_metrics', 'SELECT') AS api_cannot_select_all_metrics,
          NOT has_column_privilege('ds_api', 'public.ds_scan_jobs', 'hostname', 'INSERT') AS api_cannot_insert_jobs,
          NOT has_table_privilege('ds_api', 'public.ds_domains', 'INSERT') AS api_cannot_insert_domains,
+         has_table_privilege('ds_api', 'public.ds_report_badges', 'INSERT') AS api_can_issue_badges,
+         has_column_privilege('ds_api', 'public.ds_report_badges', 'revoked_at', 'UPDATE') AS api_can_revoke_badges,
+         NOT has_column_privilege('ds_api', 'public.ds_report_badges', 'expires_at', 'UPDATE') AS api_cannot_change_badge_expiry,
          has_function_privilege('ds_api', 'public.ds_ensure_fresh_scan(text,text,text)', 'EXECUTE') AS api_can_execute_scan_admission,
          has_function_privilege('ds_api', 'public.ds_request_on_demand_scan(text)', 'EXECUTE') AS api_can_execute_on_demand_request,
          NOT has_function_privilege('ds_worker', 'public.ds_ensure_fresh_scan(text,text,text)', 'EXECUTE') AS worker_cannot_execute_scan_admission,
@@ -254,6 +260,9 @@ describePostgres.sequential(
         api_cannot_select_all_metrics: true,
         api_cannot_insert_jobs: true,
         api_cannot_insert_domains: true,
+        api_can_issue_badges: true,
+        api_can_revoke_badges: true,
+        api_cannot_change_badge_expiry: true,
         api_can_execute_scan_admission: true,
         api_can_execute_on_demand_request: true,
         worker_cannot_execute_scan_admission: true,
@@ -362,7 +371,7 @@ describePostgres.sequential(
       const migrationCount = await targetAdminPool?.query(
         "SELECT count(*)::integer AS count FROM public.ds_schema_migrations",
       );
-      expect(migrationCount?.rows[0]?.count).toBe(15);
+      expect(migrationCount?.rows[0]?.count).toBe(17);
     });
   },
 );

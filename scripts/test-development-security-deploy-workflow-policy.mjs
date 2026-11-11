@@ -99,6 +99,8 @@ assert.doesNotMatch(
 
 assert.match(deployScript, /PROJECT_NAME="desarrollo-seguro"/u);
 assert.match(deployScript, /COMPOSE_FILE="compose\.production\.yaml"/u);
+assert.match(deployScript, /openssl rand -hex 32/u);
+assert.match(deployScript, /development_security_badge_issuer_token/u);
 assert.match(deployScript, /scripts\/configure-development-security-egress-firewall\.sh verify/u);
 assert.match(
   normalizedDeployScript,
@@ -119,6 +121,8 @@ assert.match(archiveGateway, /chmod 0755 "\$release_dir"\s+umask 022/u);
 assert.match(archiveGateway, /deploy-development-security-analysis\.sh/u);
 assert.doesNotMatch(archiveGateway, /grumphya|caddy reload|compose down/iu);
 assert.match(compose, /^  development-security-(api|runtime-coordinator|worker|web):/mu);
+assert.match(compose, /development_security_badge_issuer_token/u);
+assert.match(compose, /DS_BADGE_ISSUER_TOKEN/u);
 assert.doesNotMatch(compose, /grumphya|caddy/iu);
 
 process.stdout.write("Development Security deploy workflow policy passed.\n");

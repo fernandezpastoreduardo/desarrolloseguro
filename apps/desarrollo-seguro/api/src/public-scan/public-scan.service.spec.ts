@@ -135,6 +135,58 @@ describe("PublicScanService", () => {
     expect(status.lastReport?.id).toBe(report.id);
   });
 
+  it("projects a terminal scan failure as failed with only a safe stage code", async () => {
+    const service = new PublicScanService({
+      scanStore: {
+        readPublicDomainSnapshot: vi.fn().mockResolvedValue({
+          hostname: "example.com",
+          enrollment: "on_demand",
+          profileVersion: "domain-v1",
+          optedOut: false,
+          activeJobId: null,
+          lastReport: null,
+          lastFailure: {
+            code: "broker_failed",
+            failedAt: FIXED_NOW,
+          },
+        }),
+        readPublicReport: vi.fn(),
+      },
+    });
+
+    await expect(service.getDomainStatus("example.com")).resolves.toMatchObject({
+      state: "failed",
+      failureCode: "broker_failed",
+      lastReport: null,
+    });
+  });
+
+  it("gives a fresh active request priority over a previous terminal failure", async () => {
+    const service = new PublicScanService({
+      scanStore: {
+        readPublicDomainSnapshot: vi.fn().mockResolvedValue({
+          hostname: "example.com",
+          enrollment: "on_demand",
+          profileVersion: "domain-v1",
+          optedOut: false,
+          activeJobId: "7d140e17-68d6-489a-b451-7e87408187ae",
+          lastReport: null,
+          lastFailure: {
+            code: "broker_failed",
+            failedAt: FIXED_NOW,
+          },
+        }),
+        readPublicReport: vi.fn(),
+      },
+    });
+
+    await expect(service.getDomainStatus("example.com")).resolves.toMatchObject({
+      state: "updating",
+      activeJobId: "7d140e17-68d6-489a-b451-7e87408187ae",
+      failureCode: null,
+    });
+  });
+
   it("keeps internal evidence out of reports embedded in domain status", async () => {
     const report = makeReport({
       metrics: { requestsCount: 99 },

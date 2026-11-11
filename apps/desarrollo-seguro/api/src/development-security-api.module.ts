@@ -14,6 +14,8 @@ import { PublicScanService } from "./public-scan/public-scan.service.js";
 import { PublicScanRateLimitGuard } from "./public-scan/public-scan-rate-limit.js";
 import { PublicScanRateLimiter } from "./public-scan/public-scan-rate-limiter.js";
 import { resolveDevelopmentSecurityDatabasePoolConfig } from "./database-pool-config.js";
+import { ReportBadgeController } from "./report-badge/report-badge.controller.js";
+import { ReportBadgeService } from "./report-badge/report-badge.service.js";
 
 @Injectable()
 export class DevelopmentSecurityDatabase implements OnApplicationShutdown {
@@ -58,7 +60,7 @@ export class DevelopmentSecurityHealthController {
 }
 
 @Module({
-  controllers: [DevelopmentSecurityHealthController, PublicScanController],
+  controllers: [DevelopmentSecurityHealthController, PublicScanController, ReportBadgeController],
   providers: [
     DevelopmentSecurityDatabase,
     DevelopmentSecurityHealthService,
@@ -69,6 +71,16 @@ export class DevelopmentSecurityHealthController {
       inject: [DevelopmentSecurityDatabase],
       useFactory: (database: DevelopmentSecurityDatabase) =>
         new PublicScanService(database),
+    },
+    {
+      provide: ReportBadgeService,
+      inject: [DevelopmentSecurityDatabase],
+      useFactory: (database: DevelopmentSecurityDatabase) =>
+        new ReportBadgeService({
+          issue: (record) => database.scanStore.issueReportBadge(record),
+          verify: (input) => database.scanStore.verifyReportBadge(input),
+          revoke: (input) => database.scanStore.revokeReportBadge(input),
+        }),
     },
   ],
 })

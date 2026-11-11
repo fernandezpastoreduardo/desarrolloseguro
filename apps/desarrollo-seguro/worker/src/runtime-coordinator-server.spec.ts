@@ -61,6 +61,24 @@ describe("runtime coordinator server", () => {
     expect(runner.execute).toHaveBeenCalledOnce();
   });
 
+  it("returns only an allowlisted runtime stage category", async () => {
+    const runner: RuntimeCoordinatorRunner = {
+      execute: vi.fn(() => {
+        throw new Error("broker_failed", { cause: new Error("private path /secret") });
+      }),
+    };
+    const socketPath = await startCoordinator(runner);
+    const executor = await createClient(socketPath);
+
+    await expect(
+      executor.execute(
+        { hostname: "sample.example.net", profileVersion: "transport-v1" },
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow("broker_failed");
+    expect(runner.execute).toHaveBeenCalledOnce();
+  });
+
   it("rejects extra protocol fields before invoking the runtime", async () => {
     const runner: RuntimeCoordinatorRunner = { execute: vi.fn().mockResolvedValue(makeResult()) };
     const socketPath = await startCoordinator(runner);

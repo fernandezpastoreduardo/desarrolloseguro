@@ -68,18 +68,18 @@ export class RuntimeCoordinatorExecutor implements ScanExecutor {
       throw new Error("executor_request_invalid");
     }
 
-    await this.assertCoordinatorSocket();
+    await this.assertReady();
     return this.exchange(request, serializedRequest, signal);
   }
 
-  private async assertCoordinatorSocket(): Promise<void> {
+  async assertReady(): Promise<void> {
     let socket;
     let directory;
     try {
       socket = await lstat(this.options.socketPath);
       directory = await stat(dirname(this.options.socketPath));
     } catch {
-      throw new Error("runtime_coordinator_unavailable");
+      throw new Error("coordinator_unavailable");
     }
     if (
       !socket.isSocket() ||
@@ -91,7 +91,7 @@ export class RuntimeCoordinatorExecutor implements ScanExecutor {
       directory.gid !== this.options.expectedSocketGid ||
       (directory.mode & 0o027) !== 0
     ) {
-      throw new Error("runtime_coordinator_socket_untrusted");
+      throw new Error("coordinator_socket_untrusted");
     }
   }
 
@@ -107,7 +107,7 @@ export class RuntimeCoordinatorExecutor implements ScanExecutor {
       let settled = false;
       let receivedBytes = 0;
       const chunks: Buffer[] = [];
-      const timer = setTimeout(() => finishWithError("runtime_coordinator_timeout"), this.timeoutMs);
+      const timer = setTimeout(() => finishWithError("coordinator_unavailable"), this.timeoutMs);
       const onAbort = () => finishWithError("request_aborted");
       const cleanup = () => {
         clearTimeout(timer);
@@ -126,12 +126,12 @@ export class RuntimeCoordinatorExecutor implements ScanExecutor {
       socket.on("data", (chunk: Buffer) => {
         receivedBytes += chunk.byteLength;
         if (receivedBytes > MAX_EXECUTOR_RESPONSE_BYTES) {
-          finishWithError("executor_response_too_large");
+          finishWithError("transport_failed");
           return;
         }
         chunks.push(chunk);
       });
-      socket.once("error", () => finishWithError("runtime_coordinator_unavailable"));
+      socket.once("error", () => finishWithError("coordinator_unavailable"));
       socket.once("end", () => {
         if (settled) return;
         try {
@@ -142,16 +142,18 @@ export class RuntimeCoordinatorExecutor implements ScanExecutor {
             request.profileVersion,
           );
           if ("errorCode" in response) {
-            finishWithError(response.errorCode === "request_invalid"
-              ? "executor_request_invalid"
-              : "executor_failed");
+            finishWithError(
+              response.errorCode === "request_invalid"
+                ? "transport_failed"
+                : response.errorCode,
+            );
             return;
           }
           settled = true;
           cleanup();
           resolve(response.result);
         } catch {
-          finishWithError("executor_response_invalid");
+          finishWithError("transport_failed");
         }
       });
       if (signal.aborted) {

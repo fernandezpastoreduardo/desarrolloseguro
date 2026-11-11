@@ -17,6 +17,7 @@ import {
   type PublicScanReport,
   type PublicScanSeverity,
   type PublicScanStatus,
+  type ScanFailureCode,
 } from "@desarrolloseguro/persistence";
 import { REPORT_ID_PATTERN } from "./public-scan.constants.js";
 
@@ -26,7 +27,7 @@ const PUBLIC_SCAN_ADMISSION_FAILED = "PUBLIC_SCAN_ADMISSION_FAILED";
 const ANALYSIS_AUTHORIZATION_REQUIRED = "analysis_authorization_required";
 
 export type PublicDomainState =
-  "fresh" | "updating" | "stale" | "not_scanned" | "unavailable";
+  "fresh" | "updating" | "stale" | "failed" | "not_scanned" | "unavailable";
 
 export type PublicReport = {
   id: string;
@@ -59,6 +60,7 @@ export type PublicDomainStatus = {
   enrollment: "monitored" | "on_demand";
   state: PublicDomainState;
   activeJobId: string | null;
+  failureCode: ScanFailureCode | null;
   lastReport: PublicReport | null;
   checkedAt: string;
 };
@@ -100,6 +102,7 @@ export class PublicScanService {
         enrollment: "on_demand",
         state: "not_scanned",
         activeJobId: null,
+        failureCode: null,
         lastReport: null,
         checkedAt: checkedAt.toISOString(),
       };
@@ -108,13 +111,20 @@ export class PublicScanService {
     const isOptedOut = snapshot.optedOut;
     const report = isOptedOut ? null : snapshot.lastReport;
     const isUpdating = !isOptedOut && snapshot.activeJobId !== null;
-    const state = getPublicState(isOptedOut, isUpdating, report, checkedAt);
+    const state = getPublicState(
+      isOptedOut,
+      isUpdating,
+      report,
+      snapshot.lastFailure,
+      checkedAt,
+    );
 
     return {
       hostname,
       enrollment: isOptedOut ? "on_demand" : snapshot.enrollment,
       state,
       activeJobId: isOptedOut ? null : snapshot.activeJobId,
+      failureCode: state === "failed" ? snapshot.lastFailure?.code ?? null : null,
       lastReport: report ? toPublicReport(report) : null,
       checkedAt: checkedAt.toISOString(),
     };
@@ -185,10 +195,14 @@ function getPublicState(
   optedOut: boolean,
   isUpdating: boolean,
   report: PublicScanReport | null,
+  lastFailure: PublicDomainSnapshot["lastFailure"],
   now: Date,
 ): PublicDomainState {
   if (optedOut) return "unavailable";
   if (isUpdating) return "updating";
+  if (lastFailure && (!report || lastFailure.failedAt > report.completedAt)) {
+    return "failed";
+  }
   if (!report) return "not_scanned";
   return report.expiresAt.getTime() > now.getTime() ? "fresh" : "stale";
 }

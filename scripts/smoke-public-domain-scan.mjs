@@ -5,6 +5,15 @@ import { fileURLToPath } from "node:url";
 const API_BASE_URL = "https://desarrolloseguro.org/api/desarrollo-seguro/v1";
 const VALIDATION_HOSTNAME = "grumphya.com";
 const CANONICAL_DOMAIN = "desarrolloseguro.org";
+const SCAN_FAILURE_CODES = new Set([
+  "coordinator_unavailable",
+  "coordinator_socket_untrusted",
+  "runtime_volume_failed",
+  "broker_failed",
+  "egress_failed",
+  "executor_failed",
+  "transport_failed",
+]);
 const SCAN_TIMEOUT_MS = 4 * 60 * 1000;
 const POLL_INTERVAL_MS = 5_000;
 
@@ -77,6 +86,14 @@ export function validateWwwRedirect(responseStatus, location) {
   return destination;
 }
 
+export function validateTerminalFailure(status) {
+  if (status?.state !== "failed") return null;
+  if (typeof status.failureCode !== "string" || !SCAN_FAILURE_CODES.has(status.failureCode)) {
+    throw new Error("public_scan_failure_code_invalid");
+  }
+  return status.failureCode;
+}
+
 async function fetchJson(path, init = {}) {
   const response = await fetch(`${API_BASE_URL}/${path}`, {
     ...init,
@@ -111,6 +128,8 @@ async function runSmoke() {
   while (Date.now() < deadline) {
     await delay(POLL_INTERVAL_MS);
     const status = await fetchJson(`domains/${VALIDATION_HOSTNAME}/status`);
+    const failureCode = validateTerminalFailure(status);
+    if (failureCode) throw new Error(`public_scan_terminal_${failureCode}`);
     if (status.state === "updating") continue;
     if (!status.lastReport || status.lastReport.id === previousReportId) {
       continue;

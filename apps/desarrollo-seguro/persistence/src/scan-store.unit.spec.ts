@@ -102,6 +102,49 @@ describe("PostgresScanStore unit behavior", () => {
     expect(query.mock.calls[0][0]).not.toMatch(/SELECT\s+evidence_json/iu);
   });
 
+  it("projects terminal scan failures using only a safe failure category", async () => {
+    const query = vi.fn().mockResolvedValue({
+      rows: [makePublicReportRow({
+        report_id: null,
+        hostname: "example.com",
+        enrollment: "on_demand",
+        profile_version: "domain-v1",
+        opted_out_at: null,
+        active_job_id: null,
+        last_failure_code: "broker_failed",
+        last_failure_at: new Date("2026-11-11T10:00:00.000Z"),
+      })],
+    });
+    const store = new PostgresScanStore(makePool({ query }));
+
+    await expect(store.readPublicDomainSnapshot("example.com")).resolves.toMatchObject({
+      lastFailure: {
+        code: "broker_failed",
+        failedAt: new Date("2026-11-11T10:00:00.000Z"),
+      },
+    });
+  });
+
+  it("rejects a persisted failure code outside the public allowlist", async () => {
+    const query = vi.fn().mockResolvedValue({
+      rows: [makePublicReportRow({
+        report_id: null,
+        hostname: "example.com",
+        enrollment: "on_demand",
+        profile_version: "domain-v1",
+        opted_out_at: null,
+        active_job_id: null,
+        last_failure_code: "permission denied: /var/run/docker.sock",
+        last_failure_at: new Date("2026-11-11T10:00:00.000Z"),
+      })],
+    });
+    const store = new PostgresScanStore(makePool({ query }));
+
+    await expect(store.readPublicDomainSnapshot("example.com")).rejects.toThrow(
+      "invalid_public_report_row",
+    );
+  });
+
   it("rejects malformed persisted public report rows", async () => {
     const query = vi.fn().mockResolvedValue({
       rows: [makePublicReportRow({ report_scope: ["/", 4] })],

@@ -73,6 +73,7 @@ describe("PublicScanPortal", () => {
           hostname: "example.com",
           enrollment: "on_demand",
           state: "not_scanned",
+          failureCode: null,
           activeJobId: null,
           lastReport: null,
           checkedAt: "2026-11-03T08:00:00.000Z",
@@ -130,6 +131,7 @@ describe("PublicScanPortal", () => {
         hostname: "example.com",
         enrollment: "on_demand",
         state: "stale",
+        failureCode: null,
         activeJobId: null,
         lastReport: PUBLIC_REPORT,
         checkedAt: "2026-11-03T08:10:00.000Z",
@@ -168,6 +170,7 @@ describe("PublicScanPortal", () => {
           hostname: "example.com",
           enrollment: "on_demand",
           state: "stale",
+          failureCode: null,
           activeJobId: null,
           lastReport: PUBLIC_REPORT,
           checkedAt: "2026-11-03T08:10:00.000Z",
@@ -207,6 +210,43 @@ describe("PublicScanPortal", () => {
     ).toHaveAttribute("data-phase", "queued");
   });
 
+  it("shows a safe failure reason and allows retry when no report was produced", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({
+          hostname: "example.com",
+          enrollment: "on_demand",
+          state: "failed",
+          failureCode: "egress_failed",
+          activeJobId: null,
+          lastReport: null,
+          checkedAt: "2026-11-03T08:10:00.000Z",
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({ hostname: "example.com", state: "queued" }, { status: 202 }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+
+    render(<PublicScanPortal />);
+    await user.type(
+      screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }),
+      "example.com",
+    );
+    await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
+
+    expect(await screen.findByText(/no se pudo completar la conexión pública/i)).toBeVisible();
+    await user.click(
+      screen.getByRole("checkbox", {
+        name: /tengo autorización para solicitar este análisis/i,
+      }),
+    );
+    await user.click(screen.getByRole("button", { name: "Solicitar análisis" }));
+    expect(await screen.findByText(/solicitud añadida a la cola/i)).toBeVisible();
+  });
+
   it("shows an indeterminate progress bar for a domain with an active scan", async () => {
     vi.stubGlobal(
       "fetch",
@@ -215,6 +255,7 @@ describe("PublicScanPortal", () => {
           hostname: "example.com",
           enrollment: "on_demand",
           state: "updating",
+          failureCode: null,
           activeJobId: "123e4567-e89b-42d3-a456-426614174123",
           lastReport: null,
           checkedAt: "2026-11-03T08:10:00.000Z",
@@ -376,6 +417,7 @@ describe("PublicScanPortal", () => {
         hostname: "example.com",
         enrollment: "on_demand",
         state: "unavailable",
+        failureCode: null,
         activeJobId: null,
         lastReport: null,
         checkedAt: "2026-11-03T08:00:00.000Z",
@@ -461,6 +503,7 @@ describe("PublicScanPortal", () => {
       hostname: "example.com",
       enrollment: "on_demand",
       state: "fresh",
+      failureCode: null,
       activeJobId: null,
       lastReport: invalidReport,
       checkedAt: "2026-11-03T08:00:00.000Z",

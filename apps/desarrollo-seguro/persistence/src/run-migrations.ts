@@ -45,6 +45,11 @@ const MIGRATIONS = [
     version: "015_domain_v1_for_existing_domains",
     file: "015_domain_v1_for_existing_domains.sql",
   },
+  { version: "016_report_badges", file: "016_report_badges.sql" },
+  {
+    version: "017_safe_scan_failure_categories",
+    file: "017_safe_scan_failure_categories.sql",
+  },
 ] as const;
 
 const MIGRATION_LOCK_ID = 728194032;

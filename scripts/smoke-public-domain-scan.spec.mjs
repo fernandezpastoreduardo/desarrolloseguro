@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   validateWwwRedirect,
   validateCompletedReport,
+  validateTerminalFailure,
 } from "./smoke-public-domain-scan.mjs";
 
 function completedStatus() {
@@ -64,6 +65,18 @@ test("accepts www HTTPS redirect to the canonical domain without an exposed port
     () => validateWwwRedirect(200, null),
     { message: "development_security_www_redirect_missing" },
   );
+});
+
+test("returns a safe terminal scan failure category to the deploy smoke", () => {
+  assert.equal(
+    validateTerminalFailure({ state: "failed", failureCode: "broker_failed" }),
+    "broker_failed",
+  );
+  assert.throws(
+    () => validateTerminalFailure({ state: "failed", failureCode: "permission denied /secret" }),
+    { message: "public_scan_failure_code_invalid" },
+  );
+  assert.equal(validateTerminalFailure({ state: "updating", failureCode: null }), null);
 });
 
 test("rejects reports where network failures were saved as empty unknowns", () => {

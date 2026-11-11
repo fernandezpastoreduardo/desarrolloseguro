@@ -1,5 +1,5 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
-import "./public-scan-portal.css";
+import "./public-scan-portal.scss";
 
 const API_ROOT = "/api/desarrollo-seguro/v1";
 const DOMAIN_INPUT_ID = "public-scan-domain";
@@ -29,6 +29,7 @@ const ANALYSIS_REQUEST_MESSAGES: Record<string, string> = {
     "No se pudo actualizar el estado automáticamente. Consulta el dominio de nuevo dentro de un momento.",
   poll_timeout:
     "Todavía no hay un informe nuevo. Consulta el dominio de nuevo dentro de un momento.",
+  failed: "El análisis terminó sin generar un informe. Puedes volver a intentarlo.",
 };
 const ANALYSIS_REQUEST_STATES = [
   "queued",
@@ -51,6 +52,16 @@ const DOMAIN_STATES = [
   "stale",
   "not_scanned",
   "unavailable",
+  "failed",
+] as const;
+const SCAN_FAILURE_CODES = [
+  "coordinator_unavailable",
+  "coordinator_socket_untrusted",
+  "runtime_volume_failed",
+  "broker_failed",
+  "egress_failed",
+  "executor_failed",
+  "transport_failed",
 ] as const;
 const ENROLLMENTS = ["monitored", "on_demand"] as const;
 const PROFILE_VERSIONS = [
@@ -73,9 +84,11 @@ type AnalysisRequestState =
   | (typeof ANALYSIS_REQUEST_STATES)[number]
   | "loading"
   | "error"
+  | "failed"
   | "poll_error"
   | "poll_timeout";
 type DomainState = (typeof DOMAIN_STATES)[number];
+type ScanFailureCode = (typeof SCAN_FAILURE_CODES)[number];
 type Enrollment = (typeof ENROLLMENTS)[number];
 type ProfileVersion = (typeof PROFILE_VERSIONS)[number];
 type ScanVerdict = (typeof SCAN_VERDICTS)[number];
@@ -126,6 +139,7 @@ type DomainStatus = {
   hostname: string;
   enrollment: Enrollment;
   state: DomainState;
+  failureCode: ScanFailureCode | null;
   activeJobId: string | null;
   lastReport: PublicReport | null;
   checkedAt: string;
@@ -137,6 +151,7 @@ const STATE_LABELS: Record<string, string> = {
   stale: "Informe histórico",
   not_scanned: "Sin informe",
   unavailable: "Dominio no disponible",
+  failed: "El último análisis falló",
 };
 const VERDICT_LABELS: Record<string, string> = {
   pass: "Controles observados aprobados",
@@ -201,6 +216,10 @@ export function PublicScanPortal() {
         }
         if (payload.state === "unavailable") {
           setAnalysisRequestState("unavailable");
+          return;
+        }
+        if (payload.state === "failed") {
+          setAnalysisRequestState("failed");
           return;
         }
 
@@ -424,7 +443,8 @@ export function PublicScanPortal() {
       {state === "ready" && !status && report && (
         <ReportResult report={report} />
       )}
-      {status?.state === "updating" && analysisRequestState && (
+      {(status?.state === "updating" || status?.state === "failed") &&
+        analysisRequestState && (
         <p className="ds-portal__analysis-status" role="status">
           {getAnalysisRequestMessage(analysisRequestState)}
         </p>
@@ -493,6 +513,19 @@ function DomainResult({
           {STATE_LABELS[status.state] ?? "Estado del informe"}
         </h2>
         <p>{getEmptyStateMessage(status.state)}</p>
+        {status.state === "failed" && (
+          <>
+            <p className="ds-portal__failure" role="alert">
+              {getScanFailureMessage(status.failureCode)}
+            </p>
+            <AnalysisRequestPanel
+              authorizationConfirmed={authorizationConfirmed}
+              onAuthorizationChange={onAuthorizationChange}
+              requestState={analysisRequestState}
+              onRequest={onRequestAnalysis}
+            />
+          </>
+        )}
         {status.state === "updating" && (
           <p className="ds-portal__disclaimer">
             Esta página no se actualiza automáticamente. Vuelve a consultar para
@@ -513,6 +546,22 @@ function DomainResult({
           Hay una actualización en curso. El informe anterior se conserva como
           histórico.
         </p>
+      )}
+      {status.state === "failed" && (
+        <>
+          <p className="ds-portal__failure" role="alert">
+            {getScanFailureMessage(status.failureCode)}
+          </p>
+          <p className="ds-portal__disclaimer">
+            El informe anterior se conserva como histórico. Puedes solicitar una comprobación nueva si tienes autorización.
+          </p>
+          <AnalysisRequestPanel
+            authorizationConfirmed={authorizationConfirmed}
+            onAuthorizationChange={onAuthorizationChange}
+            requestState={analysisRequestState}
+            onRequest={onRequestAnalysis}
+          />
+        </>
       )}
       {(status.state === "fresh" || status.state === "stale") && (
         <>
@@ -735,6 +784,10 @@ function isDomainStatus(value: unknown): value is DomainStatus {
     !isPublicHostname(value.hostname) ||
     !isOneOf(value.state, DOMAIN_STATES) ||
     !isOneOf(value.enrollment, ENROLLMENTS) ||
+    (value.failureCode !== null &&
+      !isOneOf(value.failureCode, SCAN_FAILURE_CODES)) ||
+    (value.state === "failed" && value.failureCode === null) ||
+    (value.state !== "failed" && value.failureCode !== null) ||
     (value.activeJobId !== null && !isUuid(value.activeJobId)) ||
     (value.lastReport !== null && !isPublicReport(value.lastReport)) ||
     !isIsoTimestamp(value.checkedAt)
@@ -951,7 +1004,29 @@ function getCheckStatusLabel(status: string): string {
 function getEmptyStateMessage(state: string): string {
   if (state === "updating") return UPDATING_WITHOUT_REPORT_MESSAGE;
   if (state === "unavailable") return UNAVAILABLE_DOMAIN_MESSAGE;
+  if (state === "failed") {
+    return "El último análisis terminó sin generar un informe.";
+  }
   return NO_REPORT_MESSAGE;
+}
+
+function getScanFailureMessage(code: ScanFailureCode | null): string {
+  if (code === "coordinator_unavailable") {
+    return "El servicio de análisis no está disponible ahora.";
+  }
+  if (code === "coordinator_socket_untrusted" || code === "runtime_volume_failed") {
+    return "No se pudo preparar el entorno aislado de análisis.";
+  }
+  if (code === "broker_failed") {
+    return "No se pudo iniciar la comprobación del dominio.";
+  }
+  if (code === "egress_failed") {
+    return "No se pudo completar la conexión pública con el dominio.";
+  }
+  if (code === "transport_failed") {
+    return "El dominio no respondió por el transporte esperado.";
+  }
+  return "El análisis terminó con un error. Puedes intentarlo de nuevo.";
 }
 
 function getAnalysisRequestMessage(state: AnalysisRequestState): string {

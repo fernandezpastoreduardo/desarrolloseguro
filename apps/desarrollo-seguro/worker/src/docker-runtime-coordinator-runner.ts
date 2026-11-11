@@ -3,6 +3,10 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { isAbsolute } from "node:path";
 import type { ScanRunInput } from "@desarrolloseguro/persistence";
 import {
+  SCAN_FAILURE_CODES,
+  type ScanFailureCode,
+} from "@desarrolloseguro/persistence";
+import {
   MAX_EXECUTOR_RESPONSE_BYTES,
   parseTransportV1ExecutorResponse,
   type TransportV1ExecutorRequest,
@@ -72,31 +76,44 @@ export function createDockerRuntimeCoordinatorRunner(
         } catch {
           throw new Error("executor_response_invalid");
         }
-        if ("errorCode" in response) throw new Error("executor_failed");
+        if ("errorCode" in response) {
+          throw new Error(
+            response.errorCode === "request_invalid"
+              ? "transport_failed"
+              : response.errorCode,
+          );
+        }
         return response.result;
       } catch (error) {
-        if (
-          error instanceof Error &&
-          [
-            "request_aborted",
-            "executor_response_invalid",
-            "executor_failed",
-            "runtime_volume_create_failed",
-            "runtime_volume_prepare_failed",
-            "runtime_broker_start_failed",
-            "runtime_broker_ready_failed",
-            "runtime_coordinator_unavailable",
-            "runtime_cleanup_failed",
-          ].includes(error.message)
-        ) {
-          throw error;
-        }
-        throw new Error(signal.aborted ? "request_aborted" : "executor_failed", { cause: error });
+        if (signal.aborted) throw new Error("request_aborted", { cause: error });
+        throw new Error(getRuntimeFailureCode(error), { cause: error });
       } finally {
-        await session?.close();
+        try {
+          await session?.close();
+        } catch (error: unknown) {
+          throw new Error("runtime_volume_failed", { cause: error });
+        }
       }
     },
   };
+}
+
+function getRuntimeFailureCode(error: unknown): ScanFailureCode {
+  const message = error instanceof Error ? error.message : "";
+  if (SCAN_FAILURE_CODES.includes(message as ScanFailureCode)) {
+    return message as ScanFailureCode;
+  }
+  if (message === "runtime_coordinator_unavailable") return "coordinator_unavailable";
+  if (message === "runtime_coordinator_socket_untrusted") return "coordinator_socket_untrusted";
+  if (message.startsWith("runtime_volume_") || message === "runtime_cleanup_failed") {
+    return "runtime_volume_failed";
+  }
+  if (message.startsWith("runtime_broker_")) return "broker_failed";
+  if (message.includes("egress")) return "egress_failed";
+  if (message === "executor_response_invalid" || message === "executor_result_invalid") {
+    return "transport_failed";
+  }
+  return "executor_failed";
 }
 
 /** Creates a private, network-disabled Docker runtime for each job. */

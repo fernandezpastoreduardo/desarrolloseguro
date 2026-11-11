@@ -17,6 +17,16 @@ export DEVELOPMENT_SECURITY_WORKER_IMAGE="desarrolloseguro-worker:local"
 export DEVELOPMENT_SECURITY_WEB_IMAGE="desarrolloseguro-web:local"
 export DEVELOPMENT_SECURITY_SECRETS_DIR="/opt/desarrollo-seguro/secrets"
 
+install -d -o root -g root -m 0700 "$DEVELOPMENT_SECURITY_SECRETS_DIR"
+readonly BADGE_ISSUER_SECRET="$DEVELOPMENT_SECURITY_SECRETS_DIR/development_security_badge_issuer_token"
+if [[ ! -s "$BADGE_ISSUER_SECRET" ]]; then
+  readonly BADGE_ISSUER_SECRET_TEMP="$BADGE_ISSUER_SECRET.tmp"
+  umask 077
+  openssl rand -hex 32 > "$BADGE_ISSUER_SECRET_TEMP"
+  chmod 0400 "$BADGE_ISSUER_SECRET_TEMP"
+  mv "$BADGE_ISSUER_SECRET_TEMP" "$BADGE_ISSUER_SECRET"
+fi
+
 docker compose --project-name "$PROJECT_NAME" --file "$COMPOSE_FILE" config --quiet
 docker build --tag desarrolloseguro-executor:local --target development-security-executor .
 docker build --tag desarrolloseguro-egress-broker:local --target development-security-egress-broker .

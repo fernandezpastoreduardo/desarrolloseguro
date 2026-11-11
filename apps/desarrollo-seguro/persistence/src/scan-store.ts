@@ -6,7 +6,15 @@ import {
 
 const MAX_LEASE_DURATION_MS = 5 * 60 * 1000;
 const MAX_SCAN_ATTEMPTS = 10;
-const SCAN_FAILURE_CODES = ["executor_failed"] as const;
+export const SCAN_FAILURE_CODES = [
+  "coordinator_unavailable",
+  "coordinator_socket_untrusted",
+  "runtime_volume_failed",
+  "broker_failed",
+  "egress_failed",
+  "executor_failed",
+  "transport_failed",
+] as const;
 const PROFILE_VERSIONS = [
   "controls-v1",
   "controls-v2",
@@ -84,6 +92,13 @@ export type PublicScanReport = {
   checks: PublicScanReportCheck[];
 };
 
+export type ReportBadgeRecord = {
+  hostname: string;
+  reportId: string;
+  tokenHash: string;
+  expiresAt: Date;
+};
+
 export type PublicDomainSnapshot = {
   hostname: string;
   enrollment: ScanEnrollment;
@@ -91,6 +106,7 @@ export type PublicDomainSnapshot = {
   optedOut: boolean;
   activeJobId: string | null;
   lastReport: PublicScanReport | null;
+  lastFailure?: { code: ScanFailureCode; failedAt: Date } | null;
 };
 
 export type EnsureScanInput = {
@@ -186,12 +202,52 @@ export class PostgresScanStore implements ScanJobStore {
     }
   }
 
+  async issueReportBadge(record: ReportBadgeRecord): Promise<boolean> {
+    const result = await this.pool.query(
+      `INSERT INTO public.ds_report_badges(token_hash, hostname, report_id, expires_at)
+       SELECT $1, reports.hostname, reports.id, $4
+       FROM public.ds_scan_runs AS reports
+       WHERE reports.id = $2 AND reports.hostname = $3
+         AND reports.profile_version = 'domain-v1'
+       RETURNING token_hash`,
+      [record.tokenHash, record.reportId, record.hostname, record.expiresAt],
+    );
+    return result.rowCount === 1;
+  }
+
+  async verifyReportBadge(input: { hostname: string; reportId: string; tokenHash: string; at: Date }): Promise<boolean> {
+    const result = await this.pool.query(
+      `SELECT 1 FROM public.ds_report_badges AS badges
+       INNER JOIN public.ds_scan_runs AS reports
+         ON reports.id = badges.report_id AND reports.hostname = badges.hostname
+       WHERE badges.token_hash = $1 AND badges.hostname = $2 AND badges.report_id = $3
+         AND badges.revoked_at IS NULL AND badges.expires_at > $4
+       LIMIT 1`,
+      [input.tokenHash, input.hostname, input.reportId, input.at],
+    );
+    return result.rowCount === 1;
+  }
+
+  async revokeReportBadge(input: { hostname: string; reportId: string; tokenHash: string; at: Date }): Promise<boolean> {
+    const result = await this.pool.query(
+      `UPDATE public.ds_report_badges
+       SET revoked_at = $4
+       WHERE token_hash = $1 AND hostname = $2 AND report_id = $3
+         AND revoked_at IS NULL
+       RETURNING token_hash`,
+      [input.tokenHash, input.hostname, input.reportId, input.at],
+    );
+    return result.rowCount === 1;
+  }
+
   async readPublicDomainSnapshot(
     hostname: string,
   ): Promise<PublicDomainSnapshot | null> {
     const result = await this.pool.query<Record<string, unknown>>(
       `SELECT domains.hostname, domains.enrollment, domains.profile_version,
          domains.opted_out_at, active_job.id AS active_job_id,
+         failed_job.public_error_code AS last_failure_code,
+         failed_job.finished_at AS last_failure_at,
          ${PUBLIC_REPORT_COLUMNS}, check_rows.checks
        FROM public.ds_domains AS domains
        LEFT JOIN LATERAL (
@@ -201,6 +257,13 @@ export class PostgresScanStore implements ScanJobStore {
            AND state IN ('queued', 'running')
          ORDER BY queued_at ASC LIMIT 1
        ) AS active_job ON true
+       LEFT JOIN LATERAL (
+         SELECT public_error_code, finished_at FROM public.ds_scan_jobs
+         WHERE hostname = domains.hostname
+           AND profile_version = domains.profile_version
+           AND state = 'failed'
+         ORDER BY finished_at DESC NULLS LAST, queued_at DESC LIMIT 1
+       ) AS failed_job ON true
        LEFT JOIN LATERAL (
          SELECT id, hostname, profile_version, scanner_version, vantage,
            trigger, started_at, completed_at, expires_at, verdict, scope_json
@@ -224,6 +287,7 @@ export class PostgresScanStore implements ScanJobStore {
       optedOut: row.opted_out_at !== null,
       activeJobId: row.active_job_id ? requireString(row.active_job_id) : null,
       lastReport: report,
+      lastFailure: parsePublicScanFailure(row),
     };
   }
 
@@ -456,6 +520,16 @@ function parsePublicScanReport(row: Record<string, unknown>): PublicScanReport {
     verdict: parseOneOf(row.report_verdict, VERDICTS),
     scope: parseStringArray(row.report_scope),
     checks: parsePublicChecks(row.checks),
+  };
+}
+
+function parsePublicScanFailure(
+  row: Record<string, unknown>,
+): PublicDomainSnapshot["lastFailure"] {
+  if (row.last_failure_code == null && row.last_failure_at == null) return null;
+  return {
+    code: parseOneOf(row.last_failure_code, SCAN_FAILURE_CODES),
+    failedAt: parseDate(row.last_failure_at),
   };
 }
 

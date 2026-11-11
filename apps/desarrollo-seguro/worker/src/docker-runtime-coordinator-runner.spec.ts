@@ -141,7 +141,7 @@ describe("createDockerRuntimeCoordinatorRunner", () => {
     const runner = createDockerRuntimeCoordinatorRunner(factory);
 
     await expect(runner.execute(REQUEST, new AbortController().signal)).rejects.toThrow(
-      "executor_response_invalid",
+      "transport_failed",
     );
     expect(close).toHaveBeenCalledOnce();
   });
@@ -199,7 +199,7 @@ describe("createDockerRuntimeCoordinatorRunner", () => {
     const runner = createDockerRuntimeCoordinatorRunner(factory);
 
     await expect(runner.execute(REQUEST, new AbortController().signal)).rejects.toThrow(
-      "runtime_coordinator_unavailable",
+      "coordinator_unavailable",
     );
   });
 });
@@ -273,7 +273,7 @@ describe("createDockerRuntimeSessionFactory", () => {
     }));
 
     await expect(runner.execute(REQUEST, new AbortController().signal)).rejects.toThrow(
-      "runtime_volume_create_failed",
+      "runtime_volume_failed",
     );
   });
 
@@ -285,7 +285,7 @@ describe("createDockerRuntimeSessionFactory", () => {
     }));
 
     await expect(runner.execute(REQUEST, new AbortController().signal)).rejects.toThrow(
-      "runtime_volume_create_failed",
+      "runtime_volume_failed",
     );
   });
 
@@ -297,7 +297,7 @@ describe("createDockerRuntimeSessionFactory", () => {
     }));
 
     await expect(runner.execute(REQUEST, new AbortController().signal)).rejects.toThrow(
-      "runtime_volume_prepare_failed",
+      "runtime_volume_failed",
     );
     expect(dockerCalls.some((args) => args[0] === "volume" && args[1] === "rm")).toBe(true);
   });
@@ -310,7 +310,7 @@ describe("createDockerRuntimeSessionFactory", () => {
     }));
 
     await expect(runner.execute(REQUEST, new AbortController().signal)).rejects.toThrow(
-      "runtime_broker_ready_failed",
+      "broker_failed",
     );
   });
 
@@ -322,7 +322,7 @@ describe("createDockerRuntimeSessionFactory", () => {
     }));
 
     await expect(runner.execute(REQUEST, new AbortController().signal)).rejects.toThrow(
-      "executor_response_invalid",
+      "transport_failed",
     );
     expect(dockerCalls.some((args) => args[0] === "volume" && args[1] === "rm")).toBe(true);
   });
@@ -364,7 +364,7 @@ describe("createDockerRuntimeSessionFactory", () => {
     }));
 
     await expect(runner.execute(REQUEST, new AbortController().signal)).rejects.toThrow(
-      "runtime_cleanup_failed",
+      "runtime_volume_failed",
     );
     expect(dockerCalls.some((args) => args[0] === "volume" && args[1] === "rm")).toBe(true);
   });
@@ -377,7 +377,7 @@ describe("createDockerRuntimeSessionFactory", () => {
     }));
 
     await expect(runner.execute(REQUEST, new AbortController().signal)).rejects.toThrow(
-      "runtime_cleanup_failed",
+      "runtime_volume_failed",
     );
     expect(dockerCalls.some((args) => args[0] === "rm" && args.includes("--force"))).toBe(true);
   });

@@ -67,7 +67,7 @@ describe("RuntimeCoordinatorExecutor", () => {
         { hostname: "sample.example.net", profileVersion: "transport-v1" },
         new AbortController().signal,
       ),
-    ).rejects.toThrow("runtime_coordinator_socket_untrusted");
+    ).rejects.toThrow("coordinator_socket_untrusted");
   });
 
   it("rejects a coordinator socket inside a group-writable directory", async () => {
@@ -89,7 +89,7 @@ describe("RuntimeCoordinatorExecutor", () => {
         { hostname: "sample.example.net", profileVersion: "transport-v1" },
         new AbortController().signal,
       ),
-    ).rejects.toThrow("runtime_coordinator_socket_untrusted");
+    ).rejects.toThrow("coordinator_socket_untrusted");
   });
 
   it("fails closed when the coordinator returns an invalid response", async () => {
@@ -110,7 +110,7 @@ describe("RuntimeCoordinatorExecutor", () => {
         { hostname: "sample.example.net", profileVersion: "transport-v1" },
         new AbortController().signal,
       ),
-    ).rejects.toThrow("executor_response_invalid");
+    ).rejects.toThrow("transport_failed");
   });
 
   it("rejects malformed job data before contacting the coordinator", async () => {

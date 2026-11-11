@@ -97,6 +97,39 @@ const TRANSPORT_V1_FIXTURE_RESULT = {
 };
 
 describe("ScanJobProcessor", () => {
+  it("does not claim a queued scan while the runtime coordinator is unavailable", async () => {
+    const store = makeStore(JOB);
+    const executor = {
+      assertReady: vi.fn().mockRejectedValue(new Error("coordinator_unavailable")),
+      execute: vi.fn().mockResolvedValue(RESULT),
+    };
+    const processor = new ScanJobProcessor(store, executor);
+
+    await expect(processor.processNext()).rejects.toThrow("coordinator_unavailable");
+
+    expect(executor.assertReady).toHaveBeenCalledOnce();
+    expect(store.recoverExpiredLeases).not.toHaveBeenCalled();
+    expect(store.claimNextScan).not.toHaveBeenCalled();
+    expect(executor.execute).not.toHaveBeenCalled();
+  });
+
+  it("persists only an allowlisted runtime failure category", async () => {
+    const store = makeStore(JOB);
+    const executor = {
+      execute: vi.fn().mockRejectedValue(new Error("broker_failed")),
+    };
+    const processor = new ScanJobProcessor(store, executor);
+
+    await expect(processor.processNext()).resolves.toBe("retrying");
+
+    expect(store.failScan).toHaveBeenCalledWith(
+      JOB.id,
+      JOB.leaseToken,
+      "broker_failed",
+      3,
+    );
+  });
+
   it("emits bounded operational outcome telemetry without job or target data", async () => {
     const store = makeStore(JOB);
     const telemetry = vi.fn();

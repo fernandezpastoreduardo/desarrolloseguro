@@ -18,6 +18,12 @@ async function bootstrap(): Promise<void> {
       "trust proxy",
       parseTrustedProxyCidrs(process.env.DS_TRUSTED_PROXY_CIDRS),
     );
+  app.enableCors({
+    origin: ["https://grumphya.com", "https://desarrolloseguro.org"],
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Authorization", "Content-Type"],
+    maxAge: 600,
+  });
   app.setGlobalPrefix(API_PREFIX);
   app.enableShutdownHooks();
   await app.listen(Number(process.env.DS_API_PORT ?? DEFAULT_PORT), "0.0.0.0");

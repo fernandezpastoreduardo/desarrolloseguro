@@ -1,4 +1,9 @@
-import type { ScanCheck, ScanRunInput } from "@desarrolloseguro/persistence";
+import {
+  SCAN_FAILURE_CODES,
+  type ScanCheck,
+  type ScanFailureCode,
+  type ScanRunInput,
+} from "@desarrolloseguro/persistence";
 import { normalizeHostname } from "@desarrolloseguro/core";
 import type { ScanProfileVersion } from "./transport-v1-executor.js";
 
@@ -28,7 +33,7 @@ export type TransportV1ExecutorResponse =
   | {
       protocolVersion: 1;
       requestId: string;
-      errorCode: "request_invalid" | "executor_failed";
+      errorCode: "request_invalid" | ScanFailureCode;
     };
 
 export function parseTransportV1ExecutorRequest(
@@ -78,7 +83,10 @@ export function parseTransportV1ExecutorResponse(
   ) {
     throw new Error("executor_response_invalid");
   }
-  if (value.errorCode === "request_invalid" || value.errorCode === "executor_failed") {
+  if (
+    value.errorCode === "request_invalid" ||
+    (typeof value.errorCode === "string" && SCAN_FAILURE_CODES.includes(value.errorCode as ScanFailureCode))
+  ) {
     return {
       protocolVersion: 1,
       requestId: expectedRequestId,

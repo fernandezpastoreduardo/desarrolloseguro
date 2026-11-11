@@ -5,13 +5,16 @@ import {
 } from "@desarrolloseguro/core";
 import {
   ScanLeaseLostError,
+  SCAN_FAILURE_CODES,
   type ClaimedScanJob,
+  type ScanFailureCode,
   type ScanJobStore,
   type ScanRunInput,
 } from "@desarrolloseguro/persistence";
 import { performance } from "node:perf_hooks";
 
 export type ScanExecutor = {
+  assertReady?(): Promise<void>;
   execute(
     job: ClaimedScanJob,
     signal: AbortSignal,
@@ -66,6 +69,7 @@ export class ScanJobProcessor {
   }
 
   private async processNextInternal(): Promise<ScanJobOutcome> {
+    await this.executor.assertReady?.();
     const claimedAt = this.now();
     await this.recoverExpiredLeasesIfDue(claimedAt);
     const claimed = await this.store.claimNextScan(
@@ -110,10 +114,12 @@ export class ScanJobProcessor {
       "jobId" | "leaseToken" | "hostname" | "profileVersion"
     > | undefined;
     let executorFailed = false;
+    let executorError: unknown;
     try {
       result = await this.executor.execute(claimed, abortController.signal);
-    } catch {
+    } catch (error: unknown) {
       executorFailed = true;
+      executorError = error;
     } finally {
       clearInterval(heartbeatTimer);
       await heartbeatInFlight;
@@ -124,7 +130,7 @@ export class ScanJobProcessor {
         return await this.store.failScan(
           claimed.id,
           claimed.leaseToken,
-          "executor_failed",
+          getFailureCode(executorError),
           MAX_EXECUTOR_ATTEMPTS,
         );
       } catch (error) {
@@ -201,4 +207,14 @@ export class ScanJobProcessor {
       // Telemetry must never change scan processing or expose private errors.
     }
   }
+}
+
+function getFailureCode(error: unknown): ScanFailureCode {
+  if (
+    error instanceof Error &&
+    SCAN_FAILURE_CODES.includes(error.message as ScanFailureCode)
+  ) {
+    return error.message as ScanFailureCode;
+  }
+  return "executor_failed";
 }

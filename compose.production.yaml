@@ -122,11 +122,13 @@ services:
         install -o node -g node -m 0400 /run/secrets/development_security_api_tls.key /run/development-security-secrets/api-tls.key
         install -o node -g node -m 0444 /run/secrets/development_security_api_tls.crt /run/development-security-secrets/api-tls.crt
         install -o node -g node -m 0444 /run/secrets/internal_tls_ca.crt /run/development-security-secrets/database-ca.crt
+        install -o node -g node -m 0400 /run/secrets/development_security_badge_issuer_token /run/development-security-secrets/badge-issuer-token
         export DS_DATABASE_URL_FILE=/run/development-security-secrets/api-database-url
         export DS_API_TLS_CERT_FILE=/run/development-security-secrets/api-tls.crt
         export DS_API_TLS_KEY_FILE=/run/development-security-secrets/api-tls.key
         export DS_DATABASE_TLS_CA_FILE=/run/development-security-secrets/database-ca.crt
         export NODE_EXTRA_CA_CERTS=/run/development-security-secrets/database-ca.crt
+        export DS_BADGE_ISSUER_TOKEN="$$(cat /run/development-security-secrets/badge-issuer-token)"
         exec su -p node -s /bin/sh -c 'exec node apps/desarrollo-seguro/api/dist/main.js'
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=16m
@@ -144,6 +146,7 @@ services:
       - internal_tls_ca.crt
       - development_security_api_tls.crt
       - development_security_api_tls.key
+      - development_security_badge_issuer_token
     depends_on:
       development-security-migrate:
         condition: service_completed_successfully
@@ -333,5 +336,7 @@ secrets:
     file: ${DEVELOPMENT_SECURITY_SECRETS_DIR:-./.secrets}/development_security_api_tls.crt
   development_security_api_tls.key:
     file: ${DEVELOPMENT_SECURITY_SECRETS_DIR:-./.secrets}/development_security_api_tls.key
+  development_security_badge_issuer_token:
+    file: ${DEVELOPMENT_SECURITY_SECRETS_DIR:-./.secrets}/development_security_badge_issuer_token
   internal_tls_ca.crt:
     file: ${DEVELOPMENT_SECURITY_SECRETS_DIR:-./.secrets}/internal_tls_ca.crt
