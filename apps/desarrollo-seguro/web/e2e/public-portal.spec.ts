@@ -99,6 +99,24 @@ test("shows the report when an authorized analysis finishes", async ({ page }) =
         completedAt: "2026-11-11T00:01:00.000Z",
         expiresAt: "2026-11-11T01:01:00.000Z",
         verdict: "pass",
+        ethicsAssessment: {
+          policyVersion: "domain-ethics-v1",
+          score: 100,
+          assessedCriteria: 1,
+          totalCriteria: 8,
+          maturity: "preliminary",
+          criteria: [
+            {
+              id: "security-headers",
+              label: "Cabeceras de seguridad",
+              status: "pass",
+              weight: 12,
+            },
+          ],
+          reasons: [],
+          interpretation:
+            "Puntuación provisional basada solo en señales observadas; no es una certificación.",
+        },
         scope: ["/"],
         checks: [
           {
@@ -138,5 +156,8 @@ test("shows the report when an authorized analysis finishes", async ({ page }) =
   await expect.poll(() => statusReads, { timeout: 25_000 }).toBe(4);
 
   await expect(page.getByRole("heading", { name: "Informe vigente" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Lectura ética y técnica provisional" }),
+  ).toBeVisible();
   await expect(page.getByText("Controles observados aprobados")).toBeVisible();
 });
