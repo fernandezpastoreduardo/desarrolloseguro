@@ -29,6 +29,10 @@ const MIGRATIONS = [
     version: "011_harden_scan_admission",
     file: "011_harden_scan_admission.sql",
   },
+  {
+    version: "012_temporarily_disable_scan_cooldown",
+    file: "012_temporarily_disable_scan_cooldown.sql",
+  },
 ] as const;
 
 const MIGRATION_LOCK_ID = 728194032;

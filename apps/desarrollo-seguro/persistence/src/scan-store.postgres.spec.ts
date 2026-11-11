@@ -114,7 +114,7 @@ describePostgres.sequential("PostgresScanStore", () => {
     expect(queuedCount.rows[0]?.count).toBe(10);
   });
 
-  it("limits repeat admission to once per domain and profile every 24 hours", async () => {
+  it("admits a repeat scan as soon as the cached report expires", async () => {
     const job = await queueAndClaim();
     const staleCompletedAt = new Date(Date.now() - 61 * 60 * 1000);
     await complete(
@@ -124,24 +124,13 @@ describePostgres.sequential("PostgresScanStore", () => {
       staleCompletedAt,
     );
 
-    const withinWindow = await store.ensureFreshScan({
-      hostname: TEST_HOSTNAME,
-      profileVersion: TEST_PROFILE,
-      trigger: "requested",
-    });
-    await pool.query(
-      `UPDATE ds_scan_jobs SET queued_at = clock_timestamp() - interval '24 hours 1 second'
-       WHERE hostname = $1 AND profile_version = $2`,
-      [TEST_HOSTNAME, TEST_PROFILE],
-    );
-    const afterWindow = await store.ensureFreshScan({
+    const repeatedScan = await store.ensureFreshScan({
       hostname: TEST_HOSTNAME,
       profileVersion: TEST_PROFILE,
       trigger: "requested",
     });
 
-    expect(withinWindow).toEqual({ kind: "rate_limited" });
-    expect(afterWindow.kind).toBe("queued");
+    expect(repeatedScan.kind).toBe("queued");
   });
 
   it("does not admit scans for unknown or opted-out domains", async () => {
@@ -302,7 +291,7 @@ describePostgres.sequential("PostgresScanStore", () => {
       trigger: "requested",
     });
 
-    expect(expired.kind).toBe("rate_limited");
+    expect(expired.kind).toBe("queued");
   });
 
   it("reads a public domain report without returning persisted evidence", async () => {
@@ -359,7 +348,7 @@ describePostgres.sequential("PostgresScanStore", () => {
     });
 
     expect(reportId).toBeTruthy();
-    expect(changedProfile.kind).toBe("rate_limited");
+    expect(changedProfile.kind).toBe("queued");
   });
 
   it("rejects a direct database completion outside the profile path allowlist", async () => {
