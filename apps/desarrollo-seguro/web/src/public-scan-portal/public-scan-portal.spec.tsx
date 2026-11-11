@@ -154,6 +154,53 @@ describe("PublicScanPortal", () => {
     ).toBeTruthy();
   });
 
+  it("lets an authorized user request a fresh analysis when a historical report exists", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({
+          hostname: "example.com",
+          enrollment: "on_demand",
+          state: "stale",
+          activeJobId: null,
+          lastReport: PUBLIC_REPORT,
+          checkedAt: "2026-11-03T08:10:00.000Z",
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({ hostname: "example.com", state: "queued" }, { status: 202 }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+
+    render(<PublicScanPortal />);
+    await user.type(
+      screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }),
+      "example.com",
+    );
+    await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
+
+    expect(await screen.findByText("Histórico")).toBeVisible();
+    await user.click(
+      screen.getByRole("checkbox", {
+        name: /tengo autorización para solicitar este análisis/i,
+      }),
+    );
+    await user.click(screen.getByRole("button", { name: "Solicitar análisis" }));
+
+    expect(fetchMock).toHaveBeenLastCalledWith(ANALYSIS_REQUEST_ENDPOINT, {
+      method: "POST",
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      credentials: "omit",
+      cache: "no-store",
+      body: JSON.stringify({ authorized: true }),
+    });
+    expect(await screen.findByText(/solicitud añadida a la cola/i)).toBeVisible();
+    expect(
+      screen.getByRole("progressbar", { name: "Progreso del análisis" }),
+    ).toHaveAttribute("data-phase", "queued");
+  });
+
   it("shows an indeterminate progress bar for a domain with an active scan", async () => {
     vi.stubGlobal(
       "fetch",

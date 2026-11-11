@@ -21,7 +21,7 @@ const ANALYSIS_REQUEST_MESSAGES: Record<string, string> = {
   queued: "Solicitud añadida a la cola de análisis.",
   running: "El análisis de este dominio ya está en curso.",
   cached: "Ya hay un informe reciente disponible. Vuelve a consultar el dominio.",
-  rate_limited: "Ya se solicitó un análisis para este dominio en las últimas 24 horas.",
+  rate_limited: "La solicitud está limitada temporalmente. Inténtalo más tarde.",
   capacity_reached: "La cola de análisis está completa. Inténtalo más tarde.",
   unavailable: "Este dominio no está disponible para análisis.",
   error: "No se ha podido registrar la solicitud. Inténtalo más tarde.",
@@ -412,7 +412,14 @@ export function PublicScanPortal() {
         </div>
       )}
       {state === "ready" && status && (
-        <DomainResult status={status} report={report} />
+        <DomainResult
+          status={status}
+          report={report}
+          authorizationConfirmed={authorizationConfirmed}
+          onAuthorizationChange={setAuthorizationConfirmed}
+          analysisRequestState={analysisRequestState}
+          onRequestAnalysis={() => void requestAnalysis()}
+        />
       )}
       {state === "ready" && !status && report && (
         <ReportResult report={report} />
@@ -443,31 +450,12 @@ export function PublicScanPortal() {
             enviará las comprobaciones GET/HEAD limitadas del perfil, sin
             credenciales, formularios ni exploración de rutas adicionales.
           </p>
-          {analysisRequestState === null ? (
-            <div className="ds-portal__analysis-request">
-              <label>
-                <input
-                  type="checkbox"
-                  checked={authorizationConfirmed}
-                  onChange={(event) =>
-                    setAuthorizationConfirmed(event.currentTarget.checked)
-                  }
-                />
-                Confirmo que tengo autorización para solicitar este análisis.
-              </label>
-              <button
-                type="button"
-                disabled={!authorizationConfirmed}
-                onClick={() => void requestAnalysis()}
-              >
-                Solicitar análisis
-              </button>
-            </div>
-          ) : (
-            <p className="ds-portal__analysis-status" role="status">
-              {getAnalysisRequestMessage(analysisRequestState)}
-            </p>
-          )}
+          <AnalysisRequestPanel
+            authorizationConfirmed={authorizationConfirmed}
+            onAuthorizationChange={setAuthorizationConfirmed}
+            requestState={analysisRequestState}
+            onRequest={() => void requestAnalysis()}
+          />
         </section>
       )}
       <footer className="ds-portal__footer">
@@ -484,9 +472,17 @@ export function PublicScanPortal() {
 function DomainResult({
   status,
   report,
+  authorizationConfirmed,
+  onAuthorizationChange,
+  analysisRequestState,
+  onRequestAnalysis,
 }: {
   status: DomainStatus;
   report: PublicReport | null;
+  authorizationConfirmed: boolean;
+  onAuthorizationChange: (confirmed: boolean) => void;
+  analysisRequestState: AnalysisRequestState | null;
+  onRequestAnalysis: () => void;
 }) {
   if (!report) {
     if (status.state === "not_scanned") return null;
@@ -518,8 +514,63 @@ function DomainResult({
           histórico.
         </p>
       )}
+      {(status.state === "fresh" || status.state === "stale") && (
+        <>
+          <p className="ds-portal__disclaimer">
+            {status.state === "stale"
+              ? "Este informe es histórico. Puedes solicitar un análisis nuevo si tienes autorización."
+              : "Este informe está vigente. Puedes solicitar una nueva comprobación si tienes autorización."}
+          </p>
+          <AnalysisRequestPanel
+            authorizationConfirmed={authorizationConfirmed}
+            onAuthorizationChange={onAuthorizationChange}
+            requestState={analysisRequestState}
+            onRequest={onRequestAnalysis}
+          />
+        </>
+      )}
       <ReportSummary report={report} state={status.state} />
     </section>
+  );
+}
+
+function AnalysisRequestPanel({
+  authorizationConfirmed,
+  onAuthorizationChange,
+  requestState,
+  onRequest,
+}: {
+  authorizationConfirmed: boolean;
+  onAuthorizationChange: (confirmed: boolean) => void;
+  requestState: AnalysisRequestState | null;
+  onRequest: () => void;
+}) {
+  if (requestState !== null) {
+    return (
+      <p className="ds-portal__analysis-status" role="status">
+        {getAnalysisRequestMessage(requestState)}
+      </p>
+    );
+  }
+
+  return (
+    <div className="ds-portal__analysis-request">
+      <label>
+        <input
+          type="checkbox"
+          checked={authorizationConfirmed}
+          onChange={(event) => onAuthorizationChange(event.currentTarget.checked)}
+        />
+        Confirmo que tengo autorización para solicitar este análisis.
+      </label>
+      <button
+        type="button"
+        disabled={!authorizationConfirmed}
+        onClick={onRequest}
+      >
+        Solicitar análisis
+      </button>
+    </div>
   );
 }
 
