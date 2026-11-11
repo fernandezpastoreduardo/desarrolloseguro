@@ -24,6 +24,8 @@ assert.match(firewallScript, /192\.168\.0\.0\/16/u);
 assert.match(firewallScript, /--dports 80,443 -j RETURN/u);
 assert.match(firewallScript, /iptables -A "\$CHAIN_NAME" -j DROP/u);
 assert.match(firewallScript, /DOCKER-USER -i "\$BRIDGE_NAME" -j "\$CHAIN_NAME"/u);
+assert.match(firewallScript, /iptables -I DOCKER-USER 1 -i "\$BRIDGE_NAME" -j "\$CHAIN_NAME"/u);
+assert.match(firewallScript, /ip6tables -I FORWARD 1 -o "\$BRIDGE_NAME" -j DROP/u);
 assert.match(firewallScript, /INPUT -i "\$BRIDGE_NAME" -j DROP/u);
 assert.match(firewallScript, /ip6tables FORWARD -i "\$BRIDGE_NAME" -j DROP/u);
 assert.match(firewallScript, /ip6tables FORWARD -o "\$BRIDGE_NAME" -j DROP/u);

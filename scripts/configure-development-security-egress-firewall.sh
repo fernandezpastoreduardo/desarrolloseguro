@@ -45,14 +45,6 @@ verify_network() {
   fi
 }
 
-ensure_rule() {
-  local binary="$1"
-  shift
-  if ! "$binary" -C "$@" >/dev/null 2>&1; then
-    "$binary" -I "$@"
-  fi
-}
-
 delete_rule() {
   local binary="$1"
   shift
@@ -69,14 +61,19 @@ apply_ipv4_rules() {
   done
   iptables -A "$CHAIN_NAME" -p tcp -m multiport --dports 80,443 -j RETURN
   iptables -A "$CHAIN_NAME" -j DROP
-  ensure_rule iptables DOCKER-USER -i "$BRIDGE_NAME" -j "$CHAIN_NAME"
-  ensure_rule iptables INPUT -i "$BRIDGE_NAME" -j DROP
+  delete_rule iptables DOCKER-USER -i "$BRIDGE_NAME" -j "$CHAIN_NAME"
+  iptables -I DOCKER-USER 1 -i "$BRIDGE_NAME" -j "$CHAIN_NAME"
+  delete_rule iptables INPUT -i "$BRIDGE_NAME" -j DROP
+  iptables -I INPUT 1 -i "$BRIDGE_NAME" -j DROP
 }
 
 apply_ipv6_rules() {
-  ensure_rule ip6tables INPUT -i "$BRIDGE_NAME" -j DROP
-  ensure_rule ip6tables FORWARD -i "$BRIDGE_NAME" -j DROP
-  ensure_rule ip6tables FORWARD -o "$BRIDGE_NAME" -j DROP
+  delete_rule ip6tables INPUT -i "$BRIDGE_NAME" -j DROP
+  ip6tables -I INPUT 1 -i "$BRIDGE_NAME" -j DROP
+  delete_rule ip6tables FORWARD -i "$BRIDGE_NAME" -j DROP
+  ip6tables -I FORWARD 1 -i "$BRIDGE_NAME" -j DROP
+  delete_rule ip6tables FORWARD -o "$BRIDGE_NAME" -j DROP
+  ip6tables -I FORWARD 1 -o "$BRIDGE_NAME" -j DROP
 }
 
 verify_ipv4_rules() {
