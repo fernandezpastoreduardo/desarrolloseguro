@@ -1,5 +1,6 @@
 import type { ScanCheck, ScanRunInput } from "@desarrolloseguro/persistence";
 import { normalizeHostname } from "@desarrolloseguro/core";
+import type { ScanProfileVersion } from "./transport-v1-executor.js";
 
 export const TRANSPORT_V1_EXECUTOR_PROTOCOL_VERSION = 1;
 export const MAX_EXECUTOR_REQUEST_BYTES = 4 * 1024;
@@ -12,7 +13,7 @@ export type TransportV1ExecutorRequest = {
   protocolVersion: 1;
   requestId: string;
   hostname: string;
-  profileVersion: "transport-v1";
+  profileVersion: ScanProfileVersion;
 };
 
 export type TransportV1ExecutorResponse =
@@ -47,7 +48,7 @@ export function parseTransportV1ExecutorRequest(
   if (
     typeof value.requestId !== "string" ||
     !/^[0-9a-f-]{36}$/iu.test(value.requestId) ||
-    value.profileVersion !== "transport-v1"
+    !isScanProfileVersion(value.profileVersion)
   ) {
     throw new Error("executor_request_invalid");
   }
@@ -61,13 +62,14 @@ export function parseTransportV1ExecutorRequest(
     protocolVersion: 1,
     requestId: value.requestId,
     hostname,
-    profileVersion: "transport-v1",
+    profileVersion: value.profileVersion,
   };
 }
 
 export function parseTransportV1ExecutorResponse(
   value: unknown,
   expectedRequestId: string,
+  profileVersion: ScanProfileVersion = "transport-v1",
 ): TransportV1ExecutorResponse {
   if (
     !isRecord(value) ||
@@ -86,25 +88,26 @@ export function parseTransportV1ExecutorResponse(
   return {
     protocolVersion: 1,
     requestId: expectedRequestId,
-    result: parseExecutorResult(value.result),
+    result: parseExecutorResult(value.result, profileVersion),
   };
 }
 
 function parseExecutorResult(
   value: unknown,
+  profileVersion: ScanProfileVersion,
 ): Omit<ScanRunInput, "jobId" | "leaseToken" | "hostname" | "profileVersion"> {
   if (!isRecord(value)) throw new Error("executor_result_invalid");
   const startedAt = parseDate(value.startedAt);
   const completedAt = parseDate(value.completedAt);
   if (
     typeof value.scannerVersion !== "string" ||
-    value.scannerVersion !== "transport-v1-network-adapter-1" ||
+    value.scannerVersion !== getScannerVersion(profileVersion) ||
     !isVerdict(value.verdict) ||
     !Array.isArray(value.scope) ||
     value.scope.length !== 1 ||
     value.scope[0] !== "/" ||
     !Array.isArray(value.checks) ||
-    value.checks.length !== 5 ||
+    value.checks.length !== getExpectedCheckCount(profileVersion) ||
     !isRecord(value.metrics)
   ) {
     throw new Error("executor_result_invalid");
@@ -126,6 +129,20 @@ function parseExecutorResult(
       pagesCount: parseCount(value.metrics.pagesCount, 0),
     },
   };
+}
+
+function isScanProfileVersion(value: unknown): value is ScanProfileVersion {
+  return value === "transport-v1" || value === "domain-v1";
+}
+
+function getScannerVersion(profileVersion: ScanProfileVersion): string {
+  return profileVersion === "domain-v1"
+    ? "domain-v1-network-adapter-1"
+    : "transport-v1-network-adapter-1";
+}
+
+function getExpectedCheckCount(profileVersion: ScanProfileVersion): number {
+  return profileVersion === "domain-v1" ? 6 : 5;
 }
 
 function parseCheck(value: unknown): ScanCheck {

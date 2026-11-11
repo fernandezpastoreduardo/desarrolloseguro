@@ -139,6 +139,7 @@ export class RuntimeCoordinatorExecutor implements ScanExecutor {
           const response = parseTransportV1ExecutorResponse(
             JSON.parse(responseText) as unknown,
             request.requestId,
+            request.profileVersion,
           );
           if ("errorCode" in response) {
             finishWithError(response.errorCode === "request_invalid"

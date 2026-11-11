@@ -37,6 +37,10 @@ const MIGRATIONS = [
     version: "013_temporarily_disable_report_cache",
     file: "013_temporarily_disable_report_cache.sql",
   },
+  {
+    version: "014_domain_v1_initial_cookie_evidence",
+    file: "014_domain_v1_initial_cookie_evidence.sql",
+  },
 ] as const;
 
 const MIGRATION_LOCK_ID = 728194032;

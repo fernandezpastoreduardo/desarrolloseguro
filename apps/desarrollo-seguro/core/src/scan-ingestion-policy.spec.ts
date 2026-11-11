@@ -93,6 +93,47 @@ describe("sanitizeScanObservations", () => {
     ).toBe("unknown");
   });
 
+  it("accepts domain-v1 with an explicit initial cookie observation and root-only scope", () => {
+    const checks = [
+      ...makeTransportV1Checks(),
+      {
+        ...makeUnknownCheck("DS-PRIV-05", "/", "GET"),
+        status: "pass",
+        evidence: {
+          inspected: true,
+          cookieCount: 1,
+          insecureCookieCount: 0,
+          catalogMatchCount: 0,
+          consentPromptDetected: true,
+        },
+      },
+    ];
+
+    const result = sanitizeScanObservations(
+      MONITORED_HOSTNAME,
+      "domain-v1",
+      ["/"],
+      checks,
+    );
+
+    expect(result.scope).toEqual(["/"]);
+    expect(result.checks).toHaveLength(6);
+    expect(result.checks.find(({ controlId }) => controlId === "DS-PRIV-05"))
+      .toMatchObject({
+        status: "pass",
+        evidence: { cookieCount: 1 },
+        summary: "Cookies en respuesta inicial: 1; coincidencias con la tabla local Analytics/Marketing: 0; sin atributo Secure: 0. No se interactuó con el banner de consentimiento.",
+      });
+    expect(() =>
+      sanitizeScanObservations(
+        MONITORED_HOSTNAME,
+        "domain-v1",
+        ["/", "/precios"],
+        checks,
+      ),
+    ).toThrow("scan_scope_not_allowlisted");
+  });
+
   it("requires complete control, route, and method coverage for controls-v2", () => {
     const checks = makeControlsV2Checks(["/", "/precios"]).filter(
       (check) =>

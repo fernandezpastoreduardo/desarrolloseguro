@@ -14,6 +14,7 @@ import {
 import {
   requestPinnedHttps,
   type HttpsRequestFactory,
+  type PinnedHttpsResult,
 } from "./pinned-https-transport.js";
 import { PinnedTransportError } from "./pinned-transport-error.js";
 import type {
@@ -30,6 +31,7 @@ export type TransportV1NetworkObserverDependencies = {
   httpRequestFactory?: HttpRequestFactory;
   httpsRequestFactory?: HttpsRequestFactory;
   httpsCa?: string;
+  inspectPage?: boolean;
 };
 
 /**
@@ -126,6 +128,7 @@ export function createTransportV1NetworkObserver(
               method: "GET",
               allowedPaths: ROOT_PATHS,
               signal,
+              inspectPage: dependencies.inspectPage === true,
             },
             {
               ca: dependencies.httpsCa,
@@ -137,12 +140,31 @@ export function createTransportV1NetworkObserver(
           evidence: {
             finalScheme: "https",
             ...(result.tlsAuthorized ? (result.securityHeaders ?? {}) : {}),
+            ...(result.tlsAuthorized && result.passivePageSignals
+              ? toPassivePageEvidence(result.passivePageSignals)
+              : {}),
           } satisfies TransportV1Evidence,
           requestsCount: result.requestsCount,
           bytesCount: result.bytesCount,
         }),
       );
     },
+  };
+}
+
+function toPassivePageEvidence(
+  signals: NonNullable<PinnedHttpsResult["passivePageSignals"]>,
+): TransportV1Evidence {
+  return {
+    inspected: signals.inspected,
+    thirdPartyResourceReferences: signals.thirdPartyResourceReferences,
+    knownTrackingResourceReferences: signals.knownTrackingResourceReferences,
+    consentPromptDetected: signals.consentPromptDetected,
+    cookieCount: signals.cookieCount,
+    insecureCookieCount: signals.insecureCookieCount,
+    catalogMatchCount: signals.catalogMatchCount,
+    responseTimeMs: signals.responseTimeMs,
+    responseBytes: signals.responseBytes,
   };
 }
 

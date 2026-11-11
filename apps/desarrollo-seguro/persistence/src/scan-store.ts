@@ -12,6 +12,7 @@ const PROFILE_VERSIONS = [
   "controls-v2",
   "controls-v3",
   "transport-v1",
+  "domain-v1",
 ] as const;
 const CHECK_STATUSES = ["pass", "fail", "unknown", "not_applicable"] as const;
 const ENROLLMENTS = ["monitored", "on_demand"] as const;

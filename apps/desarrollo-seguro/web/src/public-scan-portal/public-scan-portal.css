@@ -438,6 +438,7 @@
 .ds-portal__ethics h3 { margin: 4px 0 10px; }
 .ds-portal__ethics p { color: var(--ds-muted); line-height: 1.6; }
 .ds-portal__ethics-score { color: var(--ds-ink) !important; font-size: 1.25rem; font-weight: 800; }
+.ds-portal__ethics .ds-portal__score-method { font-size: 0.9rem; }
 .ds-portal__ethics-criteria,
 .ds-portal__ethics-reasons { display: grid; gap: 8px; margin: 16px 0 0; padding-left: 20px; }
 .ds-portal__ethics-criteria li { display: flex; justify-content: space-between; gap: 12px; color: var(--ds-ink-soft); }

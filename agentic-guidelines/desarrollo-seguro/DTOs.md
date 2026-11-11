@@ -49,7 +49,7 @@ type PublicReport = {
   expiresAt: string;
   verdict: "pass" | "fail" | "inconclusive";
   ethicsAssessment: {
-    policyVersion: "domain-ethics-v1";
+    policyVersion: "domain-ethics-v3";
     score: number | null;
     assessedCriteria: number;
     totalCriteria: number;
@@ -78,7 +78,7 @@ type PublicReport = {
 };
 ```
 
-El resumen ético se calcula en la API desde los controles públicos del mismo informe. La puntuación es provisional, solo refleja evidencia observada y muestra cuántos criterios se evaluaron. Cookies, consentimiento, rastreadores, mapas de calor, rendimiento y prácticas de reutilización/venta de datos permanecen `unknown` hasta contar con observadores y fuentes verificables. Véase [domain-ethics-scoring.md](domain-ethics-scoring.md).
+El resumen ético se calcula en la API desde los controles públicos del mismo informe. La puntuación es provisional, solo refleja evidencia observada y muestra cuántos criterios se evaluaron. `domain-v1` añade una señal acotada de coincidencias de nombres de cookies en `Set-Cookie` inicial; el consentimiento tras elegir, rastreo dinámico, mapas de calor, rendimiento y reutilización/venta de datos permanecen `unknown`. Véase [domain-ethics-scoring.md](domain-ethics-scoring.md).
 
 `same_vps` identifica la ubicación de observación y no significa evaluación independiente. Las rutas y métodos publicados proceden del perfil, no de parámetros de la petición. El informe no existe todavía si no hay una ejecución completa previa.
 

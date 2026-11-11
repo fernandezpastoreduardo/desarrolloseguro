@@ -12,7 +12,7 @@ export type EthicsCriterion = {
 };
 
 export type DomainEthicsAssessment = {
-  policyVersion: "domain-ethics-v1";
+  policyVersion: "domain-ethics-v3";
   score: number | null;
   assessedCriteria: number;
   totalCriteria: number;
@@ -28,7 +28,7 @@ const CRITERIA = [
   { id: "http-availability", label: "Respuesta HTTP", weight: 15, controls: ["DS-HTTP-01"] },
   { id: "security-headers", label: "Cabeceras de seguridad", weight: 20, controls: ["DS-HDR-01"] },
   { id: "third-party-data-use", label: "Reutilización o venta de datos por terceros", weight: 10, controls: ["DS-PRIV-04"] },
-  { id: "cookie-consent", label: "Cookies y consentimiento", weight: 10, controls: ["DS-PRIV-05"] },
+  { id: "initial-cookie-risk", label: "Cookies conocidas antes de elegir consentimiento", weight: 10, controls: ["DS-PRIV-05"] },
   { id: "tracking", label: "Rastreadores y mapas de calor", weight: 5, controls: ["DS-PRIV-06"] },
   { id: "performance", label: "Rendimiento", weight: 5, controls: ["DS-QUAL-02"] },
 ] as const;
@@ -36,8 +36,9 @@ const CRITERIA = [
 const UNVERIFIED_THIRD_PARTY_REASON =
   "No hay evidencia verificable sobre reutilización o venta de datos por terceros.";
 const UNKNOWN_REASONS: Record<string, string> = {
+  "transport-security": "No se han comprobado todas las versiones de TLS incluidas en este criterio.",
   "third-party-data-use": UNVERIFIED_THIRD_PARTY_REASON,
-  "cookie-consent": "No se han inspeccionado cookies ni el comportamiento del consentimiento.",
+  "initial-cookie-risk": "No se pudo inspeccionar la respuesta inicial para detectar cookies conocidas.",
   tracking: "No se han inspeccionado scripts de analítica, rastreadores o mapas de calor.",
   performance: "No se han medido métricas de rendimiento de página.",
 };
@@ -63,7 +64,7 @@ export function assessDomainEthics(checks: unknown): DomainEthicsAssessment {
   });
 
   return {
-    policyVersion: "domain-ethics-v1",
+    policyVersion: "domain-ethics-v3",
     score,
     assessedCriteria: assessed.length,
     totalCriteria: criteria.length,
@@ -82,8 +83,7 @@ function normalizeChecks(input: unknown): Map<string, Array<EthicsCheck["status"
     if (!isEthicsCheck(item)) continue;
     const statuses = result.get(item.controlId) ?? [];
     if (statuses.length > 0 && !statuses.includes(item.status)) {
-      statuses.push("unknown");
-      result.set(item.controlId, statuses);
+      result.set(item.controlId, ["unknown"]);
       continue;
     }
     statuses.push(item.status);
@@ -105,10 +105,18 @@ function deriveStatus(
   checks: Map<string, Array<EthicsCheck["status"]>>,
 ): EthicsCriterion["status"] {
   if (controls.length === 0) return "unknown";
-  const statuses = controls.flatMap((control) => checks.get(control) ?? []);
-  if (statuses.length === 0) return "unknown";
-  if (statuses.includes("unknown")) return "unknown";
-  if (statuses.includes("fail")) return "fail";
-  if (statuses.includes("not_applicable")) return "unknown";
+  const statuses = controls.map((control) => checks.get(control));
+  if (statuses.some((controlStatuses) => controlStatuses?.includes("fail"))) {
+    return "fail";
+  }
+  if (statuses.some((controlStatuses) => controlStatuses?.includes("unknown"))) {
+    return "unknown";
+  }
+  if (statuses.some((controlStatuses) => !controlStatuses || controlStatuses.length === 0)) {
+    return "unknown";
+  }
+  if (statuses.some((controlStatuses) => controlStatuses?.includes("not_applicable"))) {
+    return "unknown";
+  }
   return "pass";
 }

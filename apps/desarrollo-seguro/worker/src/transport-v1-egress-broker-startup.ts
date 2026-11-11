@@ -1,9 +1,10 @@
 import { normalizeHostname } from "@desarrolloseguro/core";
+import type { ScanProfileVersion } from "./transport-v1-executor.js";
 
 export type TransportV1EgressBrokerStartupRequest = {
   protocolVersion: 1;
   hostname: string;
-  profileVersion: "transport-v1";
+  profileVersion: ScanProfileVersion;
 };
 
 export function parseTransportV1EgressBrokerStartupRequest(
@@ -21,7 +22,8 @@ export function parseTransportV1EgressBrokerStartupRequest(
   if (
     Reflect.ownKeys(request).length !== 3 ||
     request.protocolVersion !== 1 ||
-    request.profileVersion !== "transport-v1"
+    (request.profileVersion !== "transport-v1" &&
+      request.profileVersion !== "domain-v1")
   ) {
     throw new Error("egress_broker_startup_invalid");
   }
@@ -29,7 +31,7 @@ export function parseTransportV1EgressBrokerStartupRequest(
     return {
       protocolVersion: 1,
       hostname: normalizeHostname(request.hostname),
-      profileVersion: "transport-v1",
+      profileVersion: request.profileVersion,
     };
   } catch {
     throw new Error("egress_broker_startup_invalid");

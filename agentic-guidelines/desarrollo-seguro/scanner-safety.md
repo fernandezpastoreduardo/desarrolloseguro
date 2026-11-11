@@ -1,5 +1,7 @@
 # Seguridad de ejecución de análisis
 
+El perfil local `domain-v1` inspecciona pasivamente solo la respuesta HTTPS inicial de `/`: parsea HTML como texto acotado y agrega coincidencias de nombres de cookies en `Set-Cookie`. No ejecuta scripts ni realiza solicitudes a recursos de la página. Cualquier referencia a terceros en el marcado no significa que se haya contactado ese host. Solo se devuelven contadores y booleanos; el HTML y las cabeceras de cookies no se persisten. Los límites excedidos producen evidencia `unknown`. Esta ampliación de inspección no demuestra que la política de egress del VPS esté configurada correctamente.
+
 La API pública permite solicitar un análisis de un dominio con autorización explícita y aplica admisión, idempotencia, enfriamiento y cuotas compartidas en PostgreSQL. El Compose incluye un worker, un coordinador con Docker socket y un broker de egress por trabajo. Su configuración de producción solo se considera operativa después de probar el firewall en el VPS con servicios señuelo y obtener un informe real desde el portal. Hasta entonces no se debe habilitar la admisión pública de análisis. Las pruebas del paquete worker no demuestran por sí solas la política de egress del runtime del VPS.
 
 ## Modelo de amenazas y límites de confianza

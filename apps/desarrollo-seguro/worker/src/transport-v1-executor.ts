@@ -6,9 +6,12 @@ import {
 import type { ClaimedScanJob, ScanCheck, ScanRunInput } from "@desarrolloseguro/persistence";
 import { createTransportV1EgressBroker } from "./transport-v1-egress-broker.js";
 
-const PROFILE_VERSION = "transport-v1";
+const TRANSPORT_PROFILE_VERSION = "transport-v1";
+const DOMAIN_PROFILE_VERSION = "domain-v1";
 const FIXTURE_SCANNER_VERSION = "transport-v1-fixture-adapter-1";
+const DOMAIN_FIXTURE_SCANNER_VERSION = "domain-v1-fixture-adapter-1";
 const NETWORK_SCANNER_VERSION = "transport-v1-network-adapter-1";
+const DOMAIN_SCANNER_VERSION = "domain-v1-network-adapter-1";
 const MAX_CONCURRENT_NETWORK_PROBES = 2;
 const CHECKS = [
   { controlId: "DS-DNS-01", method: "DNS", severity: "high" },
@@ -30,6 +33,8 @@ export type TransportV1ScanJob = Pick<
   ClaimedScanJob,
   "hostname" | "profileVersion"
 >;
+
+export type ScanProfileVersion = typeof TRANSPORT_PROFILE_VERSION | typeof DOMAIN_PROFILE_VERSION;
 
 /**
  * Observation boundary for the reduced profile. Implementations must return
@@ -71,7 +76,7 @@ export class TransportV1FixtureExecutor {
   ): Promise<
     Omit<ScanRunInput, "jobId" | "leaseToken" | "hostname" | "profileVersion">
   > {
-    if (job.profileVersion !== PROFILE_VERSION) {
+    if (!isSupportedProfile(job.profileVersion)) {
       throw new Error("unsupported_scan_profile");
     }
 
@@ -104,16 +109,19 @@ export class TransportV1FixtureExecutor {
       limitation: "",
       evidence: observations[index] ?? {},
     }));
+    appendInitialCookieCheck(candidateChecks, job.profileVersion, observations[4] ?? {}, observedAt);
 
     const sanitized = sanitizeScanObservations(
       job.hostname,
-      PROFILE_VERSION,
+      job.profileVersion,
       ["/"],
       candidateChecks,
     );
 
     return {
-      scannerVersion: FIXTURE_SCANNER_VERSION,
+      scannerVersion: job.profileVersion === DOMAIN_PROFILE_VERSION
+        ? DOMAIN_FIXTURE_SCANNER_VERSION
+        : FIXTURE_SCANNER_VERSION,
       startedAt,
       completedAt,
       verdict: evaluateVerdict(sanitized.checks),
@@ -141,7 +149,7 @@ export class TransportV1NetworkExecutor {
   ): Promise<
     Omit<ScanRunInput, "jobId" | "leaseToken" | "hostname" | "profileVersion">
   > {
-    if (job.profileVersion !== PROFILE_VERSION) {
+    if (!isSupportedProfile(job.profileVersion)) {
       throw new Error("unsupported_scan_profile");
     }
 
@@ -183,15 +191,21 @@ export class TransportV1NetworkExecutor {
       limitation: "",
       evidence: probes[index]?.evidence ?? {},
     }));
+    appendInitialCookieCheck(
+      candidateChecks,
+      job.profileVersion,
+      probes[4]?.evidence ?? {},
+      completedAt,
+    );
     const sanitized = sanitizeScanObservations(
       job.hostname,
-      PROFILE_VERSION,
+      job.profileVersion,
       ["/"],
       candidateChecks,
     );
 
     return {
-      scannerVersion: NETWORK_SCANNER_VERSION,
+      scannerVersion: getScannerVersion(job.profileVersion),
       startedAt,
       completedAt,
       verdict: evaluateVerdict(sanitized.checks),
@@ -205,6 +219,61 @@ export class TransportV1NetworkExecutor {
       },
     };
   }
+}
+
+function appendInitialCookieCheck(
+  checks: ScanCheck[],
+  profileVersion: ScanProfileVersion,
+  headersEvidence: TransportV1Evidence,
+  observedAt: Date,
+): void {
+  if (profileVersion !== DOMAIN_PROFILE_VERSION) return;
+  const inspected = headersEvidence.inspected === true;
+  const cookieCount = headersEvidence.cookieCount;
+  const insecureCookieCount = headersEvidence.insecureCookieCount;
+  const catalogMatchCount = headersEvidence.catalogMatchCount;
+  const consentPromptDetected = headersEvidence.consentPromptDetected;
+  const evidence: TransportV1Evidence = {};
+  if (typeof headersEvidence.inspected === "boolean") evidence.inspected = inspected;
+  if (typeof cookieCount === "number") evidence.cookieCount = cookieCount;
+  if (typeof insecureCookieCount === "number") evidence.insecureCookieCount = insecureCookieCount;
+  if (typeof catalogMatchCount === "number") {
+    evidence.catalogMatchCount = catalogMatchCount;
+  }
+  if (typeof consentPromptDetected === "boolean") {
+    evidence.consentPromptDetected = consentPromptDetected;
+  }
+  const complete = inspected &&
+    typeof cookieCount === "number" &&
+    typeof insecureCookieCount === "number" &&
+    typeof catalogMatchCount === "number" &&
+    typeof consentPromptDetected === "boolean";
+  checks.push({
+    controlId: "DS-PRIV-05",
+    method: "GET",
+    severity: "medium",
+    status: !complete
+      ? "unknown"
+      : catalogMatchCount > 0
+        ? "fail"
+        : "pass",
+    required: true,
+    observedAt,
+    targetPath: "/",
+    summary: "",
+    limitation: "",
+    evidence,
+  });
+}
+
+function getScannerVersion(profileVersion: ScanProfileVersion): string {
+  return profileVersion === DOMAIN_PROFILE_VERSION
+    ? DOMAIN_SCANNER_VERSION
+    : NETWORK_SCANNER_VERSION;
+}
+
+function isSupportedProfile(value: string): value is ScanProfileVersion {
+  return value === TRANSPORT_PROFILE_VERSION || value === DOMAIN_PROFILE_VERSION;
 }
 
 async function safelyObserve(

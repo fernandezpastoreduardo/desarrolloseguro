@@ -24,7 +24,7 @@ const PUBLIC_REPORT = {
   expiresAt: "2026-11-03T08:01:00.000Z",
   verdict: "inconclusive",
   ethicsAssessment: {
-    policyVersion: "domain-ethics-v1",
+    policyVersion: "domain-ethics-v3",
     score: 100,
     assessedCriteria: 1,
     totalCriteria: 8,
@@ -141,11 +141,17 @@ describe("PublicScanPortal", () => {
 
     expect(await screen.findByText("Histórico")).toBeVisible();
     expect(screen.getByText(REPORT_SUMMARY)).toBeVisible();
-    expect(screen.getByRole("heading", { name: "Lectura ética y técnica provisional" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Resumen y puntuación" })).toBeVisible();
     expect(screen.getByText("100/100 · 1 de 8 criterios evaluados")).toBeVisible();
+    expect(screen.getByText(/solo se calcula con los criterios evaluados/i)).toBeVisible();
     expect(screen.getByText(/no hay evidencia verificable sobre reutilización o venta/i)).toBeVisible();
     expect(screen.getByText(/solo se observó la portada/i)).toBeVisible();
     expect(screen.getByText(/origen indicado en el registro/i)).toBeVisible();
+    const summary = screen.getByRole("heading", { name: "Resumen y puntuación" });
+    const detail = screen.getByRole("heading", { name: "Alcance observado" });
+    expect(
+      summary.compareDocumentPosition(detail) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it("shows an indeterminate progress bar for a domain with an active scan", async () => {
@@ -204,6 +210,44 @@ describe("PublicScanPortal", () => {
 
     expect(await screen.findByText("transport-v1")).toBeVisible();
     expect(screen.getByText("Comprobación DS-DNS-01: pass.")).toBeVisible();
+  });
+
+  it("shows the bounded initial-cookie finding in a domain-v1 report", async () => {
+    const domainReport = {
+      ...PUBLIC_REPORT,
+      profileVersion: "domain-v1",
+      ethicsAssessment: {
+        ...PUBLIC_REPORT.ethicsAssessment,
+        policyVersion: "domain-ethics-v3",
+        score: 50,
+        assessedCriteria: 2,
+        criteria: [
+          { id: "initial-cookie-risk", label: "Cookies conocidas antes de elegir consentimiento", status: "fail", weight: 10 },
+        ],
+        reasons: ["Cookies conocidas antes de elegir consentimiento: el control observado presenta fallos."],
+      },
+      checks: [
+        {
+          ...PUBLIC_REPORT.checks[0],
+          controlId: "DS-PRIV-05",
+          status: "fail",
+          method: "GET",
+          summary: "Cookies en respuesta inicial: 2; coincidencias con la tabla local Analytics/Marketing: 1; sin atributo Secure: 1. No se interactuó con el banner de consentimiento.",
+          limitation: "Solo se analizó la respuesta HTTP inicial; no se ejecutó JavaScript ni se eligió consentimiento.",
+        },
+      ],
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(Response.json(domainReport)),
+    );
+    window.history.replaceState({}, "", `/?report=${REPORT_ID}`);
+
+    render(<PublicScanPortal />);
+
+    expect(await screen.findByText(/coincidencias con la tabla local Analytics\/Marketing: 1/i)).toBeVisible();
+    expect(screen.getByText(/no se interactuó con el banner de consentimiento/i)).toBeVisible();
+    expect(screen.getByText("domain-v1")).toBeVisible();
   });
 
   it("renders untrusted report strings as text rather than HTML", async () => {

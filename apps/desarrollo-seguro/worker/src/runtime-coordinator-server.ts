@@ -213,6 +213,7 @@ function handleRequest(
                 result: JSON.parse(JSON.stringify(result)) as unknown,
               },
               request.requestId,
+              request.profileVersion,
             );
             sendResponse(socket, response);
           }

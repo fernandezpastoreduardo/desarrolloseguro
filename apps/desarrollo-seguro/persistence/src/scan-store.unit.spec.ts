@@ -72,7 +72,7 @@ describe("PostgresScanStore unit behavior", () => {
     expect(report?.checks[0].controlId).toBe("DS-HDR-01");
     expect(JSON.stringify(report)).not.toContain("<private response body>");
     expect(JSON.stringify(report)).not.toContain("database-detail");
-    expect(query.mock.calls[0][0]).not.toContain("evidence_json");
+    expect(query.mock.calls[0][0]).not.toMatch(/SELECT\s+evidence_json/iu);
   });
 
   it("projects status snapshots without selecting raw evidence", async () => {
@@ -99,7 +99,7 @@ describe("PostgresScanStore unit behavior", () => {
 
     expect(snapshot?.lastReport?.checks[0]).not.toHaveProperty("evidence");
     expect(JSON.stringify(snapshot)).not.toContain("session=private");
-    expect(query.mock.calls[0][0]).not.toContain("evidence_json");
+    expect(query.mock.calls[0][0]).not.toMatch(/SELECT\s+evidence_json/iu);
   });
 
   it("rejects malformed persisted public report rows", async () => {

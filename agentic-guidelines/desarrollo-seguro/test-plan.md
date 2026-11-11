@@ -15,7 +15,7 @@ Las pruebas de políticas TLS generan certificados sintéticos temporales. No de
 | Core | Validación de hostname, perfil/scope, normalización y reglas de veredicto. |
 | API | Validación de entrada, respuestas de estado/informe y solicitud autorizada, rate limiting y errores públicos seguros. |
 | Persistencia | Migraciones, constraints, leases, concurrencia entre dominios, cuotas atómicas (10 en cola, 1 en ejecución, ventana de 24 h y reutilización de informe temporalmente desactivadas para pruebas, 1000 altas on-demand), reintentos, proyección pública y mínimos privilegios. PostgreSQL verifica que una petición nueva se encola aun con un informe reciente. |
-| Scoring ético | La rúbrica evalúa solo controles con evidencia validada, reduce la puntuación ante fallos y deja criterios no observados en `unknown`; controles futuros de cookies, consentimiento, rastreo, ventas de datos y rendimiento no puntúan hasta ser emitidos por el perfil. La cobertura y las razones acompañan cada score. |
+| Scoring ético | La rúbrica evalúa solo controles con evidencia validada, reduce la puntuación ante fallos y deja criterios no observados en `unknown`; `domain-v1` puede puntuar coincidencias del catálogo de cookies en la respuesta inicial, pero no consentimiento tras una elección, rastreo dinámico, ventas de datos ni rendimiento. La cobertura y las razones acompañan cada score. |
 | Docker | Servicios, redes internas, loopback-only para web, secretos y volumen exclusivos del proyecto. |
 | TLS | Validación de nombres/CA y configuración de proxy con material sintético. |
 | UI | Flujos accesibles, estados de carga/error, navegación y adaptación móvil. |

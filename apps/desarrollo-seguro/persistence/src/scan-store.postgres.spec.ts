@@ -181,7 +181,7 @@ describePostgres.sequential("PostgresScanStore", () => {
     expect(snapshot).toMatchObject({
       hostname,
       enrollment: "on_demand",
-      profileVersion: "transport-v1",
+      profileVersion: "domain-v1",
       optedOut: false,
     });
     expect(repeated).toEqual(requested);
@@ -389,6 +389,25 @@ describePostgres.sequential("PostgresScanStore", () => {
     });
     expect(publicReport?.checks).toHaveLength(5);
     expect(publicReport?.checks[0]).not.toHaveProperty("evidence");
+  });
+
+  it("accepts domain-v1 root coverage and evaluates its initial cookie check", async () => {
+    const job = await queueAndClaim("domain-v1");
+    const reportId = await completeDirectly(job, ["/"], makeDomainV1Checks());
+    const publicReport = await store.readPublicReport(reportId);
+
+    expect(publicReport).toMatchObject({
+      profileVersion: "domain-v1",
+      scope: ["/"],
+    });
+    expect(publicReport?.checks).toHaveLength(6);
+    expect(publicReport?.checks.find(({ controlId }) => controlId === "DS-PRIV-05"))
+      .toMatchObject({
+        status: "pass",
+        summary: "Cookies en respuesta inicial: 0; coincidencias con la tabla local Analytics/Marketing: 0; sin atributo Secure: 0. No se interactuó con el banner de consentimiento.",
+      });
+    expect(publicReport?.checks.find(({ controlId }) => controlId === "DS-PRIV-05"))
+      .not.toHaveProperty("evidence");
   });
 
   it("rejects non-root scope for transport-v1", async () => {
@@ -908,6 +927,31 @@ describePostgres.sequential("PostgresScanStore", () => {
         csp: true,
       }),
     ];
+  }
+
+  function makeDomainV1Checks(): ScanCheck[] {
+    const checks = makeTransportV1Checks().map((check) => ({
+      ...check,
+      limitation:
+        "Resultado limitado a las rutas públicas declaradas del perfil domain-v1.",
+    }));
+    checks.push({
+      ...CHECK,
+      controlId: "DS-PRIV-05",
+      method: "GET",
+      status: "pass",
+      summary: "Cookies en respuesta inicial: 0; coincidencias con la tabla local Analytics/Marketing: 0; sin atributo Secure: 0. No se interactuó con el banner de consentimiento.",
+      limitation:
+        "Resultado limitado a las rutas públicas declaradas del perfil domain-v1.",
+      evidence: {
+        inspected: true,
+        cookieCount: 0,
+        insecureCookieCount: 0,
+        catalogMatchCount: 0,
+        consentPromptDetected: true,
+      },
+    });
+    return checks;
   }
 
   function safeDnsCheck(evidence: Record<string, unknown> = {}): ScanCheck {

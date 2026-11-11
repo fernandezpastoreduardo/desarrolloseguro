@@ -9,6 +9,8 @@ import {
   normalizeHostname,
 } from "@desarrolloseguro/core";
 import type { SecurityHeaderEvidence } from "@desarrolloseguro/core";
+import { inspectPassivePageSignals } from "./passive-page-signals.js";
+import type { PassivePageSignalInput } from "./passive-page-signals.js";
 import {
   createEgressAuthorizedLookup,
   createEgressDestinationAuthorizer,
@@ -32,6 +34,7 @@ export type PinnedHttpsRequest = {
   method: "GET" | "HEAD";
   allowedPaths: readonly string[];
   signal: AbortSignal;
+  inspectPage?: boolean;
 };
 
 export type PinnedHttpsResult = {
@@ -43,6 +46,7 @@ export type PinnedHttpsResult = {
   tlsAuthorized: boolean;
   tlsProtocol: "TLSv1.2" | "TLSv1.3" | undefined;
   securityHeaders: SecurityHeaderEvidence | null;
+  passivePageSignals?: ReturnType<typeof inspectPassivePageSignals>;
   requestsCount: number;
   bytesCount: number;
 };
@@ -104,6 +108,7 @@ export async function requestPinnedHttps(
         lookup: lookupFactory(hostname, HTTPS_PORT),
         requestFactory,
         ca: dependencies.ca,
+        inspectPage: input.inspectPage === true,
       });
     } catch (error) {
       throw includeTransportMetrics(error, requestsCount, bytesCount, "https_request_failed");
@@ -121,6 +126,9 @@ export async function requestPinnedHttps(
         tlsAuthorized: result.tlsAuthorized,
         tlsProtocol: result.tlsProtocol,
         securityHeaders: result.securityHeaders,
+        ...(result.passivePageSignals
+          ? { passivePageSignals: result.passivePageSignals }
+          : {}),
         requestsCount,
         bytesCount,
       };
@@ -159,6 +167,7 @@ type MakeRequestInput = {
   lookup: LookupFunction;
   requestFactory: HttpsRequestFactory;
   ca: string | undefined;
+  inspectPage: boolean;
 };
 
 type MakeRequestResult = {
@@ -169,12 +178,15 @@ type MakeRequestResult = {
   tlsProtocol: "TLSv1.2" | "TLSv1.3" | undefined;
   securityHeaders: SecurityHeaderEvidence | null;
   bytesCount: number;
+  passivePageSignals?: ReturnType<typeof inspectPassivePageSignals>;
 };
 
 function makeRequest(input: MakeRequestInput): Promise<MakeRequestResult> {
   return new Promise((resolve, reject) => {
     let settled = false;
     let receivedBytes = 0;
+    const responseTimeStartedAt = Date.now();
+    let htmlChunks: Buffer[] = [];
     let requestStarted = false;
     let request: ClientRequest | undefined;
     const timeoutHolder: { timer?: NodeJS.Timeout } = {};
@@ -224,8 +236,14 @@ function makeRequest(input: MakeRequestInput): Promise<MakeRequestResult> {
           finishWithError("invalid_http_response");
           return;
         }
+        const contentType = getSingleHeader(response, "content-type") ?? "";
+        const isHtml = /^text\/html(?:\s*;|$)/iu.test(contentType);
+        const setCookieHeaders = getSetCookieHeaders(response);
         response.on("data", (chunk: Buffer | string) => {
           receivedBytes += Buffer.byteLength(chunk);
+          if (input.inspectPage && input.method === "GET" && isHtml) {
+            htmlChunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+          }
           if (receivedBytes > MAX_RESPONSE_BYTES) {
             response.destroy();
             request?.destroy();
@@ -240,6 +258,23 @@ function makeRequest(input: MakeRequestInput): Promise<MakeRequestResult> {
             clearTimeout(timeoutHolder.timer);
           }
           input.signal.removeEventListener("abort", abortRequest);
+          let passivePageSignals: ReturnType<typeof inspectPassivePageSignals> | undefined;
+          if (input.inspectPage && input.method === "GET") {
+            const html = Buffer.concat(htmlChunks).toString("utf8");
+            const pageInput: PassivePageSignalInput = {
+              hostname: input.hostname,
+              html,
+              setCookieHeaders,
+              responseTimeMs: Math.max(
+                0,
+                Date.now() - responseTimeStartedAt,
+              ),
+              responseBytes: receivedBytes,
+              complete: true,
+            };
+            passivePageSignals = inspectPassivePageSignals(pageInput);
+            htmlChunks = [];
+          }
           resolve({
             statusCode,
             location: getSingleHeader(response, "location"),
@@ -251,6 +286,7 @@ function makeRequest(input: MakeRequestInput): Promise<MakeRequestResult> {
               "https",
             ).evidence,
             bytesCount: getReceivedBytesCount(socket, receivedBytes),
+            ...(passivePageSignals ? { passivePageSignals } : {}),
           });
         });
         response.resume();
@@ -382,6 +418,13 @@ function getSingleHeader(
   if (typeof value === "string") return value;
   if (Array.isArray(value) && value.length === 1) return value[0];
   return undefined;
+}
+
+function getSetCookieHeaders(response: IncomingMessage): string[] {
+  const value = response.headers["set-cookie"];
+  if (typeof value === "string") return [value];
+  if (Array.isArray(value)) return value.filter((entry): entry is string => typeof entry === "string");
+  return [];
 }
 
 function sanitizeRequestError(error: Error): string {

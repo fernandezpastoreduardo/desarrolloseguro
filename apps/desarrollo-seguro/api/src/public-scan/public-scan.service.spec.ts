@@ -259,7 +259,7 @@ describe("PublicScanService", () => {
     expect(publicReport).toMatchObject({
       profileVersion: "transport-v1",
       ethicsAssessment: {
-        policyVersion: "domain-ethics-v1",
+        policyVersion: "domain-ethics-v3",
         score: 100,
         assessedCriteria: 1,
         totalCriteria: 8,

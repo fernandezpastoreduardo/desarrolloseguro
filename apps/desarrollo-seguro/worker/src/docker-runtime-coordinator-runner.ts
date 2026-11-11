@@ -64,7 +64,11 @@ export function createDockerRuntimeCoordinatorRunner(
         const responseInput = await session.execute(request, signal);
         let response: ReturnType<typeof parseTransportV1ExecutorResponse>;
         try {
-          response = parseTransportV1ExecutorResponse(responseInput, request.requestId);
+          response = parseTransportV1ExecutorResponse(
+            responseInput,
+            request.requestId,
+            request.profileVersion,
+          );
         } catch {
           throw new Error("executor_response_invalid");
         }
@@ -181,7 +185,7 @@ export function createDockerRuntimeSessionFactory(
           brokerNetwork,
           brokerName,
           volumeName,
-          { hostname: request.hostname },
+          { hostname: request.hostname, profileVersion: request.profileVersion },
         );
         startupFailureCode = "runtime_broker_ready_failed";
         await waitForBrokerReady(brokerProcess, signal, brokerStartupTimeoutMs);
@@ -246,7 +250,7 @@ function startBroker(
   brokerNetwork: string,
   brokerName: string,
   volumeName: string,
-  options: { hostname: string },
+  options: { hostname: string; profileVersion: TransportV1ExecutorRequest["profileVersion"] },
 ): ChildProcessWithoutNullStreams {
   const child = spawn(dockerBinary, dockerCommandArguments(dockerSocketPath, [
     "run", "--interactive",
@@ -259,7 +263,7 @@ function startBroker(
   child.stdin.end(`${JSON.stringify({
     protocolVersion: 1,
     hostname: options.hostname,
-    profileVersion: "transport-v1",
+    profileVersion: options.profileVersion,
   })}\n`);
   return child;
 }

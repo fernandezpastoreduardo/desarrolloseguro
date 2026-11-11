@@ -29,6 +29,7 @@ function makeTlsSocket(): TLSSocket {
 function responseWith(
   statusCode: number,
   headers: Record<string, string>,
+  body = "",
 ): IncomingMessage {
   const emitter = new EventEmitter();
   Object.assign(emitter, {
@@ -36,6 +37,7 @@ function responseWith(
     headers,
     socket: makeTlsSocket(),
     resume() {
+      if (body) emitter.emit("data", Buffer.from(body));
       emitter.emit("end");
       return this;
     },
@@ -46,7 +48,10 @@ function responseWith(
   return emitter as unknown as IncomingMessage;
 }
 
-function httpsFactory(): HttpsRequestFactory {
+function httpsFactory(
+  responseHeaders: Record<string, string> = {},
+  responseBody = "",
+): HttpsRequestFactory {
   return vi.fn((_options: HttpsOptions, callback) => {
     const request = new EventEmitter();
     Object.assign(request, {
@@ -58,7 +63,8 @@ function httpsFactory(): HttpsRequestFactory {
             "x-frame-options": "DENY",
             "referrer-policy": "strict-origin-when-cross-origin",
             "content-security-policy": SECURE_CSP,
-          }),
+            ...responseHeaders,
+          }, responseBody),
         );
         return this;
       },
@@ -154,6 +160,35 @@ describe("createTransportV1NetworkObserver", () => {
     });
     expect(httpFactory).toHaveBeenCalledTimes(1);
     expect(tlsFactory).toHaveBeenCalledTimes(3);
+  });
+
+  it("passes only aggregate cookie signals across the broker evidence boundary", async () => {
+    const observer = createTransportV1NetworkObserver({
+      lookupFactory: () => vi.fn(),
+      httpsRequestFactory: httpsFactory(
+        {
+          "content-type": "text/html; charset=utf-8",
+          "set-cookie": "_ga=secret-cookie-value; Path=/; SameSite=Lax",
+        },
+        "<button>Rechazar</button>",
+      ),
+      inspectPage: true,
+    });
+
+    const result = await observer.observeHeaders(
+      HOSTNAME,
+      new AbortController().signal,
+    );
+
+    expect(result.evidence).toMatchObject({
+      inspected: true,
+      cookieCount: 1,
+      insecureCookieCount: 1,
+      catalogMatchCount: 1,
+      consentPromptDetected: true,
+    });
+    expect(JSON.stringify(result)).not.toContain("secret-cookie-value");
+    expect(JSON.stringify(result)).not.toContain("_ga");
   });
 
   it("does not infer HTTPS header evidence from an unauthorized TLS response", async () => {

@@ -18,17 +18,19 @@ describe("assessDomainEthics", () => {
 
     expect(result).toMatchObject({
       score: 100,
-      assessedCriteria: 4,
+      assessedCriteria: 3,
       totalCriteria: 8,
-      maturity: "partial",
+      maturity: "preliminary",
     });
-    expect(result.criteria.filter(({ status }) => status === "unknown")).toHaveLength(4);
+    expect(result.criteria.filter(({ status }) => status === "unknown")).toHaveLength(5);
+    expect(result.criteria.find(({ id }) => id === "transport-security")?.status).toBe("unknown");
   });
 
   it("reduces score for a failed observed security criterion and explains why", () => {
     const result = assessDomainEthics([
       check("DS-DNS-01", "pass"),
       check("DS-TLS-01", "fail"),
+      check("DS-TLS-02", "pass"),
       check("DS-HTTP-01", "pass"),
       check("DS-HDR-01", "pass"),
     ]);
@@ -53,6 +55,7 @@ describe("assessDomainEthics", () => {
     const technicalPasses = [
       check("DS-DNS-01", "pass"),
       check("DS-TLS-01", "pass"),
+      check("DS-TLS-02", "pass"),
       check("DS-HTTP-01", "pass"),
       check("DS-HDR-01", "pass"),
     ];
@@ -68,6 +71,18 @@ describe("assessDomainEthics", () => {
     expect(withVerifiedFutureFailure.score).toBeLessThan(withoutFutureControl.score ?? 100);
   });
 
+  it("scores the initial cookie observation without treating it as consent evidence", () => {
+    const result = assessDomainEthics([
+      check("DS-DNS-01", "pass"),
+      check("DS-PRIV-05", "fail"),
+    ]);
+
+    expect(result.policyVersion).toBe("domain-ethics-v3");
+    expect(result.criteria.find(({ id }) => id === "initial-cookie-risk"))
+      .toMatchObject({ status: "fail", weight: 10 });
+    expect(result.score).toBe(50);
+  });
+
   it("keeps unknown checks out of the denominator and rejects duplicate evidence", () => {
     const result = assessDomainEthics([
       check("DS-TLS-01", "unknown"),
@@ -76,5 +91,23 @@ describe("assessDomainEthics", () => {
 
     expect(result.score).toBeNull();
     expect(result.criteria.find(({ id }) => id === "transport-security")?.status).toBe("unknown");
+  });
+
+  it("requires every control in a composite criterion before awarding a pass", () => {
+    const result = assessDomainEthics([
+      check("DS-TLS-01", "pass"),
+      check("DS-TLS-02", "pass"),
+    ]);
+
+    expect(result.criteria.find(({ id }) => id === "transport-security")?.status).toBe("pass");
+  });
+
+  it("keeps a conclusive failure when a different required control is unobserved", () => {
+    const result = assessDomainEthics([
+      check("DS-TLS-01", "unknown"),
+      check("DS-TLS-02", "fail"),
+    ]);
+
+    expect(result.criteria.find(({ id }) => id === "transport-security")?.status).toBe("fail");
   });
 });

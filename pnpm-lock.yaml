@@ -353,6 +353,9 @@ importers:
       '@desarrolloseguro/persistence':
         specifier: workspace:*
         version: link:../persistence
+      parse5:
+        specifier: 8.0.1
+        version: 8.0.1
       pg:
         specifier: ^8.16.3
         version: 8.23.1

@@ -58,6 +58,7 @@ const PROFILE_VERSIONS = [
   "controls-v2",
   "controls-v3",
   "transport-v1",
+  "domain-v1",
 ] as const;
 const SCAN_VERDICTS = ["pass", "fail", "inconclusive"] as const;
 const SCAN_TRIGGERS = ["scheduled", "requested"] as const;
@@ -104,7 +105,7 @@ type PublicReport = {
   expiresAt: string;
   verdict: ScanVerdict;
   ethicsAssessment: {
-    policyVersion: "domain-ethics-v1";
+    policyVersion: "domain-ethics-v3";
     score: number | null;
     assessedCriteria: number;
     totalCriteria: number;
@@ -588,11 +589,15 @@ function ReportSummary({
     <>
       <section className="ds-portal__ethics" aria-labelledby="ethics-summary-heading">
         <p className="ds-portal__eyebrow">Resumen del dominio</p>
-        <h3 id="ethics-summary-heading">Lectura ética y técnica provisional</h3>
+        <h3 id="ethics-summary-heading">Resumen y puntuación</h3>
         <p className="ds-portal__ethics-score">
           {report.ethicsAssessment.score === null
             ? "Sin puntuación: faltan controles observables"
             : `${report.ethicsAssessment.score}/100 · ${report.ethicsAssessment.assessedCriteria} de ${report.ethicsAssessment.totalCriteria} criterios evaluados`}
+        </p>
+        <p className="ds-portal__score-method">
+          La puntuación solo se calcula con los criterios evaluados. Los que no
+          tienen evidencia quedan como desconocidos y no suman ni restan.
         </p>
         <p>{report.ethicsAssessment.interpretation}</p>
         <ul className="ds-portal__ethics-criteria">
@@ -739,7 +744,7 @@ function isPublicReport(value: unknown): value is PublicReport {
 
 function isEthicsAssessment(value: unknown): value is PublicReport["ethicsAssessment"] {
   if (!isRecord(value)) return false;
-  return value.policyVersion === "domain-ethics-v1" &&
+  return value.policyVersion === "domain-ethics-v3" &&
     (value.score === null || (isInteger(value.score) && value.score >= 0 && value.score <= 100)) &&
     isInteger(value.assessedCriteria) && value.assessedCriteria >= 0 &&
     isInteger(value.totalCriteria) && value.totalCriteria > 0 &&
@@ -779,7 +784,7 @@ function isPublicCheck(value: unknown): value is PublicCheck {
     isIsoTimestamp(value.observedAt) &&
     isOneOf(value.targetPath, PUBLIC_SCOPE_PATHS) &&
     isOneOf(value.method, CHECK_METHODS) &&
-    isBoundedString(value.summary, 160) &&
+    isBoundedString(value.summary, 500) &&
     isBoundedString(value.limitation, 220)
   );
 }

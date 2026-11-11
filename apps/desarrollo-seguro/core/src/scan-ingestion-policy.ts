@@ -4,11 +4,13 @@ const PROFILE_VERSION_V1 = "controls-v1";
 const PROFILE_VERSION_V2 = "controls-v2";
 const PROFILE_VERSION_V3 = "controls-v3";
 const PROFILE_VERSION_TRANSPORT_V1 = "transport-v1";
+const PROFILE_VERSION_DOMAIN_V1 = "domain-v1";
 type ProfileVersion =
   | typeof PROFILE_VERSION_V1
   | typeof PROFILE_VERSION_V2
   | typeof PROFILE_VERSION_V3
-  | typeof PROFILE_VERSION_TRANSPORT_V1;
+  | typeof PROFILE_VERSION_TRANSPORT_V1
+  | typeof PROFILE_VERSION_DOMAIN_V1;
 const MAX_SCOPE_PATHS = 3;
 const MAX_CHECKS = 32;
 const MAX_EVIDENCE_COUNT = 100_000;
@@ -57,6 +59,7 @@ const TRANSPORT_V1_CONTROLS = [
   "DS-HTTP-01",
   "DS-HDR-01",
 ] as const;
+const DOMAIN_V1_CONTROLS = [...TRANSPORT_V1_CONTROLS, "DS-PRIV-05"] as const;
 const CONTROLS: Readonly<Record<string, ControlContract>> = {
   "DS-DNS-01": {
     methodsByPath: { "/": ["DNS"] },
@@ -125,6 +128,16 @@ const CONTROLS: Readonly<Record<string, ControlContract>> = {
       insecureNavigationCount: "count",
     },
   },
+  "DS-PRIV-05": {
+    methodsByPath: pathsFor(READ_METHODS),
+    evidence: {
+      inspected: "boolean",
+      cookieCount: "count",
+      insecureCookieCount: "count",
+      catalogMatchCount: "count",
+      consentPromptDetected: "boolean",
+    },
+  },
   "DS-QUAL-01": {
     methodsByPath: pathsFor(READ_METHODS),
     evidence: {
@@ -133,12 +146,15 @@ const CONTROLS: Readonly<Record<string, ControlContract>> = {
     },
   },
 };
-const ALL_CONTROL_IDS = Object.keys(CONTROLS);
+const ALL_CONTROL_IDS = Object.keys(CONTROLS).filter(
+  (controlId) => controlId !== "DS-PRIV-05",
+);
 const PROFILE_CONTROLS: Readonly<Record<ProfileVersion, readonly string[]>> = {
   [PROFILE_VERSION_V1]: ALL_CONTROL_IDS,
   [PROFILE_VERSION_V2]: ALL_CONTROL_IDS,
   [PROFILE_VERSION_V3]: ALL_CONTROL_IDS,
   [PROFILE_VERSION_TRANSPORT_V1]: TRANSPORT_V1_CONTROLS,
+  [PROFILE_VERSION_DOMAIN_V1]: DOMAIN_V1_CONTROLS,
 };
 
 export function sanitizeScanObservations(
@@ -154,7 +170,10 @@ export function sanitizeScanObservations(
 
   const allowedPaths = getCanonicalScanPaths(safeHostname);
   const profilePaths =
-    profileVersion === PROFILE_VERSION_TRANSPORT_V1 ? ["/"] : allowedPaths;
+    profileVersion === PROFILE_VERSION_TRANSPORT_V1 ||
+    profileVersion === PROFILE_VERSION_DOMAIN_V1
+      ? ["/"]
+      : allowedPaths;
   const safeScope = sanitizeScope(scope, profilePaths);
   if (
     !Array.isArray(checks) ||
@@ -179,7 +198,8 @@ export function sanitizeScanObservations(
   if (
     profileVersion === PROFILE_VERSION_V2 ||
     profileVersion === PROFILE_VERSION_V3 ||
-    profileVersion === PROFILE_VERSION_TRANSPORT_V1
+    profileVersion === PROFILE_VERSION_TRANSPORT_V1 ||
+    profileVersion === PROFILE_VERSION_DOMAIN_V1
   ) {
     assertCompleteCoverage(safeScope, safeChecks, allowedControlIds);
   }
@@ -192,7 +212,8 @@ function isProfileVersion(value: unknown): value is ProfileVersion {
     value === PROFILE_VERSION_V1 ||
     value === PROFILE_VERSION_V2 ||
     value === PROFILE_VERSION_V3 ||
-    value === PROFILE_VERSION_TRANSPORT_V1
+    value === PROFILE_VERSION_TRANSPORT_V1 ||
+    value === PROFILE_VERSION_DOMAIN_V1
   );
 }
 
@@ -315,10 +336,30 @@ function sanitizeCheck(
     observedAt: new Date(check.observedAt),
     targetPath,
     method,
-    summary: `Comprobación ${controlId}: ${status}.`,
+    summary: getSafeCheckSummary(controlId, status, evidence),
     limitation: `Resultado limitado a las rutas públicas declaradas del perfil ${profileVersion}.`,
     evidence,
   };
+}
+
+function getSafeCheckSummary(
+  controlId: string,
+  status: string,
+  evidence: Record<string, SafeEvidenceValue>,
+): string {
+  if (controlId !== "DS-PRIV-05") {
+    return `Comprobación ${controlId}: ${status}.`;
+  }
+  if (
+    evidence.inspected !== true ||
+    typeof evidence.cookieCount !== "number" ||
+    typeof evidence.insecureCookieCount !== "number" ||
+    typeof evidence.catalogMatchCount !== "number" ||
+    typeof evidence.consentPromptDetected !== "boolean"
+  ) {
+    return "No se pudo inspeccionar la respuesta inicial para detectar cookies conocidas; criterio no evaluado.";
+  }
+  return `Cookies en respuesta inicial: ${evidence.cookieCount}; coincidencias con la tabla local Analytics/Marketing: ${evidence.catalogMatchCount}; sin atributo Secure: ${evidence.insecureCookieCount}. No se interactuó con el banner de consentimiento.`;
 }
 
 function deriveSafeStatus(
@@ -331,7 +372,8 @@ function deriveSafeStatus(
   if (
     (profileVersion === PROFILE_VERSION_V2 ||
       profileVersion === PROFILE_VERSION_V3 ||
-      profileVersion === PROFILE_VERSION_TRANSPORT_V1) &&
+      profileVersion === PROFILE_VERSION_TRANSPORT_V1 ||
+      profileVersion === PROFILE_VERSION_DOMAIN_V1) &&
     controlId === "DS-HTTP-01" &&
     method === "HEAD" &&
     [405, 501].includes(Number(evidence.statusCode)) &&
@@ -342,7 +384,8 @@ function deriveSafeStatus(
   }
   if (
     (profileVersion === PROFILE_VERSION_V3 ||
-      profileVersion === PROFILE_VERSION_TRANSPORT_V1) &&
+      profileVersion === PROFILE_VERSION_TRANSPORT_V1 ||
+      profileVersion === PROFILE_VERSION_DOMAIN_V1) &&
     controlId === "DS-HDR-01" &&
     evidence.finalScheme !== "https"
   ) {
@@ -382,6 +425,13 @@ const REQUIRED_EVIDENCE: Readonly<Record<string, readonly string[]>> = {
     "thirdPartyCookieCount",
     "inspected",
   ],
+  "DS-PRIV-05": [
+    "inspected",
+    "cookieCount",
+    "insecureCookieCount",
+    "catalogMatchCount",
+    "consentPromptDetected",
+  ],
   "DS-PRIV-03": ["mixedContentCount", "insecureNavigationCount"],
   "DS-QUAL-01": ["documentStatusCode", "failedEssentialResourceCount"],
 };
@@ -393,7 +443,8 @@ function getRequiredEvidence(
   const controlEvidence = REQUIRED_EVIDENCE[controlId];
   if (
     (profileVersion === PROFILE_VERSION_V3 ||
-      profileVersion === PROFILE_VERSION_TRANSPORT_V1) &&
+      profileVersion === PROFILE_VERSION_TRANSPORT_V1 ||
+      profileVersion === PROFILE_VERSION_DOMAIN_V1) &&
     controlId === "DS-HDR-01"
   ) {
     return [...(controlEvidence ?? []), "finalScheme"];
@@ -422,6 +473,8 @@ const CONTROL_FAILURES: Readonly<Record<string, EvidencePredicate>> = {
   "DS-PRIV-02": (evidence) =>
     Number(evidence.insecureCookieCount) > 0 ||
     Number(evidence.thirdPartyCookieCount) > 0,
+  "DS-PRIV-05": (evidence) =>
+    Number(evidence.catalogMatchCount) > 0,
   "DS-PRIV-03": (evidence) =>
     Number(evidence.mixedContentCount) > 0 ||
     Number(evidence.insecureNavigationCount) > 0,
@@ -455,6 +508,9 @@ const CONTROL_PASSES: Readonly<Record<string, EvidencePredicate>> = {
     evidence.inspected === true &&
     evidence.insecureCookieCount === 0 &&
     evidence.thirdPartyCookieCount === 0,
+  "DS-PRIV-05": (evidence) =>
+    evidence.inspected === true &&
+    Number(evidence.catalogMatchCount) === 0,
   "DS-PRIV-03": (evidence) =>
     evidence.mixedContentCount === 0 && evidence.insecureNavigationCount === 0,
   "DS-QUAL-01": (evidence) =>
@@ -477,7 +533,8 @@ function sanitizeEvidence(
       key === "finalScheme" &&
       controlId === "DS-HDR-01" &&
       profileVersion !== PROFILE_VERSION_V3 &&
-      profileVersion !== PROFILE_VERSION_TRANSPORT_V1
+      profileVersion !== PROFILE_VERSION_TRANSPORT_V1 &&
+      profileVersion !== PROFILE_VERSION_DOMAIN_V1
     ) {
       continue;
     }

@@ -100,7 +100,7 @@ test("shows the report when an authorized analysis finishes", async ({ page }) =
         expiresAt: "2026-11-11T01:01:00.000Z",
         verdict: "pass",
         ethicsAssessment: {
-          policyVersion: "domain-ethics-v1",
+          policyVersion: "domain-ethics-v3",
           score: 100,
           assessedCriteria: 1,
           totalCriteria: 8,
@@ -157,7 +157,7 @@ test("shows the report when an authorized analysis finishes", async ({ page }) =
 
   await expect(page.getByRole("heading", { name: "Informe vigente" })).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Lectura ética y técnica provisional" }),
+    page.getByRole("heading", { name: "Resumen y puntuación" }),
   ).toBeVisible();
   await expect(page.getByText("Controles observados aprobados")).toBeVisible();
 });

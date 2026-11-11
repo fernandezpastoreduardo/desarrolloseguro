@@ -170,6 +170,74 @@ describe("TransportV1FixtureExecutor", () => {
     });
   });
 
+  it("scores only a known non-essential cookie observed in the initial response", async () => {
+    const source: TransportV1ObservationSource = {
+      sourceKind: "network",
+      observeDns: vi.fn().mockResolvedValue({
+        evidence: { addressClass: "public", aRecordCount: 1, aaaaRecordCount: 0 },
+        requestsCount: 0,
+        bytesCount: 0,
+      }),
+      observeTls: vi.fn().mockResolvedValue({
+        evidence: { protocol: "TLSv1.3", certificateValid: true, hostnameMatches: true },
+        requestsCount: 1,
+        bytesCount: 1,
+      }),
+      observeHttp: vi.fn().mockResolvedValue({
+        evidence: { statusCode: 200, redirectedToHttps: true, finalScheme: "https" },
+        requestsCount: 1,
+        bytesCount: 1,
+      }),
+      observeHeaders: vi.fn().mockResolvedValue({
+        evidence: {
+          finalScheme: "https",
+          hsts: true,
+          nosniff: true,
+          frameProtection: true,
+          referrerPolicy: true,
+          csp: true,
+          inspected: true,
+          cookieCount: 1,
+          insecureCookieCount: 1,
+          catalogMatchCount: 1,
+          consentPromptDetected: true,
+        },
+        requestsCount: 1,
+        bytesCount: 1,
+      }),
+    };
+
+    const result = await new TransportV1NetworkExecutor(source).execute(
+      { ...JOB, profileVersion: "domain-v1" },
+      new AbortController().signal,
+    );
+    const cookieCheck = result.checks.find(({ controlId }) => controlId === "DS-PRIV-05");
+
+    expect(result.scannerVersion).toBe("domain-v1-network-adapter-1");
+    expect(result.checks).toHaveLength(6);
+    expect(cookieCheck).toMatchObject({
+      status: "fail",
+      evidence: {
+        inspected: true,
+        catalogMatchCount: 1,
+        consentPromptDetected: true,
+      },
+    });
+    expect(JSON.stringify(result)).not.toMatch(/cookie.?name|cookie.?value/iu);
+
+    vi.mocked(source.observeHeaders).mockResolvedValue({
+      evidence: { finalScheme: "https", hsts: true },
+      requestsCount: 1,
+      bytesCount: 1,
+    });
+    const incomplete = await new TransportV1NetworkExecutor(source).execute(
+      { ...JOB, profileVersion: "domain-v1" },
+      new AbortController().signal,
+    );
+    expect(incomplete.checks.find(({ controlId }) => controlId === "DS-PRIV-05"))
+      .toMatchObject({ status: "unknown", evidence: {} });
+  });
+
   it("limits a network executor to two concurrent probes", async () => {
     let active = 0;
     let maxActive = 0;

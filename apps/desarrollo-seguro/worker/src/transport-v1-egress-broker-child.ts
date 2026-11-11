@@ -24,7 +24,9 @@ async function main(): Promise<void> {
   const broker = await listenTransportV1EgressBroker(
     EGRESS_BROKER_SOCKET,
     request.hostname,
-    createTransportV1NetworkObserver(),
+    createTransportV1NetworkObserver({
+      inspectPage: request.profileVersion === "domain-v1",
+    }),
   );
   process.stdout.write('{"protocolVersion":1,"state":"ready"}\n');
 
