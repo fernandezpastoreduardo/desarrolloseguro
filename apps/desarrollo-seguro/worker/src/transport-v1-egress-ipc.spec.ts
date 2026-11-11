@@ -121,6 +121,33 @@ describe("transport-v1 egress IPC", () => {
     }
   });
 
+  it("preserves safe probe error categories across the Unix socket", async () => {
+    const path = await socketPath();
+    const source: TransportV1ObservationSource = {
+      sourceKind: "network",
+      observeDns: vi.fn().mockResolvedValue({
+        evidence: {},
+        requestsCount: 0,
+        bytesCount: 0,
+        errorCode: "dns_resolution_failed",
+      }),
+      observeTls: vi.fn().mockResolvedValue({ evidence: {}, requestsCount: 0, bytesCount: 0 }),
+      observeHttp: vi.fn().mockResolvedValue({ evidence: {}, requestsCount: 0, bytesCount: 0 }),
+      observeHeaders: vi.fn().mockResolvedValue({ evidence: {}, requestsCount: 0, bytesCount: 0 }),
+    };
+    const broker = await listenTransportV1EgressBroker(path, HOSTNAME, source);
+    try {
+      await expect(
+        createUnixSocketObservationSource(path).observeDns(
+          HOSTNAME,
+          new AbortController().signal,
+        ),
+      ).resolves.toMatchObject({ errorCode: "dns_resolution_failed" });
+    } finally {
+      await broker.close();
+    }
+  });
+
   it("rejects a hostname outside the job scope before network observation", async () => {
     const path = await socketPath();
     const source = makeSource();

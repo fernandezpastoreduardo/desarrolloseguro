@@ -26,6 +26,14 @@ const MAX_IPC_RESPONSE_BYTES = 32 * 1024;
 const MAX_IPC_CONNECTIONS = 5;
 const IPC_TIMEOUT_MS = 15_000;
 const FORBIDDEN_EVIDENCE_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+const SAFE_PROBE_ERROR_CODES = new Set([
+  "dns_resolution_failed", "connection_failed", "broker_failed",
+  "request_aborted", "request_timeout", "response_size_limit_exceeded",
+  "https_request_failed", "http_request_failed", "invalid_http_response",
+  "redirect_limit_exceeded", "redirect_origin_not_allowlisted",
+  "redirect_path_not_allowlisted", "tls_certificate_invalid",
+  "tls_handshake_failed", "transport_failed",
+]);
 /** Starts a per-job broker on a Unix domain socket with restrictive permissions. */
 export async function listenTransportV1EgressBroker(
   socketPath: string,
@@ -179,7 +187,8 @@ async function requestOperation(
     response.protocolVersion !== 1 ||
     response.requestId !== request.requestId ||
     !isRecord(response.result) ||
-    Reflect.ownKeys(response.result).length !== 3 ||
+    (Reflect.ownKeys(response.result).length !== 3 &&
+      Reflect.ownKeys(response.result).length !== 4) ||
     !isRecord(response.result.evidence) ||
     !Number.isSafeInteger(response.result.requestsCount) ||
     (response.result.requestsCount as number) < 0 ||
@@ -187,6 +196,9 @@ async function requestOperation(
     !Number.isSafeInteger(response.result.bytesCount) ||
     (response.result.bytesCount as number) < 0 ||
     (response.result.bytesCount as number) > MAX_TRANSPORT_BYTES_PER_SCAN ||
+    (Object.hasOwn(response.result, "errorCode") &&
+      (typeof response.result.errorCode !== "string" ||
+        !SAFE_PROBE_ERROR_CODES.has(response.result.errorCode))) ||
     Object.keys(response.result.evidence).length > 32 ||
     Object.entries(response.result.evidence).some(
       ([key, value]) =>
@@ -203,6 +215,9 @@ async function requestOperation(
     evidence: response.result.evidence as TransportV1ProbeResult["evidence"],
     requestsCount: response.result.requestsCount as number,
     bytesCount: response.result.bytesCount as number,
+    ...(typeof response.result.errorCode === "string"
+      ? { errorCode: response.result.errorCode as TransportV1ProbeResult["errorCode"] }
+      : {}),
   };
 }
 

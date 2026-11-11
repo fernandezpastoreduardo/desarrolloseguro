@@ -5,6 +5,7 @@ import {
 } from "@desarrolloseguro/core";
 import type { ClaimedScanJob, ScanCheck, ScanRunInput } from "@desarrolloseguro/persistence";
 import { createTransportV1EgressBroker } from "./transport-v1-egress-broker.js";
+import type { PinnedTransportErrorCode } from "./pinned-transport-error.js";
 
 const TRANSPORT_PROFILE_VERSION = "transport-v1";
 const DOMAIN_PROFILE_VERSION = "domain-v1";
@@ -27,6 +28,7 @@ export type TransportV1ProbeResult = {
   evidence: TransportV1Evidence;
   requestsCount: number;
   bytesCount: number;
+  errorCode?: PinnedTransportErrorCode;
 };
 
 export type TransportV1ScanJob = Pick<
@@ -180,6 +182,9 @@ export class TransportV1NetworkExecutor {
       signal,
       MAX_CONCURRENT_NETWORK_PROBES,
     );
+    if (probes.every((probe) => !probe || Object.keys(probe.evidence).length === 0)) {
+      throw new Error("network_observation_unavailable");
+    }
     const completedAt = this.now();
     const candidateChecks: ScanCheck[] = CHECKS.map((definition, index) => ({
       ...definition,
@@ -233,6 +238,7 @@ function appendInitialCookieCheck(
   const insecureCookieCount = headersEvidence.insecureCookieCount;
   const catalogMatchCount = headersEvidence.catalogMatchCount;
   const consentPromptDetected = headersEvidence.consentPromptDetected;
+  const probeErrorCode = headersEvidence.probeErrorCode;
   const evidence: TransportV1Evidence = {};
   if (typeof headersEvidence.inspected === "boolean") evidence.inspected = inspected;
   if (typeof cookieCount === "number") evidence.cookieCount = cookieCount;
@@ -242,6 +248,9 @@ function appendInitialCookieCheck(
   }
   if (typeof consentPromptDetected === "boolean") {
     evidence.consentPromptDetected = consentPromptDetected;
+  }
+  if (typeof probeErrorCode === "string") {
+    evidence.probeErrorCode = probeErrorCode;
   }
   const complete = inspected &&
     typeof cookieCount === "number" &&

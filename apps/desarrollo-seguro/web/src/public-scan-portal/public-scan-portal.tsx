@@ -795,16 +795,29 @@ function isPublicReport(value: unknown): value is PublicReport {
 
 function isEthicsAssessment(value: unknown): value is PublicReport["ethicsAssessment"] {
   if (!isRecord(value)) return false;
-  return value.policyVersion === "domain-ethics-v3" &&
-    (value.score === null || (isInteger(value.score) && value.score >= 0 && value.score <= 100)) &&
-    isInteger(value.assessedCriteria) && value.assessedCriteria >= 0 &&
-    isInteger(value.totalCriteria) && value.totalCriteria > 0 &&
-    isOneOf(value.maturity, ["preliminary", "partial", "broad"] as const) &&
-    Array.isArray(value.criteria) && value.criteria.every((item) =>
+  if (
+    value.policyVersion !== "domain-ethics-v3" ||
+    (value.score !== null && (!isInteger(value.score) || value.score < 0 || value.score > 100)) ||
+    !isInteger(value.assessedCriteria) || value.assessedCriteria < 0 ||
+    !isInteger(value.totalCriteria) || value.totalCriteria <= 0 ||
+    !isOneOf(value.maturity, ["preliminary", "partial", "broad"] as const) ||
+    !Array.isArray(value.criteria) || value.criteria.length !== value.totalCriteria ||
+    !value.criteria.every((item) =>
       isRecord(item) && typeof item.id === "string" && typeof item.label === "string" &&
-      isOneOf(item.status, CHECK_STATUSES) && typeof item.weight === "number" && item.weight > 0,
-    ) && Array.isArray(value.reasons) && value.reasons.every((reason) => typeof reason === "string") &&
-    typeof value.interpretation === "string";
+      isOneOf(item.status, ["pass", "fail", "unknown"] as const) &&
+      typeof item.weight === "number" && Number.isFinite(item.weight) && item.weight > 0,
+    ) ||
+    !Array.isArray(value.reasons) || !value.reasons.every((reason) => typeof reason === "string") ||
+    typeof value.interpretation !== "string"
+  ) {
+    return false;
+  }
+  const assessedCount = value.criteria.filter(
+    (criterion) => isRecord(criterion) && criterion.status !== "unknown",
+  ).length;
+  return assessedCount === value.assessedCriteria &&
+    ((value.assessedCriteria === 0 && value.score === null) ||
+      (value.assessedCriteria > 0 && value.score !== null));
 }
 
 function isInteger(value: unknown): value is number {

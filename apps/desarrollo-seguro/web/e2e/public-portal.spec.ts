@@ -106,16 +106,23 @@ test("shows the report when an authorized analysis finishes", async ({ page }) =
           totalCriteria: 8,
           maturity: "preliminary",
           criteria: [
+            { id: "dns-integrity", label: "Resolución DNS", status: "unknown", weight: 10 },
+            { id: "transport-security", label: "Seguridad del transporte TLS", status: "unknown", weight: 25 },
+            { id: "http-availability", label: "Respuesta HTTP", status: "unknown", weight: 15 },
             {
               id: "security-headers",
               label: "Cabeceras de seguridad",
               status: "pass",
-              weight: 12,
+              weight: 20,
             },
+            { id: "third-party-data-use", label: "Reutilización o venta de datos por terceros", status: "unknown", weight: 10 },
+            { id: "initial-cookie-risk", label: "Cookies conocidas en la respuesta inicial", status: "unknown", weight: 10 },
+            { id: "tracking", label: "Rastreadores y mapas de calor", status: "unknown", weight: 5 },
+            { id: "performance", label: "Rendimiento", status: "unknown", weight: 5 },
           ],
           reasons: [],
           interpretation:
-            "Puntuación provisional basada solo en señales observadas; no es una certificación.",
+            "Indicador provisional de DNS, TLS, HTTP, cabeceras y cookies conocidas en la respuesta inicial. No evalúa el consentimiento real, las prácticas de datos de terceros, los rastreadores dinámicos ni el rendimiento; no es una certificación.",
         },
         scope: ["/"],
         checks: [

@@ -31,10 +31,16 @@ const PUBLIC_REPORT = {
     maturity: "preliminary",
     criteria: [
       { id: "dns-integrity", label: "Resolución DNS", status: "pass", weight: 10 },
+      { id: "transport-security", label: "Seguridad del transporte TLS", status: "unknown", weight: 25 },
+      { id: "http-availability", label: "Respuesta HTTP", status: "unknown", weight: 15 },
+      { id: "security-headers", label: "Cabeceras de seguridad", status: "unknown", weight: 20 },
       { id: "third-party-data-use", label: "Reutilización o venta de datos por terceros", status: "unknown", weight: 10 },
+      { id: "initial-cookie-risk", label: "Cookies conocidas en la respuesta inicial", status: "unknown", weight: 10 },
+      { id: "tracking", label: "Rastreadores y mapas de calor", status: "unknown", weight: 5 },
+      { id: "performance", label: "Rendimiento", status: "unknown", weight: 5 },
     ],
     reasons: ["No hay evidencia verificable sobre reutilización o venta de datos por terceros."],
-    interpretation: "Puntuación provisional basada solo en señales observadas; no es una certificación ni evalúa el servicio completo.",
+    interpretation: "Indicador provisional de DNS, TLS, HTTP, cabeceras y cookies conocidas en la respuesta inicial. No evalúa el consentimiento real, las prácticas de datos de terceros, los rastreadores dinámicos ni el rendimiento; no es una certificación.",
   },
   scope: ["/"],
   checks: [
@@ -269,9 +275,16 @@ describe("PublicScanPortal", () => {
         score: 50,
         assessedCriteria: 2,
         criteria: [
-          { id: "initial-cookie-risk", label: "Cookies conocidas antes de elegir consentimiento", status: "fail", weight: 10 },
+          { id: "dns-integrity", label: "Resolución DNS", status: "pass", weight: 10 },
+          { id: "transport-security", label: "Seguridad del transporte TLS", status: "unknown", weight: 25 },
+          { id: "http-availability", label: "Respuesta HTTP", status: "unknown", weight: 15 },
+          { id: "security-headers", label: "Cabeceras de seguridad", status: "unknown", weight: 20 },
+          { id: "third-party-data-use", label: "Reutilización o venta de datos por terceros", status: "unknown", weight: 10 },
+          { id: "initial-cookie-risk", label: "Cookies conocidas en la respuesta inicial", status: "fail", weight: 10 },
+          { id: "tracking", label: "Rastreadores y mapas de calor", status: "unknown", weight: 5 },
+          { id: "performance", label: "Rendimiento", status: "unknown", weight: 5 },
         ],
-        reasons: ["Cookies conocidas antes de elegir consentimiento: el control observado presenta fallos."],
+        reasons: ["Cookies conocidas en la respuesta inicial: el control observado presenta fallos."],
       },
       checks: [
         {
@@ -429,6 +442,33 @@ describe("PublicScanPortal", () => {
       screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }),
       "example.com",
     );
+    await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "No se ha podido consultar el informe.",
+    );
+  });
+
+  it("rejects a report whose score disagrees with its evaluated criteria", async () => {
+    const invalidReport = {
+      ...PUBLIC_REPORT,
+      ethicsAssessment: {
+        ...PUBLIC_REPORT.ethicsAssessment,
+        assessedCriteria: 2,
+      },
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({
+      hostname: "example.com",
+      enrollment: "on_demand",
+      state: "fresh",
+      activeJobId: null,
+      lastReport: invalidReport,
+      checkedAt: "2026-11-03T08:00:00.000Z",
+    })));
+    const user = userEvent.setup();
+
+    render(<PublicScanPortal />);
+    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "example.com");
     await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(

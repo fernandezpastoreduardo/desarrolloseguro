@@ -134,6 +134,36 @@ describe("sanitizeScanObservations", () => {
     ).toThrow("scan_scope_not_allowlisted");
   });
 
+  it("does not persist collector error details as public evidence", () => {
+    const checks = makeTransportV1Checks().map((check) =>
+      check.controlId === "DS-DNS-01"
+        ? {
+            ...check,
+            status: "pass",
+            evidence: {
+              probeErrorCode: "dns_resolution_failed",
+              privateDetail: "user supplied sensitive error text",
+            },
+          }
+        : check,
+    );
+
+    const result = sanitizeScanObservations(
+      MONITORED_HOSTNAME,
+      "transport-v1",
+      ["/"],
+      checks,
+    );
+    const dnsCheck = result.checks.find(({ controlId }) => controlId === "DS-DNS-01");
+
+    expect(dnsCheck).toMatchObject({
+      status: "unknown",
+      evidence: {},
+      summary: "Comprobación DS-DNS-01: unknown.",
+    });
+    expect(JSON.stringify(result)).not.toContain("user supplied sensitive error text");
+  });
+
   it("requires complete control, route, and method coverage for controls-v2", () => {
     const checks = makeControlsV2Checks(["/", "/precios"]).filter(
       (check) =>

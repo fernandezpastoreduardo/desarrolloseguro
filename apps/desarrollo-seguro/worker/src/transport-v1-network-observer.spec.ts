@@ -265,7 +265,25 @@ describe("createTransportV1NetworkObserver", () => {
       evidence: {},
       requestsCount: 1,
       bytesCount: 0,
+      errorCode: "http_request_failed",
     });
     expect(JSON.stringify(result)).not.toContain("private transport detail");
+  });
+
+  it("categorizes DNS failures without returning resolver details", async () => {
+    const observer = createTransportV1NetworkObserver({
+      dnsResolver: vi.fn().mockRejectedValue(new Error("private resolver detail")),
+    });
+
+    const result = await observer.observeDns(
+      HOSTNAME,
+      new AbortController().signal,
+    );
+
+    expect(result).toMatchObject({
+      evidence: {},
+      errorCode: "dns_resolution_failed",
+    });
+    expect(JSON.stringify(result)).not.toContain("private resolver detail");
   });
 });

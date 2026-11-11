@@ -182,6 +182,8 @@ assert.match(sandboxProbe, /default_network_route_present/u);
 assert.match(sandboxVerifier, /profileVersion":"controls-v1/u);
 assert.match(sandboxVerifier, /executor_entrypoint_probe_failed/u);
 assert.match(nginx, /proxy_pass https:\/\/development-security-api:3001/u);
+assert.match(nginx, /absolute_redirect off;/u);
+assert.match(nginx, /port_in_redirect off;/u);
 assert.match(nginx, /proxy_ssl_verify on/u);
 assert.match(nginx, /proxy_ssl_trusted_certificate \/run\/secrets\/internal_tls_ca\.crt/u);
 assert.match(nginx, /client_body_temp_path \/tmp\/client_temp/u);

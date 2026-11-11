@@ -1,4 +1,7 @@
 export type PinnedTransportErrorCode =
+  | "dns_resolution_failed"
+  | "connection_failed"
+  | "broker_failed"
   | "request_aborted"
   | "request_timeout"
   | "response_size_limit_exceeded"
@@ -24,6 +27,9 @@ export class PinnedTransportError extends Error {
 }
 
 const ERROR_CODES = new Set<PinnedTransportErrorCode>([
+  "dns_resolution_failed",
+  "connection_failed",
+  "broker_failed",
   "request_aborted",
   "request_timeout",
   "response_size_limit_exceeded",
@@ -61,6 +67,12 @@ export function safeTransportErrorCode(
   }
   if (error instanceof Error) {
     const code = getErrorCode(error);
+    if (code === "EHOSTUNREACH" || code === "ENOTFOUND" || code === "EAI_AGAIN") {
+      return "dns_resolution_failed";
+    }
+    if (["ECONNREFUSED", "ECONNRESET", "ETIMEDOUT", "EHOSTUNREACH"].includes(code ?? "")) {
+      return "connection_failed";
+    }
     if (code && CERTIFICATE_ERROR_CODES.has(code)) return "tls_certificate_invalid";
     if (code?.startsWith("ERR_SSL_") || code?.startsWith("ERR_TLS_")) {
       return "tls_handshake_failed";

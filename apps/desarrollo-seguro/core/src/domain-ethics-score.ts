@@ -28,7 +28,7 @@ const CRITERIA = [
   { id: "http-availability", label: "Respuesta HTTP", weight: 15, controls: ["DS-HTTP-01"] },
   { id: "security-headers", label: "Cabeceras de seguridad", weight: 20, controls: ["DS-HDR-01"] },
   { id: "third-party-data-use", label: "Reutilización o venta de datos por terceros", weight: 10, controls: ["DS-PRIV-04"] },
-  { id: "initial-cookie-risk", label: "Cookies conocidas antes de elegir consentimiento", weight: 10, controls: ["DS-PRIV-05"] },
+  { id: "initial-cookie-risk", label: "Cookies conocidas en la respuesta inicial", weight: 10, controls: ["DS-PRIV-05"] },
   { id: "tracking", label: "Rastreadores y mapas de calor", weight: 5, controls: ["DS-PRIV-06"] },
   { id: "performance", label: "Rendimiento", weight: 5, controls: ["DS-QUAL-02"] },
 ] as const;
@@ -38,7 +38,7 @@ const UNVERIFIED_THIRD_PARTY_REASON =
 const UNKNOWN_REASONS: Record<string, string> = {
   "transport-security": "No se han comprobado todas las versiones de TLS incluidas en este criterio.",
   "third-party-data-use": UNVERIFIED_THIRD_PARTY_REASON,
-  "initial-cookie-risk": "No se pudo inspeccionar la respuesta inicial para detectar cookies conocidas.",
+  "initial-cookie-risk": "No se pudo inspeccionar la respuesta inicial; no se ha evaluado el comportamiento posterior del consentimiento.",
   tracking: "No se han inspeccionado scripts de analítica, rastreadores o mapas de calor.",
   performance: "No se han medido métricas de rendimiento de página.",
 };
@@ -71,7 +71,7 @@ export function assessDomainEthics(checks: unknown): DomainEthicsAssessment {
     maturity: assessed.length < 4 ? "preliminary" : assessed.length < criteria.length ? "partial" : "broad",
     criteria,
     reasons,
-    interpretation: "Puntuación provisional basada solo en señales observadas; no es una certificación ni evalúa el servicio completo.",
+    interpretation: "Indicador provisional de DNS, TLS, HTTP, cabeceras y cookies conocidas en la respuesta inicial. No evalúa el consentimiento real, las prácticas de datos de terceros, los rastreadores dinámicos ni el rendimiento; no es una certificación.",
   };
 }
 

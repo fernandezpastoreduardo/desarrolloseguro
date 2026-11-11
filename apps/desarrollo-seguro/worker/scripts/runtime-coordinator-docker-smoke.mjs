@@ -22,22 +22,19 @@ const signal = {
 };
 
 try {
-  const result = await runner.execute({
-    protocolVersion: 1,
-    requestId: randomUUID(),
-    hostname: "example.org",
-    profileVersion: "transport-v1",
-  }, signal);
-  if (
-    result.verdict !== "inconclusive" ||
-    result.checks.length !== 5 ||
-    result.checks.some((check) => check.status !== "unknown")
-  ) {
-    const statuses = result.checks.map((check) => check.status).join(",");
-    throw new Error(`runtime_smoke_unexpected_result:${result.verdict}:${statuses}`);
+  try {
+    await runner.execute({
+      protocolVersion: 1,
+      requestId: randomUUID(),
+      hostname: "example.org",
+      profileVersion: "transport-v1",
+    }, signal);
+    throw new Error("runtime_smoke_empty_observation_was_accepted");
+  } catch (error) {
+    if (!(error instanceof Error) || error.message !== "executor_failed") throw error;
   }
   process.stdout.write(
-    "Docker runtime lifecycle passed; network-disabled observations remained inconclusive.\n",
+    "Docker runtime lifecycle passed; empty network-disabled observations were rejected.\n",
   );
 } catch (error) {
   const safeFailureCode = getSafeFailureCode(error);

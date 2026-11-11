@@ -41,6 +41,10 @@ const MIGRATIONS = [
     version: "014_domain_v1_initial_cookie_evidence",
     file: "014_domain_v1_initial_cookie_evidence.sql",
   },
+  {
+    version: "015_domain_v1_for_existing_domains",
+    file: "015_domain_v1_for_existing_domains.sql",
+  },
 ] as const;
 
 const MIGRATION_LOCK_ID = 728194032;

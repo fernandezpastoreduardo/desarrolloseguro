@@ -4,6 +4,7 @@ import type {
   TransportV1ObservationSource,
   TransportV1ProbeResult,
 } from "./transport-v1-executor.js";
+import type { PinnedTransportErrorCode } from "./pinned-transport-error.js";
 import {
   MAX_TRANSPORT_BYTES_PER_SCAN,
   MAX_TRANSPORT_REQUESTS_PER_SCAN,
@@ -13,6 +14,14 @@ const MAX_BROKER_OPERATIONS = 5;
 const MAX_CONCURRENT_BROKER_OPERATIONS = 2;
 const PROBE_OPERATIONS = ["dns", "tls", "http-head", "http-get", "headers"] as const;
 const FORBIDDEN_EVIDENCE_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+const SAFE_PROBE_ERROR_CODES = new Set<PinnedTransportErrorCode>([
+  "dns_resolution_failed", "connection_failed", "broker_failed",
+  "request_aborted", "request_timeout", "response_size_limit_exceeded",
+  "https_request_failed", "http_request_failed", "invalid_http_response",
+  "redirect_limit_exceeded", "redirect_origin_not_allowlisted",
+  "redirect_path_not_allowlisted", "tls_certificate_invalid",
+  "tls_handshake_failed", "transport_failed",
+]);
 
 export type TransportV1ProbeOperation = (typeof PROBE_OPERATIONS)[number];
 
@@ -82,7 +91,10 @@ export function createTransportV1EgressBroker(
       }
       return createBrokerResponse(request.requestId, validatedResult);
     } catch {
-      return createBrokerResponse(request.requestId, emptyProbeResult());
+      return createBrokerResponse(request.requestId, {
+        ...emptyProbeResult(),
+        errorCode: "broker_failed",
+      });
     } finally {
       activeOperations -= 1;
     }
@@ -168,7 +180,7 @@ function validateProbeResult(input: unknown): TransportV1ProbeResult {
 
   const candidate = input as Record<string, unknown>;
   if (
-    Reflect.ownKeys(candidate).length !== 3 ||
+    (Reflect.ownKeys(candidate).length !== 3 && Reflect.ownKeys(candidate).length !== 4) ||
     !Object.hasOwn(candidate, "evidence") ||
     !Object.hasOwn(candidate, "requestsCount") ||
     !Object.hasOwn(candidate, "bytesCount") ||
@@ -177,7 +189,10 @@ function validateProbeResult(input: unknown): TransportV1ProbeResult {
     (candidate.requestsCount as number) > MAX_TRANSPORT_REQUESTS_PER_SCAN ||
     !Number.isSafeInteger(candidate.bytesCount) ||
     (candidate.bytesCount as number) < 0 ||
-    (candidate.bytesCount as number) > MAX_TRANSPORT_BYTES_PER_SCAN
+    (candidate.bytesCount as number) > MAX_TRANSPORT_BYTES_PER_SCAN ||
+    (Object.hasOwn(candidate, "errorCode") &&
+      (typeof candidate.errorCode !== "string" ||
+        !SAFE_PROBE_ERROR_CODES.has(candidate.errorCode as PinnedTransportErrorCode)))
   ) {
     throw createBrokerRequestError();
   }
@@ -186,6 +201,9 @@ function validateProbeResult(input: unknown): TransportV1ProbeResult {
     evidence: validateEvidence(candidate.evidence),
     requestsCount: candidate.requestsCount as number,
     bytesCount: candidate.bytesCount as number,
+    ...(Object.hasOwn(candidate, "errorCode")
+      ? { errorCode: candidate.errorCode as PinnedTransportErrorCode }
+      : {}),
   };
 }
 

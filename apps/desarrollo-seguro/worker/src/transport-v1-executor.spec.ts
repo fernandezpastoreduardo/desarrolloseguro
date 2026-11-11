@@ -241,19 +241,22 @@ describe("TransportV1FixtureExecutor", () => {
   it("limits a network executor to two concurrent probes", async () => {
     let active = 0;
     let maxActive = 0;
-    const observe = async () => {
+    const observe = async (evidence: Record<string, boolean | number | string>) => {
       active += 1;
       maxActive = Math.max(maxActive, active);
       await new Promise((resolve) => setTimeout(resolve, 0));
       active -= 1;
-      return { evidence: {}, requestsCount: 1, bytesCount: 1 };
+      return { evidence, requestsCount: 1, bytesCount: 1 };
     };
     const source: TransportV1ObservationSource = {
       sourceKind: "network",
-      observeDns: observe,
-      observeTls: observe,
-      observeHttp: observe,
-      observeHeaders: observe,
+      observeDns: () => observe({ addressClass: "public", aRecordCount: 1, aaaaRecordCount: 0 }),
+      observeTls: () => observe({ protocol: "TLSv1.3", certificateValid: true, hostnameMatches: true }),
+      observeHttp: () => observe({ statusCode: 200, redirectedToHttps: true, finalScheme: "https" }),
+      observeHeaders: () => observe({
+        finalScheme: "https", hsts: true, nosniff: true, frameProtection: true,
+        referrerPolicy: true, csp: true,
+      }),
     };
     const executor = new TransportV1NetworkExecutor(source);
 
@@ -262,5 +265,38 @@ describe("TransportV1FixtureExecutor", () => {
     expect(maxActive).toBe(2);
     expect(result.metrics.requestsCount).toBe(5);
     expect(result.metrics.bytesCount).toBe(5);
+  });
+
+  it("fails the job instead of saving an all-empty network report", async () => {
+    const failedProbe = {
+      evidence: {},
+      requestsCount: 0,
+      bytesCount: 0,
+      errorCode: "dns_resolution_failed" as const,
+    };
+    const source: TransportV1ObservationSource = {
+      sourceKind: "network",
+      observeDns: vi.fn().mockResolvedValue(failedProbe),
+      observeTls: vi.fn().mockResolvedValue({
+        ...failedProbe,
+        errorCode: "tls_certificate_invalid",
+      }),
+      observeHttp: vi.fn().mockResolvedValue({
+        ...failedProbe,
+        errorCode: "connection_failed",
+      }),
+      observeHeaders: vi.fn().mockResolvedValue({
+        ...failedProbe,
+        errorCode: "connection_failed",
+      }),
+    };
+
+    await expect(
+      new TransportV1NetworkExecutor(source).execute(
+        { ...JOB, profileVersion: "domain-v1" },
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow("network_observation_unavailable");
+    expect(JSON.stringify(source)).not.toContain("secret");
   });
 });

@@ -16,7 +16,10 @@ import {
   type HttpsRequestFactory,
   type PinnedHttpsResult,
 } from "./pinned-https-transport.js";
-import { PinnedTransportError } from "./pinned-transport-error.js";
+import {
+  PinnedTransportError,
+  safeTransportErrorCode,
+} from "./pinned-transport-error.js";
 import type {
   TransportV1Evidence,
   TransportV1ObservationSource,
@@ -195,6 +198,7 @@ async function collectProbe<T>(
       evidence: {},
       requestsCount: error instanceof PinnedTransportError ? error.requestsCount : 0,
       bytesCount: error instanceof PinnedTransportError ? error.bytesCount : 0,
+      errorCode: safeTransportErrorCode(error, "transport_failed"),
     };
   }
 }

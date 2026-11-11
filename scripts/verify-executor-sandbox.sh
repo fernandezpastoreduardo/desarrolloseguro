@@ -80,7 +80,7 @@ executor_response="$(printf '%s' '{"protocolVersion":1,"requestId":"11111111-111
     --cpus 0.5 \
     --tmpfs /tmp:rw,noexec,nosuid,size=16m,uid=1000,gid=1000 \
     "$image_tag" || true)"
-if [[ "$executor_response" != *'"verdict":"inconclusive"'* || "$executor_response" != *'"status":"unknown"'* ]]; then
+if [[ "$executor_response" != *'"errorCode":"executor_failed"'* ]]; then
   printf 'Executor missing-broker probe returned: %s\n' "$executor_response" >&2
   printf 'executor_missing_broker_probe_failed\n' >&2
   exit 1
@@ -169,9 +169,9 @@ executor_response="$(printf '%s' '{"protocolVersion":1,"requestId":"11111111-111
     --tmpfs /tmp:rw,noexec,nosuid,size=16m,uid=1000,gid=1000 \
     --mount "type=volume,source=$broker_volume,target=/run/development-security-egress,readonly" \
     "$image_tag" || true)"
-if [[ "$executor_response" != *'"verdict":"inconclusive"'* || "$executor_response" != *'"status":"unknown"'* ]]; then
+if [[ "$executor_response" != *'"errorCode":"executor_failed"'* ]]; then
   printf 'Executor with isolated broker returned: %s\n' "$executor_response" >&2
   printf 'executor_broker_ipc_probe_failed\n' >&2
   exit 1
 fi
-printf 'Per-job broker and network-disabled executor share a private socket volume; its mode and ownership are 0660/1000:1000. The result stays inconclusive because the broker also has network disabled.\n'
+printf 'Per-job broker and network-disabled executor share a private socket volume; its mode and ownership are 0660/1000:1000. Empty network observations are rejected.\n'
