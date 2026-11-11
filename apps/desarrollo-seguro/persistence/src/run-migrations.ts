@@ -33,6 +33,10 @@ const MIGRATIONS = [
     version: "012_temporarily_disable_scan_cooldown",
     file: "012_temporarily_disable_scan_cooldown.sql",
   },
+  {
+    version: "013_temporarily_disable_report_cache",
+    file: "013_temporarily_disable_report_cache.sql",
+  },
 ] as const;
 
 const MIGRATION_LOCK_ID = 728194032;

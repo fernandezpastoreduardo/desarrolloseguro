@@ -114,15 +114,9 @@ describePostgres.sequential("PostgresScanStore", () => {
     expect(queuedCount.rows[0]?.count).toBe(10);
   });
 
-  it("admits a repeat scan as soon as the cached report expires", async () => {
+  it("admits a repeat scan immediately after a prior report", async () => {
     const job = await queueAndClaim();
-    const staleCompletedAt = new Date(Date.now() - 61 * 60 * 1000);
-    await complete(
-      job,
-      [CHECK],
-      new Date(staleCompletedAt.getTime() - 60_000),
-      staleCompletedAt,
-    );
+    await complete(job);
 
     const repeatedScan = await store.ensureFreshScan({
       hostname: TEST_HOSTNAME,
@@ -262,7 +256,7 @@ describePostgres.sequential("PostgresScanStore", () => {
     expect(running.rows[0].count).toBe(1);
   });
 
-  it("reuses only reports younger than 60 minutes", async () => {
+  it("queues a new scan even when a recent report exists during development", async () => {
     const first = await queueAndClaim();
     const reportId = await complete(first);
 
@@ -272,7 +266,8 @@ describePostgres.sequential("PostgresScanStore", () => {
       trigger: "requested",
     });
 
-    expect(fresh).toEqual({ kind: "cached", reportId });
+    expect(fresh.kind).toBe("queued");
+    expect(fresh).not.toEqual({ kind: "cached", reportId });
   });
 
   it("does not reuse reports at least 60 minutes old", async () => {
