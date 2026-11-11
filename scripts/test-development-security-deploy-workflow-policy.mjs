@@ -12,7 +12,7 @@ const [workflow, deployScript, archiveGateway, compose] = await Promise.all([
 ]);
 const normalizedDeployScript = deployScript.replace(/\\\n/gu, " ");
 
-assert.match(workflow, /^name: Deploy Desarrollo Seguro$/mu);
+assert.match(workflow, /^name: CI\/CD Desarrollo Seguro$/mu);
 assert.match(workflow, /^  workflow_dispatch:$/mu);
 assert.match(workflow, /^      deploy:$/mu);
 assert.match(workflow, /^        type: boolean$/mu);
@@ -30,6 +30,24 @@ assert.match(
 assert.match(workflow, /^permissions:\n  contents: read$/mu);
 assert.match(workflow, /persist-credentials: false/u);
 assert.match(workflow, /environment: desarrollo-seguro-production/u);
+assert.match(workflow, /run: pnpm ci:verify quality/u);
+assert.match(workflow, /run: pnpm test:e2e/u);
+assert.match(workflow, /run: pnpm ci:verify postgres/u);
+assert.match(workflow, /run: pnpm ci:verify audit/u);
+for (const target of [
+  "development-security-production",
+  "development-security-web",
+  "development-security-worker",
+  "development-security-runtime-coordinator",
+  "development-security-executor",
+  "development-security-egress-broker",
+]) {
+  assert.match(workflow, new RegExp(`--target ${target} `, "u"));
+}
+assert.match(workflow, /aquasecurity\/setup-trivy@[a-f0-9]{40}/u);
+assert.match(workflow, /--severity HIGH,CRITICAL/u);
+assert.match(workflow, /--vuln-type os,library/u);
+assert.match(workflow, /needs: \[verify, build-and-scan-images\]/u);
 assert.match(
   workflow,
   /DS_DEPLOY_SSH_KEY: \$\{\{ secrets\.DS_DEPLOY_SSH_KEY \}\}/u,
@@ -38,7 +56,7 @@ assert.match(workflow, /DS_DEPLOY_KNOWN_HOSTS: \$\{\{ secrets\.DS_DEPLOY_KNOWN_H
 assert.match(workflow, /DS_DEPLOY_HOST: \$\{\{ secrets\.DS_DEPLOY_HOST \}\}/u);
 assert.match(workflow, /git archive --format=tar "\$GITHUB_SHA"/u);
 assert.match(workflow, /StrictHostKeyChecking=yes/u);
-assert.match(workflow, /curl .*https:\/\/desarrolloseguro\.org\/api\/desarrollo-seguro\/v1\/health/u);
+assert.match(workflow, /https:\/\/desarrolloseguro\.org\/api\/desarrollo-seguro\/v1\/health/u);
 assert.doesNotMatch(workflow, /^\s+(push|pull_request):/mu);
 assert.doesNotMatch(workflow, /grumphya|caddy reload|compose down/iu);
 
