@@ -10,7 +10,7 @@ Los DTOs son contratos HTTP. No exponen filas SQL, `evidence_json`, `lease_token
 
 Ambas rutas son de solo lectura, aplican `Cache-Control: no-store` y un limitador por proceso. La API normaliza el hostname; un hostname inválido da 400. Un UUID mal formado o un informe inexistente da 404. Si la persistencia falla, responde con un error público genérico y registra solo un código seguro.
 
-La ruta `POST` también aplica `Cache-Control: no-store`, limitador por proceso y hostname normalizado. Solo acepta `{ "authorized": true }`; no acepta perfil, rutas, métodos ni destinos en el body. Responde 202 con `{ hostname, state }`, donde `state` es `queued`, `running`, `cached`, `rate_limited`, `capacity_reached` o `unavailable`. El cliente no recibe IDs internos del trabajo. La función de PostgreSQL da de alta como `on_demand` un hostname nuevo con `transport-v1` y encola en la misma transacción; mantiene un máximo de 1000 dominios on-demand registrados y 10 trabajos en espera. La ventana de 24 horas por hostname queda temporalmente desactivada para facilitar las pruebas; la caché vigente de 60 minutos, el límite de cola y la ejecución única permanecen activos. La API conserva su propio limitador por proceso. La API no puede insertar directamente en las tablas. La respuesta `queued` confirma que se registró la petición, no que el worker esté operativo ni que haya conectado con el dominio.
+La ruta `POST` también aplica `Cache-Control: no-store`, limitador por proceso y hostname normalizado. Solo acepta `{ "authorized": true }`; no acepta perfil, rutas, métodos ni destinos en el body. Responde 202 con `{ hostname, state }`, donde `state` es `queued`, `running`, `cached`, `rate_limited`, `capacity_reached` o `unavailable`. El cliente no recibe IDs internos del trabajo. La función de PostgreSQL da de alta como `on_demand` un hostname nuevo con `transport-v1` y encola en la misma transacción; mantiene un máximo de 1000 dominios on-demand registrados y 10 trabajos en espera. Durante la fase de pruebas no aplica el intervalo de 24 horas ni reutiliza informes recientes como resultado de una nueva solicitud; ambos límites se reactivarán antes de producción. Se conservan el límite de cola, la ejecución única y el limitador de API por proceso. La API no puede insertar directamente en las tablas. La respuesta `queued` confirma que se registró la petición, no que el worker esté operativo ni que haya conectado con el dominio.
 
 ## Estado del dominio
 
@@ -48,6 +48,21 @@ type PublicReport = {
   completedAt: string;
   expiresAt: string;
   verdict: "pass" | "fail" | "inconclusive";
+  ethicsAssessment: {
+    policyVersion: "domain-ethics-v1";
+    score: number | null;
+    assessedCriteria: number;
+    totalCriteria: number;
+    maturity: "preliminary" | "partial" | "broad";
+    criteria: Array<{
+      id: string;
+      label: string;
+      status: "pass" | "fail" | "unknown";
+      weight: number;
+    }>;
+    reasons: string[];
+    interpretation: string;
+  };
   scope: string[];
   checks: Array<{
     controlId: string;
@@ -62,6 +77,8 @@ type PublicReport = {
   }>;
 };
 ```
+
+El resumen ético se calcula en la API desde los controles públicos del mismo informe. La puntuación es provisional, solo refleja evidencia observada y muestra cuántos criterios se evaluaron. Cookies, consentimiento, rastreadores, mapas de calor, rendimiento y prácticas de reutilización/venta de datos permanecen `unknown` hasta contar con observadores y fuentes verificables. Véase [domain-ethics-scoring.md](domain-ethics-scoring.md).
 
 `same_vps` identifica la ubicación de observación y no significa evaluación independiente. Las rutas y métodos publicados proceden del perfil, no de parámetros de la petición. El informe no existe todavía si no hay una ejecución completa previa.
 

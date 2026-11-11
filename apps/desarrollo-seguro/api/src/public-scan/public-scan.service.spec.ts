@@ -258,6 +258,12 @@ describe("PublicScanService", () => {
 
     expect(publicReport).toMatchObject({
       profileVersion: "transport-v1",
+      ethicsAssessment: {
+        policyVersion: "domain-ethics-v1",
+        score: 100,
+        assessedCriteria: 1,
+        totalCriteria: 8,
+      },
       checks: [
         {
           controlId: "DS-DNS-01",
@@ -431,6 +437,7 @@ describe("PublicScanService", () => {
         "completedAt",
         "expiresAt",
         "verdict",
+        "ethicsAssessment",
         "scope",
         "checks",
       ].sort(),

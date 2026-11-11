@@ -103,6 +103,21 @@ type PublicReport = {
   completedAt: string;
   expiresAt: string;
   verdict: ScanVerdict;
+  ethicsAssessment: {
+    policyVersion: "domain-ethics-v1";
+    score: number | null;
+    assessedCriteria: number;
+    totalCriteria: number;
+    maturity: "preliminary" | "partial" | "broad";
+    criteria: Array<{
+      id: string;
+      label: string;
+      status: CheckStatus;
+      weight: number;
+    }>;
+    reasons: string[];
+    interpretation: string;
+  };
   scope: string[];
   checks: PublicCheck[];
 };
@@ -406,6 +421,11 @@ export function PublicScanPortal() {
           {getAnalysisRequestMessage(analysisRequestState)}
         </p>
       )}
+      {isScanInProgress(status, analysisRequestState) && (
+        <ScanProgress
+          phase={getScanProgressPhase(status, analysisRequestState)}
+        />
+      )}
       {state === "ready" && status?.state === "not_scanned" && (
         <section
           className="ds-portal__empty"
@@ -512,6 +532,50 @@ function ReportResult({ report }: { report: PublicReport }) {
   );
 }
 
+function ScanProgress({ phase }: { phase: "queued" | "running" }) {
+  const description =
+    phase === "queued"
+      ? "Análisis en cola. El porcentaje de progreso no está disponible."
+      : "Análisis en curso. El porcentaje de progreso no está disponible.";
+
+  return (
+    <div
+      className="ds-portal__scan-progress"
+      role="progressbar"
+      aria-label="Progreso del análisis"
+      aria-valuetext={description}
+      data-phase={phase}
+    >
+      <span className="ds-portal__scan-progress-track" aria-hidden="true">
+        <span className="ds-portal__scan-progress-indicator" />
+      </span>
+      <span className="ds-portal__scan-progress-label">{description}</span>
+    </div>
+  );
+}
+
+function isScanInProgress(
+  status: DomainStatus | null,
+  requestState: AnalysisRequestState | null,
+): boolean {
+  return (
+    status?.state === "updating" ||
+    requestState === "queued" ||
+    requestState === "running"
+  );
+}
+
+function getScanProgressPhase(
+  status: DomainStatus | null,
+  requestState: AnalysisRequestState | null,
+): "queued" | "running" {
+  if (requestState === "queued") return "queued";
+  if (status?.state === "updating" || requestState === "running") {
+    return "running";
+  }
+  return "queued";
+}
+
 function ReportSummary({
   report,
   state,
@@ -522,6 +586,29 @@ function ReportSummary({
   const isCurrent = state === "fresh";
   return (
     <>
+      <section className="ds-portal__ethics" aria-labelledby="ethics-summary-heading">
+        <p className="ds-portal__eyebrow">Resumen del dominio</p>
+        <h3 id="ethics-summary-heading">Lectura ética y técnica provisional</h3>
+        <p className="ds-portal__ethics-score">
+          {report.ethicsAssessment.score === null
+            ? "Sin puntuación: faltan controles observables"
+            : `${report.ethicsAssessment.score}/100 · ${report.ethicsAssessment.assessedCriteria} de ${report.ethicsAssessment.totalCriteria} criterios evaluados`}
+        </p>
+        <p>{report.ethicsAssessment.interpretation}</p>
+        <ul className="ds-portal__ethics-criteria">
+          {report.ethicsAssessment.criteria.map((criterion) => (
+            <li key={criterion.id} data-status={criterion.status}>
+              <span>{criterion.label}</span>
+              <strong>{getCheckStatusLabel(criterion.status)}</strong>
+            </li>
+          ))}
+        </ul>
+        {report.ethicsAssessment.reasons.length > 0 && (
+          <ul className="ds-portal__ethics-reasons">
+            {report.ethicsAssessment.reasons.map((reason) => <li key={reason}>{reason}</li>)}
+          </ul>
+        )}
+      </section>
       <div className="ds-portal__verdict" data-verdict={report.verdict}>
         <span>{isCurrent ? "Vigente" : "Histórico"}</span>
         <strong>
@@ -616,6 +703,7 @@ function isPublicReport(value: unknown): value is PublicReport {
     !isIsoTimestamp(value.completedAt) ||
     !isIsoTimestamp(value.expiresAt) ||
     !isOneOf(value.verdict, SCAN_VERDICTS) ||
+    !isEthicsAssessment(value.ethicsAssessment) ||
     !Array.isArray(value.checks) ||
     value.checks.length === 0 ||
     value.checks.length > MAX_REPORT_CHECKS ||
@@ -647,6 +735,24 @@ function isPublicReport(value: unknown): value is PublicReport {
     return false;
   }
   return true;
+}
+
+function isEthicsAssessment(value: unknown): value is PublicReport["ethicsAssessment"] {
+  if (!isRecord(value)) return false;
+  return value.policyVersion === "domain-ethics-v1" &&
+    (value.score === null || (isInteger(value.score) && value.score >= 0 && value.score <= 100)) &&
+    isInteger(value.assessedCriteria) && value.assessedCriteria >= 0 &&
+    isInteger(value.totalCriteria) && value.totalCriteria > 0 &&
+    isOneOf(value.maturity, ["preliminary", "partial", "broad"] as const) &&
+    Array.isArray(value.criteria) && value.criteria.every((item) =>
+      isRecord(item) && typeof item.id === "string" && typeof item.label === "string" &&
+      isOneOf(item.status, CHECK_STATUSES) && typeof item.weight === "number" && item.weight > 0,
+    ) && Array.isArray(value.reasons) && value.reasons.every((reason) => typeof reason === "string") &&
+    typeof value.interpretation === "string";
+}
+
+function isInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value);
 }
 
 function isAnalysisRequest(

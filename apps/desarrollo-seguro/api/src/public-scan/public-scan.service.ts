@@ -5,7 +5,11 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from "@nestjs/common";
-import { normalizeHostname } from "@desarrolloseguro/core";
+import {
+  assessDomainEthics,
+  normalizeHostname,
+  type DomainEthicsAssessment,
+} from "@desarrolloseguro/core";
 import {
   type EnsureScanResult,
   type PostgresScanStore,
@@ -35,6 +39,7 @@ export type PublicReport = {
   completedAt: string;
   expiresAt: string;
   verdict: "pass" | "fail" | "inconclusive";
+  ethicsAssessment: DomainEthicsAssessment;
   scope: string[];
   checks: Array<{
     controlId: string;
@@ -200,6 +205,7 @@ function toPublicReport(report: PublicScanReport): PublicReport {
     completedAt: report.completedAt.toISOString(),
     expiresAt: report.expiresAt.toISOString(),
     verdict: report.verdict,
+    ethicsAssessment: assessDomainEthics(report.checks),
     scope: report.scope,
     checks: report.checks.map((check) => ({
       controlId: check.controlId,

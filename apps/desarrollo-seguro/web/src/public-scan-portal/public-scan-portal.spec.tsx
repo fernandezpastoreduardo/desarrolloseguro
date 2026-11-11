@@ -23,6 +23,19 @@ const PUBLIC_REPORT = {
   completedAt: "2026-11-03T07:01:00.000Z",
   expiresAt: "2026-11-03T08:01:00.000Z",
   verdict: "inconclusive",
+  ethicsAssessment: {
+    policyVersion: "domain-ethics-v1",
+    score: 100,
+    assessedCriteria: 1,
+    totalCriteria: 8,
+    maturity: "preliminary",
+    criteria: [
+      { id: "dns-integrity", label: "Resolución DNS", status: "pass", weight: 10 },
+      { id: "third-party-data-use", label: "Reutilización o venta de datos por terceros", status: "unknown", weight: 10 },
+    ],
+    reasons: ["No hay evidencia verificable sobre reutilización o venta de datos por terceros."],
+    interpretation: "Puntuación provisional basada solo en señales observadas; no es una certificación ni evalúa el servicio completo.",
+  },
   scope: ["/"],
   checks: [
     {
@@ -100,6 +113,9 @@ describe("PublicScanPortal", () => {
       body: JSON.stringify({ authorized: true }),
     });
     expect(await screen.findByText(/solicitud añadida a la cola/i)).toBeVisible();
+    expect(
+      screen.getByRole("progressbar", { name: "Progreso del análisis" }),
+    ).toHaveAttribute("data-phase", "queued");
   });
 
   it("shows the stored checks and makes a stale report visibly historical", async () => {
@@ -125,8 +141,44 @@ describe("PublicScanPortal", () => {
 
     expect(await screen.findByText("Histórico")).toBeVisible();
     expect(screen.getByText(REPORT_SUMMARY)).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Lectura ética y técnica provisional" })).toBeVisible();
+    expect(screen.getByText("100/100 · 1 de 8 criterios evaluados")).toBeVisible();
+    expect(screen.getByText(/no hay evidencia verificable sobre reutilización o venta/i)).toBeVisible();
     expect(screen.getByText(/solo se observó la portada/i)).toBeVisible();
     expect(screen.getByText(/origen indicado en el registro/i)).toBeVisible();
+  });
+
+  it("shows an indeterminate progress bar for a domain with an active scan", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        Response.json({
+          hostname: "example.com",
+          enrollment: "on_demand",
+          state: "updating",
+          activeJobId: "123e4567-e89b-42d3-a456-426614174123",
+          lastReport: null,
+          checkedAt: "2026-11-03T08:10:00.000Z",
+        }),
+      ),
+    );
+    const user = userEvent.setup();
+
+    render(<PublicScanPortal />);
+    await user.type(
+      screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }),
+      "example.com",
+    );
+    await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
+
+    const progress = await screen.findByRole("progressbar", {
+      name: "Progreso del análisis",
+    });
+    expect(progress).toHaveAttribute(
+      "aria-valuetext",
+      expect.stringContaining("porcentaje de progreso no está disponible"),
+    );
+    expect(progress).not.toHaveAttribute("aria-valuenow");
   });
 
   it("accepts and labels a transport-v1 report", async () => {
