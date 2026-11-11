@@ -43,6 +43,8 @@ if tar --verbose --list --file "$archive" | awk 'substr($0, 1, 1) ~ /[lh]/ { fou
 fi
 
 release_dir="$(mktemp --directory "$PROJECT_ROOT/releases/gha-${revision}.XXXXXX")"
+chmod 0755 "$release_dir"
+umask 022
 tar --extract --file "$archive" --directory "$release_dir" --no-same-owner --no-same-permissions
 for required_file in compose.production.yaml Dockerfile scripts/deploy-development-security-analysis.sh; do
   if [[ ! -f "$release_dir/$required_file" ]]; then

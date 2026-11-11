@@ -60,6 +60,7 @@ assert.match(archiveGateway, /SSH_ORIGINAL_COMMAND/u);
 assert.match(archiveGateway, /MAX_ARCHIVE_BYTES=50000000/u);
 assert.match(archiveGateway, /development_security_deploy_archive_path_rejected/u);
 assert.match(archiveGateway, /development_security_deploy_archive_link_rejected/u);
+assert.match(archiveGateway, /chmod 0755 "\$release_dir"\s+umask 022/u);
 assert.match(archiveGateway, /deploy-development-security-analysis\.sh/u);
 assert.doesNotMatch(archiveGateway, /grumphya|caddy reload|compose down/iu);
 assert.match(compose, /^  development-security-(api|runtime-coordinator|worker|web):/mu);
