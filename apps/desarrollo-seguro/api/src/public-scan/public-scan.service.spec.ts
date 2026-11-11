@@ -77,12 +77,17 @@ describe("PublicScanService", () => {
   });
 
   it("normalizes authorized analysis requests and returns only the public state", async () => {
-    const requestOnDemandScan = vi.fn().mockResolvedValue({
-      kind: "queued",
-      jobId: "internal-job-id",
+    const requestOnDemandScan = vi.fn(function (this: object) {
+      expect(this).toBe(scanStore);
+      return Promise.resolve({ kind: "queued" as const, jobId: "internal-job-id" });
     });
+    const scanStore = {
+      readPublicDomainSnapshot: vi.fn(),
+      readPublicReport: vi.fn(),
+      requestOnDemandScan,
+    };
     const service = new PublicScanService({
-      scanStore: { readPublicDomainSnapshot: vi.fn(), readPublicReport: vi.fn(), requestOnDemandScan },
+      scanStore,
     });
 
     await expect(

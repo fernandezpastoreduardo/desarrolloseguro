@@ -21,10 +21,10 @@ docker compose --project-name "$PROJECT_NAME" --file "$COMPOSE_FILE" config --qu
 docker build --tag desarrolloseguro-executor:local --target development-security-executor .
 docker build --tag desarrolloseguro-egress-broker:local --target development-security-egress-broker .
 docker compose --project-name "$PROJECT_NAME" --file "$COMPOSE_FILE" \
-  build development-security-runtime-coordinator development-security-worker development-security-web
+  build development-security-api development-security-runtime-coordinator development-security-worker development-security-web
 docker compose --project-name "$PROJECT_NAME" --file "$COMPOSE_FILE" \
   up --detach --no-deps --wait \
-  development-security-runtime-coordinator development-security-worker development-security-web
+  development-security-api development-security-runtime-coordinator development-security-worker development-security-web
 
 docker compose --project-name "$PROJECT_NAME" --file "$COMPOSE_FILE" \
-  ps development-security-runtime-coordinator development-security-worker development-security-web
+  ps development-security-api development-security-runtime-coordinator development-security-worker development-security-web

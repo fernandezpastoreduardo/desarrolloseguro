@@ -141,14 +141,14 @@ export class PublicScanService {
     if (!isAuthorizedAnalysisRequest(body)) {
       throw new BadRequestException(ANALYSIS_AUTHORIZATION_REQUIRED);
     }
-    const requestOnDemandScan = this.store.scanStore.requestOnDemandScan;
-    if (!requestOnDemandScan) {
+    const scanStore = this.store.scanStore;
+    if (!scanStore.requestOnDemandScan) {
       this.logger.error(PUBLIC_SCAN_ADMISSION_FAILED);
       throw new ServiceUnavailableException(PUBLIC_STORAGE_ERROR);
     }
 
     try {
-      const result = await requestOnDemandScan(hostname);
+      const result = await scanStore.requestOnDemandScan(hostname);
       return { hostname, state: result.kind };
     } catch {
       this.logger.error(PUBLIC_SCAN_ADMISSION_FAILED);

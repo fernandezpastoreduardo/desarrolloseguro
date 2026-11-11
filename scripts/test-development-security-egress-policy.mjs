@@ -36,8 +36,8 @@ assert.doesNotMatch(
 assert.match(deployScript, /create-development-security-egress-network\.sh verify/u);
 assert.match(deployScript, /configure-development-security-egress-firewall\.sh verify/u);
 assert.match(deployScript, /DEVELOPMENT_SECURITY_SECRETS_DIR="\/opt\/desarrollo-seguro\/secrets"/u);
-assert.match(deployScript, /development-security-runtime-coordinator development-security-worker development-security-web/u);
-assert.doesNotMatch(deployScript, /(?:down|--volumes|grumphya|development-security-api|development-security-database)/u);
+assert.match(deployScript, /development-security-api development-security-runtime-coordinator development-security-worker development-security-web/u);
+assert.doesNotMatch(deployScript, /(?:down|--volumes|grumphya|development-security-database)/u);
 assert.match(compose, /DS_RUNTIME_EGRESS_NETWORK:\s*development-security-egress/u);
 assert.match(compose, /development-security-analysis-egress:\n    name: development-security-egress\n    external: true/u);
 for (const serviceName of [
