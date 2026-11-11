@@ -26,8 +26,10 @@ docker compose --project-name "$PROJECT_NAME" --file "$COMPOSE_FILE" \
 docker compose --project-name "$PROJECT_NAME" --file "$COMPOSE_FILE" \
   run --rm --no-deps development-security-migrate
 docker compose --project-name "$PROJECT_NAME" --file "$COMPOSE_FILE" \
+  up --detach --no-deps --wait development-security-runtime-coordinator
+docker compose --project-name "$PROJECT_NAME" --file "$COMPOSE_FILE" \
   up --detach --no-deps --wait \
-  development-security-api development-security-runtime-coordinator development-security-worker development-security-web
+  development-security-api development-security-worker development-security-web
 
 docker compose --project-name "$PROJECT_NAME" --file "$COMPOSE_FILE" \
   ps development-security-api development-security-runtime-coordinator development-security-worker development-security-web

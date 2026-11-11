@@ -107,8 +107,8 @@ assert.match(
 );
 assert.match(
   normalizedDeployScript,
-  /up --detach --no-deps --wait\s+development-security-api development-security-runtime-coordinator development-security-worker development-security-web/u,
-  "deployment must update only the four Desarrollo Seguro application services",
+  /up --detach --no-deps --wait development-security-runtime-coordinator[\s\S]*up --detach --no-deps --wait\s+development-security-api development-security-worker development-security-web/u,
+  "deployment must wait for the isolated runtime coordinator before starting the scanner worker",
 );
 assert.doesNotMatch(deployScript, /grumphya|caddy reload|compose down/iu);
 assert.match(archiveGateway, /SSH_ORIGINAL_COMMAND/u);
