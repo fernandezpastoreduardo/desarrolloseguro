@@ -5,12 +5,14 @@ const PROFILE_VERSION_V2 = "controls-v2";
 const PROFILE_VERSION_V3 = "controls-v3";
 const PROFILE_VERSION_TRANSPORT_V1 = "transport-v1";
 const PROFILE_VERSION_DOMAIN_V1 = "domain-v1";
+const PROFILE_VERSION_DOMAIN_V2 = "domain-v2";
 type ProfileVersion =
   | typeof PROFILE_VERSION_V1
   | typeof PROFILE_VERSION_V2
   | typeof PROFILE_VERSION_V3
   | typeof PROFILE_VERSION_TRANSPORT_V1
-  | typeof PROFILE_VERSION_DOMAIN_V1;
+  | typeof PROFILE_VERSION_DOMAIN_V1
+  | typeof PROFILE_VERSION_DOMAIN_V2;
 const MAX_SCOPE_PATHS = 3;
 const MAX_CHECKS = 32;
 const MAX_EVIDENCE_COUNT = 100_000;
@@ -60,6 +62,7 @@ const TRANSPORT_V1_CONTROLS = [
   "DS-HDR-01",
 ] as const;
 const DOMAIN_V1_CONTROLS = [...TRANSPORT_V1_CONTROLS, "DS-PRIV-05"] as const;
+const DOMAIN_V2_CONTROLS = [...DOMAIN_V1_CONTROLS, "DS-PRIV-06", "DS-QUAL-02"] as const;
 const CONTROLS: Readonly<Record<string, ControlContract>> = {
   "DS-DNS-01": {
     methodsByPath: { "/": ["DNS"] },
@@ -138,6 +141,22 @@ const CONTROLS: Readonly<Record<string, ControlContract>> = {
       consentPromptDetected: "boolean",
     },
   },
+  "DS-PRIV-06": {
+    methodsByPath: pathsFor(READ_METHODS),
+    evidence: {
+      inspected: "boolean",
+      thirdPartyResourceReferences: "count",
+      knownTrackingResourceReferences: "count",
+    },
+  },
+  "DS-QUAL-02": {
+    methodsByPath: pathsFor(READ_METHODS),
+    evidence: {
+      inspected: "boolean",
+      responseTimeMs: "count",
+      responseBytes: "count",
+    },
+  },
   "DS-QUAL-01": {
     methodsByPath: pathsFor(READ_METHODS),
     evidence: {
@@ -147,7 +166,7 @@ const CONTROLS: Readonly<Record<string, ControlContract>> = {
   },
 };
 const ALL_CONTROL_IDS = Object.keys(CONTROLS).filter(
-  (controlId) => controlId !== "DS-PRIV-05",
+  (controlId) => !["DS-PRIV-05", "DS-PRIV-06", "DS-QUAL-02"].includes(controlId),
 );
 const PROFILE_CONTROLS: Readonly<Record<ProfileVersion, readonly string[]>> = {
   [PROFILE_VERSION_V1]: ALL_CONTROL_IDS,
@@ -155,6 +174,7 @@ const PROFILE_CONTROLS: Readonly<Record<ProfileVersion, readonly string[]>> = {
   [PROFILE_VERSION_V3]: ALL_CONTROL_IDS,
   [PROFILE_VERSION_TRANSPORT_V1]: TRANSPORT_V1_CONTROLS,
   [PROFILE_VERSION_DOMAIN_V1]: DOMAIN_V1_CONTROLS,
+  [PROFILE_VERSION_DOMAIN_V2]: DOMAIN_V2_CONTROLS,
 };
 
 export function sanitizeScanObservations(
@@ -171,7 +191,8 @@ export function sanitizeScanObservations(
   const allowedPaths = getCanonicalScanPaths(safeHostname);
   const profilePaths =
     profileVersion === PROFILE_VERSION_TRANSPORT_V1 ||
-    profileVersion === PROFILE_VERSION_DOMAIN_V1
+    profileVersion === PROFILE_VERSION_DOMAIN_V1 ||
+    profileVersion === PROFILE_VERSION_DOMAIN_V2
       ? ["/"]
       : allowedPaths;
   const safeScope = sanitizeScope(scope, profilePaths);
@@ -199,7 +220,8 @@ export function sanitizeScanObservations(
     profileVersion === PROFILE_VERSION_V2 ||
     profileVersion === PROFILE_VERSION_V3 ||
     profileVersion === PROFILE_VERSION_TRANSPORT_V1 ||
-    profileVersion === PROFILE_VERSION_DOMAIN_V1
+    profileVersion === PROFILE_VERSION_DOMAIN_V1 ||
+    profileVersion === PROFILE_VERSION_DOMAIN_V2
   ) {
     assertCompleteCoverage(safeScope, safeChecks, allowedControlIds);
   }
@@ -213,7 +235,8 @@ function isProfileVersion(value: unknown): value is ProfileVersion {
     value === PROFILE_VERSION_V2 ||
     value === PROFILE_VERSION_V3 ||
     value === PROFILE_VERSION_TRANSPORT_V1 ||
-    value === PROFILE_VERSION_DOMAIN_V1
+    value === PROFILE_VERSION_DOMAIN_V1 ||
+    value === PROFILE_VERSION_DOMAIN_V2
   );
 }
 
@@ -373,7 +396,8 @@ function deriveSafeStatus(
     (profileVersion === PROFILE_VERSION_V2 ||
       profileVersion === PROFILE_VERSION_V3 ||
       profileVersion === PROFILE_VERSION_TRANSPORT_V1 ||
-      profileVersion === PROFILE_VERSION_DOMAIN_V1) &&
+      profileVersion === PROFILE_VERSION_DOMAIN_V1 ||
+      profileVersion === PROFILE_VERSION_DOMAIN_V2) &&
     controlId === "DS-HTTP-01" &&
     method === "HEAD" &&
     [405, 501].includes(Number(evidence.statusCode)) &&
@@ -385,7 +409,8 @@ function deriveSafeStatus(
   if (
     (profileVersion === PROFILE_VERSION_V3 ||
       profileVersion === PROFILE_VERSION_TRANSPORT_V1 ||
-      profileVersion === PROFILE_VERSION_DOMAIN_V1) &&
+      profileVersion === PROFILE_VERSION_DOMAIN_V1 ||
+      profileVersion === PROFILE_VERSION_DOMAIN_V2) &&
     controlId === "DS-HDR-01" &&
     evidence.finalScheme !== "https"
   ) {
@@ -432,6 +457,8 @@ const REQUIRED_EVIDENCE: Readonly<Record<string, readonly string[]>> = {
     "catalogMatchCount",
     "consentPromptDetected",
   ],
+  "DS-PRIV-06": ["inspected", "thirdPartyResourceReferences", "knownTrackingResourceReferences"],
+  "DS-QUAL-02": ["inspected", "responseTimeMs", "responseBytes"],
   "DS-PRIV-03": ["mixedContentCount", "insecureNavigationCount"],
   "DS-QUAL-01": ["documentStatusCode", "failedEssentialResourceCount"],
 };
@@ -444,7 +471,8 @@ function getRequiredEvidence(
   if (
     (profileVersion === PROFILE_VERSION_V3 ||
       profileVersion === PROFILE_VERSION_TRANSPORT_V1 ||
-      profileVersion === PROFILE_VERSION_DOMAIN_V1) &&
+      profileVersion === PROFILE_VERSION_DOMAIN_V1 ||
+      profileVersion === PROFILE_VERSION_DOMAIN_V2) &&
     controlId === "DS-HDR-01"
   ) {
     return [...(controlEvidence ?? []), "finalScheme"];
@@ -475,6 +503,8 @@ const CONTROL_FAILURES: Readonly<Record<string, EvidencePredicate>> = {
     Number(evidence.thirdPartyCookieCount) > 0,
   "DS-PRIV-05": (evidence) =>
     Number(evidence.catalogMatchCount) > 0,
+  "DS-PRIV-06": (evidence) => Number(evidence.knownTrackingResourceReferences) > 0,
+  "DS-QUAL-02": (evidence) => Number(evidence.responseTimeMs) > 2_500,
   "DS-PRIV-03": (evidence) =>
     Number(evidence.mixedContentCount) > 0 ||
     Number(evidence.insecureNavigationCount) > 0,
@@ -511,6 +541,11 @@ const CONTROL_PASSES: Readonly<Record<string, EvidencePredicate>> = {
   "DS-PRIV-05": (evidence) =>
     evidence.inspected === true &&
     Number(evidence.catalogMatchCount) === 0,
+  "DS-PRIV-06": (evidence) =>
+    evidence.inspected === true &&
+    Number(evidence.knownTrackingResourceReferences) === 0,
+  "DS-QUAL-02": (evidence) =>
+    evidence.inspected === true && Number(evidence.responseTimeMs) <= 2_500,
   "DS-PRIV-03": (evidence) =>
     evidence.mixedContentCount === 0 && evidence.insecureNavigationCount === 0,
   "DS-QUAL-01": (evidence) =>
@@ -534,7 +569,8 @@ function sanitizeEvidence(
       controlId === "DS-HDR-01" &&
       profileVersion !== PROFILE_VERSION_V3 &&
       profileVersion !== PROFILE_VERSION_TRANSPORT_V1 &&
-      profileVersion !== PROFILE_VERSION_DOMAIN_V1
+      profileVersion !== PROFILE_VERSION_DOMAIN_V1 &&
+      profileVersion !== PROFILE_VERSION_DOMAIN_V2
     ) {
       continue;
     }

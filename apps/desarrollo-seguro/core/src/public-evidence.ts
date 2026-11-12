@@ -7,6 +7,8 @@ const PUBLIC_EVIDENCE_FIELDS: Readonly<Record<string, readonly string[]>> = {
   "DS-HTTP-01": ["statusCode", "redirectedToHttps", "finalScheme"],
   "DS-HDR-01": ["finalScheme", "hsts", "nosniff", "frameProtection", "referrerPolicy", "csp"],
   "DS-PRIV-05": ["inspected", "cookieCount", "insecureCookieCount", "catalogMatchCount", "consentPromptDetected"],
+  "DS-PRIV-06": ["inspected", "thirdPartyResourceReferences", "knownTrackingResourceReferences"],
+  "DS-QUAL-02": ["inspected", "responseTimeMs", "responseBytes"],
 };
 
 const PUBLIC_EVIDENCE_ENUMS: Readonly<Record<string, readonly string[]>> = {

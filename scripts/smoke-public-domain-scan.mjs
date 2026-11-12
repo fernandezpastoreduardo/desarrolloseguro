@@ -27,10 +27,10 @@ export function validateCompletedReport(status, previousReportId) {
     throw new Error("public_scan_report_not_refreshed");
   }
   if (
-    report.profileVersion !== "domain-v1" ||
-    report.scannerVersion !== "domain-v1-network-adapter-1" ||
+    report.profileVersion !== "domain-v2" ||
+    report.scannerVersion !== "domain-v2-network-adapter-1" ||
     !Array.isArray(report.checks) ||
-    report.checks.length !== 6
+    report.checks.length !== 8
   ) {
     throw new Error("public_scan_profile_or_coverage_invalid");
   }
@@ -56,10 +56,12 @@ export function validateCompletedReport(status, previousReportId) {
     !Number.isInteger(assessment.score) ||
     assessment.score < 0 ||
     assessment.score > 100 ||
-    assessment.assessedCriteria < 4 ||
+    assessment.assessedCriteria < 6 ||
     assessment.totalCriteria !== 8 ||
     assessment.criteria.find(({ id }) => id === "initial-cookie-risk")?.status ===
-      "unknown"
+      "unknown" ||
+    assessment.criteria.find(({ id }) => id === "tracking")?.status === "unknown" ||
+    assessment.criteria.find(({ id }) => id === "performance")?.status === "unknown"
   ) {
     throw new Error("public_scan_ethics_assessment_incomplete");
   }

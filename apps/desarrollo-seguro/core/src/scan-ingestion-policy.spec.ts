@@ -134,6 +134,39 @@ describe("sanitizeScanObservations", () => {
     ).toThrow("scan_scope_not_allowlisted");
   });
 
+  it("accepts domain-v2 with bounded tracker references and initial response metrics", () => {
+    const checks = [
+      ...makeTransportV1Checks(),
+      {
+        ...makeUnknownCheck("DS-PRIV-05", "/", "GET"),
+        status: "pass",
+        evidence: { inspected: true, cookieCount: 0, insecureCookieCount: 0, catalogMatchCount: 0, consentPromptDetected: false },
+      },
+      {
+        ...makeUnknownCheck("DS-PRIV-06", "/", "GET"),
+        status: "pass",
+        evidence: { inspected: true, thirdPartyResourceReferences: 3, knownTrackingResourceReferences: 0 },
+      },
+      {
+        ...makeUnknownCheck("DS-QUAL-02", "/", "GET"),
+        status: "pass",
+        evidence: { inspected: true, responseTimeMs: 900, responseBytes: 45_000 },
+      },
+    ];
+
+    const result = sanitizeScanObservations(MONITORED_HOSTNAME, "domain-v2", ["/"], checks);
+
+    expect(result.checks).toHaveLength(8);
+    expect(result.checks.find(({ controlId }) => controlId === "DS-PRIV-06")?.status).toBe("pass");
+    expect(result.checks.find(({ controlId }) => controlId === "DS-QUAL-02")?.status).toBe("pass");
+
+    const slowChecks = checks.map((check) => check.controlId === "DS-QUAL-02"
+      ? { ...check, evidence: { inspected: true, responseTimeMs: 2_501, responseBytes: 45_000 } }
+      : check);
+    const slowResult = sanitizeScanObservations(MONITORED_HOSTNAME, "domain-v2", ["/"], slowChecks);
+    expect(slowResult.checks.find(({ controlId }) => controlId === "DS-QUAL-02")?.status).toBe("fail");
+  });
+
   it("does not persist collector error details as public evidence", () => {
     const checks = makeTransportV1Checks().map((check) =>
       check.controlId === "DS-DNS-01"

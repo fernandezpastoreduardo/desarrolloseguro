@@ -50,6 +50,10 @@ const MIGRATIONS = [
     version: "017_safe_scan_failure_categories",
     file: "017_safe_scan_failure_categories.sql",
   },
+  {
+    version: "018_domain_v2_tracking_performance",
+    file: "018_domain_v2_tracking_performance.sql",
+  },
 ] as const;
 
 const MIGRATION_LOCK_ID = 728194032;

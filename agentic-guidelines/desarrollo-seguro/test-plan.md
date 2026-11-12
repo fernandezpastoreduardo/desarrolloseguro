@@ -2,7 +2,7 @@
 
 ## Estado y ejecución
 
-La suite cubre reglas del core, persistencia, API de estado/informe, políticas de ingesta, Compose y configuración TLS. CI ejecuta lint, typecheck, tests, build, integración PostgreSQL efímera, políticas estáticas y un smoke aislado de la imagen. El job de despliegue verifica después que `.com` redirige a `.org` sin exponer `:8080` y solicita un informe real nuevo de `grumphya.com`; exige `domain-v1`, seis controles, al menos cuatro observaciones concluyentes, cookie evaluada y puntuación consistente.
+La suite cubre reglas del core, persistencia, API de estado/informe, políticas de ingesta, Compose y configuración TLS. CI ejecuta lint, typecheck, tests, build, integración PostgreSQL efímera, políticas estáticas y un smoke aislado de la imagen. El job de despliegue verifica después que `.com` redirige a `.org` sin exponer `:8080` y solicita un informe real nuevo de `grumphya.com`; exige `domain-v2`, ocho controles, al menos seis criterios evaluados, medición de cookies/rastreadores/rendimiento inicial y puntuación consistente.
 
 La suite PostgreSQL puede crear/borrar bases y roles globales. En local requiere `DS_TEST_POSTGRES_ISOLATED=1`, URL de loopback sin query/fragmento y base administrativa con prefijo `development_security_test_`. Ejecutarla solo contra un cluster local dedicado. CI usa un servicio PostgreSQL/pgvector efímero.
 
@@ -15,7 +15,7 @@ Las pruebas de políticas TLS generan certificados sintéticos temporales. No de
 | Core | Validación de hostname, perfil/scope, normalización y reglas de veredicto. |
 | API | Validación de entrada, respuestas de estado/informe y solicitud autorizada, rate limiting y errores públicos seguros. |
 | Persistencia | Migraciones, constraints, leases, concurrencia entre dominios, cuotas atómicas (10 en cola, 1 en ejecución, ventana de 24 h y reutilización de informe temporalmente desactivadas para pruebas, 1000 altas on-demand), reintentos, proyección pública y mínimos privilegios. PostgreSQL verifica la migración de 15 versiones, la petición nueva tras un informe reciente y la invariancia del historial. |
-| Scoring ético | La rúbrica evalúa solo controles con evidencia validada, reduce la puntuación ante fallos y deja criterios no observados en `unknown`; `domain-v1` puede puntuar coincidencias del catálogo de cookies en la respuesta inicial, pero no consentimiento tras una elección, rastreo dinámico, ventas de datos ni rendimiento. La cobertura y las razones acompañan cada score. |
+| Scoring ético | La rúbrica evalúa solo controles con evidencia validada y deja criterios no observados en `unknown`. `domain-v2` suma cookies iniciales, referencias de rastreadores conocidos en el HTML y latencia/tamaño de una respuesta GET; no afirma consentimiento, conexión efectiva, ventas de datos ni Core Web Vitals. La cobertura y las razones acompañan cada puntuación. |
 | Docker | Servicios, redes internas, loopback-only para web, secretos y volumen exclusivos del proyecto. La imagen del coordinador contiene el CLI Alpine; CI lo ejecuta sin daemon para detectar binarios incompatibles antes del deploy. |
 | TLS | Validación de nombres/CA y configuración de proxy con material sintético. |
 | UI | Flujos accesibles, estados de carga/error, navegación y adaptación móvil. |

@@ -83,6 +83,17 @@ describe("assessDomainEthics", () => {
     expect(result.score).toBe(50);
   });
 
+  it("scores passive known-tracker references and initial response performance separately", () => {
+    const observed = assessDomainEthics([
+      check("DS-PRIV-06", "fail"),
+      check("DS-QUAL-02", "pass"),
+    ]);
+
+    expect(observed).toMatchObject({ score: 50, assessedCriteria: 2, totalCriteria: 8 });
+    expect(observed.criteria.find(({ id }) => id === "tracking")?.status).toBe("fail");
+    expect(observed.criteria.find(({ id }) => id === "performance")?.status).toBe("pass");
+  });
+
   it("keeps unknown checks out of the denominator and rejects duplicate evidence", () => {
     const result = assessDomainEthics([
       check("DS-TLS-01", "unknown"),

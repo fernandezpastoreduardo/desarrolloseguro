@@ -347,7 +347,7 @@ describePostgres.sequential("PostgresScanStore", () => {
     expect(expired.kind).toBe("queued");
   });
 
-  it("reads a public domain report without returning persisted evidence", async () => {
+  it("reads public reports with only persisted allowlisted evidence", async () => {
     const job = await queueAndClaim();
     const reportId = await complete(job);
 
@@ -366,9 +366,9 @@ describePostgres.sequential("PostgresScanStore", () => {
         vantage: "same_vps",
       },
     });
-    expect(snapshot?.lastReport?.checks[0]).not.toHaveProperty("evidence");
+    expect(snapshot?.lastReport?.checks[0].evidence).toEqual({});
     expect(report).toMatchObject({ id: reportId, hostname: TEST_HOSTNAME });
-    expect(report?.checks[0]).not.toHaveProperty("evidence");
+    expect(report?.checks[0].evidence).toEqual({});
     await expect(
       store.readPublicDomainSnapshot("unregistered.example.net"),
     ).resolves.toBeNull();
@@ -446,7 +446,11 @@ describePostgres.sequential("PostgresScanStore", () => {
       scope: ["/"],
     });
     expect(publicReport?.checks).toHaveLength(5);
-    expect(publicReport?.checks[0]).not.toHaveProperty("evidence");
+    expect(publicReport?.checks[0].evidence).toEqual({
+      addressClass: "public",
+      aRecordCount: 1,
+      aaaaRecordCount: 0,
+    });
   });
 
   it("accepts domain-v1 root coverage and evaluates its initial cookie check", async () => {
@@ -464,8 +468,21 @@ describePostgres.sequential("PostgresScanStore", () => {
         status: "pass",
         summary: "Cookies en respuesta inicial: 0; coincidencias con la tabla local Analytics/Marketing: 0; sin atributo Secure: 0. No se interactuó con el banner de consentimiento.",
       });
-    expect(publicReport?.checks.find(({ controlId }) => controlId === "DS-PRIV-05"))
-      .not.toHaveProperty("evidence");
+    expect(publicReport?.checks.find(({ controlId }) => controlId === "DS-PRIV-05")?.evidence)
+      .toMatchObject({ cookieCount: 0, catalogMatchCount: 0 });
+  });
+
+  it("accepts domain-v2 tracking and initial-response measurements in PostgreSQL", async () => {
+    const job = await queueAndClaim("domain-v2");
+    const reportId = await completeDirectly(job, ["/"], makeDomainV2Checks());
+    const publicReport = await store.readPublicReport(reportId);
+
+    expect(publicReport).toMatchObject({ profileVersion: "domain-v2", verdict: "pass" });
+    expect(publicReport?.checks).toHaveLength(8);
+    expect(publicReport?.checks.find(({ controlId }) => controlId === "DS-PRIV-06")?.evidence)
+      .toMatchObject({ thirdPartyResourceReferences: 2, knownTrackingResourceReferences: 0 });
+    expect(publicReport?.checks.find(({ controlId }) => controlId === "DS-QUAL-02")?.evidence)
+      .toMatchObject({ responseTimeMs: 800, responseBytes: 40_000 });
   });
 
   it("rejects non-root scope for transport-v1", async () => {
@@ -1009,6 +1026,34 @@ describePostgres.sequential("PostgresScanStore", () => {
         consentPromptDetected: true,
       },
     });
+    return checks;
+  }
+
+  function makeDomainV2Checks(): ScanCheck[] {
+    const checks = makeDomainV1Checks().map((check) => ({
+      ...check,
+      limitation: "Resultado limitado a las rutas públicas declaradas del perfil domain-v2.",
+    }));
+    checks.push(
+      {
+        ...CHECK,
+        controlId: "DS-PRIV-06",
+        method: "GET",
+        status: "pass",
+        summary: "Comprobación DS-PRIV-06: pass.",
+        limitation: "Resultado limitado a las rutas públicas declaradas del perfil domain-v2.",
+        evidence: { inspected: true, thirdPartyResourceReferences: 2, knownTrackingResourceReferences: 0 },
+      },
+      {
+        ...CHECK,
+        controlId: "DS-QUAL-02",
+        method: "GET",
+        status: "pass",
+        summary: "Comprobación DS-QUAL-02: pass.",
+        limitation: "Resultado limitado a las rutas públicas declaradas del perfil domain-v2.",
+        evidence: { inspected: true, responseTimeMs: 800, responseBytes: 40_000 },
+      },
+    );
     return checks;
   }
 

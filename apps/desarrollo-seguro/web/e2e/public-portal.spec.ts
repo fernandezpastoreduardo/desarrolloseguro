@@ -74,6 +74,7 @@ test("searches a domain and requests an authorized analysis without third-party 
 
 test("shows the report when an authorized analysis finishes", async ({ page }) => {
   let statusReads = 0;
+  let completedResponseServed = false;
   await page.route("**/domains/report.example/status", async (route) => {
     statusReads += 1;
     const state = statusReads >= 2 ? "updating" : "not_scanned";
@@ -93,18 +94,18 @@ test("shows the report when an authorized analysis finishes", async ({ page }) =
       lastReport: {
         id: "123e4567-e89b-42d3-a456-426614174000",
         hostname: "report.example",
-        profileVersion: "controls-v3",
+        profileVersion: "domain-v2",
         scannerVersion: "scanner-v1",
         vantage: "same_vps",
         trigger: "requested",
         startedAt: "2026-11-11T00:00:00.000Z",
         completedAt: "2026-11-11T00:01:00.000Z",
         expiresAt: "2026-11-11T01:01:00.000Z",
-        verdict: "pass",
+        verdict: "fail",
         ethicsAssessment: {
           policyVersion: "domain-ethics-v3",
-          score: 100,
-          assessedCriteria: 1,
+          score: 67,
+          assessedCriteria: 3,
           totalCriteria: 8,
           maturity: "preliminary",
           criteria: [
@@ -119,12 +120,12 @@ test("shows the report when an authorized analysis finishes", async ({ page }) =
             },
             { id: "third-party-data-use", label: "Reutilización o venta de datos por terceros", status: "unknown", weight: 10 },
             { id: "initial-cookie-risk", label: "Cookies conocidas en la respuesta inicial", status: "unknown", weight: 10 },
-            { id: "tracking", label: "Rastreadores y mapas de calor", status: "unknown", weight: 5 },
-            { id: "performance", label: "Rendimiento", status: "unknown", weight: 5 },
+            { id: "tracking", label: "Rastreadores y mapas de calor", status: "fail", weight: 5 },
+            { id: "performance", label: "Rendimiento", status: "pass", weight: 5 },
           ],
           reasons: [],
           interpretation:
-            "Indicador provisional de DNS, TLS, HTTP, cabeceras y cookies conocidas en la respuesta inicial. No evalúa el consentimiento real, las prácticas de datos de terceros, los rastreadores dinámicos ni el rendimiento; no es una certificación.",
+            "No confirma conexiones ni scripts dinámicos; el rendimiento mide una respuesta inicial.",
         },
         scope: ["/"],
         checks: [
@@ -140,13 +141,39 @@ test("shows the report when an authorized analysis finishes", async ({ page }) =
             limitation: "Solo se observó la portada.",
             evidence: { finalScheme: "https", hsts: true, nosniff: true, frameProtection: true, referrerPolicy: true, csp: true },
           },
+          {
+            controlId: "DS-PRIV-06",
+            status: "fail",
+            required: true,
+            severity: "medium",
+            observedAt: "2026-11-11T00:01:00.000Z",
+            targetPath: "/",
+            method: "GET",
+            summary: "Se encontraron referencias a rastreadores conocidos.",
+            limitation: "Solo se contaron referencias visibles en el HTML inicial; no se ejecutó JavaScript ni se confirmó ninguna conexión.",
+            evidence: { inspected: true, thirdPartyResourceReferences: 2, knownTrackingResourceReferences: 1 },
+          },
+          {
+            controlId: "DS-QUAL-02",
+            status: "pass",
+            required: true,
+            severity: "medium",
+            observedAt: "2026-11-11T00:01:00.000Z",
+            targetPath: "/",
+            method: "GET",
+            summary: "La respuesta inicial se completó dentro del umbral provisional.",
+            limitation: "Una única respuesta GET desde el VPS; no mide Core Web Vitals, carga de recursos ni experiencia del visitante.",
+            evidence: { inspected: true, responseTimeMs: 700, responseBytes: 45000 },
+          },
         ],
       },
     };
+    const reportReady = statusReads >= 4;
     await route.fulfill({
       contentType: "application/json",
-      body: JSON.stringify(statusReads >= 4 ? completedResponse : response),
+      body: JSON.stringify(reportReady ? completedResponse : response),
     });
+    if (reportReady) completedResponseServed = true;
   });
   await page.route("**/analysis-requests", async (route) =>
     route.fulfill({
@@ -166,7 +193,7 @@ test("shows the report when an authorized analysis finishes", async ({ page }) =
   await expect.poll(() => statusReads, { timeout: 10_000 }).toBeGreaterThanOrEqual(2);
   await expect(page.getByRole("progressbar", { name: "Progreso del análisis" }))
     .toHaveAttribute("data-phase", "running");
-  await expect.poll(() => statusReads, { timeout: 25_000 }).toBe(4);
+  await expect.poll(() => completedResponseServed, { timeout: 25_000 }).toBe(true);
 
   await expect(page.getByRole("heading", { name: "Informe vigente" })).toBeVisible();
   await expect(
@@ -177,7 +204,10 @@ test("shows the report when an authorized analysis finishes", async ({ page }) =
   await expect(page.getByRole("heading", { name: "Seguridad" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Rendimiento" })).toBeVisible();
   await expect(page.getByText("Política que restringe contenido cargado (CSP)")).toBeVisible();
-  await expect(page.getByText("Controles observados aprobados")).toBeVisible();
+  await expect(page.getByText("Referencias a rastreadores conocidos").first()).toBeVisible();
+  await expect(page.getByText("Tiempo de respuesta inicial")).toBeVisible();
+  await expect(page.getByText("45.000 bytes")).toBeVisible();
+  await expect(page.getByText("Hay controles observados que no se cumplen")).toBeVisible();
 });
 
 test("stops polling and reports an admission mismatch when no scan job appears", async ({

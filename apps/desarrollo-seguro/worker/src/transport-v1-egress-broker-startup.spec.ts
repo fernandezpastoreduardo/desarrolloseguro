@@ -16,6 +16,16 @@ describe("parseTransportV1EgressBrokerStartupRequest", () => {
     });
   });
 
+  it("accepts the versioned domain-v2 profile for passive root-page inspection", () => {
+    expect(
+      parseTransportV1EgressBrokerStartupRequest({
+        protocolVersion: 1,
+        hostname: "example.org",
+        profileVersion: "domain-v2",
+      }),
+    ).toMatchObject({ profileVersion: "domain-v2", hostname: "example.org" });
+  });
+
   it.each([
     null,
     [],

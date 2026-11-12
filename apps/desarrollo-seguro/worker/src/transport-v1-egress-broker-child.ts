@@ -32,7 +32,7 @@ async function main(): Promise<void> {
     EGRESS_BROKER_SOCKET,
     request.hostname,
     createTransportV1NetworkObserver({
-      inspectPage: request.profileVersion === "domain-v1",
+      inspectPage: request.profileVersion === "domain-v1" || request.profileVersion === "domain-v2",
     }),
   );
   process.stdout.write('{"protocolVersion":1,"state":"ready"}\n');

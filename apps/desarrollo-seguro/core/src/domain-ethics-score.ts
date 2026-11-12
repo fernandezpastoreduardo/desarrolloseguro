@@ -39,8 +39,8 @@ const UNKNOWN_REASONS: Record<string, string> = {
   "transport-security": "No se han comprobado todas las versiones de TLS incluidas en este criterio.",
   "third-party-data-use": UNVERIFIED_THIRD_PARTY_REASON,
   "initial-cookie-risk": "No se pudo inspeccionar la respuesta inicial; no se ha evaluado el comportamiento posterior del consentimiento.",
-  tracking: "No se han inspeccionado scripts de analítica, rastreadores o mapas de calor.",
-  performance: "No se han medido métricas de rendimiento de página.",
+  tracking: "No se midieron conexiones ni scripts ejecutados; la comprobación se limita a referencias del HTML inicial.",
+  performance: "No se midieron el tiempo y el tamaño de la respuesta inicial.",
 };
 
 export function assessDomainEthics(checks: unknown): DomainEthicsAssessment {
@@ -71,7 +71,7 @@ export function assessDomainEthics(checks: unknown): DomainEthicsAssessment {
     maturity: assessed.length < 4 ? "preliminary" : assessed.length < criteria.length ? "partial" : "broad",
     criteria,
     reasons,
-    interpretation: "Indicador provisional de DNS, TLS, HTTP, cabeceras y cookies conocidas en la respuesta inicial. No evalúa el consentimiento real, las prácticas de datos de terceros, los rastreadores dinámicos ni el rendimiento; no es una certificación.",
+    interpretation: "Indicador provisional basado en señales públicas de DNS, TLS, HTTP, cabeceras, cookies, referencias del HTML inicial a rastreadores conocidos y una medición de respuesta. No evalúa el consentimiento real, las prácticas de datos de terceros, conexiones o scripts dinámicos, ni la experiencia completa de rendimiento; no es una certificación.",
   };
 }
 

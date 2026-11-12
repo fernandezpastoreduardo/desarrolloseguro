@@ -1,6 +1,6 @@
 # Sello verificable de informe
 
-El API puede emitir un identificador aleatorio de 256 bits ligado a un informe persistido de `grumphya.com` con perfil `domain-v1`. Solo guarda su SHA-256. Cada sello dura 30 días, puede revocarse y desaparece si la política de retención elimina el informe. No se emite desde datos de muestra ni desde un informe inexistente.
+El API puede emitir un identificador aleatorio de 256 bits ligado a un informe persistido de `grumphya.com` con perfil `domain-v1` o `domain-v2` (el perfil activo actual es `domain-v2`). Solo guarda su SHA-256. Cada sello dura 30 días, puede revocarse y desaparece si la política de retención elimina el informe. No se emite desde datos de muestra ni desde un informe inexistente.
 
 ## Emisión
 
@@ -12,7 +12,7 @@ Para emitir desde el checkout de Desarrollo Seguro en el VPS, ejecuta el helper 
 node scripts/issue-report-badge.mjs <uuid-del-informe-real>
 ```
 
-El helper valida el UUID, lee la clave solo desde el archivo privado y muestra la respuesta pública de emisión. La API guarda solo SHA-256 del token aleatorio; conserva el token y `verifyUrl` de la salida para el embed. No se puede recuperar después. La emisión se rechaza si el ID no pertenece a `grumphya.com` y al perfil `domain-v1`.
+El helper valida el UUID, lee la clave solo desde el archivo privado y muestra la respuesta pública de emisión. La API guarda solo SHA-256 del token aleatorio; conserva el token y `verifyUrl` de la salida para el embed. No se puede recuperar después. La emisión se rechaza si el ID no pertenece a `grumphya.com` y a un informe del perfil de análisis de dominio.
 
 La emisión se autoriza con el secreto que solo conserva el VPS:
 

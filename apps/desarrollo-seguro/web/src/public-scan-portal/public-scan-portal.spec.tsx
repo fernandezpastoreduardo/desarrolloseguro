@@ -403,6 +403,56 @@ describe("PublicScanPortal", () => {
     expect(screen.getByText("domain-v1")).toBeVisible();
   });
 
+  it("shows domain-v2 tracker and response evidence in readable categories", async () => {
+    const criteria = PUBLIC_REPORT.ethicsAssessment.criteria.map((criterion) => {
+      if (["security-headers", "initial-cookie-risk"].includes(criterion.id)) {
+        return { ...criterion, status: "pass" };
+      }
+      if (["tracking", "performance"].includes(criterion.id)) {
+        return { ...criterion, status: "fail" };
+      }
+      return { ...criterion, status: "unknown" };
+    });
+    const report = {
+      ...PUBLIC_REPORT,
+      profileVersion: "domain-v2",
+      verdict: "fail",
+      ethicsAssessment: {
+        ...PUBLIC_REPORT.ethicsAssessment,
+        score: 75,
+        assessedCriteria: 4,
+        criteria,
+        reasons: ["Hay referencias a rastreadores conocidos.", "La respuesta inicial supera el umbral provisional."],
+        interpretation: "No confirma conexiones ni scripts dinámicos; el rendimiento mide una respuesta inicial.",
+      },
+      checks: [
+        { ...PUBLIC_REPORT.checks[0], evidence: { finalScheme: "https", hsts: true, nosniff: true, frameProtection: true, referrerPolicy: true, csp: true } },
+        {
+          ...PUBLIC_REPORT.checks[0], controlId: "DS-PRIV-05", summary: "Cookies comprobadas.",
+          evidence: { inspected: true, cookieCount: 0, insecureCookieCount: 0, catalogMatchCount: 0, consentPromptDetected: false },
+        },
+        {
+          ...PUBLIC_REPORT.checks[0], controlId: "DS-PRIV-06", status: "fail", summary: "Referencias a terceros comprobadas.",
+          evidence: { inspected: true, thirdPartyResourceReferences: 3, knownTrackingResourceReferences: 1 },
+        },
+        {
+          ...PUBLIC_REPORT.checks[0], controlId: "DS-QUAL-02", status: "fail", summary: "Respuesta inicial medida.",
+          evidence: { inspected: true, responseTimeMs: 2_900, responseBytes: 40_000 },
+        },
+      ],
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(report)));
+    window.history.replaceState({}, "", `/?report=${REPORT_ID}`);
+
+    render(<PublicScanPortal />);
+
+    expect(await screen.findByText("domain-v2")).toBeVisible();
+    expect(screen.getAllByText("Referencias a rastreadores conocidos").length).toBeGreaterThan(0);
+    expect(screen.getByText("Tiempo de respuesta inicial")).toBeVisible();
+    expect(screen.getByText("40.000 bytes")).toBeVisible();
+    expect(screen.getByText("No confirma conexiones ni scripts dinámicos; el rendimiento mide una respuesta inicial.")).toBeVisible();
+  });
+
   it("renders untrusted report strings as text rather than HTML", async () => {
     const unsafeSummary = '<img src=x onerror="alert(1)">';
     const reportWithUnsafeText = {

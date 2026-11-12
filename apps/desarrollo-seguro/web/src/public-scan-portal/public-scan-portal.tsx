@@ -72,6 +72,7 @@ const PROFILE_VERSIONS = [
   "controls-v3",
   "transport-v1",
   "domain-v1",
+  "domain-v2",
 ] as const;
 const SCAN_VERDICTS = ["pass", "fail", "inconclusive"] as const;
 const SCAN_TRIGGERS = ["scheduled", "requested"] as const;
@@ -82,10 +83,10 @@ const PUBLIC_SCOPE_PATHS = ["/", "/precios", "/informe"] as const;
 const MAX_REPORT_CHECKS = 32;
 
 const REPORT_CATEGORIES = [
-  { id: "ethics", label: "Ética", description: "Señales observables sobre seguimiento y servicios de terceros. No permiten determinar por sí solas cómo una empresa usa o vende datos.", criteria: ["third-party-data-use", "tracking"], controls: ["DS-PRIV-06"] },
+  { id: "ethics", label: "Ética", description: "Señales de referencias a rastreadores conocidos en el HTML inicial. No permiten determinar por sí solas cómo una empresa usa o vende datos.", criteria: ["third-party-data-use", "tracking"], controls: ["DS-PRIV-06"] },
   { id: "privacy", label: "Privacidad", description: "Cookies detectadas en la primera respuesta. El análisis no acepta ni rechaza avisos ni navega por el sitio.", criteria: ["initial-cookie-risk"], controls: ["DS-PRIV-05"] },
   { id: "security", label: "Seguridad", description: "Comprueba resolución del dominio, cifrado TLS, respuesta web y algunas protecciones del navegador.", criteria: ["dns-integrity", "transport-security", "http-availability", "security-headers"], controls: ["DS-DNS-01", "DS-TLS-01", "DS-TLS-02", "DS-HTTP-01", "DS-HDR-01"] },
-  { id: "performance", label: "Rendimiento", description: "Las métricas de velocidad y experiencia aún no forman parte de las comprobaciones activas.", criteria: ["performance"], controls: ["DS-QUAL-02"] },
+  { id: "performance", label: "Rendimiento", description: "Mide el tiempo y tamaño de una respuesta inicial. No mide experiencia real ni métricas Core Web Vitals.", criteria: ["performance"], controls: ["DS-QUAL-02"] },
 ] as const;
 const CRITERION_EXPLANATIONS: Record<string, string> = {
   "dns-integrity": "Comprueba si el dominio resuelve a direcciones públicas. No verifica titularidad ni DNSSEC.",
@@ -94,8 +95,8 @@ const CRITERION_EXPLANATIONS: Record<string, string> = {
   "security-headers": "Revisa protecciones que ayudan al navegador frente a ciertos ataques.",
   "third-party-data-use": "La respuesta técnica no permite verificar contratos ni prácticas de reutilización de datos.",
   "initial-cookie-risk": "Cuenta cookies y coincidencias conocidas en la primera respuesta; no evalúa el consentimiento posterior.",
-  tracking: "No se inspeccionan interacciones ni se identifican todos los rastreadores dinámicos.",
-  performance: "No se han medido métricas de velocidad o experiencia de usuario.",
+  tracking: "Cuenta referencias del HTML inicial a una lista local de rastreadores conocidos; no confirma conexiones ni ejecuta scripts.",
+  performance: "Mide el tiempo y tamaño de una única respuesta GET inicial. No mide la experiencia completa de una persona ni métricas Core Web Vitals.",
 };
 const EVIDENCE_LABELS: Record<string, string> = {
   addressClass: "Tipo de dirección", aRecordCount: "Direcciones IPv4 encontradas", aaaaRecordCount: "Direcciones IPv6 encontradas",
@@ -106,6 +107,8 @@ const EVIDENCE_LABELS: Record<string, string> = {
   frameProtection: "Protección frente a inserción en marcos", referrerPolicy: "Limita información enviada al salir del sitio",
   csp: "Política que restringe contenido cargado (CSP)", inspected: "Respuesta inspeccionada", cookieCount: "Cookies en la primera respuesta",
   insecureCookieCount: "Cookies sin atributo Secure", catalogMatchCount: "Coincidencias con cookies conocidas", consentPromptDetected: "Aviso de consentimiento detectado",
+  thirdPartyResourceReferences: "Referencias a recursos de terceros en el HTML", knownTrackingResourceReferences: "Referencias a rastreadores conocidos",
+  responseTimeMs: "Tiempo de respuesta inicial", responseBytes: "Tamaño recibido de la página",
 };
 
 type PortalState = "idle" | "loading" | "ready" | "error";
@@ -797,7 +800,7 @@ function ReportSummary({
                         {Object.keys(check.evidence).length > 0 && (
                           <dl className="ds-portal__evidence">
                             {Object.entries(check.evidence).map(([key, value]) => (
-                              <div key={key}><dt>{EVIDENCE_LABELS[key] ?? key}</dt><dd>{formatEvidenceValue(value)}</dd></div>
+                              <div key={key}><dt>{EVIDENCE_LABELS[key] ?? key}</dt><dd>{formatEvidenceValue(value, key)}</dd></div>
                             ))}
                           </dl>
                         )}
@@ -1114,13 +1117,19 @@ function getControlLabel(controlId: string): string {
     "DS-HTTP-01": "Respuesta de la página",
     "DS-HDR-01": "Protecciones del navegador",
     "DS-PRIV-05": "Cookies de la primera respuesta",
+    "DS-PRIV-06": "Referencias a rastreadores conocidos",
+    "DS-QUAL-02": "Tiempo y tamaño de respuesta",
   };
   return labels[controlId] ?? controlId;
 }
 
-function formatEvidenceValue(value: string | number | boolean): string {
+function formatEvidenceValue(value: string | number | boolean, key: string): string {
   if (typeof value === "boolean") return value ? "Sí" : "No";
-  if (typeof value === "number") return String(value);
+  if (typeof value === "number") {
+    if (key === "responseTimeMs") return `${value} ms`;
+    if (key === "responseBytes") return `${new Intl.NumberFormat("es-ES").format(value)} bytes`;
+    return String(value);
+  }
   const labels: Record<string, string> = {
     public: "Pública", private: "Privada", reserved: "Reservada", unresolved: "Sin resolver",
     "TLSv1.2": "TLS 1.2", "TLSv1.3": "TLS 1.3", http: "HTTP", https: "HTTPS",

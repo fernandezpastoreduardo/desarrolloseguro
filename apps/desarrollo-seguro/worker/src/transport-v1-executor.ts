@@ -9,10 +9,13 @@ import type { PinnedTransportErrorCode } from "./pinned-transport-error.js";
 
 const TRANSPORT_PROFILE_VERSION = "transport-v1";
 const DOMAIN_PROFILE_VERSION = "domain-v1";
+const DOMAIN_PROFILE_VERSION_V2 = "domain-v2";
 const FIXTURE_SCANNER_VERSION = "transport-v1-fixture-adapter-1";
 const DOMAIN_FIXTURE_SCANNER_VERSION = "domain-v1-fixture-adapter-1";
+const DOMAIN_V2_FIXTURE_SCANNER_VERSION = "domain-v2-fixture-adapter-1";
 const NETWORK_SCANNER_VERSION = "transport-v1-network-adapter-1";
 const DOMAIN_SCANNER_VERSION = "domain-v1-network-adapter-1";
+const DOMAIN_V2_SCANNER_VERSION = "domain-v2-network-adapter-1";
 const MAX_CONCURRENT_NETWORK_PROBES = 2;
 const CHECKS = [
   { controlId: "DS-DNS-01", method: "DNS", severity: "high" },
@@ -36,7 +39,7 @@ export type TransportV1ScanJob = Pick<
   "hostname" | "profileVersion"
 >;
 
-export type ScanProfileVersion = typeof TRANSPORT_PROFILE_VERSION | typeof DOMAIN_PROFILE_VERSION;
+export type ScanProfileVersion = typeof TRANSPORT_PROFILE_VERSION | typeof DOMAIN_PROFILE_VERSION | typeof DOMAIN_PROFILE_VERSION_V2;
 
 /**
  * Observation boundary for the reduced profile. Implementations must return
@@ -112,6 +115,7 @@ export class TransportV1FixtureExecutor {
       evidence: observations[index] ?? {},
     }));
     appendInitialCookieCheck(candidateChecks, job.profileVersion, observations[4] ?? {}, observedAt);
+    appendPassivePageSignalChecks(candidateChecks, job.profileVersion, observations[4] ?? {}, observedAt);
 
     const sanitized = sanitizeScanObservations(
       job.hostname,
@@ -121,9 +125,7 @@ export class TransportV1FixtureExecutor {
     );
 
     return {
-      scannerVersion: job.profileVersion === DOMAIN_PROFILE_VERSION
-        ? DOMAIN_FIXTURE_SCANNER_VERSION
-        : FIXTURE_SCANNER_VERSION,
+      scannerVersion: getFixtureScannerVersion(job.profileVersion),
       startedAt,
       completedAt,
       verdict: evaluateVerdict(sanitized.checks),
@@ -202,6 +204,7 @@ export class TransportV1NetworkExecutor {
       probes[4]?.evidence ?? {},
       completedAt,
     );
+    appendPassivePageSignalChecks(candidateChecks, job.profileVersion, probes[4]?.evidence ?? {}, completedAt);
     const sanitized = sanitizeScanObservations(
       job.hostname,
       job.profileVersion,
@@ -232,7 +235,7 @@ function appendInitialCookieCheck(
   headersEvidence: TransportV1Evidence,
   observedAt: Date,
 ): void {
-  if (profileVersion !== DOMAIN_PROFILE_VERSION) return;
+  if (profileVersion === TRANSPORT_PROFILE_VERSION) return;
   const inspected = headersEvidence.inspected === true;
   const cookieCount = headersEvidence.cookieCount;
   const insecureCookieCount = headersEvidence.insecureCookieCount;
@@ -276,13 +279,84 @@ function appendInitialCookieCheck(
 }
 
 function getScannerVersion(profileVersion: ScanProfileVersion): string {
+  if (profileVersion === DOMAIN_PROFILE_VERSION_V2) return DOMAIN_V2_SCANNER_VERSION;
   return profileVersion === DOMAIN_PROFILE_VERSION
     ? DOMAIN_SCANNER_VERSION
     : NETWORK_SCANNER_VERSION;
 }
 
 function isSupportedProfile(value: string): value is ScanProfileVersion {
-  return value === TRANSPORT_PROFILE_VERSION || value === DOMAIN_PROFILE_VERSION;
+  return value === TRANSPORT_PROFILE_VERSION || value === DOMAIN_PROFILE_VERSION || value === DOMAIN_PROFILE_VERSION_V2;
+}
+
+function getFixtureScannerVersion(profileVersion: ScanProfileVersion): string {
+  if (profileVersion === DOMAIN_PROFILE_VERSION_V2) return DOMAIN_V2_FIXTURE_SCANNER_VERSION;
+  return profileVersion === DOMAIN_PROFILE_VERSION ? DOMAIN_FIXTURE_SCANNER_VERSION : FIXTURE_SCANNER_VERSION;
+}
+
+function appendPassivePageSignalChecks(
+  checks: ScanCheck[],
+  profileVersion: ScanProfileVersion,
+  headersEvidence: TransportV1Evidence,
+  observedAt: Date,
+): void {
+  if (profileVersion !== DOMAIN_PROFILE_VERSION_V2) return;
+
+  const inspected = headersEvidence.inspected === true;
+  const trackingEvidence = pickNumericEvidence(headersEvidence, [
+    "thirdPartyResourceReferences",
+    "knownTrackingResourceReferences",
+  ]);
+  const performanceEvidence = pickNumericEvidence(headersEvidence, [
+    "responseTimeMs",
+    "responseBytes",
+  ]);
+  trackingEvidence.inspected = inspected;
+  performanceEvidence.inspected = inspected;
+
+  const trackerCount = trackingEvidence.knownTrackingResourceReferences;
+  const elapsedMs = performanceEvidence.responseTimeMs;
+  checks.push(
+    {
+      controlId: "DS-PRIV-06",
+      method: "GET",
+      severity: "medium",
+      status: !inspected || typeof trackerCount !== "number"
+        ? "unknown"
+        : trackerCount > 0 ? "fail" : "pass",
+      required: true,
+      observedAt,
+      targetPath: "/",
+      summary: "",
+      limitation: "Solo se contaron referencias visibles en el HTML inicial; no se ejecutó JavaScript ni se confirmó ninguna conexión.",
+      evidence: trackingEvidence,
+    },
+    {
+      controlId: "DS-QUAL-02",
+      method: "GET",
+      severity: "medium",
+      status: !inspected || typeof elapsedMs !== "number"
+        ? "unknown"
+        : elapsedMs > 2_500 ? "fail" : "pass",
+      required: true,
+      observedAt,
+      targetPath: "/",
+      summary: "Medición provisional del tiempo de respuesta y tamaño recibido de la portada; no equivale a métricas de experiencia real.",
+      limitation: "Una única respuesta GET desde el VPS; no mide Core Web Vitals, carga de recursos ni experiencia del visitante.",
+      evidence: performanceEvidence,
+    },
+  );
+}
+
+function pickNumericEvidence(
+  evidence: TransportV1Evidence,
+  keys: readonly string[],
+): TransportV1Evidence {
+  const selected: TransportV1Evidence = {};
+  for (const key of keys) {
+    if (typeof evidence[key] === "number") selected[key] = evidence[key] as number;
+  }
+  return selected;
 }
 
 async function safelyObserve(

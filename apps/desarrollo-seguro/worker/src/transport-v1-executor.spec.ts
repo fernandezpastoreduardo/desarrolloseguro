@@ -201,6 +201,10 @@ describe("TransportV1FixtureExecutor", () => {
           insecureCookieCount: 1,
           catalogMatchCount: 1,
           consentPromptDetected: true,
+          thirdPartyResourceReferences: 5,
+          knownTrackingResourceReferences: 2,
+          responseTimeMs: 700,
+          responseBytes: 45000,
         },
         requestsCount: 1,
         bytesCount: 1,
@@ -208,13 +212,15 @@ describe("TransportV1FixtureExecutor", () => {
     };
 
     const result = await new TransportV1NetworkExecutor(source).execute(
-      { ...JOB, profileVersion: "domain-v1" },
+      { ...JOB, profileVersion: "domain-v2" },
       new AbortController().signal,
     );
     const cookieCheck = result.checks.find(({ controlId }) => controlId === "DS-PRIV-05");
+    const trackingCheck = result.checks.find(({ controlId }) => controlId === "DS-PRIV-06");
+    const performanceCheck = result.checks.find(({ controlId }) => controlId === "DS-QUAL-02");
 
-    expect(result.scannerVersion).toBe("domain-v1-network-adapter-1");
-    expect(result.checks).toHaveLength(6);
+    expect(result.scannerVersion).toBe("domain-v2-network-adapter-1");
+    expect(result.checks).toHaveLength(8);
     expect(cookieCheck).toMatchObject({
       status: "fail",
       evidence: {
@@ -222,6 +228,14 @@ describe("TransportV1FixtureExecutor", () => {
         catalogMatchCount: 1,
         consentPromptDetected: true,
       },
+    });
+    expect(trackingCheck).toMatchObject({
+      status: "fail",
+      evidence: { inspected: true, thirdPartyResourceReferences: 5, knownTrackingResourceReferences: 2 },
+    });
+    expect(performanceCheck).toMatchObject({
+      status: "pass",
+      evidence: { inspected: true, responseTimeMs: 700, responseBytes: 45000 },
     });
     expect(JSON.stringify(result)).not.toMatch(/cookie.?name|cookie.?value/iu);
 
@@ -231,11 +245,15 @@ describe("TransportV1FixtureExecutor", () => {
       bytesCount: 1,
     });
     const incomplete = await new TransportV1NetworkExecutor(source).execute(
-      { ...JOB, profileVersion: "domain-v1" },
+      { ...JOB, profileVersion: "domain-v2" },
       new AbortController().signal,
     );
     expect(incomplete.checks.find(({ controlId }) => controlId === "DS-PRIV-05"))
       .toMatchObject({ status: "unknown", evidence: {} });
+    expect(incomplete.checks.find(({ controlId }) => controlId === "DS-PRIV-06"))
+      .toMatchObject({ status: "unknown", evidence: { inspected: false } });
+    expect(incomplete.checks.find(({ controlId }) => controlId === "DS-QUAL-02"))
+      .toMatchObject({ status: "unknown", evidence: { inspected: false } });
   });
 
   it("limits a network executor to two concurrent probes", async () => {
