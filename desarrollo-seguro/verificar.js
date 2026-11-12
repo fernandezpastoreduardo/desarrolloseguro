@@ -24,7 +24,7 @@ async function renderVerification() {
 
   status.textContent = "Sello verificado";
   status.dataset.state = "valid";
-  reportLink.href = `/app/#report=${encodeURIComponent(result.reportId)}`;
+  reportLink.href = `/app/?report=${encodeURIComponent(result.reportId)}`;
   reportLink.hidden = false;
 }
 

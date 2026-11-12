@@ -28,7 +28,7 @@ La respuesta contiene `token`, `verifyUrl` y `expiresAt`. Conserva el token devu
 
 ## Verificación desde la página pública y el sitio
 
-`verifyUrl` abre `/desarrollo-seguro/verificar.html`. El token va en el fragmento `#` de la URL, que no se envía al servidor al abrir la página. El verificador consulta `POST /api/desarrollo-seguro/v1/badges/verify` con `cache: "no-store"`; el token está en el cuerpo de la solicitud y no aparece en el access log. Muestra dominio e ID con `textContent` y enlaza a la vista humana `/app/#report=<reportId>`. La página usa `noindex`, `nofollow` y `no-referrer`.
+`verifyUrl` abre `/desarrollo-seguro/verificar.html`. El token va en el fragmento `#` de la URL, que no se envía al servidor al abrir la página. El verificador consulta `POST /api/desarrollo-seguro/v1/badges/verify` con `cache: "no-store"`; el token está en el cuerpo de la solicitud y no aparece en el access log. Muestra dominio e ID con `textContent` y enlaza a la vista humana `/app/?report=<reportId>`, el formato que consume el buscador. La página usa `noindex`, `nofollow` y `no-referrer`.
 
 La comprobación es un `POST` con el token en el cuerpo JSON, por lo que no aparece en la URL ni en los access logs. La API comprueba que el informe siga existiendo, que el sello no haya caducado ni se haya revocado y que el origen sea el sitio autorizado.
 

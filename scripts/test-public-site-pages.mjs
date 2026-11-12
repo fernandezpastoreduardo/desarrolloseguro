@@ -55,6 +55,19 @@ for (const obsoleteCss of [
 }
 
 const reportId = "8d140e17-68d6-489a-b451-7e87408187ae";
+const verifierScript = await readFile("desarrollo-seguro/verificar.js", "utf8");
+const portalScript = await readFile(
+  "apps/desarrollo-seguro/web/src/public-scan-portal/public-scan-portal.tsx",
+  "utf8",
+);
+assert.match(portalScript, /new URLSearchParams\(window\.location\.search\)\.get\("report"\)/u);
+assert.match(
+  verifierScript,
+  /reportLink\.href = `\/app\/\?report=\$\{encodeURIComponent\(result\.reportId\)\}`/u,
+  "verified badges open the report using the public portal's query parameter",
+);
+assert.doesNotMatch(verifierScript, /\/app\/#report=/u);
+
 let observedRequest;
 const validResult = await verifyReportBadge(
   { token: "A".repeat(43), hostname: "grumphya.com", reportId },
