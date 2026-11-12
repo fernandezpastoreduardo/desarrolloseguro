@@ -45,9 +45,15 @@ try {
 function getSafeFailureCode(error) {
   if (!(error instanceof Error)) return "docker_runner_failed";
   const allowedCodes = new Set([
+    "broker_failed",
+    "coordinator_socket_untrusted",
+    "coordinator_unavailable",
+    "egress_failed",
     "executor_failed",
     "executor_response_invalid",
     "request_aborted",
+    "runtime_volume_failed",
+    "transport_failed",
     "runtime_broker_ready_failed",
     "runtime_broker_start_failed",
     "runtime_cleanup_failed",
