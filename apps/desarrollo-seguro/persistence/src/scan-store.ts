@@ -1,20 +1,15 @@
 import type { Pool } from "pg";
 import {
+  SCAN_FAILURE_CODES,
   evaluateVerdict,
   sanitizeScanObservations,
 } from "@desarrolloseguro/core";
+import type { ScanFailureCode } from "@desarrolloseguro/core";
+export { SCAN_FAILURE_CODES };
+export type { ScanFailureCode };
 
 const MAX_LEASE_DURATION_MS = 5 * 60 * 1000;
 const MAX_SCAN_ATTEMPTS = 10;
-export const SCAN_FAILURE_CODES = [
-  "coordinator_unavailable",
-  "coordinator_socket_untrusted",
-  "runtime_volume_failed",
-  "broker_failed",
-  "egress_failed",
-  "executor_failed",
-  "transport_failed",
-] as const;
 const PROFILE_VERSIONS = [
   "controls-v1",
   "controls-v2",
@@ -58,7 +53,6 @@ const PUBLIC_CHECKS_LATERAL = `LEFT JOIN LATERAL (
 export type ScanTrigger = "scheduled" | "requested";
 export type ScanEnrollment = "monitored" | "on_demand";
 export type ScanJobState = "queued" | "running" | "completed" | "failed";
-export type ScanFailureCode = (typeof SCAN_FAILURE_CODES)[number];
 export type ScanFailureDisposition = "retrying" | "failed";
 export type ScanVerdict = "pass" | "fail" | "inconclusive";
 export type CheckStatus = "pass" | "fail" | "unknown" | "not_applicable";

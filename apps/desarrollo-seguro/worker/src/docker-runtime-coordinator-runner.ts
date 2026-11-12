@@ -2,10 +2,7 @@ import { randomUUID } from "node:crypto";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { isAbsolute } from "node:path";
 import type { ScanRunInput } from "@desarrolloseguro/persistence";
-import {
-  SCAN_FAILURE_CODES,
-  type ScanFailureCode,
-} from "@desarrolloseguro/persistence";
+import { SCAN_FAILURE_CODES, type ScanFailureCode } from "@desarrolloseguro/core";
 import {
   MAX_EXECUTOR_RESPONSE_BYTES,
   parseTransportV1ExecutorResponse,

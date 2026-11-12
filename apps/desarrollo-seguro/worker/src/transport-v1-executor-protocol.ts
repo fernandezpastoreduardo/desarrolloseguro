@@ -1,10 +1,5 @@
-import {
-  SCAN_FAILURE_CODES,
-  type ScanCheck,
-  type ScanFailureCode,
-  type ScanRunInput,
-} from "@desarrolloseguro/persistence";
-import { normalizeHostname } from "@desarrolloseguro/core";
+import { normalizeHostname, SCAN_FAILURE_CODES, type ScanFailureCode } from "@desarrolloseguro/core";
+import type { ScanCheck, ScanRunInput } from "@desarrolloseguro/persistence";
 import type { ScanProfileVersion } from "./transport-v1-executor.js";
 
 export const TRANSPORT_V1_EXECUTOR_PROTOCOL_VERSION = 1;

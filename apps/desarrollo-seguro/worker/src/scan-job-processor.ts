@@ -2,12 +2,12 @@ import {
   evaluateVerdict,
   normalizeHostname,
   sanitizeScanObservations,
+  SCAN_FAILURE_CODES,
+  type ScanFailureCode,
 } from "@desarrolloseguro/core";
 import {
   ScanLeaseLostError,
-  SCAN_FAILURE_CODES,
   type ClaimedScanJob,
-  type ScanFailureCode,
   type ScanJobStore,
   type ScanRunInput,
 } from "@desarrolloseguro/persistence";

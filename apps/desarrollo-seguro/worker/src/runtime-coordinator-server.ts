@@ -1,11 +1,8 @@
 import { chmod, lstat, stat, unlink } from "node:fs/promises";
 import { createServer, type Server, type Socket } from "node:net";
 import { dirname } from "node:path";
-import {
-  SCAN_FAILURE_CODES,
-  type ScanFailureCode,
-  type ScanRunInput,
-} from "@desarrolloseguro/persistence";
+import { SCAN_FAILURE_CODES, type ScanFailureCode } from "@desarrolloseguro/core";
+import type { ScanRunInput } from "@desarrolloseguro/persistence";
 import {
   MAX_EXECUTOR_REQUEST_BYTES,
   MAX_EXECUTOR_RESPONSE_BYTES,

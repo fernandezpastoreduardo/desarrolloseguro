@@ -8,6 +8,8 @@ import {
 import {
   assessDomainEthics,
   normalizeHostname,
+  SCAN_FAILURE_CODES,
+  type ScanFailureCode,
   type DomainEthicsAssessment,
 } from "@desarrolloseguro/core";
 import {
@@ -17,7 +19,6 @@ import {
   type PublicScanReport,
   type PublicScanSeverity,
   type PublicScanStatus,
-  type ScanFailureCode,
 } from "@desarrolloseguro/persistence";
 import { REPORT_ID_PATTERN } from "./public-scan.constants.js";
 
