@@ -214,6 +214,7 @@ describe("PublicScanPortal", () => {
     expect(screen.getByText(/indicaciones que el sitio envía al navegador/i)).toBeVisible();
     expect(screen.getByText(/se revisaron 1 de 4 aspectos; no se detectaron problemas en el observado\. faltan datos de 3/i)).toBeVisible();
     expect(screen.getByText("Política que restringe contenido cargado (CSP)")).toBeInTheDocument();
+    expect(screen.getByText(/faltaba.*política de contenido CSP/i)).toBeVisible();
     expect(screen.getByText("Ver evidencias técnicas (1 comprobación)")).toBeVisible();
     const summary = screen.getByRole("heading", { name: "Resumen y puntuación" });
     const detail = screen.getByRole("heading", { name: "Alcance observado" });

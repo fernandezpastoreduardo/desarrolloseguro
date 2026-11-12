@@ -84,7 +84,7 @@ const PUBLIC_SCOPE_PATHS = ["/", "/precios", "/informe"] as const;
 const MAX_REPORT_CHECKS = 32;
 
 const REPORT_CATEGORIES = [
-  { id: "ethics", label: "Ética", description: "Busca señales visibles de herramientas de seguimiento. Esta prueba no puede confirmar contratos ni si una empresa vende o reutiliza datos.", criteria: ["third-party-data-use", "tracking"], controls: ["DS-PRIV-06"] },
+  { id: "ethics", label: "Ética", description: "Busca señales visibles de herramientas de seguimiento. Esta prueba no puede confirmar contratos ni si una empresa vende o reutiliza datos.", criteria: ["third-party-data-use", "tracking"], controls: ["DS-PRIV-04", "DS-PRIV-06"] },
   { id: "privacy", label: "Privacidad", description: "Revisa las cookies que se envían al abrir la portada. No acepta avisos de consentimiento ni navega por la web.", criteria: ["initial-cookie-risk"], controls: ["DS-PRIV-05"] },
   { id: "security", label: "Seguridad", description: "Revisa que el dominio responda, use una conexión cifrada y envíe protecciones básicas al navegador.", criteria: ["dns-integrity", "transport-security", "http-availability", "security-headers"], controls: ["DS-DNS-01", "DS-TLS-01", "DS-TLS-02", "DS-HTTP-01", "DS-HDR-01"] },
   { id: "performance", label: "Rendimiento", description: "Mide cuánto tarda y cuánto pesa la respuesta de portada. No representa toda la experiencia desde otros dispositivos o páginas.", criteria: ["performance"], controls: ["DS-QUAL-02"] },
@@ -815,6 +815,7 @@ function ReportSummary({
                         <strong>{getCriterionDisplayLabel(criterion.id, criterion.label)}</strong>
                         <p><b>Qué comprueba:</b> {CRITERION_EXPLANATIONS[criterion.id]}</p>
                         <p><b>Qué significa:</b> {getCriterionOutcome(criterion.id, criterion.status)}</p>
+                        <p className="ds-portal__criterion-evidence"><b>Dato observado:</b> {getCriterionEvidenceSummary(criterion.id, checks)}</p>
                         {criterion.status !== "pass" && (
                           <p><b>Qué revisar:</b> {CRITERION_RECOMMENDATIONS[criterion.id]}</p>
                         )}
@@ -1189,6 +1190,107 @@ function getCriterionOutcome(criterionId: string, status: string): string {
     performance: "La respuesta inicial quedó dentro del umbral orientativo de esta comprobación; no representa la experiencia completa.",
   };
   return outcomes[criterionId] ?? "La comprobación no detectó un problema en este punto.";
+}
+
+function getCriterionEvidenceSummary(criterionId: string, checks: PublicCheck[]): string {
+  const evidence = checks
+    .filter((check) => getCriterionControlIds(criterionId).includes(check.controlId))
+    .map((check) => check.evidence);
+  const values = Object.assign({}, ...evidence);
+  const number = (key: string) => typeof values[key] === "number" ? values[key] as number : null;
+  const flag = (key: string) => typeof values[key] === "boolean" ? values[key] as boolean : null;
+  const text = (key: string) => typeof values[key] === "string" ? values[key] as string : null;
+
+  switch (criterionId) {
+    case "dns-integrity": {
+      const ipv4 = number("aRecordCount");
+      const ipv6 = number("aaaaRecordCount");
+      if (ipv4 === null && ipv6 === null) break;
+      return `El dominio resolvió a ${ipv4 ?? "sin dato"} dirección${ipv4 === 1 ? "" : "es"} IPv4 y ${ipv6 ?? "sin dato"} IPv6.`;
+    }
+    case "transport-security": {
+      const protocol = text("protocol");
+      const certificateValid = flag("certificateValid");
+      const hostnameMatches = flag("hostnameMatches");
+      const tls12 = flag("tls12Accepted");
+      const tls13 = flag("tls13Accepted");
+      const details = [
+        protocol ? `conexión negociada con ${protocol}` : null,
+        certificateValid !== null ? `certificado ${certificateValid ? "válido" : "no válido"}` : null,
+        hostnameMatches !== null ? `nombre ${hostnameMatches ? "coincidente" : "no coincidente"}` : null,
+        tls12 !== null || tls13 !== null ? `TLS 1.2 ${tls12 === null ? "sin dato" : tls12 ? "aceptado" : "rechazado"} y TLS 1.3 ${tls13 === null ? "sin dato" : tls13 ? "aceptado" : "rechazado"}` : null,
+      ].filter(Boolean);
+      if (details.length > 0) return `${details.join("; ")}.`;
+      break;
+    }
+    case "http-availability": {
+      const statusCode = number("statusCode");
+      const finalScheme = text("finalScheme");
+      const redirected = flag("redirectedToHttps");
+      const details = [
+        statusCode !== null ? `la página respondió con código ${statusCode}` : null,
+        finalScheme ? `la conexión terminó en ${finalScheme.toUpperCase()}` : null,
+        redirected !== null ? `redirección a conexión segura ${redirected ? "observada" : "no observada"}` : null,
+      ].filter(Boolean);
+      if (details.length > 0) return `${details.join("; ")}.`;
+      break;
+    }
+    case "security-headers": {
+      const labels = [
+        ["hsts", "HSTS"], ["nosniff", "protección de tipo de contenido"],
+        ["frameProtection", "protección frente a marcos"], ["referrerPolicy", "política de referencia"], ["csp", "política de contenido CSP"],
+      ] as const;
+      const known = labels.filter(([key]) => flag(key) !== null);
+      if (known.length === 0) break;
+      const missing = known.filter(([key]) => flag(key) === false).map(([, label]) => label);
+      const present = known.filter(([key]) => flag(key) === true).map(([, label]) => label);
+      const observed = present.length > 0 ? `incluía ${present.join(", ")}` : "no incluía las protecciones comprobadas";
+      return missing.length > 0
+        ? `La respuesta ${observed}; faltaba${missing.length === 1 ? "" : "n"} ${missing.join(", ")}.`
+        : `La respuesta incluía las ${present.length} protecciones comprobadas: ${present.join(", " )}.`;
+    }
+    case "initial-cookie-risk": {
+      const count = number("cookieCount");
+      const matches = number("catalogMatchCount");
+      const insecure = number("insecureCookieCount");
+      if (count === null && matches === null && insecure === null) break;
+      return `En la primera respuesta se observaron ${count ?? "sin dato"} cookies; ${matches ?? "sin dato"} coincidían con el catálogo de nombres conocidos y ${insecure ?? "sin dato"} no incluían el atributo Secure.`;
+    }
+    case "tracking": {
+      const thirdParty = number("thirdPartyResourceReferences");
+      const known = number("knownTrackingResourceReferences");
+      if (thirdParty === null && known === null) break;
+      return `El HTML inicial contenía ${thirdParty ?? "sin dato"} referencias a recursos de terceros y ${known ?? "sin dato"} coincidencias con rastreadores conocidos.`;
+    }
+    case "performance": {
+      const responseTime = number("responseTimeMs");
+      const responseBytes = number("responseBytes");
+      if (responseTime === null && responseBytes === null) break;
+      return `La respuesta inicial tardó ${responseTime === null ? "sin dato" : `${responseTime} ms`} y recibió ${responseBytes === null ? "un tamaño no medido" : `${formatByteCount(responseBytes)} de datos`}.`;
+    }
+    default:
+      break;
+  }
+  return "El análisis no obtuvo un dato verificable para este aspecto.";
+}
+
+function getCriterionControlIds(criterionId: string): readonly string[] {
+  const controlIds: Record<string, readonly string[]> = {
+    "dns-integrity": ["DS-DNS-01"],
+    "transport-security": ["DS-TLS-01", "DS-TLS-02"],
+    "http-availability": ["DS-HTTP-01"],
+    "security-headers": ["DS-HDR-01"],
+    "third-party-data-use": ["DS-PRIV-04"],
+    "initial-cookie-risk": ["DS-PRIV-05"],
+    tracking: ["DS-PRIV-06"],
+    performance: ["DS-QUAL-02"],
+  };
+  return controlIds[criterionId] ?? [];
+}
+
+function formatByteCount(value: number): string {
+  if (value < 1_000) return `${value} bytes`;
+  return `${(value / 1_000).toFixed(1)} kB`;
 }
 
 function getCriterionDisplayLabel(criterionId: string, fallback: string): string {

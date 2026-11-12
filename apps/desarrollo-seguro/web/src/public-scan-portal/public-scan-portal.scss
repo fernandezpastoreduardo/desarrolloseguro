@@ -459,6 +459,8 @@ $ds-canvas: #f5f2ec;
 .ds-portal__ethics-criteria li > div > strong { color: var(--ds-ink); font-size: 0.9rem; }
 .ds-portal__ethics-criteria li p { margin: 6px 0 0; font-size: 0.86rem; line-height: 1.55; }
 .ds-portal__ethics-criteria li p b { color: var(--ds-ink); }
+.ds-portal__ethics-criteria li .ds-portal__criterion-evidence { border-left: 2px solid var(--ds-line); padding-left: 10px; color: var(--ds-ink-soft); }
+.ds-portal__ethics-criteria li .ds-portal__criterion-evidence b { color: var(--ds-accent-strong); }
 .ds-portal__ethics-criteria li > span { flex: 0 0 auto; color: var(--ds-accent-strong); font-family: var(--ds-mono); font-size: 0.64rem; text-transform: uppercase; }
 .ds-portal__ethics-reasons { color: var(--ds-muted); line-height: 1.5; }
 .ds-portal__technical-details { margin-top: 18px; border-top: 1px solid var(--ds-line); padding-top: 12px; }
