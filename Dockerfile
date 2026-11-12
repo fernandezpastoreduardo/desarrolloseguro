@@ -147,7 +147,7 @@ RUN apk upgrade --no-cache
 
 COPY docker/nginx-development-security.conf /etc/nginx/conf.d/default.conf
 COPY --from=development-security-build /workspace/apps/desarrollo-seguro/web/dist /usr/share/nginx/html/app
-COPY --from=development-security-build /workspace/desarrollo-seguro /usr/share/nginx/html/desarrollo-seguro
+COPY --from=development-security-build /workspace/apps/desarrollo-seguro/web/dist/desarrollo-seguro /usr/share/nginx/html/desarrollo-seguro
 
 USER 101:101
 

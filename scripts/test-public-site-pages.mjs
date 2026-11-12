@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
-import { access, readFile } from "node:fs/promises";
+import { access, mkdtemp, readFile, rm } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { verifyReportBadge } from "../desarrollo-seguro/badge-api.mjs";
 
 const pages = [
@@ -83,4 +87,33 @@ assert.match(widgetScript, /cache: "no-store"/u);
 assert.match(widgetScript, /widget\.hidden = false/u, "badge link is exposed only after server verification");
 assert.match(widgetScript, /widget\.textContent/u, "badge content is never parsed as markup");
 
-process.stdout.write("Public site page policy passed.\n");
+const buildDirectory = await mkdtemp(join(tmpdir(), "development-security-site-build-"));
+try {
+  const build = spawnSync(
+    process.execPath,
+    [
+      "apps/desarrollo-seguro/web/scripts/build-public-site-assets.mjs",
+      "--output-dir",
+      buildDirectory,
+    ],
+    { encoding: "utf8" },
+  );
+  assert.equal(build.status, 0, build.stderr || build.stdout);
+  const generatedHome = await readFile(join(buildDirectory, "desarrollo-seguro/index.html"), "utf8");
+  const stylesheetPath = generatedHome.match(/href="(\/app\/assets\/site-[a-f0-9]{16}\.css)"/u)?.[1];
+  assert.ok(stylesheetPath, "generated pages reference a fingerprinted stylesheet");
+  const stylesheet = await readFile(join(buildDirectory, stylesheetPath.replace(/^\/app\//u, "")), "utf8");
+  const stylesheetHash = createHash("sha256").update(stylesheet).digest("hex").slice(0, 16);
+  assert.equal(stylesheetPath, `/app/assets/site-${stylesheetHash}.css`);
+  assert.equal(await readFile(join(buildDirectory, "site.css"), "utf8"), stylesheet);
+  for (const page of pages.slice(1)) {
+    const generatedPage = await readFile(join(buildDirectory, page), "utf8");
+    assert.match(generatedPage, new RegExp(`href="/app/assets/site-${stylesheetHash}\\.css"`, "u"));
+  }
+  await access(join(buildDirectory, "desarrollo-seguro/badge-widget.js"));
+  await access(join(buildDirectory, "desarrollo-seguro/verificar.js"));
+} finally {
+  await rm(buildDirectory, { recursive: true, force: true });
+}
+
+process.stdout.write("Public site page and asset-version policy passed.\n");

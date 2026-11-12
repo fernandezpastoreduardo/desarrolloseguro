@@ -14,8 +14,9 @@ const SCAN_FAILURE_CODES = new Set([
   "executor_failed",
   "transport_failed",
 ]);
-const SCAN_TIMEOUT_MS = 4 * 60 * 1000;
+export const SCAN_TIMEOUT_MS = 15 * 60 * 1000;
 const POLL_INTERVAL_MS = 5_000;
+const PROGRESS_INTERVAL_MS = 30_000;
 
 export function validateCompletedReport(status, previousReportId) {
   const report = status?.lastReport;
@@ -94,6 +95,53 @@ export function validateTerminalFailure(status) {
   return status.failureCode;
 }
 
+export async function waitForPublicScanReport({
+  getStatus,
+  previousReportId,
+  timeoutMs = SCAN_TIMEOUT_MS,
+  pollIntervalMs = POLL_INTERVAL_MS,
+  progressIntervalMs = PROGRESS_INTERVAL_MS,
+  now = Date.now,
+  wait = delay,
+  onProgress = () => {},
+}) {
+  const deadline = now() + timeoutMs;
+  let nextProgressAt = now() + progressIntervalMs;
+  let status;
+
+  while (now() < deadline) {
+    status = await getStatus();
+    const failureCode = validateTerminalFailure(status);
+    if (failureCode) throw new Error(`public_scan_terminal_${failureCode}`);
+    if (status?.lastReport && status.lastReport.id !== previousReportId) {
+      return validateCompletedReport(status, previousReportId);
+    }
+    emitProgressIfDue(status, now(), nextProgressAt, onProgress);
+    if (now() >= nextProgressAt) nextProgressAt = now() + progressIntervalMs;
+    if (!status?.activeJobId) {
+      throw new Error("public_scan_active_job_missing");
+    }
+    await wait(Math.min(pollIntervalMs, deadline - now()));
+  }
+  emitProgressIfDue(status, now(), nextProgressAt, onProgress);
+  throw new Error("public_scan_completion_timeout");
+}
+
+function emitProgressIfDue(status, now, nextProgressAt, onProgress) {
+  if (now < nextProgressAt) return;
+  const allowedStates = new Set([
+    "updating",
+    "fresh",
+    "stale",
+    "failed",
+    "not_scanned",
+    "unavailable",
+  ]);
+  const state = allowedStates.has(status?.state) ? status.state : "unknown";
+  const job = status?.activeJobId ? "active" : "none";
+  onProgress(`public_scan_wait state=${state} active_job=${job}`);
+}
+
 async function fetchJson(path, init = {}) {
   const response = await fetch(`${API_BASE_URL}/${path}`, {
     ...init,
@@ -119,28 +167,18 @@ async function runSmoke() {
   );
   if (
     admission.hostname !== VALIDATION_HOSTNAME ||
-    !["queued", "running", "cached"].includes(admission.state)
+    !["queued", "running"].includes(admission.state)
   ) {
     throw new Error("public_scan_admission_invalid");
   }
-
-  const deadline = Date.now() + SCAN_TIMEOUT_MS;
-  while (Date.now() < deadline) {
-    await delay(POLL_INTERVAL_MS);
-    const status = await fetchJson(`domains/${VALIDATION_HOSTNAME}/status`);
-    const failureCode = validateTerminalFailure(status);
-    if (failureCode) throw new Error(`public_scan_terminal_${failureCode}`);
-    if (status.state === "updating") continue;
-    if (!status.lastReport || status.lastReport.id === previousReportId) {
-      continue;
-    }
-    const report = validateCompletedReport(status, previousReportId);
-    process.stdout.write(
-      `Live domain scan passed: ${report.checks.filter(({ status: value }) => value !== "unknown").length}/6 checks conclusive; score ${report.ethicsAssessment.score}/100.\n`,
-    );
-    return;
-  }
-  throw new Error("public_scan_completion_timeout");
+  const report = await waitForPublicScanReport({
+    previousReportId,
+    getStatus: () => fetchJson(`domains/${VALIDATION_HOSTNAME}/status`),
+    onProgress: (message) => process.stdout.write(`${message}\n`),
+  });
+  process.stdout.write(
+    `Live domain scan passed: ${report.checks.filter(({ status: value }) => value !== "unknown").length}/6 checks conclusive; score ${report.ethicsAssessment.score}/100.\n`,
+  );
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {

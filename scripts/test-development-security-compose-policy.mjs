@@ -198,11 +198,15 @@ assert.match(nginx, /scgi_temp_path \/tmp\/scgi_temp/u);
 assert.match(nginx, /uwsgi_temp_path \/tmp\/uwsgi_temp/u);
 assert.match(
   nginx,
-  /location = \/ \{\s+add_header Cache-Control "no-cache" always;\s+try_files \/desarrollo-seguro\/index\.html =404;\s+\}/u,
+  /location = \/ \{\s+add_header Cache-Control "no-store" always;\s+try_files \/desarrollo-seguro\/index\.html =404;\s+\}/u,
 );
-assert.match(nginx, /try_files \$uri \$uri\/ \/app\/index\.html/u);
+assert.match(nginx, /location \^~ \/desarrollo-seguro\/ \{\s+add_header Cache-Control "no-store" always;/u);
+assert.match(nginx, /location \/app\/ \{\s+add_header Cache-Control "no-store" always;\s+try_files \$uri \$uri\/ \/app\/index\.html/u);
+assert.doesNotMatch(nginx, /location \^~ \/app\//u, "hashed asset locations must remain eligible for immutable caching");
+assert.match(nginx, /Cache-Control "public, max-age=31536000, immutable"/u);
 assert.match(dockerfile, /FROM nginx:1\.30-alpine AS development-security-web/u);
 assert.match(dockerfile, /FROM node:26\.13\.0-alpine3\.24 AS node-base/u);
+assert.match(dockerfile, /COPY --from=development-security-build \/workspace\/apps\/desarrollo-seguro\/web\/dist\/desarrollo-seguro \/usr\/share\/nginx\/html\/desarrollo-seguro/u);
 assert.match(dockerfile, /RUN apk upgrade --no-cache/u);
 assert.match(postgresHba, /^hostnossl all all all reject$/mu);
 
