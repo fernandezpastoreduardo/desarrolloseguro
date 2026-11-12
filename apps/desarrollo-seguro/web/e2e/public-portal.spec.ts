@@ -216,7 +216,11 @@ test("shows the report when an authorized analysis finishes", async ({ page }) =
   await expect(page.getByRole("heading", { name: "Seguridad" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Rendimiento" })).toBeVisible();
   await expect(page.getByText("La conexión protege los datos")).toBeVisible();
-  await page.getByText("Ver evidencias técnicas (6 comprobaciones)").click();
+  const technicalEvidenceSections = page.locator(".ds-portal__technical-details summary");
+  await expect(technicalEvidenceSections).toHaveCount(3);
+  for (let index = 0; index < 3; index += 1) {
+    await technicalEvidenceSections.nth(index).click();
+  }
   await expect(page.getByText("TLS 1.0 aceptado")).toBeVisible();
   await expect(page.getByText("TLS 1.1 aceptado")).toBeVisible();
   await expect(page.getByText("TLS 1.2 aceptado")).toBeVisible();
