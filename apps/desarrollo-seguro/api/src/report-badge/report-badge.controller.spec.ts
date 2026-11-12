@@ -34,8 +34,8 @@ describe("ReportBadgeController", () => {
       "https://grumphya.com",
       "cross-site",
     );
-    await expect(
+    expect(() =>
       controller.verify({ ...body, token: 1 }, "https://grumphya.com", "cross-site"),
-    ).rejects.toThrow("invalid_report_badge_verification");
+    ).toThrow("invalid_report_badge_verification");
   });
 });
