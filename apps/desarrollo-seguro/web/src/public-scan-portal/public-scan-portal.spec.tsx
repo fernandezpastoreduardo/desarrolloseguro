@@ -195,13 +195,13 @@ describe("PublicScanPortal", () => {
     expect(await screen.findByText("Histórico")).toBeVisible();
     expect(screen.getByText(REPORT_SUMMARY)).toBeVisible();
     expect(screen.getByRole("heading", { name: "Resumen y puntuación" })).toBeVisible();
-    expect(screen.getByText("100/100 · 1 de 8 criterios evaluados")).toBeVisible();
+    expect(screen.getByText("100/100 · provisional · 1 de 8 criterios evaluados")).toBeVisible();
     expect(screen.getByText(/solo se calcula con los criterios evaluados/i)).toBeVisible();
     expect(screen.getByText("No se detectaron problemas en 1 aspecto evaluado. 7 aspectos aún no tienen datos."))
       .toBeVisible();
-    expect(screen.getByText("Evaluación parcial · 1 de 4 aspectos"))
+    expect(screen.getByText("100/100 provisional · 1 de 4 aspectos evaluados"))
       .toBeVisible();
-    expect(screen.queryByText("100/100 · 1 de 4 evaluados")).not.toBeInTheDocument();
+    expect(screen.getByText(/provisional · 1 de 8 criterios evaluados/i)).toBeVisible();
     expect(screen.getAllByText(/qué significa:/i)).toHaveLength(8);
     expect(screen.getAllByText("Sin datos suficientes").length).toBeGreaterThan(0);
     expect(screen.getByText(/no hay evidencia verificable sobre reutilización o venta/i)).toBeVisible();

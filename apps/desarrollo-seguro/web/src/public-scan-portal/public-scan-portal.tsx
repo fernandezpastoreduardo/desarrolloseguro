@@ -781,8 +781,8 @@ function ReportSummary({
         <h3 id="ethics-summary-heading">Resumen y puntuación</h3>
         <p className="ds-portal__ethics-score">
           {report.ethicsAssessment.score === null
-            ? "Sin puntuación: faltan controles observables"
-            : `${report.ethicsAssessment.score}/100 · ${report.ethicsAssessment.assessedCriteria} de ${report.ethicsAssessment.totalCriteria} criterios evaluados`}
+            ? `Sin puntuación: faltan controles observables · ${report.ethicsAssessment.assessedCriteria} de ${report.ethicsAssessment.totalCriteria} criterios evaluados`
+            : `${report.ethicsAssessment.score}/100${report.ethicsAssessment.assessedCriteria < report.ethicsAssessment.totalCriteria ? " · provisional" : ""} · ${report.ethicsAssessment.assessedCriteria} de ${report.ethicsAssessment.totalCriteria} criterios evaluados`}
         </p>
         <p className="ds-portal__score-method">
           La puntuación solo se calcula con los criterios evaluados. Los que no
@@ -1132,14 +1132,14 @@ function getCheckStatusLabel(status: string): string {
 function getCategoryScoreLabel(criteria: Array<{ status: string; weight: number }>): string {
   const assessed = criteria.filter((criterion) => criterion.status !== "unknown");
   if (assessed.length === 0) return "Sin datos suficientes";
-  if (assessed.length < criteria.length) {
-    return `Evaluación parcial · ${assessed.length} de ${criteria.length} aspectos`;
-  }
   const totalWeight = assessed.reduce((sum, criterion) => sum + criterion.weight, 0);
   const passedWeight = assessed
     .filter((criterion) => criterion.status === "pass")
     .reduce((sum, criterion) => sum + criterion.weight, 0);
-  return `${Math.round((passedWeight / totalWeight) * 100)}/100 · ${assessed.length} de ${criteria.length} evaluados`;
+  const score = Math.round((passedWeight / totalWeight) * 100);
+  const coverage = `${assessed.length} de ${criteria.length} aspectos evaluados`;
+  if (assessed.length < criteria.length) return `${score}/100 provisional · ${coverage}`;
+  return `${score}/100 · ${coverage}`;
 }
 
 function getReportTakeaway(criteria: Array<{ status: string }>): string {
