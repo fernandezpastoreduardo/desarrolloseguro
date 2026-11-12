@@ -139,6 +139,8 @@ FROM development-security-worker AS development-security-runtime-coordinator
 
 USER root:root
 
+RUN apk add --no-cache docker-cli
+
 ENTRYPOINT ["node", "apps/desarrollo-seguro/worker/dist/runtime-coordinator-entrypoint.js"]
 
 FROM nginx:1.30-alpine AS development-security-web

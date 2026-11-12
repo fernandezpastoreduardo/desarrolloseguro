@@ -202,7 +202,6 @@ services:
       DS_RUNTIME_EGRESS_NETWORK: development-security-egress
     volumes:
       - development-security-runtime:/run/development-security
-      - /usr/bin/docker:/usr/bin/docker:ro
       - /var/run/docker.sock:/var/run/docker.sock
     healthcheck:
       test: [CMD, node, -e, "require('node:fs').statSync('/run/development-security/runtime-coordinator.sock')"]

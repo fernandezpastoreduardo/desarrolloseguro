@@ -111,7 +111,7 @@ assert.match(runtimeCoordinator, /target:\s*development-security-runtime-coordin
 assert.match(runtimeCoordinator, /network_mode:\s*none/u);
 assert.match(runtimeCoordinator, /user:\s*"0:1000"/u);
 assert.match(runtimeCoordinator, /\/var\/run\/docker\.sock:\/var\/run\/docker\.sock/u);
-assert.match(runtimeCoordinator, /\/usr\/bin\/docker:\/usr\/bin\/docker:ro/u);
+assert.doesNotMatch(runtimeCoordinator, /\/usr\/bin\/docker:\/usr\/bin\/docker/u);
 assert.match(runtimeCoordinator, /DS_RUNTIME_DOCKER_BINARY:\s*\/usr\/bin\/docker/u);
 assert.match(runtimeCoordinator, /development-security-runtime:\/run\/development-security/u);
 assert.doesNotMatch(runtimeCoordinator, /development-security-ingress|development-security-backend|ports:/u);
@@ -140,6 +140,8 @@ assert.match(
   /development-security-worker-dependencies --chown=node:node \/workspace\/apps\/desarrollo-seguro\/persistence\/node_modules \/workspace\/apps\/desarrollo-seguro\/persistence\/node_modules/u,
 );
 assert.match(dockerfile, /AS development-security-runtime-coordinator\n/u);
+assert.match(dockerfile, /FROM development-security-worker AS development-security-runtime-coordinator[\s\S]*?apk add --no-cache docker-cli/u);
+assert.match(runtimeCoordinator, /\/var\/run\/docker\.sock:\/var\/run\/docker\.sock/u);
 assert.doesNotMatch(compose, /grumphya|apps\/api|apps\/web/iu);
 assert.doesNotMatch(compose, /privileged:\s*true/u);
 assert.match(dockerfile, /AS development-security-executor\n/u);
