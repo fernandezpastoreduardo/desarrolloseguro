@@ -19,6 +19,7 @@ const EXECUTOR_COMMAND_TIMEOUT_MS = 38_000;
 const BROKER_STOP_TIMEOUT_MS = 3_000;
 const MAX_DOCKER_COMMAND_OUTPUT_BYTES = 256 * 1024;
 const MAX_BROKER_STARTUP_OUTPUT_BYTES = 4 * 1024;
+const MAX_BROKER_STARTUP_ERROR_BYTES = 4 * 1024;
 const EGRESS_SOCKET_DIRECTORY = "/run/development-security-egress";
 const VOLUME_PREFIX = "development-security-job-";
 const BROKER_CONTAINER_PREFIX = "development-security-broker-";
@@ -37,6 +38,9 @@ const SAFE_BROKER_STARTUP_FAILURES = new Set([
   "runtime_broker_container_start_failed",
   "runtime_broker_entrypoint_failed",
   "runtime_broker_ready_timeout",
+  "runtime_broker_module_load_failed",
+  "runtime_broker_permission_denied",
+  "runtime_broker_file_missing",
 ]);
 const IMAGE_REFERENCE = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/u;
 const NETWORK_REFERENCE = /^(?:none|[A-Za-z0-9][A-Za-z0-9_.-]{0,127})$/u;
@@ -358,6 +362,7 @@ function waitForBrokerReady(
   return new Promise((resolve, reject) => {
     let receivedBytes = 0;
     let buffer = "";
+    let stderrBuffer = "";
     let startupFailureCode: string | undefined;
     let settled = false;
     const timer = setTimeout(() => finish(new Error("runtime_broker_ready_timeout")), timeoutMs);
@@ -386,13 +391,22 @@ function waitForBrokerReady(
       }
     };
     const onStderr = (chunk: Buffer) => {
-      const code = chunk.toString("utf8").trim();
+      const output = chunk.toString("utf8");
+      if (stderrBuffer.length < MAX_BROKER_STARTUP_ERROR_BYTES) {
+        stderrBuffer += output.slice(0, MAX_BROKER_STARTUP_ERROR_BYTES - stderrBuffer.length);
+      }
+      const code = output.trim();
       if (SAFE_BROKER_STARTUP_FAILURES.has(code)) startupFailureCode = code;
     };
     const onError = () => finish(new Error(startupFailureCode ?? "runtime_broker_process_error"));
     const onClose = (exitCode: number | null, signalName: string | null) => {
       if (startupFailureCode) {
         finish(new Error(startupFailureCode));
+        return;
+      }
+      const diagnosticCode = classifyBrokerStartupStderr(stderrBuffer);
+      if (diagnosticCode) {
+        finish(new Error(diagnosticCode));
         return;
       }
       if (signalName === "SIGKILL") {
@@ -420,6 +434,20 @@ function waitForBrokerReady(
     signal.addEventListener("abort", onAbort, { once: true });
     if (signal.aborted) onAbort();
   });
+}
+
+export function classifyBrokerStartupStderr(output: string): string | undefined {
+  const normalized = output.toLowerCase();
+  if (normalized.includes("cannot find module") || normalized.includes("module_not_found")) {
+    return "runtime_broker_module_load_failed";
+  }
+  if (normalized.includes("permission denied") || normalized.includes("operation not permitted")) {
+    return "runtime_broker_permission_denied";
+  }
+  if (normalized.includes("no such file or directory")) {
+    return "runtime_broker_file_missing";
+  }
+  return undefined;
 }
 
 async function runDocker(

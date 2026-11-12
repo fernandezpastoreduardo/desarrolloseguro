@@ -3,6 +3,7 @@ import { PassThrough } from "node:stream";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ScanRunInput } from "@desarrolloseguro/persistence";
 import {
+  classifyBrokerStartupStderr,
   createDockerRuntimeCoordinatorRunner,
   createDockerRuntimeSessionFactory,
   type DockerRuntimeSessionFactory,
@@ -105,6 +106,14 @@ beforeEach(() => {
 let activeBroker: FakeDockerChild | undefined;
 
 describe("createDockerRuntimeCoordinatorRunner", () => {
+  it("reduces broker startup stderr to a safe failure category", () => {
+    expect(classifyBrokerStartupStderr("Cannot find module '/private/runtime.js'"))
+      .toBe("runtime_broker_module_load_failed");
+    expect(classifyBrokerStartupStderr("permission denied: /run/private/socket"))
+      .toBe("runtime_broker_permission_denied");
+    expect(classifyBrokerStartupStderr("secret host path and token")).toBeUndefined();
+  });
+
   it("validates the executor response and closes the per-job runtime", async () => {
     const result = makeResult();
     const close = vi.fn().mockResolvedValue(undefined);
