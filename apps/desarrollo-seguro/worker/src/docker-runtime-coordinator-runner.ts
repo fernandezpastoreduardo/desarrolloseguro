@@ -39,6 +39,10 @@ const SAFE_BROKER_STARTUP_FAILURES = new Set([
   "runtime_broker_entrypoint_failed",
   "runtime_broker_ready_timeout",
   "runtime_broker_module_load_failed",
+  "runtime_broker_core_package_missing",
+  "runtime_broker_html_parser_missing",
+  "runtime_broker_persistence_package_missing",
+  "runtime_broker_entrypoint_module_missing",
   "runtime_broker_permission_denied",
   "runtime_broker_file_missing",
 ]);
@@ -438,6 +442,16 @@ function waitForBrokerReady(
 
 export function classifyBrokerStartupStderr(output: string): string | undefined {
   const normalized = output.toLowerCase();
+  if (normalized.includes("@desarrolloseguro/core")) {
+    return "runtime_broker_core_package_missing";
+  }
+  if (normalized.includes("@desarrolloseguro/persistence")) {
+    return "runtime_broker_persistence_package_missing";
+  }
+  if (normalized.includes("parse5")) return "runtime_broker_html_parser_missing";
+  if (normalized.includes("transport-v1-egress-broker-child")) {
+    return "runtime_broker_entrypoint_module_missing";
+  }
   if (normalized.includes("cannot find module") || normalized.includes("module_not_found")) {
     return "runtime_broker_module_load_failed";
   }

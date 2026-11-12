@@ -111,6 +111,8 @@ describe("createDockerRuntimeCoordinatorRunner", () => {
       .toBe("runtime_broker_module_load_failed");
     expect(classifyBrokerStartupStderr("permission denied: /run/private/socket"))
       .toBe("runtime_broker_permission_denied");
+    expect(classifyBrokerStartupStderr("Cannot find package parse5 imported from /private/path"))
+      .toBe("runtime_broker_html_parser_missing");
     expect(classifyBrokerStartupStderr("secret host path and token")).toBeUndefined();
   });
 
