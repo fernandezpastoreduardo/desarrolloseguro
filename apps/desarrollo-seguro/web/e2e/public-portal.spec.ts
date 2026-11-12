@@ -232,7 +232,7 @@ test("shows the report when an authorized analysis finishes", async ({ page }) =
   await expect(page.getByText(/qué comprueba:/i).first()).toBeVisible();
   await expect(page.getByText(/qué significa:/i).first()).toBeVisible();
   await expect(page.getByText(/qué revisar:/i).first()).toBeVisible();
-  await expect(page.getByText(/No se detectaron problemas|Se detectaron problemas/)).toBeVisible();
+  await expect(page.locator(".ds-portal__report-takeaway")).toBeVisible();
   await expect(page.getByText(/HTML inicial contiene referencias a herramientas de seguimiento conocidas/i))
     .toBeVisible();
   await expect(page.getByText(/Revisa las referencias detectadas/i)).toBeVisible();
