@@ -9,6 +9,13 @@ import {
   type TransportV1ExecutorRequest,
 } from "./transport-v1-executor-protocol.js";
 import type { RuntimeCoordinatorRunner } from "./runtime-coordinator-server.js";
+import {
+  createJsonLineRuntimeDiagnostic,
+  RUNTIME_DIAGNOSTIC_CODES,
+  type RuntimeDiagnosticCode,
+  type RuntimeDiagnosticStage,
+  type RuntimeDiagnosticWriter,
+} from "./runtime-diagnostics.js";
 
 const DEFAULT_BROKER_STARTUP_TIMEOUT_MS = 20_000;
 const DOCKER_COMMAND_TIMEOUT_MS = 10_000;
@@ -59,6 +66,7 @@ export type DockerRuntimeCoordinatorRunnerOptions = {
   dockerSocketPath?: string;
   brokerNetwork?: string;
   brokerStartupTimeoutMs?: number;
+  diagnostic?: RuntimeDiagnosticWriter;
 };
 
 export type DockerRuntimeSession = {
@@ -168,6 +176,14 @@ export function createDockerRuntimeSessionFactory(
   const dockerSocketPath = options.dockerSocketPath ?? "/var/run/docker.sock";
   const brokerNetwork = options.brokerNetwork ?? "none";
   const brokerStartupTimeoutMs = options.brokerStartupTimeoutMs ?? DEFAULT_BROKER_STARTUP_TIMEOUT_MS;
+  const diagnosticWriter = options.diagnostic ?? createJsonLineRuntimeDiagnostic();
+  const diagnostic: RuntimeDiagnosticWriter = (event) => {
+    try {
+      diagnosticWriter(event);
+    } catch {
+      // A diagnostic sink must never change runtime behavior.
+    }
+  };
   if (
     !IMAGE_REFERENCE.test(options.executorImage) ||
     !IMAGE_REFERENCE.test(options.brokerImage) ||
@@ -198,19 +214,36 @@ export function createDockerRuntimeSessionFactory(
         closed = true;
         let cleanupFailed = false;
         if (executorMayExist) {
-          const removed = await removeContainer(dockerBinary, executorName, dockerSocketPath);
+          const removed = await removeContainer(
+            dockerBinary,
+            executorName,
+            dockerSocketPath,
+            "executor_container_cleanup",
+            diagnostic,
+          );
           if (!removed) cleanupFailed = true;
           executorMayExist = false;
         }
         if (brokerProcess) {
-          const removed = await removeContainer(dockerBinary, brokerName, dockerSocketPath);
+          const removed = await removeContainer(
+            dockerBinary,
+            brokerName,
+            dockerSocketPath,
+            "broker_container_cleanup",
+            diagnostic,
+          );
           const processClosed = await waitForChildClose(brokerProcess, BROKER_STOP_TIMEOUT_MS);
           if (!removed && !processClosed) cleanupFailed = true;
           if (!processClosed) brokerProcess.kill("SIGKILL");
           brokerProcess = undefined;
         }
         if (volumeMayExist) {
-          const removed = await removeVolume(dockerBinary, volumeName, dockerSocketPath);
+          const removed = await removeVolume(
+            dockerBinary,
+            volumeName,
+            dockerSocketPath,
+            diagnostic,
+          );
           if (!removed) cleanupFailed = true;
           volumeMayExist = false;
         }
@@ -227,7 +260,7 @@ export function createDockerRuntimeSessionFactory(
           ], undefined, signal, undefined, undefined, undefined, dockerSocketPath);
           volumeMayExist = true;
         } catch (error) {
-          await removeVolume(dockerBinary, volumeName, dockerSocketPath);
+          await removeVolume(dockerBinary, volumeName, dockerSocketPath, diagnostic);
           throw error;
         }
         startupFailureCode = "runtime_volume_prepare_failed";
@@ -251,6 +284,11 @@ export function createDockerRuntimeSessionFactory(
         startupFailureCode = "runtime_broker_ready_failed";
         await waitForBrokerReady(brokerProcess, signal, brokerStartupTimeoutMs);
       } catch (error) {
+        diagnostic({
+          type: "runtime_diagnostic",
+          stage: getStartupDiagnosticStage(startupFailureCode),
+          code: getRuntimeDiagnosticCode(error),
+        });
         try {
           await close();
         } catch (cleanupError) {
@@ -267,20 +305,31 @@ export function createDockerRuntimeSessionFactory(
         execute: async (executorRequest, executorSignal) => {
           if (closed || executorSignal.aborted) throw new Error("request_aborted");
           executorMayExist = true;
-          const output = await runDocker(
-            dockerBinary,
-            executorArguments(options.executorImage, volumeName, executorName),
-            `${JSON.stringify(executorRequest)}\n`,
-            executorSignal,
-            MAX_EXECUTOR_RESPONSE_BYTES,
-            true,
-            EXECUTOR_COMMAND_TIMEOUT_MS,
-            dockerSocketPath,
-          );
           try {
-            return JSON.parse(output.trim()) as unknown;
+            const output = await runDocker(
+              dockerBinary,
+              executorArguments(options.executorImage, volumeName, executorName),
+              `${JSON.stringify(executorRequest)}\n`,
+              executorSignal,
+              MAX_EXECUTOR_RESPONSE_BYTES,
+              true,
+              EXECUTOR_COMMAND_TIMEOUT_MS,
+              dockerSocketPath,
+            );
+            try {
+              return JSON.parse(output.trim()) as unknown;
+            } catch (error) {
+              throw new Error("executor_response_invalid", { cause: error });
+            }
           } catch (error) {
-            throw new Error("executor_response_invalid", { cause: error });
+            if (!(error instanceof Error) || error.message !== "request_aborted") {
+              diagnostic({
+                type: "runtime_diagnostic",
+                stage: "executor",
+                code: getRuntimeDiagnosticCode(error),
+              });
+            }
+            throw error;
           }
         },
         close,
@@ -479,7 +528,7 @@ async function runDocker(
   if (signal?.aborted) throw new Error("request_aborted");
   return new Promise((resolve, reject) => {
     const child = spawn(dockerBinary, dockerCommandArguments(dockerSocketPath, args), {
-      stdio: ["pipe", "pipe", acceptNonZeroStderr ? "pipe" : "ignore"],
+      stdio: ["pipe", "pipe", "pipe"],
     });
     const chunks: Buffer[] = [];
     const errorChunks: Buffer[] = [];
@@ -511,14 +560,12 @@ async function runDocker(
       }
       chunks.push(Buffer.from(chunk));
     });
-    if (acceptNonZeroStderr) {
-      child.stderr?.on("data", (chunk: Buffer) => {
-        receivedErrorBytes += chunk.byteLength;
-        if (receivedErrorBytes <= MAX_DOCKER_ERROR_OUTPUT_BYTES) {
-          errorChunks.push(Buffer.from(chunk));
-        }
-      });
-    }
+    child.stderr?.on("data", (chunk: Buffer) => {
+      receivedErrorBytes += chunk.byteLength;
+      if (receivedErrorBytes <= MAX_DOCKER_ERROR_OUTPUT_BYTES) {
+        errorChunks.push(Buffer.from(chunk));
+      }
+    });
     child.once("error", () => finish(new Error("docker_runtime_unavailable")));
     child.once("close", (code) => {
       if (code !== 0 && !allowNonZeroExit) {
@@ -527,7 +574,7 @@ async function runDocker(
           finish(undefined, Buffer.concat(chunks).toString("utf8"));
           return;
         }
-        finish(new Error("docker_runtime_command_failed"));
+        finish(new Error(classifyDockerCommandFailure(errorOutput)));
         return;
       }
       finish(undefined, Buffer.concat(chunks).toString("utf8"));
@@ -541,16 +588,37 @@ async function runDocker(
   });
 }
 
+function classifyDockerCommandFailure(output: string): RuntimeDiagnosticCode {
+  const normalized = output.toLowerCase();
+  if (/permission denied|operation not permitted/u.test(normalized)) {
+    return "docker_permission_denied";
+  }
+  if (/cannot connect to the docker daemon|error during connect|is the docker daemon running/u.test(normalized)) {
+    return "docker_daemon_unavailable";
+  }
+  if (/removal is already in progress|being removed/u.test(normalized)) {
+    return "docker_removal_in_progress";
+  }
+  if (/volume(?: .*?)? is in use|resource is in use|device or resource busy/u.test(normalized)) {
+    return "docker_resource_in_use";
+  }
+  return "docker_runtime_command_failed";
+}
+
 async function removeContainer(
   dockerBinary: string,
   containerName: string,
   dockerSocketPath: string,
+  stage: RuntimeDiagnosticStage,
+  diagnostic: RuntimeDiagnosticWriter,
 ): Promise<boolean> {
   return runDockerCleanup(
     dockerBinary,
     ["rm", "--force", containerName],
     dockerSocketPath,
     /\bno such container:/iu,
+    stage,
+    diagnostic,
   );
 }
 
@@ -558,12 +626,15 @@ async function removeVolume(
   dockerBinary: string,
   volumeName: string,
   dockerSocketPath: string,
+  diagnostic: RuntimeDiagnosticWriter,
 ): Promise<boolean> {
   return runDockerCleanup(
     dockerBinary,
     ["volume", "rm", volumeName],
     dockerSocketPath,
     /\bno such volume\b/iu,
+    "volume_cleanup",
+    diagnostic,
   );
 }
 
@@ -572,7 +643,10 @@ async function runDockerCleanup(
   args: string[],
   dockerSocketPath: string,
   absentResourcePattern: RegExp,
+  stage: RuntimeDiagnosticStage,
+  diagnostic: RuntimeDiagnosticWriter,
 ): Promise<boolean> {
+  let lastCauseCode: RuntimeDiagnosticCode;
   for (let attempt = 0; attempt < DOCKER_CLEANUP_ATTEMPTS; attempt += 1) {
     try {
       await runDocker(
@@ -587,12 +661,44 @@ async function runDockerCleanup(
         absentResourcePattern,
       );
       return true;
-    } catch {
-      if (attempt + 1 === DOCKER_CLEANUP_ATTEMPTS) return false;
+    } catch (error) {
+      lastCauseCode = getRuntimeDiagnosticCode(error);
+      if (attempt + 1 === DOCKER_CLEANUP_ATTEMPTS) {
+        diagnostic({
+          type: "runtime_diagnostic",
+          stage,
+          code: "runtime_cleanup_failed",
+          attempt: attempt + 1,
+          causeCode: lastCauseCode,
+        });
+        return false;
+      }
+      diagnostic({
+        type: "runtime_diagnostic",
+        stage,
+        code: "runtime_cleanup_retry",
+        attempt: attempt + 1,
+        causeCode: lastCauseCode,
+      });
       await new Promise((resolve) => setTimeout(resolve, DOCKER_CLEANUP_RETRY_DELAY_MS));
     }
   }
   return false;
+}
+
+function getStartupDiagnosticStage(startupFailureCode: string): RuntimeDiagnosticStage {
+  if (startupFailureCode === "runtime_volume_create_failed") return "volume_create";
+  if (startupFailureCode === "runtime_volume_prepare_failed") return "volume_prepare";
+  if (startupFailureCode === "runtime_broker_start_failed") return "broker_start";
+  return "broker_ready";
+}
+
+function getRuntimeDiagnosticCode(error: unknown): RuntimeDiagnosticCode {
+  const message = error instanceof Error ? error.message : "";
+  if (RUNTIME_DIAGNOSTIC_CODES.includes(message as RuntimeDiagnosticCode)) {
+    return message as RuntimeDiagnosticCode;
+  }
+  return "docker_runtime_command_failed";
 }
 
 function dockerCommandArguments(dockerSocketPath: string, args: string[]): string[] {

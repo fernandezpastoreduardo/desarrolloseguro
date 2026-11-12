@@ -106,7 +106,12 @@ beforeEach(() => {
         queueMicrotask(() => child.finish(dockerBehavior.failExecutorRemoval ? 1 : 0));
       }
     } else if (args[0] === "volume" && args[1] === "rm") {
-      queueMicrotask(() => child.finish(dockerBehavior.failVolumeRemoval ? 1 : 0));
+      queueMicrotask(() => child.finish(
+        dockerBehavior.failVolumeRemoval ? 1 : 0,
+        "",
+        null,
+        dockerBehavior.failVolumeRemoval ? "Error response from daemon: volume is in use\n" : "",
+      ));
     } else {
       queueMicrotask(() => child.finish(0));
     }
@@ -321,14 +326,21 @@ describe("createDockerRuntimeSessionFactory", () => {
 
   it("reports a volume creation failure and hides Docker output", async () => {
     dockerBehavior.failVolumeCreate = true;
+    const diagnostic = vi.fn();
     const runner = createDockerRuntimeCoordinatorRunner(createDockerRuntimeSessionFactory({
       executorImage: "executor:test",
       brokerImage: "broker:test",
+      diagnostic,
     }));
 
     await expect(runner.execute(REQUEST, new AbortController().signal)).rejects.toThrow(
       "runtime_volume_failed",
     );
+    expect(diagnostic).toHaveBeenCalledWith({
+      type: "runtime_diagnostic",
+      stage: "volume_create",
+      code: "docker_runtime_command_failed",
+    });
   });
 
   it("categorizes a Docker process spawn error without exposing its detail", async () => {
@@ -438,9 +450,11 @@ describe("createDockerRuntimeSessionFactory", () => {
 
   it("retries transient container cleanup errors before failing the scan", async () => {
     dockerBehavior.executorRemovalTransientFailures = 1;
+    const diagnostic = vi.fn();
     const runner = createDockerRuntimeCoordinatorRunner(createDockerRuntimeSessionFactory({
       executorImage: "executor:test",
       brokerImage: "broker:test",
+      diagnostic,
     }));
 
     await expect(runner.execute(REQUEST, new AbortController().signal)).resolves.toMatchObject({
@@ -448,19 +462,48 @@ describe("createDockerRuntimeSessionFactory", () => {
     });
     expect(dockerCalls.filter((args) => args[0] === "rm" && args[2]?.startsWith("development-security-executor-")).length)
       .toBe(2);
+    expect(diagnostic).toHaveBeenCalledWith({
+      type: "runtime_diagnostic",
+      stage: "executor_container_cleanup",
+      code: "runtime_cleanup_retry",
+      attempt: 1,
+      causeCode: "docker_removal_in_progress",
+    });
   });
 
   it("reports a volume cleanup failure after removing the containers", async () => {
     dockerBehavior.failVolumeRemoval = true;
+    const diagnostic = vi.fn();
     const runner = createDockerRuntimeCoordinatorRunner(createDockerRuntimeSessionFactory({
       executorImage: "executor:test",
       brokerImage: "broker:test",
+      diagnostic,
     }));
 
     await expect(runner.execute(REQUEST, new AbortController().signal)).rejects.toThrow(
       "runtime_volume_failed",
     );
     expect(dockerCalls.some((args) => args[0] === "rm" && args.includes("--force"))).toBe(true);
+    expect(diagnostic).toHaveBeenCalledWith({
+      type: "runtime_diagnostic",
+      stage: "volume_cleanup",
+      code: "runtime_cleanup_failed",
+      attempt: 3,
+      causeCode: "docker_resource_in_use",
+    });
+  });
+
+  it("does not let a failing diagnostic sink interrupt scanning or cleanup", async () => {
+    const runner = createDockerRuntimeCoordinatorRunner(createDockerRuntimeSessionFactory({
+      executorImage: "executor:test",
+      brokerImage: "broker:test",
+      diagnostic: () => { throw new Error("private diagnostic sink failure"); },
+    }));
+
+    await expect(runner.execute(REQUEST, new AbortController().signal)).resolves.toMatchObject({
+      verdict: "inconclusive",
+    });
+    expect(dockerCalls.some((args) => args[0] === "volume" && args[1] === "rm")).toBe(true);
   });
 });
 
