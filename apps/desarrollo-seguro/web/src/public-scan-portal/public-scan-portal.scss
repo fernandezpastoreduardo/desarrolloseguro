@@ -452,6 +452,7 @@ $ds-canvas: #f5f2ec;
 .ds-portal__category-heading h4 { margin: 0; color: var(--ds-ink); font-size: 1.1rem; }
 .ds-portal__category-heading strong { max-width: 60%; color: var(--ds-accent-strong); font-family: var(--ds-mono); font-size: 0.65rem; text-align: right; text-transform: uppercase; }
 .ds-portal__report-category > p { color: var(--ds-muted); font-size: 0.88rem; line-height: 1.55; }
+.ds-portal__report-category > .ds-portal__category-summary { margin: 14px 0 0; border-left: 3px solid var(--ds-accent); padding: 10px 12px; color: var(--ds-ink); background: var(--ds-canvas-deep); font-weight: 700; }
 .ds-portal__ethics-criteria { display: grid; gap: 10px; margin: 16px 0 0; padding: 0; list-style: none; }
 .ds-portal__ethics-criteria li { display: flex; justify-content: space-between; gap: 12px; color: var(--ds-ink-soft); }
 .ds-portal__ethics-criteria li > div { min-width: 0; }
@@ -460,6 +461,9 @@ $ds-canvas: #f5f2ec;
 .ds-portal__ethics-criteria li p b { color: var(--ds-ink); }
 .ds-portal__ethics-criteria li > span { flex: 0 0 auto; color: var(--ds-accent-strong); font-family: var(--ds-mono); font-size: 0.64rem; text-transform: uppercase; }
 .ds-portal__ethics-reasons { color: var(--ds-muted); line-height: 1.5; }
+.ds-portal__technical-details { margin-top: 18px; border-top: 1px solid var(--ds-line); padding-top: 12px; }
+.ds-portal__technical-details summary { width: fit-content; color: var(--ds-accent-strong); cursor: pointer; font-size: 0.84rem; font-weight: 750; }
+.ds-portal__technical-details summary:focus-visible { outline: 2px solid var(--ds-accent-strong); outline-offset: 4px; }
 
 .ds-portal__verdict span {
   border: 1px solid var(--ds-line);

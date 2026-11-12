@@ -28,10 +28,10 @@ import type {
 
 const ROOT_PATHS = ["/"] as const;
 const TLS_VERSION_PROBES = [
-  { tlsVersion: "TLSv1", evidenceKey: "tls10Accepted" },
-  { tlsVersion: "TLSv1.1", evidenceKey: "tls11Accepted" },
-  { tlsVersion: "TLSv1.2", evidenceKey: "tls12Accepted" },
-  { tlsVersion: "TLSv1.3", evidenceKey: "tls13Accepted" },
+  { tlsVersion: "TLSv1", evidenceKey: "tls10Accepted", errorKey: "tls10ProbeError" },
+  { tlsVersion: "TLSv1.1", evidenceKey: "tls11Accepted", errorKey: "tls11ProbeError" },
+  { tlsVersion: "TLSv1.2", evidenceKey: "tls12Accepted", errorKey: "tls12ProbeError" },
+  { tlsVersion: "TLSv1.3", evidenceKey: "tls13Accepted", errorKey: "tls13ProbeError" },
 ] as const;
 
 export type TransportV1NetworkObserverDependencies = {
@@ -138,6 +138,8 @@ export function createTransportV1NetworkObserver(
           versionEvidence[evidenceKey] = result.evidence[evidenceKey];
         } else if (result.errorCode === "tls_handshake_failed") {
           versionEvidence[evidenceKey] = false;
+        } else if (result.errorCode) {
+          versionEvidence[TLS_VERSION_PROBES[index].errorKey] = result.errorCode;
         }
       }
       return {

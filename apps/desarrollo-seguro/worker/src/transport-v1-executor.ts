@@ -324,6 +324,10 @@ function appendTlsVersionCheck(
     const value = evidence[key];
     if (typeof value === "boolean") tlsEvidence[key] = value;
   }
+  for (const key of ["tls10ProbeError", "tls11ProbeError", "tls12ProbeError", "tls13ProbeError"]) {
+    const value = evidence[key];
+    if (typeof value === "string") tlsEvidence[key] = value;
+  }
   checks.push({
     controlId: "DS-TLS-02",
     method: "TLS",

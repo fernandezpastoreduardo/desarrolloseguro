@@ -120,6 +120,30 @@ describe("TransportV1FixtureExecutor", () => {
     expect(JSON.stringify(result)).not.toContain("sensitive detail");
   });
 
+  it("preserves safe TLS diagnostics when the protocol matrix is incomplete", async () => {
+    const source = makeSource();
+    vi.mocked(source.observeTls).mockResolvedValue({
+      protocol: "TLSv1.3",
+      certificateValid: true,
+      hostnameMatches: true,
+      tls12ProbeError: "connection_failed",
+      tls13ProbeError: "request_timeout",
+    });
+    const executor = new TransportV1FixtureExecutor(source);
+
+    const result = await executor.execute(
+      { ...JOB, profileVersion: "domain-v3" },
+      new AbortController().signal,
+    );
+
+    expect(result.checks.find(({ controlId }) => controlId === "DS-TLS-02"))
+      .toMatchObject({
+        status: "unknown",
+        evidence: { tls12ProbeError: "connection_failed", tls13ProbeError: "request_timeout" },
+        summary: "No se pudieron completar todas las pruebas de TLS. TLS 1.2: no se pudo completar la conexión. TLS 1.3: se agotó el tiempo de espera.",
+      });
+  });
+
   it("does not run probes for an unsupported profile", async () => {
     const source = makeSource();
     const executor = new TransportV1FixtureExecutor(source);

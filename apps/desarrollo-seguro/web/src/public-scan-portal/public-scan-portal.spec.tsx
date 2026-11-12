@@ -193,7 +193,7 @@ describe("PublicScanPortal", () => {
     await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
 
     expect(await screen.findByText("Histórico")).toBeVisible();
-    expect(screen.getByText(REPORT_SUMMARY)).toBeVisible();
+    expect(screen.getByText(REPORT_SUMMARY)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Resumen y puntuación" })).toBeVisible();
     expect(screen.getByText("100/100 · provisional · 1 de 8 criterios evaluados")).toBeVisible();
     expect(screen.getByText(/solo se calcula con los criterios evaluados/i)).toBeVisible();
@@ -205,14 +205,16 @@ describe("PublicScanPortal", () => {
     expect(screen.getAllByText(/qué significa:/i)).toHaveLength(8);
     expect(screen.getAllByText("Sin datos suficientes").length).toBeGreaterThan(0);
     expect(screen.getByText(/no hay evidencia verificable sobre reutilización o venta/i)).toBeVisible();
-    expect(screen.getByText(/solo se observó la portada/i)).toBeVisible();
+    expect(screen.getByText(/solo se observó la portada/i)).toBeInTheDocument();
     expect(screen.getByText(/origen indicado en el registro/i)).toBeVisible();
     expect(screen.getByRole("heading", { name: "Seguridad" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Privacidad" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Ética" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Rendimiento" })).toBeVisible();
     expect(screen.getByText(/indicaciones que el sitio envía al navegador/i)).toBeVisible();
-    expect(screen.getByText("Política que restringe contenido cargado (CSP)")).toBeVisible();
+    expect(screen.getByText(/se revisaron 1 de 4 aspectos; no se detectaron problemas en el observado\. faltan datos de 3/i)).toBeVisible();
+    expect(screen.getByText("Política que restringe contenido cargado (CSP)")).toBeInTheDocument();
+    expect(screen.getByText("Ver evidencias técnicas (1 comprobación)")).toBeVisible();
     const summary = screen.getByRole("heading", { name: "Resumen y puntuación" });
     const detail = screen.getByRole("heading", { name: "Alcance observado" });
     expect(
@@ -361,7 +363,7 @@ describe("PublicScanPortal", () => {
     render(<PublicScanPortal />);
 
     expect(await screen.findByText("transport-v1")).toBeVisible();
-    expect(screen.getByText("Comprobación DS-DNS-01: pass.")).toBeVisible();
+    expect(screen.getByText("Comprobación DS-DNS-01: pass.")).toBeInTheDocument();
   });
 
   it("shows the bounded initial-cookie finding in a domain-v1 report", async () => {
@@ -405,8 +407,8 @@ describe("PublicScanPortal", () => {
 
     render(<PublicScanPortal />);
 
-    expect(await screen.findByText(/coincidencias con la tabla local Analytics\/Marketing: 1/i)).toBeVisible();
-    expect(screen.getByText(/no se interactuó con el banner de consentimiento/i)).toBeVisible();
+    expect(await screen.findByText(/coincidencias con la tabla local Analytics\/Marketing: 1/i)).toBeInTheDocument();
+    expect(screen.getByText(/no se interactuó con el banner de consentimiento/i)).toBeInTheDocument();
     expect(screen.getByText("domain-v1")).toBeVisible();
   });
 
@@ -455,8 +457,8 @@ describe("PublicScanPortal", () => {
 
     expect(await screen.findByText("domain-v2")).toBeVisible();
     expect(screen.getAllByText("Referencias a rastreadores conocidos").length).toBeGreaterThan(0);
-    expect(screen.getByText("Tiempo de respuesta inicial")).toBeVisible();
-    expect(screen.getByText("40.000 bytes")).toBeVisible();
+    expect(screen.getByText("Tiempo de respuesta inicial")).toBeInTheDocument();
+    expect(screen.getByText("40.000 bytes")).toBeInTheDocument();
     expect(screen.getByText("No confirma conexiones ni scripts dinámicos; el rendimiento mide una respuesta inicial.")).toBeVisible();
   });
 
@@ -477,7 +479,7 @@ describe("PublicScanPortal", () => {
 
     render(<PublicScanPortal />);
 
-    expect(await screen.findByText(unsafeSummary)).toBeVisible();
+    expect(await screen.findByText(unsafeSummary)).toBeInTheDocument();
     expect(document.querySelector("img[onerror]")).toBeNull();
     expect(fetchMock).toHaveBeenCalledWith(
       `/api/desarrollo-seguro/v1/reports/${REPORT_ID}`,

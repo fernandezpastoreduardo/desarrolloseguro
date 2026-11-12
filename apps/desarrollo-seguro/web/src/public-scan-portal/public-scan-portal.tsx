@@ -84,10 +84,10 @@ const PUBLIC_SCOPE_PATHS = ["/", "/precios", "/informe"] as const;
 const MAX_REPORT_CHECKS = 32;
 
 const REPORT_CATEGORIES = [
-  { id: "ethics", label: "Ética", description: "Señales de referencias a rastreadores conocidos en el HTML inicial. No permiten determinar por sí solas cómo una empresa usa o vende datos.", criteria: ["third-party-data-use", "tracking"], controls: ["DS-PRIV-06"] },
-  { id: "privacy", label: "Privacidad", description: "Cookies detectadas en la primera respuesta. El análisis no acepta ni rechaza avisos ni navega por el sitio.", criteria: ["initial-cookie-risk"], controls: ["DS-PRIV-05"] },
-  { id: "security", label: "Seguridad", description: "Comprueba resolución del dominio, cifrado TLS, respuesta web y algunas protecciones del navegador.", criteria: ["dns-integrity", "transport-security", "http-availability", "security-headers"], controls: ["DS-DNS-01", "DS-TLS-01", "DS-TLS-02", "DS-HTTP-01", "DS-HDR-01"] },
-  { id: "performance", label: "Rendimiento", description: "Mide el tiempo y tamaño de una respuesta inicial. No mide experiencia real ni métricas Core Web Vitals.", criteria: ["performance"], controls: ["DS-QUAL-02"] },
+  { id: "ethics", label: "Ética", description: "Busca señales visibles de herramientas de seguimiento. Esta prueba no puede confirmar contratos ni si una empresa vende o reutiliza datos.", criteria: ["third-party-data-use", "tracking"], controls: ["DS-PRIV-06"] },
+  { id: "privacy", label: "Privacidad", description: "Revisa las cookies que se envían al abrir la portada. No acepta avisos de consentimiento ni navega por la web.", criteria: ["initial-cookie-risk"], controls: ["DS-PRIV-05"] },
+  { id: "security", label: "Seguridad", description: "Revisa que el dominio responda, use una conexión cifrada y envíe protecciones básicas al navegador.", criteria: ["dns-integrity", "transport-security", "http-availability", "security-headers"], controls: ["DS-DNS-01", "DS-TLS-01", "DS-TLS-02", "DS-HTTP-01", "DS-HDR-01"] },
+  { id: "performance", label: "Rendimiento", description: "Mide cuánto tarda y cuánto pesa la respuesta de portada. No representa toda la experiencia desde otros dispositivos o páginas.", criteria: ["performance"], controls: ["DS-QUAL-02"] },
 ] as const;
 const CRITERION_EXPLANATIONS: Record<string, string> = {
   "dns-integrity": "Comprueba que el nombre del dominio lleva a una dirección pública. No confirma quién es su titular.",
@@ -123,6 +123,7 @@ const EVIDENCE_LABELS: Record<string, string> = {
   addressClass: "Tipo de dirección", aRecordCount: "Direcciones IPv4 encontradas", aaaaRecordCount: "Direcciones IPv6 encontradas",
   protocol: "Protocolo TLS negociado", certificateValid: "Certificado válido", hostnameMatches: "Certificado para este dominio",
   tls10Accepted: "TLS 1.0 aceptado", tls11Accepted: "TLS 1.1 aceptado", tls12Accepted: "TLS 1.2 aceptado", tls13Accepted: "TLS 1.3 aceptado",
+  tls10ProbeError: "Resultado de la prueba TLS 1.0", tls11ProbeError: "Resultado de la prueba TLS 1.1", tls12ProbeError: "Resultado de la prueba TLS 1.2", tls13ProbeError: "Resultado de la prueba TLS 1.3",
   statusCode: "Código de respuesta HTTP", redirectedToHttps: "Redirige a conexión segura", finalScheme: "Conexión final",
   hsts: "Fuerza conexiones seguras futuras (HSTS)", nosniff: "Evita interpretar archivos con un tipo distinto",
   frameProtection: "Protección frente a inserción en marcos", referrerPolicy: "Limita información enviada al salir del sitio",
@@ -806,6 +807,7 @@ function ReportSummary({
                   <strong>{getCategoryScoreLabel(criteria)}</strong>
                 </div>
                 <p>{category.description}</p>
+                <p className="ds-portal__category-summary">{getCategorySummary(criteria)}</p>
                 <ul className="ds-portal__ethics-criteria">
                   {criteria.map((criterion) => (
                     <li key={criterion.id} data-status={criterion.status}>
@@ -822,22 +824,25 @@ function ReportSummary({
                   ))}
                 </ul>
                 {checks.length > 0 && (
-                  <ul className="ds-portal__checks">
-                    {checks.map((check) => (
-                      <li key={`${check.controlId}-${check.targetPath}-${check.method}`}>
-                        <div><strong>{getControlLabel(check.controlId)}</strong><span>{getCheckStatusLabel(check.status)}</span></div>
-                        <p>{check.summary}</p>
-                        {Object.keys(check.evidence).length > 0 && (
-                          <dl className="ds-portal__evidence">
-                            {Object.entries(check.evidence).map(([key, value]) => (
-                              <div key={key}><dt>{EVIDENCE_LABELS[key] ?? key}</dt><dd>{formatEvidenceValue(value, key)}</dd></div>
-                            ))}
-                          </dl>
-                        )}
-                        <small>{check.method} {check.targetPath} · {check.limitation}</small>
-                      </li>
-                    ))}
-                  </ul>
+                  <details className="ds-portal__technical-details">
+                    <summary>Ver evidencias técnicas ({checks.length} comprobación{checks.length === 1 ? "" : "es"})</summary>
+                    <ul className="ds-portal__checks">
+                      {checks.map((check) => (
+                        <li key={`${check.controlId}-${check.targetPath}-${check.method}`}>
+                          <div><strong>{getControlLabel(check.controlId)}</strong><span>{getCheckStatusLabel(check.status)}</span></div>
+                          <p>{check.summary}</p>
+                          {Object.keys(check.evidence).length > 0 && (
+                            <dl className="ds-portal__evidence">
+                              {Object.entries(check.evidence).map(([key, value]) => (
+                                <div key={key}><dt>{EVIDENCE_LABELS[key] ?? key}</dt><dd>{formatEvidenceValue(value, key)}</dd></div>
+                              ))}
+                            </dl>
+                          )}
+                          <small>{check.method} {check.targetPath} · {check.limitation}</small>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
                 )}
               </section>
             );
@@ -1142,6 +1147,20 @@ function getCategoryScoreLabel(criteria: Array<{ status: string; weight: number 
   return `${score}/100 · ${coverage}`;
 }
 
+function getCategorySummary(criteria: Array<{ status: string }>): string {
+  const assessed = criteria.filter((criterion) => criterion.status !== "unknown");
+  const problems = assessed.filter((criterion) => criterion.status === "fail").length;
+  const unknown = criteria.length - assessed.length;
+  if (assessed.length === 0) return "Todavía no hay datos suficientes para valorar esta categoría.";
+  if (problems > 0) {
+    return `Hay ${problems} aspecto${problems === 1 ? "" : "s"} que conviene revisar de ${assessed.length} evaluado${assessed.length === 1 ? "" : "s"}.`;
+  }
+  if (unknown > 0) {
+    return `Se revisaron ${assessed.length} de ${criteria.length} aspectos; no se detectaron problemas en el observado. Faltan datos de ${unknown}.`;
+  }
+  return `No se detectaron problemas en los ${assessed.length} aspectos evaluados.`;
+}
+
 function getReportTakeaway(criteria: Array<{ status: string }>): string {
   const assessed = criteria.filter((criterion) => criterion.status !== "unknown");
   const problems = assessed.filter((criterion) => criterion.status === "fail").length;
@@ -1210,6 +1229,14 @@ function formatEvidenceValue(value: string | number | boolean, key: string): str
   const labels: Record<string, string> = {
     public: "Pública", private: "Privada", reserved: "Reservada", unresolved: "Sin resolver",
     "TLSv1.2": "TLS 1.2", "TLSv1.3": "TLS 1.3", http: "HTTP", https: "HTTPS",
+    dns_resolution_failed: "No se pudo resolver el dominio", connection_failed: "No se pudo completar la conexión",
+    broker_failed: "El servicio de medición no respondió", request_aborted: "Prueba interrumpida",
+    request_timeout: "Tiempo de espera agotado", response_size_limit_exceeded: "Respuesta mayor al límite permitido",
+    https_request_failed: "Falló la solicitud HTTPS", http_request_failed: "Falló la solicitud de prueba",
+    invalid_http_response: "Respuesta no válida", redirect_limit_exceeded: "Demasiadas redirecciones",
+    redirect_origin_not_allowlisted: "Redirección fuera del dominio permitido", redirect_path_not_allowlisted: "Redirección fuera de la ruta permitida",
+    tls_certificate_invalid: "Certificado no válido", tls_handshake_failed: "El servidor rechazó el cifrado",
+    transport_failed: "Error de transporte",
   };
   return labels[value] ?? value;
 }

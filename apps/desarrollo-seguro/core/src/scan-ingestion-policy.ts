@@ -1,4 +1,5 @@
 import { normalizeHostname } from "./scan-policy.js";
+import { TLS_PROBE_ERROR_CODES } from "./public-evidence.js";
 
 const PROFILE_VERSION_V1 = "controls-v1";
 const PROFILE_VERSION_V2 = "controls-v2";
@@ -90,6 +91,10 @@ const CONTROLS: Readonly<Record<string, ControlContract>> = {
       tls11Accepted: "boolean",
       tls12Accepted: "boolean",
       tls13Accepted: "boolean",
+      tls10ProbeError: TLS_PROBE_ERROR_CODES,
+      tls11ProbeError: TLS_PROBE_ERROR_CODES,
+      tls12ProbeError: TLS_PROBE_ERROR_CODES,
+      tls13ProbeError: TLS_PROBE_ERROR_CODES,
     },
   },
   "DS-HTTP-01": {
@@ -377,6 +382,18 @@ function getSafeCheckSummary(
   status: string,
   evidence: Record<string, SafeEvidenceValue>,
 ): string {
+  if (controlId === "DS-TLS-02") {
+    const diagnostics = [
+      ["TLS 1.0", evidence.tls10ProbeError],
+      ["TLS 1.1", evidence.tls11ProbeError],
+      ["TLS 1.2", evidence.tls12ProbeError],
+      ["TLS 1.3", evidence.tls13ProbeError],
+    ].filter((entry): entry is [string, string] => typeof entry[1] === "string");
+    if (diagnostics.length > 0) {
+      return `No se pudieron completar todas las pruebas de TLS. ${diagnostics.map(([version, code]) => `${version}: ${getTlsProbeErrorLabel(code)}.`).join(" ")}`;
+    }
+    return "No se pudieron determinar todas las versiones de TLS; faltan resultados de una o más pruebas.";
+  }
   if (controlId !== "DS-PRIV-05") {
     return `Comprobación ${controlId}: ${status}.`;
   }
@@ -390,6 +407,27 @@ function getSafeCheckSummary(
     return "No se pudo inspeccionar la respuesta inicial para detectar cookies conocidas; criterio no evaluado.";
   }
   return `Cookies en respuesta inicial: ${evidence.cookieCount}; coincidencias con la tabla local Analytics/Marketing: ${evidence.catalogMatchCount}; sin atributo Secure: ${evidence.insecureCookieCount}. No se interactuó con el banner de consentimiento.`;
+}
+
+function getTlsProbeErrorLabel(code: string): string {
+  const labels: Readonly<Record<string, string>> = {
+    dns_resolution_failed: "no se pudo resolver el dominio",
+    connection_failed: "no se pudo completar la conexión",
+    broker_failed: "el servicio de medición no respondió",
+    request_aborted: "la prueba se interrumpió",
+    request_timeout: "se agotó el tiempo de espera",
+    response_size_limit_exceeded: "la respuesta superó el límite permitido",
+    https_request_failed: "falló la solicitud HTTPS",
+    http_request_failed: "falló la solicitud de prueba",
+    invalid_http_response: "se recibió una respuesta no válida",
+    redirect_limit_exceeded: "se superó el límite de redirecciones",
+    redirect_origin_not_allowlisted: "la redirección salió del dominio permitido",
+    redirect_path_not_allowlisted: "la redirección salió de la ruta permitida",
+    tls_certificate_invalid: "el certificado no pasó la comprobación",
+    tls_handshake_failed: "el servidor rechazó la negociación de cifrado",
+    transport_failed: "se produjo un error de transporte",
+  };
+  return labels[code] ?? "la prueba no pudo completarse";
 }
 
 function deriveSafeStatus(

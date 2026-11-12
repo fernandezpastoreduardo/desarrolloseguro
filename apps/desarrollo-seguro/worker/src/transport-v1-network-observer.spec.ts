@@ -194,6 +194,42 @@ describe("createTransportV1NetworkObserver", () => {
     }
   });
 
+  it("keeps safe per-version failure categories when a TLS probe cannot connect", async () => {
+    const requestFactory: HttpsRequestFactory = vi.fn((options, callback) => {
+      const request = new EventEmitter();
+      Object.assign(request, {
+        end() {
+          if (options.maxVersion) {
+            const error = Object.assign(new Error("private socket detail"), { code: "ECONNRESET" });
+            request.emit("error", error);
+          } else {
+            callback(responseWith(200, {}, "", "TLSv1.3"));
+          }
+          return this;
+        },
+        destroy() {
+          return this;
+        },
+      });
+      return request as unknown as ClientRequest;
+    });
+    const observer = createTransportV1NetworkObserver({
+      lookupFactory: () => vi.fn(),
+      httpsRequestFactory: requestFactory,
+      probeTlsVersions: true,
+    });
+
+    const result = await observer.observeTls(HOSTNAME, new AbortController().signal);
+
+    expect(result.evidence).toMatchObject({
+      tls10ProbeError: "connection_failed",
+      tls11ProbeError: "connection_failed",
+      tls12ProbeError: "connection_failed",
+      tls13ProbeError: "connection_failed",
+    });
+    expect(JSON.stringify(result)).not.toContain("private socket detail");
+  });
+
   it("passes only aggregate cookie signals across the broker evidence boundary", async () => {
     const observer = createTransportV1NetworkObserver({
       lookupFactory: () => vi.fn(),

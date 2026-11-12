@@ -210,6 +210,40 @@ describe("sanitizeScanObservations", () => {
     expect(weakTlsResult.checks.find(({ controlId }) => controlId === "DS-TLS-02")?.status).toBe("fail");
   });
 
+  it("retains safe TLS probe failure categories to explain incomplete results", () => {
+    const checks = [
+      ...makeTransportV1Checks(),
+      {
+        ...makeUnknownCheck("DS-TLS-02", "/", "TLS"),
+        evidence: { tls12ProbeError: "connection_failed", tls13ProbeError: "request_timeout" },
+      },
+      {
+        ...makeUnknownCheck("DS-PRIV-05", "/", "GET"),
+        status: "pass",
+        evidence: { inspected: true, cookieCount: 0, insecureCookieCount: 0, catalogMatchCount: 0, consentPromptDetected: false },
+      },
+      {
+        ...makeUnknownCheck("DS-PRIV-06", "/", "GET"),
+        status: "pass",
+        evidence: { inspected: true, thirdPartyResourceReferences: 0, knownTrackingResourceReferences: 0 },
+      },
+      {
+        ...makeUnknownCheck("DS-QUAL-02", "/", "GET"),
+        status: "pass",
+        evidence: { inspected: true, responseTimeMs: 900, responseBytes: 45_000 },
+      },
+    ];
+
+    const result = sanitizeScanObservations(MONITORED_HOSTNAME, "domain-v3", ["/"], checks);
+    const tlsCheck = result.checks.find(({ controlId }) => controlId === "DS-TLS-02");
+
+    expect(tlsCheck).toMatchObject({
+      status: "unknown",
+      evidence: { tls12ProbeError: "connection_failed", tls13ProbeError: "request_timeout" },
+      summary: "No se pudieron completar todas las pruebas de TLS. TLS 1.2: no se pudo completar la conexión. TLS 1.3: se agotó el tiempo de espera.",
+    });
+  });
+
   it("does not persist collector error details as public evidence", () => {
     const checks = makeTransportV1Checks().map((check) =>
       check.controlId === "DS-DNS-01"

@@ -20,4 +20,15 @@ describe("projectPublicEvidence", () => {
       responseBytes: 100,
     })).toEqual({ statusCode: 200, redirectedToHttps: true });
   });
+
+  it("projects only allowlisted TLS probe diagnostics", () => {
+    expect(projectPublicEvidence("DS-TLS-02", {
+      tls12ProbeError: "connection_failed",
+      tls13ProbeError: "request_timeout",
+      tls10ProbeError: "private socket details",
+    })).toEqual({
+      tls12ProbeError: "connection_failed",
+      tls13ProbeError: "request_timeout",
+    });
+  });
 });
