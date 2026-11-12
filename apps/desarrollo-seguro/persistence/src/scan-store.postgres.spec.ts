@@ -488,12 +488,15 @@ describePostgres.sequential("PostgresScanStore", () => {
   it("stores and returns the complete TLS version matrix for domain-v3", async () => {
     const job = await queueAndClaim("domain-v3");
     const checks = [
-      ...makeDomainV2Checks(),
+      ...makeDomainV2Checks().map((check) => ({
+        ...check,
+        limitation: "Resultado limitado a las rutas públicas declaradas del perfil domain-v3.",
+      })),
       {
         ...makeDomainV2Checks()[1],
         controlId: "DS-TLS-02",
         method: "TLS",
-        summary: "Se probaron por separado las cuatro versiones de TLS incluidas en este control.",
+        summary: "Comprobación DS-TLS-02: pass.",
         limitation: "Resultado limitado a las rutas públicas declaradas del perfil domain-v3.",
         evidence: { tls10Accepted: false, tls11Accepted: false, tls12Accepted: true, tls13Accepted: true },
       },
