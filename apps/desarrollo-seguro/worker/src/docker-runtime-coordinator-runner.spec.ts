@@ -21,6 +21,7 @@ const dockerBehavior = {
   failExecutorRemoval: false,
   failVolumeRemoval: false,
   executorContainerAlreadyAbsent: false,
+  executorRemovalTransientFailures: 0,
   brokerExitsBeforeReady: false,
   executorOutput: undefined as string | undefined,
   executorExitCode: 0,
@@ -38,6 +39,7 @@ beforeEach(() => {
     failExecutorRemoval: false,
     failVolumeRemoval: false,
     executorContainerAlreadyAbsent: false,
+    executorRemovalTransientFailures: 0,
     brokerExitsBeforeReady: false,
     executorOutput: undefined,
     executorExitCode: 0,
@@ -97,6 +99,9 @@ beforeEach(() => {
     } else if (args[0] === "rm" && args[2]?.startsWith("development-security-executor-") === true) {
       if (dockerBehavior.executorContainerAlreadyAbsent) {
         queueMicrotask(() => child.finish(1, "", null, "Error response from daemon: No such container: ephemeral\n"));
+      } else if (dockerBehavior.executorRemovalTransientFailures > 0) {
+        dockerBehavior.executorRemovalTransientFailures -= 1;
+        queueMicrotask(() => child.finish(1, "", null, "Error response from daemon: removal is already in progress\n"));
       } else {
         queueMicrotask(() => child.finish(dockerBehavior.failExecutorRemoval ? 1 : 0));
       }
@@ -429,6 +434,20 @@ describe("createDockerRuntimeSessionFactory", () => {
       verdict: "inconclusive",
     });
     expect(dockerCalls.some((args) => args[0] === "volume" && args[1] === "rm")).toBe(true);
+  });
+
+  it("retries transient container cleanup errors before failing the scan", async () => {
+    dockerBehavior.executorRemovalTransientFailures = 1;
+    const runner = createDockerRuntimeCoordinatorRunner(createDockerRuntimeSessionFactory({
+      executorImage: "executor:test",
+      brokerImage: "broker:test",
+    }));
+
+    await expect(runner.execute(REQUEST, new AbortController().signal)).resolves.toMatchObject({
+      verdict: "inconclusive",
+    });
+    expect(dockerCalls.filter((args) => args[0] === "rm" && args[2]?.startsWith("development-security-executor-")).length)
+      .toBe(2);
   });
 
   it("reports a volume cleanup failure after removing the containers", async () => {

@@ -12,6 +12,9 @@ import type { RuntimeCoordinatorRunner } from "./runtime-coordinator-server.js";
 
 const DEFAULT_BROKER_STARTUP_TIMEOUT_MS = 20_000;
 const DOCKER_COMMAND_TIMEOUT_MS = 10_000;
+const DOCKER_CLEANUP_COMMAND_TIMEOUT_MS = 3_000;
+const DOCKER_CLEANUP_ATTEMPTS = 3;
+const DOCKER_CLEANUP_RETRY_DELAY_MS = 100;
 const EXECUTOR_COMMAND_TIMEOUT_MS = 38_000;
 const BROKER_STOP_TIMEOUT_MS = 3_000;
 const MAX_DOCKER_COMMAND_OUTPUT_BYTES = 256 * 1024;
@@ -543,22 +546,12 @@ async function removeContainer(
   containerName: string,
   dockerSocketPath: string,
 ): Promise<boolean> {
-  try {
-    await runDocker(
-      dockerBinary,
-      ["rm", "--force", containerName],
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      dockerSocketPath,
-      /\bno such container:/iu,
-    );
-    return true;
-  } catch {
-    return false;
-  }
+  return runDockerCleanup(
+    dockerBinary,
+    ["rm", "--force", containerName],
+    dockerSocketPath,
+    /\bno such container:/iu,
+  );
 }
 
 async function removeVolume(
@@ -566,22 +559,40 @@ async function removeVolume(
   volumeName: string,
   dockerSocketPath: string,
 ): Promise<boolean> {
-  try {
-    await runDocker(
-      dockerBinary,
-      ["volume", "rm", volumeName],
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      dockerSocketPath,
-      /\bno such volume\b/iu,
-    );
-    return true;
-  } catch {
-    return false;
+  return runDockerCleanup(
+    dockerBinary,
+    ["volume", "rm", volumeName],
+    dockerSocketPath,
+    /\bno such volume\b/iu,
+  );
+}
+
+async function runDockerCleanup(
+  dockerBinary: string,
+  args: string[],
+  dockerSocketPath: string,
+  absentResourcePattern: RegExp,
+): Promise<boolean> {
+  for (let attempt = 0; attempt < DOCKER_CLEANUP_ATTEMPTS; attempt += 1) {
+    try {
+      await runDocker(
+        dockerBinary,
+        args,
+        undefined,
+        undefined,
+        undefined,
+        false,
+        DOCKER_CLEANUP_COMMAND_TIMEOUT_MS,
+        dockerSocketPath,
+        absentResourcePattern,
+      );
+      return true;
+    } catch {
+      if (attempt + 1 === DOCKER_CLEANUP_ATTEMPTS) return false;
+      await new Promise((resolve) => setTimeout(resolve, DOCKER_CLEANUP_RETRY_DELAY_MS));
+    }
   }
+  return false;
 }
 
 function dockerCommandArguments(dockerSocketPath: string, args: string[]): string[] {
