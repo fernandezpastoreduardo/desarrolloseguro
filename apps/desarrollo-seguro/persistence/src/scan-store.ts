@@ -2,6 +2,7 @@ import type { Pool } from "pg";
 import {
   SCAN_FAILURE_CODES,
   evaluateVerdict,
+  projectPublicEvidence,
   sanitizeScanObservations,
 } from "@desarrolloseguro/core";
 import type { ScanFailureCode } from "@desarrolloseguro/core";
@@ -45,7 +46,8 @@ const PUBLIC_CHECKS_LATERAL = `LEFT JOIN LATERAL (
     'targetPath', target_path,
     'method', method,
     'summary', summary,
-    'limitation', limitation
+    'limitation', limitation,
+    'evidence', evidence_json
   ) ORDER BY target_path, control_id, method) AS checks
   FROM public.ds_check_results WHERE run_id = reports.id
 ) AS check_rows ON true`;
@@ -69,6 +71,7 @@ export type PublicScanReportCheck = {
   method: string;
   summary: string;
   limitation: string;
+  evidence: Record<string, unknown>;
 };
 
 export type PublicScanReport = {
@@ -541,6 +544,7 @@ function parsePublicChecks(value: unknown): PublicScanReportCheck[] {
       method: requireString(item.method),
       summary: requireString(item.summary),
       limitation: requireString(item.limitation),
+      evidence: projectPublicEvidence(requireString(item.controlId), item.evidence),
     };
   });
 }

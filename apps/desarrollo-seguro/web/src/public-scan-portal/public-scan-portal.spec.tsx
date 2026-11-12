@@ -54,6 +54,7 @@ const PUBLIC_REPORT = {
       method: "GET",
       summary: REPORT_SUMMARY,
       limitation: "Solo se observó la portada.",
+      evidence: { hsts: true, nosniff: true, csp: false },
     },
   ],
 };
@@ -199,6 +200,12 @@ describe("PublicScanPortal", () => {
     expect(screen.getByText(/no hay evidencia verificable sobre reutilización o venta/i)).toBeVisible();
     expect(screen.getByText(/solo se observó la portada/i)).toBeVisible();
     expect(screen.getByText(/origen indicado en el registro/i)).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Seguridad" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Privacidad" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Ética" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Rendimiento" })).toBeVisible();
+    expect(screen.getByText(/protecciones que ayudan al navegador/i)).toBeVisible();
+    expect(screen.getByText("Política que restringe contenido cargado (CSP)")).toBeVisible();
     const summary = screen.getByRole("heading", { name: "Resumen y puntuación" });
     const detail = screen.getByRole("heading", { name: "Alcance observado" });
     expect(
@@ -379,6 +386,7 @@ describe("PublicScanPortal", () => {
           method: "GET",
           summary: "Cookies en respuesta inicial: 2; coincidencias con la tabla local Analytics/Marketing: 1; sin atributo Secure: 1. No se interactuó con el banner de consentimiento.",
           limitation: "Solo se analizó la respuesta HTTP inicial; no se ejecutó JavaScript ni se eligió consentimiento.",
+          evidence: { inspected: true, cookieCount: 2, insecureCookieCount: 1, catalogMatchCount: 1, consentPromptDetected: false },
         },
       ],
     };

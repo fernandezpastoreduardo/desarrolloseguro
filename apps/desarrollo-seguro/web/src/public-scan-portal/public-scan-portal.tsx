@@ -81,6 +81,33 @@ const CHECK_METHODS = ["DNS", "TLS", "GET", "HEAD"] as const;
 const PUBLIC_SCOPE_PATHS = ["/", "/precios", "/informe"] as const;
 const MAX_REPORT_CHECKS = 32;
 
+const REPORT_CATEGORIES = [
+  { id: "ethics", label: "Ética", description: "Señales observables sobre seguimiento y servicios de terceros. No permiten determinar por sí solas cómo una empresa usa o vende datos.", criteria: ["third-party-data-use", "tracking"], controls: ["DS-PRIV-06"] },
+  { id: "privacy", label: "Privacidad", description: "Cookies detectadas en la primera respuesta. El análisis no acepta ni rechaza avisos ni navega por el sitio.", criteria: ["initial-cookie-risk"], controls: ["DS-PRIV-05"] },
+  { id: "security", label: "Seguridad", description: "Comprueba resolución del dominio, cifrado TLS, respuesta web y algunas protecciones del navegador.", criteria: ["dns-integrity", "transport-security", "http-availability", "security-headers"], controls: ["DS-DNS-01", "DS-TLS-01", "DS-TLS-02", "DS-HTTP-01", "DS-HDR-01"] },
+  { id: "performance", label: "Rendimiento", description: "Las métricas de velocidad y experiencia aún no forman parte de las comprobaciones activas.", criteria: ["performance"], controls: ["DS-QUAL-02"] },
+] as const;
+const CRITERION_EXPLANATIONS: Record<string, string> = {
+  "dns-integrity": "Comprueba si el dominio resuelve a direcciones públicas. No verifica titularidad ni DNSSEC.",
+  "transport-security": "Comprueba el certificado y las versiones de TLS contempladas por el perfil.",
+  "http-availability": "Comprueba las respuestas GET y HEAD de la portada y si se usa HTTPS.",
+  "security-headers": "Revisa protecciones que ayudan al navegador frente a ciertos ataques.",
+  "third-party-data-use": "La respuesta técnica no permite verificar contratos ni prácticas de reutilización de datos.",
+  "initial-cookie-risk": "Cuenta cookies y coincidencias conocidas en la primera respuesta; no evalúa el consentimiento posterior.",
+  tracking: "No se inspeccionan interacciones ni se identifican todos los rastreadores dinámicos.",
+  performance: "No se han medido métricas de velocidad o experiencia de usuario.",
+};
+const EVIDENCE_LABELS: Record<string, string> = {
+  addressClass: "Tipo de dirección", aRecordCount: "Direcciones IPv4 encontradas", aaaaRecordCount: "Direcciones IPv6 encontradas",
+  protocol: "Protocolo TLS negociado", certificateValid: "Certificado válido", hostnameMatches: "Certificado para este dominio",
+  tls10Accepted: "TLS 1.0 aceptado", tls11Accepted: "TLS 1.1 aceptado", tls12Accepted: "TLS 1.2 aceptado", tls13Accepted: "TLS 1.3 aceptado",
+  statusCode: "Código de respuesta HTTP", redirectedToHttps: "Redirige a conexión segura", finalScheme: "Conexión final",
+  hsts: "Fuerza conexiones seguras futuras (HSTS)", nosniff: "Evita interpretar archivos con un tipo distinto",
+  frameProtection: "Protección frente a inserción en marcos", referrerPolicy: "Limita información enviada al salir del sitio",
+  csp: "Política que restringe contenido cargado (CSP)", inspected: "Respuesta inspeccionada", cookieCount: "Cookies en la primera respuesta",
+  insecureCookieCount: "Cookies sin atributo Secure", catalogMatchCount: "Coincidencias con cookies conocidas", consentPromptDetected: "Aviso de consentimiento detectado",
+};
+
 type PortalState = "idle" | "loading" | "ready" | "error";
 type AnalysisRequestState =
   | (typeof ANALYSIS_REQUEST_STATES)[number]
@@ -108,6 +135,7 @@ type PublicCheck = {
   method: string;
   summary: string;
   limitation: string;
+  evidence: Record<string, string | number | boolean>;
 };
 type PublicReport = {
   id: string;
@@ -737,14 +765,51 @@ function ReportSummary({
           tienen evidencia quedan como desconocidos y no suman ni restan.
         </p>
         <p>{report.ethicsAssessment.interpretation}</p>
-        <ul className="ds-portal__ethics-criteria">
-          {report.ethicsAssessment.criteria.map((criterion) => (
-            <li key={criterion.id} data-status={criterion.status}>
-              <span>{criterion.label}</span>
-              <strong>{getCheckStatusLabel(criterion.status)}</strong>
-            </li>
-          ))}
-        </ul>
+        <div className="ds-portal__report-categories">
+          {REPORT_CATEGORIES.map((category) => {
+            const criteria = report.ethicsAssessment.criteria.filter((criterion) =>
+              (category.criteria as readonly string[]).includes(criterion.id),
+            );
+            const checks = report.checks.filter((check) =>
+              (category.controls as readonly string[]).includes(check.controlId),
+            );
+            return (
+              <section className="ds-portal__report-category" key={category.id}>
+                <div className="ds-portal__category-heading">
+                  <h4>{category.label}</h4>
+                  <strong>{getCategoryScoreLabel(criteria)}</strong>
+                </div>
+                <p>{category.description}</p>
+                <ul className="ds-portal__ethics-criteria">
+                  {criteria.map((criterion) => (
+                    <li key={criterion.id} data-status={criterion.status}>
+                      <div><strong>{criterion.label}</strong><p>{CRITERION_EXPLANATIONS[criterion.id]}</p></div>
+                      <span>{getCheckStatusLabel(criterion.status)}</span>
+                    </li>
+                  ))}
+                </ul>
+                {checks.length > 0 && (
+                  <ul className="ds-portal__checks">
+                    {checks.map((check) => (
+                      <li key={`${check.controlId}-${check.targetPath}-${check.method}`}>
+                        <div><strong>{getControlLabel(check.controlId)}</strong><span>{getCheckStatusLabel(check.status)}</span></div>
+                        <p>{check.summary}</p>
+                        {Object.keys(check.evidence).length > 0 && (
+                          <dl className="ds-portal__evidence">
+                            {Object.entries(check.evidence).map(([key, value]) => (
+                              <div key={key}><dt>{EVIDENCE_LABELS[key] ?? key}</dt><dd>{formatEvidenceValue(value)}</dd></div>
+                            ))}
+                          </dl>
+                        )}
+                        <small>{check.method} {check.targetPath} · {check.limitation}</small>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            );
+          })}
+        </div>
         {report.ethicsAssessment.reasons.length > 0 && (
           <ul className="ds-portal__ethics-reasons">
             {report.ethicsAssessment.reasons.map((reason) => <li key={reason}>{reason}</li>)}
@@ -779,21 +844,6 @@ function ReportSummary({
       <ul className="ds-portal__scope">
         {report.scope.map((scopeItem) => (
           <li key={scopeItem}>{scopeItem}</li>
-        ))}
-      </ul>
-      <h3>Controles observados</h3>
-      <ul className="ds-portal__checks">
-        {report.checks.map((check) => (
-          <li key={`${check.controlId}-${check.targetPath}-${check.method}`}>
-            <div>
-              <strong>{check.controlId}</strong>
-              <span>{getCheckStatusLabel(check.status)}</span>
-            </div>
-            <p>{check.summary}</p>
-            <small>
-              {check.method} {check.targetPath} · {check.limitation}
-            </small>
-          </li>
         ))}
       </ul>
       <p className="ds-portal__disclaimer">
@@ -939,7 +989,15 @@ function isPublicCheck(value: unknown): value is PublicCheck {
     isOneOf(value.targetPath, PUBLIC_SCOPE_PATHS) &&
     isOneOf(value.method, CHECK_METHODS) &&
     isBoundedString(value.summary, 500) &&
-    isBoundedString(value.limitation, 220)
+    isBoundedString(value.limitation, 220) &&
+    isRecord(value.evidence) &&
+    Object.keys(value.evidence).length <= 20 &&
+    Object.entries(value.evidence).every(([key, item]) =>
+      /^[a-z][a-zA-Z0-9]{0,39}$/u.test(key) &&
+      ((typeof item === "string" && item.length <= 40) ||
+        (typeof item === "number" && Number.isSafeInteger(item) && item >= 0 && item <= 1_000_000) ||
+        typeof item === "boolean"),
+    )
   );
 }
 
@@ -1032,10 +1090,42 @@ function formatDate(value: string): string {
 }
 
 function getCheckStatusLabel(status: string): string {
-  if (status === "pass") return "Observado";
-  if (status === "fail") return "No observado";
-  if (status === "not_applicable") return "No aplicable";
-  return "Sin conclusión";
+  if (status === "pass") return "Correcto";
+  if (status === "fail") return "Problema detectado";
+  if (status === "not_applicable") return "No evaluado";
+  return "Sin datos";
+}
+
+function getCategoryScoreLabel(criteria: Array<{ status: string; weight: number }>): string {
+  const assessed = criteria.filter((criterion) => criterion.status !== "unknown");
+  if (assessed.length === 0) return "Sin datos suficientes";
+  const totalWeight = assessed.reduce((sum, criterion) => sum + criterion.weight, 0);
+  const passedWeight = assessed
+    .filter((criterion) => criterion.status === "pass")
+    .reduce((sum, criterion) => sum + criterion.weight, 0);
+  return `${Math.round((passedWeight / totalWeight) * 100)}/100 · ${assessed.length} de ${criteria.length} evaluados`;
+}
+
+function getControlLabel(controlId: string): string {
+  const labels: Record<string, string> = {
+    "DS-DNS-01": "Resolución del dominio",
+    "DS-TLS-01": "Certificado de conexión segura",
+    "DS-TLS-02": "Versiones de conexión segura",
+    "DS-HTTP-01": "Respuesta de la página",
+    "DS-HDR-01": "Protecciones del navegador",
+    "DS-PRIV-05": "Cookies de la primera respuesta",
+  };
+  return labels[controlId] ?? controlId;
+}
+
+function formatEvidenceValue(value: string | number | boolean): string {
+  if (typeof value === "boolean") return value ? "Sí" : "No";
+  if (typeof value === "number") return String(value);
+  const labels: Record<string, string> = {
+    public: "Pública", private: "Privada", reserved: "Reservada", unresolved: "Sin resolver",
+    "TLSv1.2": "TLS 1.2", "TLSv1.3": "TLS 1.3", http: "HTTP", https: "HTTPS",
+  };
+  return labels[value] ?? value;
 }
 
 function getEmptyStateMessage(state: string): string {

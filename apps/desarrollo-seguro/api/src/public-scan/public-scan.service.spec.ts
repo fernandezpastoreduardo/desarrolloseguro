@@ -187,7 +187,7 @@ describe("PublicScanService", () => {
     });
   });
 
-  it("keeps internal evidence out of reports embedded in domain status", async () => {
+  it("projects only bounded public evidence into reports embedded in domain status", async () => {
     const report = makeReport({
       metrics: { requestsCount: 99 },
       checks: [
@@ -201,7 +201,7 @@ describe("PublicScanService", () => {
           method: "GET",
           summary: "Comprobación DS-HDR-01: unknown.",
           limitation: "Resultado limitado al perfil controls-v3.",
-          evidence: { responseBody: PRIVATE_RESPONSE_BODY },
+          evidence: { hsts: false, nosniff: true, responseBody: PRIVATE_RESPONSE_BODY },
           trace: INTERNAL_STORAGE_ERROR,
         },
       ],
@@ -222,7 +222,7 @@ describe("PublicScanService", () => {
 
     const status = await service.getDomainStatus(report.hostname);
 
-    expect(status.lastReport?.checks[0]).not.toHaveProperty("evidence");
+    expect(status.lastReport?.checks[0]).toHaveProperty("evidence", { hsts: false, nosniff: true });
     expect(JSON.stringify(status)).not.toContain(PRIVATE_RESPONSE_BODY);
     expect(JSON.stringify(status)).not.toContain(INTERNAL_STORAGE_ERROR);
     expect(JSON.stringify(status)).not.toContain("requestsCount");
@@ -280,7 +280,7 @@ describe("PublicScanService", () => {
     });
   });
 
-  it("projects a transport-v1 fixture report without exposing evidence", async () => {
+  it("projects safe TLS and DNS evidence without exposing raw network data", async () => {
     const report = makeReport({
       profileVersion: "transport-v1",
       checks: [
@@ -295,7 +295,7 @@ describe("PublicScanService", () => {
           summary: "Comprobación DS-DNS-01: pass.",
           limitation:
             "Resultado limitado a las rutas públicas declaradas del perfil transport-v1.",
-          evidence: { addressClass: "public", aRecordCount: 1 },
+          evidence: { addressClass: "public", aRecordCount: 1, rawAddresses: ["203.0.113.5"] },
         },
       ],
     });
@@ -324,7 +324,7 @@ describe("PublicScanService", () => {
         },
       ],
     });
-    expect(publicReport.checks[0]).not.toHaveProperty("evidence");
+    expect(publicReport.checks[0]).toHaveProperty("evidence", { addressClass: "public", aRecordCount: 1 });
   });
 
   it.each([
@@ -446,7 +446,7 @@ describe("PublicScanService", () => {
     },
   );
 
-  it("does not return raw evidence in public report results", async () => {
+  it("does not return raw or non-allowlisted evidence in public report results", async () => {
     const report = makeReport({
       privateDiagnostic: INTERNAL_STORAGE_ERROR,
       metrics: { requestCount: 100 },
@@ -461,7 +461,7 @@ describe("PublicScanService", () => {
           method: "GET",
           summary: "Comprobación DS-HDR-01: unknown.",
           limitation: "Resultado limitado al perfil controls-v3.",
-          evidence: { responseBody: PRIVATE_RESPONSE_BODY },
+          evidence: { hsts: false, responseBody: PRIVATE_RESPONSE_BODY },
           internalTrace: INTERNAL_STORAGE_ERROR,
         },
       ],
@@ -476,7 +476,7 @@ describe("PublicScanService", () => {
     const result = await service.getReport(report.id);
 
     expect(result).toMatchObject({ id: report.id, verdict: "inconclusive" });
-    expect(result.checks[0]).not.toHaveProperty("evidence");
+    expect(result.checks[0]).toHaveProperty("evidence", { hsts: false });
     expect(Object.keys(result).sort()).toEqual(
       [
         "id",
@@ -505,6 +505,7 @@ describe("PublicScanService", () => {
         "method",
         "summary",
         "limitation",
+        "evidence",
       ].sort(),
     );
     expect(JSON.stringify(result)).not.toContain(PRIVATE_RESPONSE_BODY);

@@ -8,6 +8,7 @@ import {
 import {
   assessDomainEthics,
   normalizeHostname,
+  projectPublicEvidence,
   type ScanFailureCode,
   type DomainEthicsAssessment,
 } from "@desarrolloseguro/core";
@@ -52,6 +53,7 @@ export type PublicReport = {
     method: string;
     summary: string;
     limitation: string;
+    evidence: Record<string, string | number | boolean>;
   }>;
 };
 
@@ -231,6 +233,7 @@ function toPublicReport(report: PublicScanReport): PublicReport {
       method: check.method,
       summary: check.summary,
       limitation: check.limitation,
+      evidence: projectPublicEvidence(check.controlId, check.evidence),
     })),
   };
 }

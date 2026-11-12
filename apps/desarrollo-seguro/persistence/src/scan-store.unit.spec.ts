@@ -48,14 +48,14 @@ describe("PostgresScanStore unit behavior", () => {
     await expect(store.healthCheck()).resolves.toBe(false);
   });
 
-  it("projects public reports without selecting raw evidence", async () => {
+  it("projects only allowlisted evidence into public report rows", async () => {
     const query = vi.fn().mockResolvedValue({
       rows: [
         makePublicReportRow({
           checks: [
             {
               ...makePublicReportCheck(),
-              evidence: { html: "<private response body>" },
+              evidence: { hsts: false, html: "<private response body>" },
               internalTrace: "database-detail",
             },
           ],
@@ -68,14 +68,14 @@ describe("PostgresScanStore unit behavior", () => {
       "8d140e17-68d6-489a-b451-7e87408187ae",
     );
 
-    expect(report?.checks[0]).not.toHaveProperty("evidence");
+    expect(report?.checks[0].evidence).toEqual({ hsts: false });
     expect(report?.checks[0].controlId).toBe("DS-HDR-01");
     expect(JSON.stringify(report)).not.toContain("<private response body>");
     expect(JSON.stringify(report)).not.toContain("database-detail");
     expect(query.mock.calls[0][0]).not.toMatch(/SELECT\s+evidence_json/iu);
   });
 
-  it("projects status snapshots without selecting raw evidence", async () => {
+  it("filters evidence in status snapshots before exposing the report", async () => {
     const query = vi.fn().mockResolvedValue({
       rows: [
         makePublicReportRow({
@@ -87,7 +87,7 @@ describe("PostgresScanStore unit behavior", () => {
           checks: [
             {
               ...makePublicReportCheck(),
-              evidence: { cookie: "session=private" },
+              evidence: { hsts: true, cookie: "session=private" },
             },
           ],
         }),
@@ -97,7 +97,7 @@ describe("PostgresScanStore unit behavior", () => {
 
     const snapshot = await store.readPublicDomainSnapshot("example.com");
 
-    expect(snapshot?.lastReport?.checks[0]).not.toHaveProperty("evidence");
+    expect(snapshot?.lastReport?.checks[0].evidence).toEqual({ hsts: true });
     expect(JSON.stringify(snapshot)).not.toContain("session=private");
     expect(query.mock.calls[0][0]).not.toMatch(/SELECT\s+evidence_json/iu);
   });

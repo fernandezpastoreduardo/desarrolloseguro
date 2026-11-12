@@ -74,11 +74,12 @@ type PublicReport = {
     method: string;
     summary: string;
     limitation: string;
+    evidence: Record<string, string | number | boolean>;
   }>;
 };
 ```
 
-El resumen ético se calcula en la API desde los controles públicos del mismo informe. La puntuación es provisional, solo refleja evidencia observada y muestra cuántos criterios se evaluaron. `domain-v1` añade una señal acotada de coincidencias de nombres de cookies en `Set-Cookie` inicial; el consentimiento tras elegir, rastreo dinámico, mapas de calor, rendimiento y reutilización/venta de datos permanecen `unknown`. Véase [domain-ethics-scoring.md](domain-ethics-scoring.md).
+El resumen se calcula en la API desde los controles del mismo informe y agrupa criterios en Ética, Privacidad, Seguridad y Rendimiento. Cada categoría muestra cobertura, estado y explicación. Las evidencias públicas se limitan a una allowlist de datos agregados (por ejemplo, protocolo TLS, estado HTTP, señales de cabeceras y recuentos de cookies); se excluyen direcciones IP, nombres/valores de cookies, contenido de página y trazas. `domain-v1` solo observa cookies de la respuesta inicial; el consentimiento tras elegir, rastreo dinámico, mapas de calor, rendimiento y reutilización/venta de datos permanecen `unknown`. Véase [domain-ethics-scoring.md](domain-ethics-scoring.md).
 
 `same_vps` identifica la ubicación de observación y no significa evaluación independiente. Las rutas y métodos publicados proceden del perfil, no de parámetros de la petición. El informe no existe todavía si no hay una ejecución completa previa.
 

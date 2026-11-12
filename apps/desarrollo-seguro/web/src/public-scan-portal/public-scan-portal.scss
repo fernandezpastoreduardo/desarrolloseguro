@@ -445,10 +445,18 @@ $ds-canvas: #f5f2ec;
 .ds-portal__ethics p { color: var(--ds-muted); line-height: 1.6; }
 .ds-portal__ethics-score { color: var(--ds-ink) !important; font-size: 1.25rem; font-weight: 800; }
 .ds-portal__ethics .ds-portal__score-method { font-size: 0.9rem; }
-.ds-portal__ethics-criteria,
-.ds-portal__ethics-reasons { display: grid; gap: 8px; margin: 16px 0 0; padding-left: 20px; }
+.ds-portal__report-categories { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 22px; }
+.ds-portal__report-category { min-width: 0; border: 1px solid var(--ds-line); padding: 16px; background: var(--ds-canvas); }
+.ds-portal__category-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.ds-portal__category-heading h4 { margin: 0; color: var(--ds-ink); font-size: 1.1rem; }
+.ds-portal__category-heading strong { max-width: 60%; color: var(--ds-accent-strong); font-family: var(--ds-mono); font-size: 0.65rem; text-align: right; text-transform: uppercase; }
+.ds-portal__report-category > p { color: var(--ds-muted); font-size: 0.88rem; line-height: 1.55; }
+.ds-portal__ethics-criteria { display: grid; gap: 10px; margin: 16px 0 0; padding: 0; list-style: none; }
 .ds-portal__ethics-criteria li { display: flex; justify-content: space-between; gap: 12px; color: var(--ds-ink-soft); }
-.ds-portal__ethics-criteria strong { color: var(--ds-accent-strong); font-family: var(--ds-mono); font-size: 0.7rem; text-transform: uppercase; }
+.ds-portal__ethics-criteria li > div { min-width: 0; }
+.ds-portal__ethics-criteria li > div > strong { color: var(--ds-ink); font-size: 0.9rem; }
+.ds-portal__ethics-criteria li p { margin: 4px 0 0; font-size: 0.82rem; }
+.ds-portal__ethics-criteria li > span { flex: 0 0 auto; color: var(--ds-accent-strong); font-family: var(--ds-mono); font-size: 0.64rem; text-transform: uppercase; }
 .ds-portal__ethics-reasons { color: var(--ds-muted); line-height: 1.5; }
 
 .ds-portal__verdict span {
@@ -535,6 +543,11 @@ $ds-canvas: #f5f2ec;
   color: var(--ds-muted);
   line-height: 1.5;
 }
+
+.ds-portal__evidence { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px; margin: 12px 0; }
+.ds-portal__evidence div { min-width: 0; border-left: 2px solid var(--ds-line); padding-left: 9px; }
+.ds-portal__evidence dt { color: var(--ds-muted); font-size: 0.72rem; line-height: 1.4; }
+.ds-portal__evidence dd { margin: 3px 0 0; color: var(--ds-ink); font-size: 0.84rem; font-weight: 700; overflow-wrap: anywhere; }
 
 .ds-portal__disclaimer {
   border-left: 2px solid var(--ds-accent);
@@ -671,6 +684,11 @@ $ds-canvas: #f5f2ec;
 }
 
 @media (max-width: 640px) {
+  .ds-portal__report-categories,
+  .ds-portal__evidence {
+    grid-template-columns: 1fr;
+  }
+
   .ds-portal {
     border-left-width: 3px;
   }

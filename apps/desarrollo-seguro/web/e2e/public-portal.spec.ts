@@ -138,6 +138,7 @@ test("shows the report when an authorized analysis finishes", async ({ page }) =
             method: "GET",
             summary: "La cabecera de seguridad está presente.",
             limitation: "Solo se observó la portada.",
+            evidence: { finalScheme: "https", hsts: true, nosniff: true, frameProtection: true, referrerPolicy: true, csp: true },
           },
         ],
       },
@@ -171,6 +172,11 @@ test("shows the report when an authorized analysis finishes", async ({ page }) =
   await expect(
     page.getByRole("heading", { name: "Resumen y puntuación" }),
   ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Ética" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Privacidad" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Seguridad" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Rendimiento" })).toBeVisible();
+  await expect(page.getByText("Política que restringe contenido cargado (CSP)")).toBeVisible();
   await expect(page.getByText("Controles observados aprobados")).toBeVisible();
 });
 
