@@ -26,6 +26,21 @@ describe("runtime coordinator server", () => {
     }, "11111111-1111-4111-8111-111111111111")).toThrow("executor_result_invalid");
   });
 
+  it("rejects malformed probe diagnostics from the isolated executor", () => {
+    expect(() => parseTransportV1ExecutorResponse({
+      protocolVersion: 1,
+      requestId: "11111111-1111-4111-8111-111111111111",
+      errorCode: "executor_failed",
+      diagnostic: {
+        category: "network_observation_unavailable",
+        probeFailures: [
+          { operation: "dns", code: "dns_resolution_failed" },
+          { operation: "dns", code: "connection_failed" },
+        ],
+      },
+    }, "11111111-1111-4111-8111-111111111111")).toThrow("executor_response_invalid");
+  });
+
   it("runs a validated request and returns a correlated bounded result", async () => {
     expect(() => parseTransportV1ExecutorResponse({
       protocolVersion: 1,

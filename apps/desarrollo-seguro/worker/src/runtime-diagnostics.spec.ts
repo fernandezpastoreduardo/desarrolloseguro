@@ -17,6 +17,41 @@ describe("createJsonLineRuntimeDiagnostic", () => {
     );
   });
 
+  it("writes only allowlisted per-probe failure categories", () => {
+    const write = vi.fn();
+    const diagnostic = createJsonLineRuntimeDiagnostic(write);
+
+    diagnostic({
+      type: "runtime_diagnostic",
+      stage: "executor",
+      code: "executor_application_failed",
+      probeFailures: [
+        { operation: "dns", code: "dns_resolution_failed" },
+        { operation: "http-get", code: "connection_failed" },
+      ],
+    });
+
+    expect(write).toHaveBeenCalledExactlyOnceWith(
+      '{"type":"runtime_diagnostic","stage":"executor","code":"executor_application_failed","probeFailures":[{"operation":"dns","code":"dns_resolution_failed"},{"operation":"http-get","code":"connection_failed"}]}\n',
+    );
+  });
+
+  it("rejects unsafe per-probe failure details", () => {
+    const write = vi.fn();
+    const diagnostic = createJsonLineRuntimeDiagnostic(write);
+
+    diagnostic({
+      type: "runtime_diagnostic",
+      stage: "executor",
+      code: "executor_application_failed",
+      probeFailures: [
+        { operation: "dns", code: "grumphya.com" },
+      ] as never,
+    });
+
+    expect(write).not.toHaveBeenCalled();
+  });
+
   it("projects runtime events to the allowlisted fields", () => {
     const write = vi.fn();
     const diagnostic = createJsonLineRuntimeDiagnostic(write);

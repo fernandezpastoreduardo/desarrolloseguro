@@ -221,10 +221,10 @@ test("shows the report when an authorized analysis finishes", async ({ page }) =
   for (let index = 0; index < 3; index += 1) {
     await technicalEvidenceSections.nth(index).click();
   }
-  await expect(page.getByText("TLS 1.0 aceptado")).toBeVisible();
-  await expect(page.getByText("TLS 1.1 aceptado")).toBeVisible();
-  await expect(page.getByText("TLS 1.2 aceptado")).toBeVisible();
-  await expect(page.getByText("TLS 1.3 aceptado")).toBeVisible();
+  await expect(page.getByText("TLS 1.0 aceptado", { exact: true })).toBeVisible();
+  await expect(page.getByText("TLS 1.1 aceptado", { exact: true })).toBeVisible();
+  await expect(page.getByText("TLS 1.2 aceptado", { exact: true })).toBeVisible();
+  await expect(page.getByText("TLS 1.3 aceptado", { exact: true })).toBeVisible();
   await expect(page.getByText("Política que restringe contenido cargado (CSP)")).toBeVisible();
   await expect(page.getByText("Referencias a rastreadores conocidos").first()).toBeVisible();
   await expect(page.getByText("Tiempo de respuesta inicial")).toBeVisible();

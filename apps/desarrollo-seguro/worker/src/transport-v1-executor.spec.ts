@@ -377,7 +377,43 @@ describe("TransportV1FixtureExecutor", () => {
         { ...JOB, profileVersion: "domain-v1" },
         new AbortController().signal,
       ),
-    ).rejects.toThrow("network_observation_unavailable");
+    ).rejects.toMatchObject({
+      message: "network_observation_unavailable",
+      probeFailures: [
+        { operation: "dns", code: "dns_resolution_failed" },
+        { operation: "tls", code: "tls_certificate_invalid" },
+        { operation: "http-head", code: "connection_failed" },
+        { operation: "http-get", code: "connection_failed" },
+        { operation: "headers", code: "connection_failed" },
+      ],
+    });
     expect(JSON.stringify(source)).not.toContain("secret");
+  });
+
+  it("preserves only allowlisted probe errors and redacts arbitrary exception text", async () => {
+    const source: TransportV1ObservationSource = {
+      sourceKind: "network",
+      observeDns: vi.fn().mockRejectedValue(new Error("dns_resolution_failed")),
+      observeTls: vi.fn().mockRejectedValue(new Error("certificate /private/path")),
+      observeHttp: vi.fn().mockRejectedValue(new Error("connection_failed")),
+      observeHeaders: vi.fn().mockRejectedValue(new Error("connection_failed")),
+    };
+
+    await expect(
+      new TransportV1NetworkExecutor(source).execute(
+        { ...JOB, profileVersion: "domain-v1" },
+        new AbortController().signal,
+      ),
+    ).rejects.toMatchObject({
+      message: "network_observation_unavailable",
+      probeFailures: [
+        { operation: "dns", code: "broker_failed" },
+        { operation: "tls", code: "broker_failed" },
+        { operation: "http-head", code: "broker_failed" },
+        { operation: "http-get", code: "broker_failed" },
+        { operation: "headers", code: "broker_failed" },
+      ],
+    });
+    expect(JSON.stringify(source)).not.toContain("/private/path");
   });
 });

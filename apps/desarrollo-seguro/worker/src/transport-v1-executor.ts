@@ -5,7 +5,7 @@ import {
 } from "@desarrolloseguro/core";
 import type { ClaimedScanJob, ScanCheck, ScanRunInput } from "@desarrolloseguro/persistence";
 import { createTransportV1EgressBroker } from "./transport-v1-egress-broker.js";
-import type { PinnedTransportErrorCode } from "./pinned-transport-error.js";
+import { safeTransportErrorCode, type PinnedTransportErrorCode } from "./pinned-transport-error.js";
 
 const TRANSPORT_PROFILE_VERSION = "transport-v1";
 const DOMAIN_PROFILE_VERSION = "domain-v1";
@@ -36,6 +36,53 @@ export type TransportV1ProbeResult = {
   bytesCount: number;
   errorCode?: PinnedTransportErrorCode;
 };
+
+export type NetworkProbeOperation = "dns" | "tls" | "http-head" | "http-get" | "headers";
+export type NetworkProbeFailureCode = PinnedTransportErrorCode | "probe_unavailable" | "empty_evidence";
+export type NetworkProbeFailure = { operation: NetworkProbeOperation; code: NetworkProbeFailureCode };
+
+export const NETWORK_PROBE_OPERATIONS: readonly NetworkProbeOperation[] = ["dns", "tls", "http-head", "http-get", "headers"];
+export const NETWORK_PROBE_FAILURE_CODES: readonly NetworkProbeFailureCode[] = [
+  "dns_resolution_failed", "connection_failed", "broker_failed", "request_aborted",
+  "request_timeout", "response_size_limit_exceeded", "https_request_failed", "http_request_failed",
+  "invalid_http_response", "redirect_limit_exceeded", "redirect_origin_not_allowlisted",
+  "redirect_path_not_allowlisted", "tls_certificate_invalid", "tls_handshake_failed",
+  "transport_failed", "probe_unavailable", "empty_evidence",
+];
+
+export function isNetworkProbeFailureList(value: unknown): value is NetworkProbeFailure[] {
+  if (!Array.isArray(value) || value.length === 0 || value.length > NETWORK_PROBE_OPERATIONS.length) {
+    return false;
+  }
+  const seenOperations = new Set<string>();
+  return value.every((item) => {
+    if (
+      item === null || typeof item !== "object" || Array.isArray(item) ||
+      !isNetworkProbeOperation(item.operation) ||
+      !isNetworkProbeFailureCode(item.code) ||
+      seenOperations.has(item.operation)
+    ) {
+      return false;
+    }
+    seenOperations.add(item.operation);
+    return true;
+  });
+}
+
+function isNetworkProbeOperation(value: unknown): value is NetworkProbeOperation {
+  return typeof value === "string" && NETWORK_PROBE_OPERATIONS.includes(value as NetworkProbeOperation);
+}
+
+function isNetworkProbeFailureCode(value: unknown): value is NetworkProbeFailureCode {
+  return typeof value === "string" && NETWORK_PROBE_FAILURE_CODES.includes(value as NetworkProbeFailureCode);
+}
+
+export class NetworkObservationUnavailableError extends Error {
+  constructor(readonly probeFailures: NetworkProbeFailure[]) {
+    super("network_observation_unavailable");
+    this.name = "NetworkObservationUnavailableError";
+  }
+}
 
 export type TransportV1ScanJob = Pick<
   ClaimedScanJob,
@@ -163,7 +210,7 @@ export class TransportV1NetworkExecutor {
 
     const startedAt = this.now();
     const broker = createTransportV1EgressBroker(job.hostname, this.source);
-    const operations = ["dns", "tls", "http-head", "http-get", "headers"] as const;
+    const operations = NETWORK_PROBE_OPERATIONS;
     const observations = operations.map((operation) => async () => {
       const requestId = randomUUID();
       const response = await broker(
@@ -189,7 +236,13 @@ export class TransportV1NetworkExecutor {
       MAX_CONCURRENT_NETWORK_PROBES,
     );
     if (probes.every((probe) => !probe || Object.keys(probe.evidence).length === 0)) {
-      throw new Error("network_observation_unavailable");
+      const probeFailures = operations.flatMap((operation, index) => {
+        const probe = probes[index];
+        if (probe && Object.keys(probe.evidence).length > 0) return [];
+        const code: NetworkProbeFailureCode = probe?.errorCode ?? (probe ? "empty_evidence" : "probe_unavailable");
+        return [{ operation, code }];
+      });
+      throw new NetworkObservationUnavailableError(probeFailures);
     }
     const completedAt = this.now();
     const candidateChecks: ScanCheck[] = CHECKS.map((definition, index) => ({
@@ -430,8 +483,13 @@ async function safelyObserveNetwork(
   try {
     const result = await observe();
     return signal.aborted ? { ...result, evidence: {} } : result;
-  } catch {
-    return undefined;
+  } catch (error) {
+    return {
+      evidence: {},
+      requestsCount: 0,
+      bytesCount: 0,
+      errorCode: safeTransportErrorCode(error, "broker_failed"),
+    };
   }
 }
 

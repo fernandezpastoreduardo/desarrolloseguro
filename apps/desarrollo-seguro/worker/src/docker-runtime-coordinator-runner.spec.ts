@@ -343,6 +343,38 @@ describe("createDockerRuntimeSessionFactory", () => {
     });
   });
 
+  it("logs safe probe failure categories returned by the isolated executor", async () => {
+    dockerBehavior.executorOutput = `${JSON.stringify({
+      protocolVersion: 1,
+      requestId: REQUEST.requestId,
+      errorCode: "executor_failed",
+      diagnostic: {
+        category: "network_observation_unavailable",
+        probeFailures: [
+          { operation: "dns", code: "dns_resolution_failed" },
+          { operation: "http-get", code: "connection_failed" },
+        ],
+      },
+    })}\n`;
+    const diagnostic = vi.fn();
+    const runner = createDockerRuntimeCoordinatorRunner(createDockerRuntimeSessionFactory({
+      executorImage: "executor:test",
+      brokerImage: "broker:test",
+      diagnostic,
+    }));
+
+    await expect(runner.execute(REQUEST, new AbortController().signal)).rejects.toThrow("executor_failed");
+    expect(diagnostic).toHaveBeenCalledWith({
+      type: "runtime_diagnostic",
+      stage: "executor",
+      code: "executor_application_failed",
+      probeFailures: [
+        { operation: "dns", code: "dns_resolution_failed" },
+        { operation: "http-get", code: "connection_failed" },
+      ],
+    });
+  });
+
   it("categorizes a Docker process spawn error without exposing its detail", async () => {
     dockerBehavior.spawnErrorOnVolumeCreate = true;
     const runner = createDockerRuntimeCoordinatorRunner(createDockerRuntimeSessionFactory({

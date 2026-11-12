@@ -1,6 +1,6 @@
 import { normalizeHostname, SCAN_FAILURE_CODES, type ScanFailureCode } from "@desarrolloseguro/core";
 import type { ScanCheck, ScanRunInput } from "@desarrolloseguro/persistence";
-import type { ScanProfileVersion } from "./transport-v1-executor.js";
+import { isNetworkProbeFailureList, type NetworkProbeFailure, type ScanProfileVersion } from "./transport-v1-executor.js";
 
 export const TRANSPORT_V1_EXECUTOR_PROTOCOL_VERSION = 1;
 export const MAX_EXECUTOR_REQUEST_BYTES = 4 * 1024;
@@ -16,6 +16,11 @@ export type TransportV1ExecutorRequest = {
   profileVersion: ScanProfileVersion;
 };
 
+export type TransportV1ExecutorDiagnostic = {
+  category: "network_observation_unavailable";
+  probeFailures: NetworkProbeFailure[];
+};
+
 export type TransportV1ExecutorResponse =
   | {
       protocolVersion: 1;
@@ -29,6 +34,7 @@ export type TransportV1ExecutorResponse =
       protocolVersion: 1;
       requestId: string;
       errorCode: "request_invalid" | ScanFailureCode;
+      diagnostic?: TransportV1ExecutorDiagnostic;
     };
 
 export function parseTransportV1ExecutorRequest(
@@ -82,10 +88,14 @@ export function parseTransportV1ExecutorResponse(
     value.errorCode === "request_invalid" ||
     isScanFailureCode(value.errorCode)
   ) {
+    const diagnostic = value.diagnostic === undefined
+      ? undefined
+      : parseExecutorDiagnostic(value.diagnostic);
     return {
       protocolVersion: 1,
       requestId: expectedRequestId,
       errorCode: value.errorCode,
+      ...(diagnostic === undefined ? {} : { diagnostic }),
     };
   }
   return {
@@ -93,6 +103,13 @@ export function parseTransportV1ExecutorResponse(
     requestId: expectedRequestId,
     result: parseExecutorResult(value.result, profileVersion),
   };
+}
+
+function parseExecutorDiagnostic(value: unknown): TransportV1ExecutorDiagnostic {
+  if (!isRecord(value) || value.category !== "network_observation_unavailable" || !isNetworkProbeFailureList(value.probeFailures)) {
+    throw new Error("executor_response_invalid");
+  }
+  return { category: "network_observation_unavailable", probeFailures: value.probeFailures };
 }
 
 function isScanFailureCode(value: unknown): value is ScanFailureCode {

@@ -78,6 +78,7 @@ export type DockerRuntimeSession = {
 };
 
 export type DockerRuntimeSessionFactory = {
+  diagnostic?: RuntimeDiagnosticWriter;
   create(
     request: TransportV1ExecutorRequest,
     signal: AbortSignal,
@@ -88,6 +89,7 @@ export type DockerRuntimeSessionFactory = {
 export function createDockerRuntimeCoordinatorRunner(
   factory: DockerRuntimeSessionFactory,
 ): RuntimeCoordinatorRunner {
+  const diagnostic = factory.diagnostic ?? createJsonLineRuntimeDiagnostic();
   return {
     async execute(request, signal): Promise<
       Omit<ScanRunInput, "jobId" | "leaseToken" | "hostname" | "profileVersion">
@@ -116,6 +118,14 @@ export function createDockerRuntimeCoordinatorRunner(
           throw new Error("executor_response_invalid");
         }
         if ("errorCode" in response) {
+          if (response.diagnostic?.category === "network_observation_unavailable") {
+            diagnostic({
+              type: "runtime_diagnostic",
+              stage: "executor",
+              code: "executor_application_failed",
+              probeFailures: response.diagnostic.probeFailures,
+            });
+          }
           throw new Error(
             response.errorCode === "request_invalid"
               ? "transport_failed"
@@ -198,6 +208,7 @@ export function createDockerRuntimeSessionFactory(
   }
 
   return {
+    diagnostic,
     async create(request, signal): Promise<DockerRuntimeSession> {
       if (signal.aborted) throw new Error("request_aborted");
       const runtimeId = randomUUID();

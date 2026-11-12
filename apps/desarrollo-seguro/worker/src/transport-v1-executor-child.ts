@@ -3,7 +3,10 @@ import {
   parseTransportV1ExecutorRequest,
 } from "./transport-v1-executor-protocol.js";
 import { createUnixSocketObservationSource } from "./transport-v1-egress-ipc.js";
-import { TransportV1NetworkExecutor } from "./transport-v1-executor.js";
+import {
+  NetworkObservationUnavailableError,
+  TransportV1NetworkExecutor,
+} from "./transport-v1-executor.js";
 
 const EGRESS_BROKER_SOCKET = "/run/development-security-egress/broker.sock";
 
@@ -41,19 +44,30 @@ async function main(): Promise<void> {
       `${JSON.stringify({ protocolVersion: 1, requestId, result })}\n`,
     );
   } catch (error) {
-    writeFailure(
-      requestId,
-      error instanceof Error && error.message === "executor_request_invalid"
-        ? "request_invalid"
-        : "executor_failed",
-    );
+    if (error instanceof NetworkObservationUnavailableError) {
+      writeFailure(requestId, "executor_failed", {
+        category: "network_observation_unavailable",
+        probeFailures: error.probeFailures,
+      });
+    } else {
+      writeFailure(
+        requestId,
+        error instanceof Error && error.message === "executor_request_invalid"
+          ? "request_invalid"
+          : "executor_failed",
+      );
+    }
     process.exitCode = 1;
   }
 }
 
-function writeFailure(requestId: string, errorCode: "request_invalid" | "executor_failed"): void {
+function writeFailure(
+  requestId: string,
+  errorCode: "request_invalid" | "executor_failed",
+  diagnostic?: { category: "network_observation_unavailable"; probeFailures: NetworkObservationUnavailableError["probeFailures"] },
+): void {
   process.stdout.write(
-    `${JSON.stringify({ protocolVersion: 1, requestId, errorCode })}\n`,
+    `${JSON.stringify({ protocolVersion: 1, requestId, errorCode, ...(diagnostic ? { diagnostic } : {}) })}\n`,
   );
 }
 

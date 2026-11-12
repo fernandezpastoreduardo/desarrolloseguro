@@ -1,3 +1,5 @@
+import { isNetworkProbeFailureList, type NetworkProbeFailure } from "./transport-v1-executor.js";
+
 export const RUNTIME_DIAGNOSTIC_STAGES = [
   "volume_create",
   "volume_prepare",
@@ -22,6 +24,7 @@ export const RUNTIME_DIAGNOSTIC_CODES = [
   "runtime_coordinator_socket_untrusted",
   "executor_response_invalid",
   "executor_result_invalid",
+  "executor_application_failed",
   "runtime_broker_process_error",
   "runtime_broker_process_exited",
   "runtime_broker_process_killed",
@@ -46,6 +49,7 @@ export type RuntimeDiagnosticEvent = {
   code: RuntimeDiagnosticCode;
   attempt?: number;
   causeCode?: RuntimeDiagnosticCode;
+  probeFailures?: NetworkProbeFailure[];
 };
 
 export type RuntimeDiagnosticWriter = (event: RuntimeDiagnosticEvent) => void;
@@ -64,6 +68,7 @@ export function createJsonLineRuntimeDiagnostic(
         code: event.code,
         ...(event.attempt === undefined ? {} : { attempt: event.attempt }),
         ...(event.causeCode === undefined ? {} : { causeCode: event.causeCode }),
+        ...(event.probeFailures === undefined ? {} : { probeFailures: event.probeFailures }),
       };
       write(`${JSON.stringify(safeEvent)}\n`);
     } catch {
@@ -78,6 +83,7 @@ function isSafeRuntimeDiagnosticEvent(event: RuntimeDiagnosticEvent): boolean {
     RUNTIME_DIAGNOSTIC_STAGES.includes(event.stage) &&
     RUNTIME_DIAGNOSTIC_CODES.includes(event.code) &&
     (event.causeCode === undefined || RUNTIME_DIAGNOSTIC_CODES.includes(event.causeCode)) &&
+    (event.probeFailures === undefined || isNetworkProbeFailureList(event.probeFailures)) &&
     (event.attempt === undefined || (
       Number.isSafeInteger(event.attempt) && event.attempt >= 1 && event.attempt <= 3
     ))
