@@ -6,13 +6,15 @@ const PROFILE_VERSION_V3 = "controls-v3";
 const PROFILE_VERSION_TRANSPORT_V1 = "transport-v1";
 const PROFILE_VERSION_DOMAIN_V1 = "domain-v1";
 const PROFILE_VERSION_DOMAIN_V2 = "domain-v2";
+const PROFILE_VERSION_DOMAIN_V3 = "domain-v3";
 type ProfileVersion =
   | typeof PROFILE_VERSION_V1
   | typeof PROFILE_VERSION_V2
   | typeof PROFILE_VERSION_V3
   | typeof PROFILE_VERSION_TRANSPORT_V1
   | typeof PROFILE_VERSION_DOMAIN_V1
-  | typeof PROFILE_VERSION_DOMAIN_V2;
+  | typeof PROFILE_VERSION_DOMAIN_V2
+  | typeof PROFILE_VERSION_DOMAIN_V3;
 const MAX_SCOPE_PATHS = 3;
 const MAX_CHECKS = 32;
 const MAX_EVIDENCE_COUNT = 100_000;
@@ -63,6 +65,7 @@ const TRANSPORT_V1_CONTROLS = [
 ] as const;
 const DOMAIN_V1_CONTROLS = [...TRANSPORT_V1_CONTROLS, "DS-PRIV-05"] as const;
 const DOMAIN_V2_CONTROLS = [...DOMAIN_V1_CONTROLS, "DS-PRIV-06", "DS-QUAL-02"] as const;
+const DOMAIN_V3_CONTROLS = [...DOMAIN_V2_CONTROLS, "DS-TLS-02"] as const;
 const CONTROLS: Readonly<Record<string, ControlContract>> = {
   "DS-DNS-01": {
     methodsByPath: { "/": ["DNS"] },
@@ -175,6 +178,7 @@ const PROFILE_CONTROLS: Readonly<Record<ProfileVersion, readonly string[]>> = {
   [PROFILE_VERSION_TRANSPORT_V1]: TRANSPORT_V1_CONTROLS,
   [PROFILE_VERSION_DOMAIN_V1]: DOMAIN_V1_CONTROLS,
   [PROFILE_VERSION_DOMAIN_V2]: DOMAIN_V2_CONTROLS,
+  [PROFILE_VERSION_DOMAIN_V3]: DOMAIN_V3_CONTROLS,
 };
 
 export function sanitizeScanObservations(
@@ -192,7 +196,8 @@ export function sanitizeScanObservations(
   const profilePaths =
     profileVersion === PROFILE_VERSION_TRANSPORT_V1 ||
     profileVersion === PROFILE_VERSION_DOMAIN_V1 ||
-    profileVersion === PROFILE_VERSION_DOMAIN_V2
+    profileVersion === PROFILE_VERSION_DOMAIN_V2 ||
+    profileVersion === PROFILE_VERSION_DOMAIN_V3
       ? ["/"]
       : allowedPaths;
   const safeScope = sanitizeScope(scope, profilePaths);
@@ -221,7 +226,8 @@ export function sanitizeScanObservations(
     profileVersion === PROFILE_VERSION_V3 ||
     profileVersion === PROFILE_VERSION_TRANSPORT_V1 ||
     profileVersion === PROFILE_VERSION_DOMAIN_V1 ||
-    profileVersion === PROFILE_VERSION_DOMAIN_V2
+    profileVersion === PROFILE_VERSION_DOMAIN_V2 ||
+    profileVersion === PROFILE_VERSION_DOMAIN_V3
   ) {
     assertCompleteCoverage(safeScope, safeChecks, allowedControlIds);
   }
@@ -236,7 +242,8 @@ function isProfileVersion(value: unknown): value is ProfileVersion {
     value === PROFILE_VERSION_V3 ||
     value === PROFILE_VERSION_TRANSPORT_V1 ||
     value === PROFILE_VERSION_DOMAIN_V1 ||
-    value === PROFILE_VERSION_DOMAIN_V2
+    value === PROFILE_VERSION_DOMAIN_V2 ||
+    value === PROFILE_VERSION_DOMAIN_V3
   );
 }
 
@@ -397,7 +404,8 @@ function deriveSafeStatus(
       profileVersion === PROFILE_VERSION_V3 ||
       profileVersion === PROFILE_VERSION_TRANSPORT_V1 ||
       profileVersion === PROFILE_VERSION_DOMAIN_V1 ||
-      profileVersion === PROFILE_VERSION_DOMAIN_V2) &&
+      profileVersion === PROFILE_VERSION_DOMAIN_V2 ||
+      profileVersion === PROFILE_VERSION_DOMAIN_V3) &&
     controlId === "DS-HTTP-01" &&
     method === "HEAD" &&
     [405, 501].includes(Number(evidence.statusCode)) &&
@@ -410,7 +418,8 @@ function deriveSafeStatus(
     (profileVersion === PROFILE_VERSION_V3 ||
       profileVersion === PROFILE_VERSION_TRANSPORT_V1 ||
       profileVersion === PROFILE_VERSION_DOMAIN_V1 ||
-      profileVersion === PROFILE_VERSION_DOMAIN_V2) &&
+      profileVersion === PROFILE_VERSION_DOMAIN_V2 ||
+      profileVersion === PROFILE_VERSION_DOMAIN_V3) &&
     controlId === "DS-HDR-01" &&
     evidence.finalScheme !== "https"
   ) {
@@ -570,7 +579,8 @@ function sanitizeEvidence(
       profileVersion !== PROFILE_VERSION_V3 &&
       profileVersion !== PROFILE_VERSION_TRANSPORT_V1 &&
       profileVersion !== PROFILE_VERSION_DOMAIN_V1 &&
-      profileVersion !== PROFILE_VERSION_DOMAIN_V2
+      profileVersion !== PROFILE_VERSION_DOMAIN_V2 &&
+      profileVersion !== PROFILE_VERSION_DOMAIN_V3
     ) {
       continue;
     }

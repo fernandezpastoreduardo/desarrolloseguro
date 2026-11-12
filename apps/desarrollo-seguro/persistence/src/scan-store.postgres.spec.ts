@@ -238,7 +238,7 @@ describePostgres.sequential("PostgresScanStore", () => {
     expect(snapshot).toMatchObject({
       hostname,
       enrollment: "on_demand",
-      profileVersion: "domain-v2",
+      profileVersion: "domain-v3",
       optedOut: false,
     });
     expect(snapshot?.activeJobId).toBeTruthy();
@@ -483,6 +483,27 @@ describePostgres.sequential("PostgresScanStore", () => {
       .toMatchObject({ thirdPartyResourceReferences: 2, knownTrackingResourceReferences: 0 });
     expect(publicReport?.checks.find(({ controlId }) => controlId === "DS-QUAL-02")?.evidence)
       .toMatchObject({ responseTimeMs: 800, responseBytes: 40_000 });
+  });
+
+  it("stores and returns the complete TLS version matrix for domain-v3", async () => {
+    const job = await queueAndClaim("domain-v3");
+    const checks = [
+      ...makeDomainV2Checks(),
+      {
+        ...makeDomainV2Checks()[1],
+        controlId: "DS-TLS-02",
+        method: "TLS",
+        summary: "Se probaron por separado las cuatro versiones de TLS incluidas en este control.",
+        evidence: { tls10Accepted: false, tls11Accepted: false, tls12Accepted: true, tls13Accepted: true },
+      },
+    ];
+    const reportId = await completeDirectly(job, ["/"], checks, "pass");
+    const report = await store.readPublicReport(reportId);
+
+    expect(report).toMatchObject({ profileVersion: "domain-v3", scannerVersion: expect.any(String) });
+    expect(report?.checks).toHaveLength(9);
+    expect(report?.checks.find(({ controlId }) => controlId === "DS-TLS-02"))
+      .toMatchObject({ status: "pass", evidence: { tls10Accepted: false, tls11Accepted: false, tls12Accepted: true, tls13Accepted: true } });
   });
 
   it("rejects non-root scope for transport-v1", async () => {

@@ -167,6 +167,49 @@ describe("sanitizeScanObservations", () => {
     expect(slowResult.checks.find(({ controlId }) => controlId === "DS-QUAL-02")?.status).toBe("fail");
   });
 
+  it("accepts domain-v3 with an independently measured TLS version matrix", () => {
+    const checks = [
+      ...makeTransportV1Checks(),
+      {
+        ...makeUnknownCheck("DS-TLS-02", "/", "TLS"),
+        status: "pass",
+        evidence: {
+          tls10Accepted: false,
+          tls11Accepted: false,
+          tls12Accepted: true,
+          tls13Accepted: true,
+        },
+      },
+      {
+        ...makeUnknownCheck("DS-PRIV-05", "/", "GET"),
+        status: "pass",
+        evidence: { inspected: true, cookieCount: 0, insecureCookieCount: 0, catalogMatchCount: 0, consentPromptDetected: false },
+      },
+      {
+        ...makeUnknownCheck("DS-PRIV-06", "/", "GET"),
+        status: "pass",
+        evidence: { inspected: true, thirdPartyResourceReferences: 0, knownTrackingResourceReferences: 0 },
+      },
+      {
+        ...makeUnknownCheck("DS-QUAL-02", "/", "GET"),
+        status: "pass",
+        evidence: { inspected: true, responseTimeMs: 900, responseBytes: 45_000 },
+      },
+    ];
+
+    const result = sanitizeScanObservations(MONITORED_HOSTNAME, "domain-v3", ["/"], checks);
+
+    expect(result.checks).toHaveLength(9);
+    expect(result.checks.find(({ controlId }) => controlId === "DS-TLS-02"))
+      .toMatchObject({ status: "pass", evidence: { tls10Accepted: false, tls11Accepted: false, tls12Accepted: true, tls13Accepted: true } });
+
+    const weakTlsChecks = checks.map((check) => check.controlId === "DS-TLS-02"
+      ? { ...check, status: "fail", evidence: { tls10Accepted: true, tls11Accepted: false, tls12Accepted: true, tls13Accepted: true } }
+      : check);
+    const weakTlsResult = sanitizeScanObservations(MONITORED_HOSTNAME, "domain-v3", ["/"], weakTlsChecks);
+    expect(weakTlsResult.checks.find(({ controlId }) => controlId === "DS-TLS-02")?.status).toBe("fail");
+  });
+
   it("does not persist collector error details as public evidence", () => {
     const checks = makeTransportV1Checks().map((check) =>
       check.controlId === "DS-DNS-01"

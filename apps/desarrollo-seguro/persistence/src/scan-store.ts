@@ -18,6 +18,7 @@ const PROFILE_VERSIONS = [
   "transport-v1",
   "domain-v1",
   "domain-v2",
+  "domain-v3",
 ] as const;
 const CHECK_STATUSES = ["pass", "fail", "unknown", "not_applicable"] as const;
 const ENROLLMENTS = ["monitored", "on_demand"] as const;
@@ -206,7 +207,7 @@ export class PostgresScanStore implements ScanJobStore {
        SELECT $1, reports.hostname, reports.id, $4
        FROM public.ds_scan_runs AS reports
        WHERE reports.id = $2 AND reports.hostname = $3
-         AND reports.profile_version IN ('domain-v1', 'domain-v2')
+         AND reports.profile_version IN ('domain-v1', 'domain-v2', 'domain-v3')
        RETURNING token_hash`,
       [record.tokenHash, record.reportId, record.hostname, record.expiresAt],
     );

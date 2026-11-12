@@ -1,6 +1,6 @@
 # Sello verificable de informe
 
-El API puede emitir un identificador aleatorio de 256 bits ligado a un informe persistido de `grumphya.com` con perfil `domain-v1` o `domain-v2` (el perfil activo actual es `domain-v2`). Solo guarda su SHA-256. Cada sello dura 30 días, puede revocarse y desaparece si la política de retención elimina el informe. No se emite desde datos de muestra ni desde un informe inexistente.
+El API puede emitir un identificador aleatorio de 256 bits ligado a un informe persistido de `grumphya.com` con perfil `domain-v1`, `domain-v2` o `domain-v3` (el perfil activo actual es `domain-v3`). Solo guarda su SHA-256. Cada sello dura 30 días, puede revocarse y desaparece si la política de retención elimina el informe. No se emite desde datos de muestra ni desde un informe inexistente.
 
 ## Emisión
 

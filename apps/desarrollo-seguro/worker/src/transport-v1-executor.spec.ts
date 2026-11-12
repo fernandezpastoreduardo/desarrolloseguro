@@ -67,6 +67,45 @@ describe("TransportV1FixtureExecutor", () => {
     expect(result.metrics.requestsCount).toBe(0);
   });
 
+  it("records the full TLS version matrix in domain-v3 and fails on legacy protocols", async () => {
+    const source = makeSource();
+    vi.mocked(source.observeTls).mockResolvedValue({
+      protocol: "TLSv1.3",
+      certificateValid: true,
+      hostnameMatches: true,
+      tls10Accepted: false,
+      tls11Accepted: false,
+      tls12Accepted: true,
+      tls13Accepted: true,
+    });
+    const executor = new TransportV1FixtureExecutor(source);
+
+    const secure = await executor.execute(
+      { ...JOB, profileVersion: "domain-v3" },
+      new AbortController().signal,
+    );
+    expect(secure.scannerVersion).toBe("domain-v3-fixture-adapter-1");
+    expect(secure.checks).toHaveLength(9);
+    expect(secure.checks.find(({ controlId }) => controlId === "DS-TLS-02"))
+      .toMatchObject({ status: "pass", evidence: { tls10Accepted: false, tls11Accepted: false, tls12Accepted: true, tls13Accepted: true } });
+
+    vi.mocked(source.observeTls).mockResolvedValue({
+      protocol: "TLSv1.3",
+      certificateValid: true,
+      hostnameMatches: true,
+      tls10Accepted: true,
+      tls11Accepted: false,
+      tls12Accepted: true,
+      tls13Accepted: true,
+    });
+    const weak = await executor.execute(
+      { ...JOB, profileVersion: "domain-v3" },
+      new AbortController().signal,
+    );
+    expect(weak.checks.find(({ controlId }) => controlId === "DS-TLS-02"))
+      .toMatchObject({ status: "fail", evidence: { tls10Accepted: true } });
+  });
+
   it("keeps failed observations unknown and still returns full coverage", async () => {
     const source = makeSource();
     vi.mocked(source.observeTls).mockRejectedValue(new Error("sensitive detail"));

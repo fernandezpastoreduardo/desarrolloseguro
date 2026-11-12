@@ -94,7 +94,7 @@ test("shows the report when an authorized analysis finishes", async ({ page }) =
       lastReport: {
         id: "123e4567-e89b-42d3-a456-426614174000",
         hostname: "report.example",
-        profileVersion: "domain-v2",
+        profileVersion: "domain-v3",
         scannerVersion: "scanner-v1",
         vantage: "same_vps",
         trigger: "requested",
@@ -104,13 +104,13 @@ test("shows the report when an authorized analysis finishes", async ({ page }) =
         verdict: "fail",
         ethicsAssessment: {
           policyVersion: "domain-ethics-v3",
-          score: 67,
-          assessedCriteria: 3,
+          score: 70,
+          assessedCriteria: 4,
           totalCriteria: 8,
           maturity: "preliminary",
           criteria: [
             { id: "dns-integrity", label: "Resolución DNS", status: "unknown", weight: 10 },
-            { id: "transport-security", label: "Seguridad del transporte TLS", status: "unknown", weight: 25 },
+            { id: "transport-security", label: "Seguridad del transporte TLS", status: "pass", weight: 25 },
             { id: "http-availability", label: "Respuesta HTTP", status: "unknown", weight: 15 },
             {
               id: "security-headers",
@@ -129,6 +129,18 @@ test("shows the report when an authorized analysis finishes", async ({ page }) =
         },
         scope: ["/"],
         checks: [
+          {
+            controlId: "DS-TLS-02",
+            status: "pass",
+            required: true,
+            severity: "high",
+            observedAt: "2026-11-11T00:01:00.000Z",
+            targetPath: "/",
+            method: "TLS",
+            summary: "Las versiones antiguas de TLS están desactivadas.",
+            limitation: "Prueba la negociación de TLS por versión; no analiza todos los cifrados.",
+            evidence: { tls10Accepted: false, tls11Accepted: false, tls12Accepted: true, tls13Accepted: true },
+          },
           {
             controlId: "DS-HDR-01",
             status: "pass",
@@ -203,6 +215,11 @@ test("shows the report when an authorized analysis finishes", async ({ page }) =
   await expect(page.getByRole("heading", { name: "Privacidad" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Seguridad" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Rendimiento" })).toBeVisible();
+  await expect(page.getByText("La conexión protege los datos")).toBeVisible();
+  await expect(page.getByText("TLS 1.0 aceptado")).toBeVisible();
+  await expect(page.getByText("TLS 1.1 aceptado")).toBeVisible();
+  await expect(page.getByText("TLS 1.2 aceptado")).toBeVisible();
+  await expect(page.getByText("TLS 1.3 aceptado")).toBeVisible();
   await expect(page.getByText("Política que restringe contenido cargado (CSP)")).toBeVisible();
   await expect(page.getByText("Referencias a rastreadores conocidos").first()).toBeVisible();
   await expect(page.getByText("Tiempo de respuesta inicial")).toBeVisible();

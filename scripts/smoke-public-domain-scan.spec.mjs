@@ -12,6 +12,7 @@ function completedStatus() {
   const checks = [
     { controlId: "DS-DNS-01", status: "pass", summary: "DNS válido" },
     { controlId: "DS-TLS-01", status: "pass", summary: "TLS válido" },
+    { controlId: "DS-TLS-02", status: "pass", summary: "Versiones TLS comprobadas", evidence: { tls10Accepted: false, tls11Accepted: false, tls12Accepted: true, tls13Accepted: true } },
     { controlId: "DS-HTTP-01", status: "pass", summary: "HTTP válido" },
     { controlId: "DS-HTTP-01", status: "pass", summary: "HTTP válido" },
     { controlId: "DS-HDR-01", status: "fail", summary: "Faltan cabeceras" },
@@ -21,7 +22,7 @@ function completedStatus() {
   ];
   const criteria = [
     { id: "dns-integrity", status: "pass" },
-    { id: "transport-security", status: "unknown" },
+    { id: "transport-security", status: "pass" },
     { id: "http-availability", status: "pass" },
     { id: "security-headers", status: "fail" },
     { id: "third-party-data-use", status: "unknown" },
@@ -33,13 +34,13 @@ function completedStatus() {
     hostname: "grumphya.com",
     lastReport: {
       id: "f7490d2d-2976-4a89-a9a7-001690e873ef",
-      profileVersion: "domain-v2",
-      scannerVersion: "domain-v2-network-adapter-1",
+      profileVersion: "domain-v3",
+      scannerVersion: "domain-v3-network-adapter-1",
       completedAt: "2026-11-11T20:00:00.000Z",
       checks,
       ethicsAssessment: {
         score: 75,
-        assessedCriteria: 6,
+        assessedCriteria: 7,
         totalCriteria: 8,
         criteria,
       },
@@ -51,13 +52,14 @@ test("bounds the live scan smoke wait to fifteen minutes for the serial queue", 
   assert.equal(SCAN_TIMEOUT_MS, 15 * 60 * 1000);
 });
 
-test("accepts a refreshed domain-v2 report with tracking and performance observations", () => {
+test("accepts a refreshed domain-v3 report with TLS matrix, tracking and performance observations", () => {
   const status = completedStatus();
   const report = validateCompletedReport(
     status,
     "previous-report-id",
   );
   assert.equal(report.ethicsAssessment.score, 75);
+  assert.equal(report.checks.length, 9);
 });
 
 test("accepts www HTTPS redirect to the canonical domain without an exposed port", () => {

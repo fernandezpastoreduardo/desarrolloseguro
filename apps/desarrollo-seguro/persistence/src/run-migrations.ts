@@ -54,6 +54,10 @@ const MIGRATIONS = [
     version: "018_domain_v2_tracking_performance",
     file: "018_domain_v2_tracking_performance.sql",
   },
+  {
+    version: "019_domain_v3_tls_version_matrix",
+    file: "019_domain_v3_tls_version_matrix.sql",
+  },
 ] as const;
 
 const MIGRATION_LOCK_ID = 728194032;

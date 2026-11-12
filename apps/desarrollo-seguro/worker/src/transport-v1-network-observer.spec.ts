@@ -17,11 +17,11 @@ const PUBLIC_ADDRESSES: LookupAddress[] = [
 const SECURE_CSP =
   "default-src 'self'; script-src 'sha256-suebgenoyDvF0MseSMQjhvmvvc00cXYsKyXaeDanRCI='; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'";
 
-function makeTlsSocket(): TLSSocket {
+function makeTlsSocket(protocol: string = "TLSv1.3"): TLSSocket {
   const socket = Object.create(TLSSocket.prototype) as TLSSocket;
   Object.defineProperties(socket, {
     authorized: { value: true },
-    getProtocol: { value: () => "TLSv1.3" },
+    getProtocol: { value: () => protocol },
   });
   return socket;
 }
@@ -30,12 +30,13 @@ function responseWith(
   statusCode: number,
   headers: Record<string, string>,
   body = "",
+  protocol = "TLSv1.3",
 ): IncomingMessage {
   const emitter = new EventEmitter();
   Object.assign(emitter, {
     statusCode,
     headers,
-    socket: makeTlsSocket(),
+    socket: makeTlsSocket(protocol),
     resume() {
       if (body) emitter.emit("data", Buffer.from(body));
       emitter.emit("end");
@@ -56,6 +57,7 @@ function httpsFactory(
     const request = new EventEmitter();
     Object.assign(request, {
       end() {
+        const tlsProtocol = _options.maxVersion ?? "TLSv1.3";
         callback(
           responseWith(200, {
             "strict-transport-security": "max-age=31536000",
@@ -64,7 +66,7 @@ function httpsFactory(
             "referrer-policy": "strict-origin-when-cross-origin",
             "content-security-policy": SECURE_CSP,
             ...responseHeaders,
-          }, responseBody),
+          }, responseBody, String(tlsProtocol)),
         );
         return this;
       },
@@ -160,6 +162,36 @@ describe("createTransportV1NetworkObserver", () => {
     });
     expect(httpFactory).toHaveBeenCalledTimes(1);
     expect(tlsFactory).toHaveBeenCalledTimes(3);
+  });
+
+  it("measures each supported TLS version with a version-pinned read-only probe", async () => {
+    const requestFactory = httpsFactory();
+    const observer = createTransportV1NetworkObserver({
+      dnsResolver: vi.fn().mockResolvedValue(PUBLIC_ADDRESSES),
+      lookupFactory: () => vi.fn(),
+      httpsRequestFactory: requestFactory,
+      probeTlsVersions: true,
+    });
+
+    await expect(observer.observeTls(HOSTNAME, new AbortController().signal)).resolves.toMatchObject({
+      evidence: {
+        protocol: "TLSv1.3",
+        certificateValid: true,
+        hostnameMatches: true,
+        tls10Accepted: true,
+        tls11Accepted: true,
+        tls12Accepted: true,
+        tls13Accepted: true,
+      },
+      requestsCount: 5,
+    });
+    expect(requestFactory).toHaveBeenCalledTimes(5);
+    for (const [options] of vi.mocked(requestFactory).mock.calls.slice(1)) {
+      expect(options.minVersion).toBe(options.maxVersion);
+      expect(options.rejectUnauthorized).toBe(false);
+      expect(options.path).toBe("/");
+      expect(options.method).toBe("HEAD");
+    }
   });
 
   it("passes only aggregate cookie signals across the broker evidence boundary", async () => {

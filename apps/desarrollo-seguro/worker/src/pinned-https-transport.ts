@@ -35,6 +35,9 @@ export type PinnedHttpsRequest = {
   allowedPaths: readonly string[];
   signal: AbortSignal;
   inspectPage?: boolean;
+  tlsVersion?: "TLSv1" | "TLSv1.1" | "TLSv1.2" | "TLSv1.3";
+  allowUntrustedCertificate?: boolean;
+  timeoutMs?: number;
 };
 
 export type PinnedHttpsResult = {
@@ -44,7 +47,7 @@ export type PinnedHttpsResult = {
   redirectCount: number;
   remoteAddress: string | undefined;
   tlsAuthorized: boolean;
-  tlsProtocol: "TLSv1.2" | "TLSv1.3" | undefined;
+  tlsProtocol: "TLSv1" | "TLSv1.1" | "TLSv1.2" | "TLSv1.3" | undefined;
   securityHeaders: SecurityHeaderEvidence | null;
   passivePageSignals?: ReturnType<typeof inspectPassivePageSignals>;
   requestsCount: number;
@@ -87,7 +90,11 @@ export async function requestPinnedHttps(
         createEgressDestinationAuthorizer(targetHostname),
       ));
   const requestFactory = dependencies.requestFactory ?? defaultHttpsRequest;
-  const deadline = Date.now() + REQUEST_TIMEOUT_MS;
+  const timeoutMs = input.timeoutMs ?? REQUEST_TIMEOUT_MS;
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > REQUEST_TIMEOUT_MS) {
+    throw new PinnedTransportError("request_timeout", 0, 0);
+  }
+  const deadline = Date.now() + timeoutMs;
   let currentPath = input.path;
   let requestsCount = 0;
   let bytesCount = 0;
@@ -109,6 +116,8 @@ export async function requestPinnedHttps(
         requestFactory,
         ca: dependencies.ca,
         inspectPage: input.inspectPage === true,
+        tlsVersion: input.tlsVersion,
+        allowUntrustedCertificate: input.allowUntrustedCertificate === true,
       });
     } catch (error) {
       throw includeTransportMetrics(error, requestsCount, bytesCount, "https_request_failed");
@@ -168,6 +177,8 @@ type MakeRequestInput = {
   requestFactory: HttpsRequestFactory;
   ca: string | undefined;
   inspectPage: boolean;
+  tlsVersion: PinnedHttpsRequest["tlsVersion"];
+  allowUntrustedCertificate: boolean;
 };
 
 type MakeRequestResult = {
@@ -175,7 +186,7 @@ type MakeRequestResult = {
   location: string | undefined;
   remoteAddress: string | undefined;
   tlsAuthorized: boolean;
-  tlsProtocol: "TLSv1.2" | "TLSv1.3" | undefined;
+  tlsProtocol: "TLSv1" | "TLSv1.1" | "TLSv1.2" | "TLSv1.3" | undefined;
   securityHeaders: SecurityHeaderEvidence | null;
   bytesCount: number;
   passivePageSignals?: ReturnType<typeof inspectPassivePageSignals>;
@@ -214,7 +225,16 @@ function makeRequest(input: MakeRequestInput): Promise<MakeRequestResult> {
       path: input.path,
       method: input.method,
       servername: input.hostname,
-      rejectUnauthorized: true,
+      rejectUnauthorized: !input.allowUntrustedCertificate,
+      ...(input.tlsVersion
+        ? {
+            minVersion: input.tlsVersion,
+            maxVersion: input.tlsVersion,
+            ...(input.tlsVersion === "TLSv1" || input.tlsVersion === "TLSv1.1"
+              ? { ciphers: "DEFAULT:@SECLEVEL=0" }
+              : {}),
+          }
+        : {}),
       agent: false,
       lookup: input.lookup,
       ca: input.ca,
@@ -323,10 +343,13 @@ function makeRequest(input: MakeRequestInput): Promise<MakeRequestResult> {
 
 function getTlsProtocol(
   socket: IncomingMessage["socket"],
-): "TLSv1.2" | "TLSv1.3" | undefined {
+): "TLSv1" | "TLSv1.1" | "TLSv1.2" | "TLSv1.3" | undefined {
   if (!(socket instanceof TLSSocket)) return undefined;
   const protocol = socket.getProtocol();
-  if (protocol === "TLSv1.2" || protocol === "TLSv1.3") return protocol;
+  if (
+    protocol === "TLSv1" || protocol === "TLSv1.1" ||
+    protocol === "TLSv1.2" || protocol === "TLSv1.3"
+  ) return protocol;
   return undefined;
 }
 

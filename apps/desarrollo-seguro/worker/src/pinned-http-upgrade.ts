@@ -38,7 +38,7 @@ export type PinnedHttpUpgradeResult = {
   finalScheme: "http" | "https";
   redirectedToHttps: boolean;
   tlsAuthorized?: boolean;
-  tlsProtocol?: "TLSv1.2" | "TLSv1.3";
+  tlsProtocol?: "TLSv1" | "TLSv1.1" | "TLSv1.2" | "TLSv1.3";
   requestsCount: number;
   bytesCount: number;
 };

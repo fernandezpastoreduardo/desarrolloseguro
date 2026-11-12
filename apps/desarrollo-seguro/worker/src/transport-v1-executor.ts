@@ -10,12 +10,15 @@ import type { PinnedTransportErrorCode } from "./pinned-transport-error.js";
 const TRANSPORT_PROFILE_VERSION = "transport-v1";
 const DOMAIN_PROFILE_VERSION = "domain-v1";
 const DOMAIN_PROFILE_VERSION_V2 = "domain-v2";
+const DOMAIN_PROFILE_VERSION_V3 = "domain-v3";
 const FIXTURE_SCANNER_VERSION = "transport-v1-fixture-adapter-1";
 const DOMAIN_FIXTURE_SCANNER_VERSION = "domain-v1-fixture-adapter-1";
 const DOMAIN_V2_FIXTURE_SCANNER_VERSION = "domain-v2-fixture-adapter-1";
+const DOMAIN_V3_FIXTURE_SCANNER_VERSION = "domain-v3-fixture-adapter-1";
 const NETWORK_SCANNER_VERSION = "transport-v1-network-adapter-1";
 const DOMAIN_SCANNER_VERSION = "domain-v1-network-adapter-1";
 const DOMAIN_V2_SCANNER_VERSION = "domain-v2-network-adapter-1";
+const DOMAIN_V3_SCANNER_VERSION = "domain-v3-network-adapter-1";
 const MAX_CONCURRENT_NETWORK_PROBES = 2;
 const CHECKS = [
   { controlId: "DS-DNS-01", method: "DNS", severity: "high" },
@@ -39,7 +42,7 @@ export type TransportV1ScanJob = Pick<
   "hostname" | "profileVersion"
 >;
 
-export type ScanProfileVersion = typeof TRANSPORT_PROFILE_VERSION | typeof DOMAIN_PROFILE_VERSION | typeof DOMAIN_PROFILE_VERSION_V2;
+export type ScanProfileVersion = typeof TRANSPORT_PROFILE_VERSION | typeof DOMAIN_PROFILE_VERSION | typeof DOMAIN_PROFILE_VERSION_V2 | typeof DOMAIN_PROFILE_VERSION_V3;
 
 /**
  * Observation boundary for the reduced profile. Implementations must return
@@ -114,6 +117,7 @@ export class TransportV1FixtureExecutor {
       limitation: "",
       evidence: observations[index] ?? {},
     }));
+    appendTlsVersionCheck(candidateChecks, job.profileVersion, observations[1] ?? {}, observedAt);
     appendInitialCookieCheck(candidateChecks, job.profileVersion, observations[4] ?? {}, observedAt);
     appendPassivePageSignalChecks(candidateChecks, job.profileVersion, observations[4] ?? {}, observedAt);
 
@@ -198,6 +202,7 @@ export class TransportV1NetworkExecutor {
       limitation: "",
       evidence: probes[index]?.evidence ?? {},
     }));
+    appendTlsVersionCheck(candidateChecks, job.profileVersion, probes[1]?.evidence ?? {}, completedAt);
     appendInitialCookieCheck(
       candidateChecks,
       job.profileVersion,
@@ -279,6 +284,7 @@ function appendInitialCookieCheck(
 }
 
 function getScannerVersion(profileVersion: ScanProfileVersion): string {
+  if (profileVersion === DOMAIN_PROFILE_VERSION_V3) return DOMAIN_V3_SCANNER_VERSION;
   if (profileVersion === DOMAIN_PROFILE_VERSION_V2) return DOMAIN_V2_SCANNER_VERSION;
   return profileVersion === DOMAIN_PROFILE_VERSION
     ? DOMAIN_SCANNER_VERSION
@@ -286,12 +292,52 @@ function getScannerVersion(profileVersion: ScanProfileVersion): string {
 }
 
 function isSupportedProfile(value: string): value is ScanProfileVersion {
-  return value === TRANSPORT_PROFILE_VERSION || value === DOMAIN_PROFILE_VERSION || value === DOMAIN_PROFILE_VERSION_V2;
+  return value === TRANSPORT_PROFILE_VERSION || value === DOMAIN_PROFILE_VERSION || value === DOMAIN_PROFILE_VERSION_V2 || value === DOMAIN_PROFILE_VERSION_V3;
 }
 
 function getFixtureScannerVersion(profileVersion: ScanProfileVersion): string {
+  if (profileVersion === DOMAIN_PROFILE_VERSION_V3) return DOMAIN_V3_FIXTURE_SCANNER_VERSION;
   if (profileVersion === DOMAIN_PROFILE_VERSION_V2) return DOMAIN_V2_FIXTURE_SCANNER_VERSION;
   return profileVersion === DOMAIN_PROFILE_VERSION ? DOMAIN_FIXTURE_SCANNER_VERSION : FIXTURE_SCANNER_VERSION;
+}
+
+function appendTlsVersionCheck(
+  checks: ScanCheck[],
+  profileVersion: ScanProfileVersion,
+  evidence: TransportV1Evidence,
+  observedAt: Date,
+): void {
+  if (profileVersion !== DOMAIN_PROFILE_VERSION_V3) return;
+  const versionKeys = ["tls10Accepted", "tls11Accepted", "tls12Accepted", "tls13Accepted"] as const;
+  const complete = versionKeys.every((key) => typeof evidence[key] === "boolean");
+  let status: ScanCheck["status"] = "unknown";
+  if (evidence.tls10Accepted === true || evidence.tls11Accepted === true) {
+    status = "fail";
+  } else if (
+    complete && evidence.tls10Accepted === false && evidence.tls11Accepted === false &&
+    (evidence.tls12Accepted === true || evidence.tls13Accepted === true)
+  ) {
+    status = "pass";
+  }
+  const tlsEvidence: TransportV1Evidence = {};
+  for (const key of versionKeys) {
+    const value = evidence[key];
+    if (typeof value === "boolean") tlsEvidence[key] = value;
+  }
+  checks.push({
+    controlId: "DS-TLS-02",
+    method: "TLS",
+    severity: "high",
+    status,
+    required: true,
+    observedAt,
+    targetPath: "/",
+    summary: complete
+      ? "Se probaron por separado las cuatro versiones de TLS incluidas en este control."
+      : "No se pudieron comprobar todas las versiones de TLS; el criterio queda sin conclusión.",
+    limitation: "Se intenta una negociación HTTPS HEAD por versión; no evalúa todos los cifrados ni la configuración TLS completa.",
+    evidence: tlsEvidence,
+  });
 }
 
 function appendPassivePageSignalChecks(
@@ -300,7 +346,7 @@ function appendPassivePageSignalChecks(
   headersEvidence: TransportV1Evidence,
   observedAt: Date,
 ): void {
-  if (profileVersion !== DOMAIN_PROFILE_VERSION_V2) return;
+  if (profileVersion !== DOMAIN_PROFILE_VERSION_V2 && profileVersion !== DOMAIN_PROFILE_VERSION_V3) return;
 
   const inspected = headersEvidence.inspected === true;
   const trackingEvidence = pickNumericEvidence(headersEvidence, [

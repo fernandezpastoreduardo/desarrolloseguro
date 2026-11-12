@@ -41,7 +41,7 @@ export class IsolatedTransportV1Executor {
     Omit<ScanRunInput, "jobId" | "leaseToken" | "hostname" | "profileVersion">
   > {
     if (signal.aborted) return Promise.reject(new Error("request_aborted"));
-    if (job.profileVersion !== "transport-v1" && job.profileVersion !== "domain-v1" && job.profileVersion !== "domain-v2") {
+    if (job.profileVersion !== "transport-v1" && job.profileVersion !== "domain-v1" && job.profileVersion !== "domain-v2" && job.profileVersion !== "domain-v3") {
       return Promise.reject(new Error("unsupported_scan_profile"));
     }
 

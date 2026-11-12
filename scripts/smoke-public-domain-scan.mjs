@@ -27,10 +27,10 @@ export function validateCompletedReport(status, previousReportId) {
     throw new Error("public_scan_report_not_refreshed");
   }
   if (
-    report.profileVersion !== "domain-v2" ||
-    report.scannerVersion !== "domain-v2-network-adapter-1" ||
+    report.profileVersion !== "domain-v3" ||
+    report.scannerVersion !== "domain-v3-network-adapter-1" ||
     !Array.isArray(report.checks) ||
-    report.checks.length !== 8
+    report.checks.length !== 9
   ) {
     throw new Error("public_scan_profile_or_coverage_invalid");
   }
@@ -38,7 +38,7 @@ export function validateCompletedReport(status, previousReportId) {
   const conclusiveChecks = report.checks.filter(
     ({ status: checkStatus }) => checkStatus === "pass" || checkStatus === "fail",
   );
-  if (conclusiveChecks.length < 4) {
+  if (conclusiveChecks.length < 5) {
     throw new Error("public_scan_insufficient_observations");
   }
   const inconclusiveWithoutReason = report.checks.some(
@@ -51,6 +51,7 @@ export function validateCompletedReport(status, previousReportId) {
   }
 
   const assessment = report.ethicsAssessment;
+  const tlsMatrix = report.checks.find(({ controlId }) => controlId === "DS-TLS-02")?.evidence;
   if (
     !assessment ||
     !Number.isInteger(assessment.score) ||
@@ -62,6 +63,10 @@ export function validateCompletedReport(status, previousReportId) {
       "unknown" ||
     assessment.criteria.find(({ id }) => id === "tracking")?.status === "unknown" ||
     assessment.criteria.find(({ id }) => id === "performance")?.status === "unknown"
+    || assessment.criteria.find(({ id }) => id === "transport-security")?.status === "unknown"
+    || !tlsMatrix
+    || ["tls10Accepted", "tls11Accepted", "tls12Accepted", "tls13Accepted"]
+      .some((key) => typeof tlsMatrix[key] !== "boolean")
   ) {
     throw new Error("public_scan_ethics_assessment_incomplete");
   }
@@ -179,7 +184,7 @@ async function runSmoke() {
     onProgress: (message) => process.stdout.write(`${message}\n`),
   });
   process.stdout.write(
-    `Live domain scan passed: ${report.checks.filter(({ status: value }) => value !== "unknown").length}/6 checks conclusive; score ${report.ethicsAssessment.score}/100.\n`,
+    `Live domain scan passed: ${report.checks.filter(({ status: value }) => value !== "unknown").length}/9 checks conclusive; score ${report.ethicsAssessment.score}/100.\n`,
   );
 }
 

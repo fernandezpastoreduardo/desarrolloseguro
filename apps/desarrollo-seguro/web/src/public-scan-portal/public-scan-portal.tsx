@@ -73,6 +73,7 @@ const PROFILE_VERSIONS = [
   "transport-v1",
   "domain-v1",
   "domain-v2",
+  "domain-v3",
 ] as const;
 const SCAN_VERDICTS = ["pass", "fail", "inconclusive"] as const;
 const SCAN_TRIGGERS = ["scheduled", "requested"] as const;
@@ -89,10 +90,10 @@ const REPORT_CATEGORIES = [
   { id: "performance", label: "Rendimiento", description: "Mide el tiempo y tamaño de una respuesta inicial. No mide experiencia real ni métricas Core Web Vitals.", criteria: ["performance"], controls: ["DS-QUAL-02"] },
 ] as const;
 const CRITERION_EXPLANATIONS: Record<string, string> = {
-  "dns-integrity": "Comprueba si el dominio resuelve a direcciones públicas. No verifica titularidad ni DNSSEC.",
-  "transport-security": "Comprueba el certificado y las versiones de TLS contempladas por el perfil.",
-  "http-availability": "Comprueba las respuestas GET y HEAD de la portada y si se usa HTTPS.",
-  "security-headers": "Revisa protecciones que ayudan al navegador frente a ciertos ataques.",
+  "dns-integrity": "Comprueba que el nombre del dominio lleva a una dirección pública. No confirma quién es su titular.",
+  "transport-security": "Comprueba el certificado y qué versiones de TLS acepta la conexión para proteger los datos en tránsito.",
+  "http-availability": "Comprueba si la portada responde y si las visitas terminan en una conexión HTTPS cifrada.",
+  "security-headers": "Revisa indicaciones que el sitio envía al navegador para reducir algunos tipos de ataque.",
   "third-party-data-use": "La respuesta técnica no permite verificar contratos ni prácticas de reutilización de datos.",
   "initial-cookie-risk": "Cuenta cookies y coincidencias conocidas en la primera respuesta; no evalúa el consentimiento posterior.",
   tracking: "Cuenta referencias del HTML inicial a una lista local de rastreadores conocidos; no confirma conexiones ni ejecuta scripts.",
@@ -809,7 +810,7 @@ function ReportSummary({
                   {criteria.map((criterion) => (
                     <li key={criterion.id} data-status={criterion.status}>
                       <div>
-                        <strong>{criterion.label}</strong>
+                        <strong>{getCriterionDisplayLabel(criterion.id, criterion.label)}</strong>
                         <p><b>Qué comprueba:</b> {CRITERION_EXPLANATIONS[criterion.id]}</p>
                         <p><b>Qué significa:</b> {getCriterionOutcome(criterion.id, criterion.status)}</p>
                         {criterion.status !== "pass" && (
@@ -1169,6 +1170,20 @@ function getCriterionOutcome(criterionId: string, status: string): string {
     performance: "La respuesta inicial quedó dentro del umbral orientativo de esta comprobación; no representa la experiencia completa.",
   };
   return outcomes[criterionId] ?? "La comprobación no detectó un problema en este punto.";
+}
+
+function getCriterionDisplayLabel(criterionId: string, fallback: string): string {
+  const labels: Record<string, string> = {
+    "dns-integrity": "El dominio apunta a una dirección pública",
+    "transport-security": "La conexión protege los datos",
+    "http-availability": "La página responde de forma segura",
+    "security-headers": "El navegador recibe protecciones",
+    "third-party-data-use": "Uso de datos por servicios externos",
+    "initial-cookie-risk": "Cookies potencialmente no esenciales",
+    tracking: "Rastreadores conocidos en la página",
+    performance: "Rapidez de la respuesta inicial",
+  };
+  return labels[criterionId] ?? fallback;
 }
 
 function getControlLabel(controlId: string): string {

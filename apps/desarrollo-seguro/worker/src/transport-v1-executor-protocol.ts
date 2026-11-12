@@ -139,10 +139,11 @@ function parseExecutorResult(
 }
 
 function isScanProfileVersion(value: unknown): value is ScanProfileVersion {
-  return value === "transport-v1" || value === "domain-v1" || value === "domain-v2";
+  return value === "transport-v1" || value === "domain-v1" || value === "domain-v2" || value === "domain-v3";
 }
 
 function getScannerVersion(profileVersion: ScanProfileVersion): string {
+  if (profileVersion === "domain-v3") return "domain-v3-network-adapter-1";
   if (profileVersion === "domain-v2") return "domain-v2-network-adapter-1";
   return profileVersion === "domain-v1"
     ? "domain-v1-network-adapter-1"
@@ -150,6 +151,7 @@ function getScannerVersion(profileVersion: ScanProfileVersion): string {
 }
 
 function getExpectedCheckCount(profileVersion: ScanProfileVersion): number {
+  if (profileVersion === "domain-v3") return 9;
   if (profileVersion === "domain-v2") return 8;
   return profileVersion === "domain-v1" ? 6 : 5;
 }

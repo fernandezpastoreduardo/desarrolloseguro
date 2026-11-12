@@ -211,7 +211,7 @@ describe("PublicScanPortal", () => {
     expect(screen.getByRole("heading", { name: "Privacidad" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Ética" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Rendimiento" })).toBeVisible();
-    expect(screen.getByText(/protecciones que ayudan al navegador/i)).toBeVisible();
+    expect(screen.getByText(/indicaciones que el sitio envía al navegador/i)).toBeVisible();
     expect(screen.getByText("Política que restringe contenido cargado (CSP)")).toBeVisible();
     const summary = screen.getByRole("heading", { name: "Resumen y puntuación" });
     const detail = screen.getByRole("heading", { name: "Alcance observado" });

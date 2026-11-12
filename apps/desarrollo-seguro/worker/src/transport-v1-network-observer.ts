@@ -27,6 +27,12 @@ import type {
 } from "./transport-v1-executor.js";
 
 const ROOT_PATHS = ["/"] as const;
+const TLS_VERSION_PROBES = [
+  { tlsVersion: "TLSv1", evidenceKey: "tls10Accepted" },
+  { tlsVersion: "TLSv1.1", evidenceKey: "tls11Accepted" },
+  { tlsVersion: "TLSv1.2", evidenceKey: "tls12Accepted" },
+  { tlsVersion: "TLSv1.3", evidenceKey: "tls13Accepted" },
+] as const;
 
 export type TransportV1NetworkObserverDependencies = {
   dnsResolver?: PublicDnsResolver;
@@ -35,6 +41,7 @@ export type TransportV1NetworkObserverDependencies = {
   httpsRequestFactory?: HttpsRequestFactory;
   httpsCa?: string;
   inspectPage?: boolean;
+  probeTlsVersions?: boolean;
 };
 
 /**
@@ -69,7 +76,7 @@ export function createTransportV1NetworkObserver(
       );
     },
     async observeTls(hostname, signal) {
-      return collectProbe(
+      const negotiated = await collectProbe(
         () =>
           requestPinnedHttps(
             {
@@ -91,6 +98,54 @@ export function createTransportV1NetworkObserver(
           bytesCount: result.bytesCount,
         }),
       );
+      if (!dependencies.probeTlsVersions || signal.aborted) return negotiated;
+
+      const versionResults = await Promise.all(TLS_VERSION_PROBES.map(async (probe) =>
+        collectProbe(
+          () => requestPinnedHttps(
+            {
+              hostname,
+              path: "/",
+              method: "HEAD",
+              allowedPaths: ROOT_PATHS,
+              signal,
+              tlsVersion: probe.tlsVersion,
+              allowUntrustedCertificate: true,
+              timeoutMs: 2_000,
+            },
+            {
+              lookupFactory,
+              requestFactory: dependencies.httpsRequestFactory,
+            },
+          ),
+          (result) => ({
+            evidence: result.tlsProtocol === probe.tlsVersion
+              ? { [probe.evidenceKey]: true }
+              : {},
+            requestsCount: result.requestsCount,
+            bytesCount: result.bytesCount,
+          }),
+        ),
+      ));
+      const versionEvidence: TransportV1Evidence = {};
+      let requestsCount = negotiated.requestsCount;
+      let bytesCount = negotiated.bytesCount;
+      for (const [index, result] of versionResults.entries()) {
+        requestsCount += result.requestsCount;
+        bytesCount += result.bytesCount;
+        const evidenceKey = TLS_VERSION_PROBES[index].evidenceKey;
+        if (typeof result.evidence[evidenceKey] === "boolean") {
+          versionEvidence[evidenceKey] = result.evidence[evidenceKey];
+        } else if (result.errorCode === "tls_handshake_failed") {
+          versionEvidence[evidenceKey] = false;
+        }
+      }
+      return {
+        evidence: { ...negotiated.evidence, ...versionEvidence },
+        requestsCount,
+        bytesCount,
+        ...(negotiated.errorCode ? { errorCode: negotiated.errorCode } : {}),
+      };
     },
     async observeHttp(hostname, method, signal) {
       return collectProbe(
@@ -177,11 +232,13 @@ function assertNotAborted(signal: AbortSignal): void {
 
 function getTlsEvidence(
   tlsAuthorized: boolean,
-  tlsProtocol: "TLSv1.2" | "TLSv1.3" | undefined,
+  tlsProtocol: "TLSv1" | "TLSv1.1" | "TLSv1.2" | "TLSv1.3" | undefined,
 ): TransportV1Evidence {
   if (!tlsAuthorized || !tlsProtocol) return {};
   return {
-    protocol: tlsProtocol,
+    ...(tlsProtocol === "TLSv1.2" || tlsProtocol === "TLSv1.3"
+      ? { protocol: tlsProtocol }
+      : {}),
     certificateValid: true,
     hostnameMatches: true,
   };
