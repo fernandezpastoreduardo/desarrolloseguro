@@ -23,6 +23,14 @@ const EGRESS_SOCKET_DIRECTORY = "/run/development-security-egress";
 const VOLUME_PREFIX = "development-security-job-";
 const BROKER_CONTAINER_PREFIX = "development-security-broker-";
 const EXECUTOR_CONTAINER_PREFIX = "development-security-executor-";
+const SAFE_BROKER_STARTUP_FAILURES = new Set([
+  "egress_broker_startup_invalid",
+  "egress_broker_startup_failed",
+  "egress_broker_socket_invalid",
+  "egress_broker_socket_directory_invalid",
+  "egress_broker_socket_setup_failed",
+  "egress_broker_socket_listen_failed",
+]);
 const IMAGE_REFERENCE = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/u;
 const NETWORK_REFERENCE = /^(?:none|[A-Za-z0-9][A-Za-z0-9_.-]{0,127})$/u;
 const BROKER_INITIALIZER =
@@ -122,6 +130,7 @@ function getRuntimeFailureCode(error: unknown): ScanFailureCode {
   if (SCAN_FAILURE_CODES.includes(message as ScanFailureCode)) {
     return message as ScanFailureCode;
   }
+  if (SAFE_BROKER_STARTUP_FAILURES.has(message)) return "broker_failed";
   if (message === "runtime_coordinator_unavailable") return "coordinator_unavailable";
   if (message === "runtime_coordinator_socket_untrusted") return "coordinator_socket_untrusted";
   if (message.startsWith("runtime_volume_") || message === "runtime_cleanup_failed") {
@@ -231,6 +240,9 @@ export function createDockerRuntimeSessionFactory(
         } catch (cleanupError) {
           throw new Error("runtime_cleanup_failed", { cause: cleanupError });
         }
+        if (error instanceof Error && SAFE_BROKER_STARTUP_FAILURES.has(error.message)) {
+          throw error;
+        }
         if (error instanceof Error && error.message === "request_aborted") throw error;
         throw new Error(startupFailureCode, { cause: error });
       }
@@ -295,7 +307,6 @@ function startBroker(
     "--mount", `type=volume,source=${volumeName},target=${EGRESS_SOCKET_DIRECTORY}`,
     brokerImage,
   ]), { stdio: ["pipe", "pipe", "pipe"] });
-  child.stderr.resume();
   child.stdin.end(`${JSON.stringify({
     protocolVersion: 1,
     hostname: options.hostname,
@@ -340,6 +351,7 @@ function waitForBrokerReady(
   return new Promise((resolve, reject) => {
     let receivedBytes = 0;
     let buffer = "";
+    let startupFailureCode: string | undefined;
     let settled = false;
     const timer = setTimeout(() => finish(new Error("runtime_coordinator_unavailable")), timeoutMs);
     const onAbort = () => finish(new Error("request_aborted"));
@@ -349,6 +361,7 @@ function waitForBrokerReady(
       clearTimeout(timer);
       signal.removeEventListener("abort", onAbort);
       child.stdout.removeListener("data", onData);
+      child.stderr.removeListener("data", onStderr);
       child.removeListener("error", onError);
       child.removeListener("close", onClose);
       if (error) reject(error);
@@ -365,9 +378,14 @@ function waitForBrokerReady(
         finish();
       }
     };
-    const onError = () => finish(new Error("runtime_coordinator_unavailable"));
-    const onClose = () => finish(new Error("runtime_coordinator_unavailable"));
+    const onStderr = (chunk: Buffer) => {
+      const code = chunk.toString("utf8").trim();
+      if (SAFE_BROKER_STARTUP_FAILURES.has(code)) startupFailureCode = code;
+    };
+    const onError = () => finish(new Error(startupFailureCode ?? "runtime_coordinator_unavailable"));
+    const onClose = () => finish(new Error(startupFailureCode ?? "runtime_coordinator_unavailable"));
     child.stdout.on("data", onData);
+    child.stderr.on("data", onStderr);
     child.once("error", onError);
     child.once("close", onClose);
     signal.addEventListener("abort", onAbort, { once: true });

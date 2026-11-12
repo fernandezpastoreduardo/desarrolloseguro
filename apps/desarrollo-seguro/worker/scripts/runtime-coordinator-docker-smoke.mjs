@@ -44,6 +44,8 @@ try {
 
 function getSafeFailureCode(error) {
   if (!(error instanceof Error)) return "docker_runner_failed";
+  const causeCode = getSafeFailureCode(error.cause);
+  if (causeCode !== "docker_runner_failed") return causeCode;
   const allowedCodes = new Set([
     "broker_failed",
     "coordinator_socket_untrusted",
@@ -51,6 +53,12 @@ function getSafeFailureCode(error) {
     "egress_failed",
     "executor_failed",
     "executor_response_invalid",
+    "egress_broker_startup_failed",
+    "egress_broker_startup_invalid",
+    "egress_broker_socket_directory_invalid",
+    "egress_broker_socket_invalid",
+    "egress_broker_socket_listen_failed",
+    "egress_broker_socket_setup_failed",
     "request_aborted",
     "runtime_volume_failed",
     "transport_failed",

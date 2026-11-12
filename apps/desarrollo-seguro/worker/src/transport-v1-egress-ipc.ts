@@ -265,7 +265,9 @@ function exchange(
 
 function listen(server: Server, socketPath: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    server.once("error", reject);
+    server.once("error", (error: unknown) => {
+      reject(new Error("egress_broker_socket_listen_failed", { cause: error }));
+    });
     server.listen(socketPath, () => {
       server.removeListener("error", reject);
       resolve();

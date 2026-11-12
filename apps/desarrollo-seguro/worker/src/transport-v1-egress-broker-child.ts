@@ -5,6 +5,13 @@ import { createTransportV1NetworkObserver } from "./transport-v1-network-observe
 
 const EGRESS_BROKER_SOCKET = "/run/development-security-egress/broker.sock";
 const MAX_STARTUP_REQUEST_BYTES = 4 * 1024;
+const SAFE_STARTUP_FAILURES = new Set([
+  "egress_broker_startup_invalid",
+  "egress_broker_socket_invalid",
+  "egress_broker_socket_directory_invalid",
+  "egress_broker_socket_setup_failed",
+  "egress_broker_socket_listen_failed",
+]);
 
 async function main(): Promise<void> {
   const chunks: Buffer[] = [];
@@ -41,7 +48,10 @@ async function main(): Promise<void> {
   process.once("SIGINT", () => void close().then(() => process.exit(0)));
 }
 
-void main().catch(() => {
-  process.stderr.write("egress_broker_startup_failed\n");
+void main().catch((error: unknown) => {
+  const code = error instanceof Error && SAFE_STARTUP_FAILURES.has(error.message)
+    ? error.message
+    : "egress_broker_startup_failed";
+  process.stderr.write(`${code}\n`);
   process.exitCode = 1;
 });
