@@ -478,6 +478,7 @@ async function applyRuntimeGrants(pool: Pool): Promise<void> {
       run_id, control_id, status, required, severity, observed_at,
       target_path, method, summary, limitation
     ) ON public.ds_check_results TO ${READ_ROLE};
+    GRANT SELECT ON public.ds_public_check_results TO ${READ_ROLE};
     GRANT SELECT, INSERT ON public.ds_report_badges TO ${API_ROLE};
     REVOKE UPDATE, DELETE, TRUNCATE ON ALL TABLES IN SCHEMA public
       FROM ${READ_ROLE}, ${API_ROLE}, ${WORKER_ROLE}, ${RETENTION_ROLE};

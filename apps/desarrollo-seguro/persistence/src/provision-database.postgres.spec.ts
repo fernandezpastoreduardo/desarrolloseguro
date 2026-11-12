@@ -198,7 +198,8 @@ describePostgres.sequential(
         worker_can_select_lease_token: boolean;
         worker_is_reader_member: boolean;
         reader_can_select: boolean;
-        reader_can_select_safe_evidence: boolean;
+        reader_can_select_raw_evidence: boolean;
+        reader_can_select_public_evidence: boolean;
         reader_can_insert: boolean;
       }>(
         `SELECT
@@ -260,7 +261,8 @@ describePostgres.sequential(
          has_column_privilege('ds_worker', 'public.ds_scan_jobs', 'lease_token', 'SELECT') AS worker_can_select_lease_token,
          pg_has_role('ds_worker', 'ds_read', 'MEMBER') AS worker_is_reader_member,
          has_table_privilege('ds_read', 'ds_scan_runs', 'SELECT') AS reader_can_select,
-         has_column_privilege('ds_read', 'public.ds_check_results', 'evidence_json', 'SELECT') AS reader_can_select_safe_evidence,
+         has_column_privilege('ds_read', 'public.ds_check_results', 'evidence_json', 'SELECT') AS reader_can_select_raw_evidence,
+         has_table_privilege('ds_read', 'public.ds_public_check_results', 'SELECT') AS reader_can_select_public_evidence,
          has_table_privilege('ds_read', 'ds_scan_runs', 'INSERT') AS reader_can_insert`,
         [TEST_DATABASE_NAME],
       );
@@ -302,7 +304,8 @@ describePostgres.sequential(
         worker_can_select_lease_token: false,
         worker_is_reader_member: false,
         reader_can_select: false,
-        reader_can_select_safe_evidence: true,
+        reader_can_select_raw_evidence: false,
+        reader_can_select_public_evidence: true,
         reader_can_insert: false,
       });
     });

@@ -23,6 +23,37 @@ VALUES
   ('domain-v2', 'DS-QUAL-02', 'route', 'GET')
 ON CONFLICT(profile_version, control_id, target_kind, method) DO NOTHING;
 
+-- Expose only explicitly approved evidence keys to API readers. The underlying
+-- evidence_json column remains unavailable to ds_read and ds_api.
+CREATE OR REPLACE VIEW public.ds_public_check_results AS
+SELECT
+  checks.run_id,
+  checks.control_id,
+  checks.status,
+  checks.required,
+  checks.severity,
+  checks.observed_at,
+  checks.target_path,
+  checks.method,
+  checks.summary,
+  checks.limitation,
+  COALESCE((
+    SELECT jsonb_object_agg(item.key, item.value)
+    FROM jsonb_each(checks.evidence_json) AS item(key, value)
+    WHERE item.key = ANY(CASE checks.control_id
+      WHEN 'DS-DNS-01' THEN ARRAY['addressClass', 'aRecordCount', 'aaaaRecordCount']
+      WHEN 'DS-TLS-01' THEN ARRAY['protocol', 'certificateValid', 'hostnameMatches']
+      WHEN 'DS-TLS-02' THEN ARRAY['tls10Accepted', 'tls11Accepted', 'tls12Accepted', 'tls13Accepted']
+      WHEN 'DS-HTTP-01' THEN ARRAY['statusCode', 'redirectedToHttps', 'finalScheme']
+      WHEN 'DS-HDR-01' THEN ARRAY['finalScheme', 'hsts', 'nosniff', 'frameProtection', 'referrerPolicy', 'csp']
+      WHEN 'DS-PRIV-05' THEN ARRAY['inspected', 'cookieCount', 'insecureCookieCount', 'catalogMatchCount', 'consentPromptDetected']
+      WHEN 'DS-PRIV-06' THEN ARRAY['inspected', 'thirdPartyResourceReferences', 'knownTrackingResourceReferences']
+      WHEN 'DS-QUAL-02' THEN ARRAY['inspected', 'responseTimeMs', 'responseBytes']
+      ELSE ARRAY[]::text[]
+    END)
+  ), '{}'::jsonb) AS evidence_json
+FROM public.ds_check_results AS checks;
+
 -- Existing runs remain domain-v1 history; only future admissions use v2.
 UPDATE public.ds_domains SET profile_version = 'domain-v2'
 WHERE profile_version = 'domain-v1';

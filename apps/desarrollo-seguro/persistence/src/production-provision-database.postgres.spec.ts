@@ -193,13 +193,14 @@ describePostgres.sequential(
       const migrationCount = await targetAdminPool?.query(
         "SELECT count(*)::integer AS count FROM public.ds_schema_migrations",
       );
-      expect(migrationCount?.rows[0]?.count).toBe(17);
+      expect(migrationCount?.rows[0]?.count).toBe(18);
     });
 
     it("applies column-scoped runtime grants and does not grant schema ownership to the API", async () => {
       const access = await targetPool?.query<{
         api_can_select_public_columns: boolean;
         api_cannot_read_evidence: boolean;
+        api_can_read_public_evidence: boolean;
         api_cannot_read_lease_token: boolean;
         api_cannot_select_all_metrics: boolean;
         api_cannot_insert_jobs: boolean;
@@ -220,6 +221,7 @@ describePostgres.sequential(
         `SELECT
          has_column_privilege('ds_api', 'public.ds_check_results', 'summary', 'SELECT') AS api_can_select_public_columns,
          NOT has_column_privilege('ds_api', 'public.ds_check_results', 'evidence_json', 'SELECT') AS api_cannot_read_evidence,
+         has_table_privilege('ds_api', 'public.ds_public_check_results', 'SELECT') AS api_can_read_public_evidence,
          NOT has_column_privilege('ds_api', 'public.ds_scan_jobs', 'lease_token', 'SELECT') AS api_cannot_read_lease_token,
          NOT has_table_privilege('ds_api', 'public.ds_scan_metrics', 'SELECT') AS api_cannot_select_all_metrics,
          NOT has_column_privilege('ds_api', 'public.ds_scan_jobs', 'hostname', 'INSERT') AS api_cannot_insert_jobs,
@@ -256,6 +258,7 @@ describePostgres.sequential(
       expect(access?.rows[0]).toEqual({
         api_can_select_public_columns: true,
         api_cannot_read_evidence: true,
+        api_can_read_public_evidence: true,
         api_cannot_read_lease_token: true,
         api_cannot_select_all_metrics: true,
         api_cannot_insert_jobs: true,
@@ -371,7 +374,7 @@ describePostgres.sequential(
       const migrationCount = await targetAdminPool?.query(
         "SELECT count(*)::integer AS count FROM public.ds_schema_migrations",
       );
-      expect(migrationCount?.rows[0]?.count).toBe(17);
+      expect(migrationCount?.rows[0]?.count).toBe(18);
     });
   },
 );

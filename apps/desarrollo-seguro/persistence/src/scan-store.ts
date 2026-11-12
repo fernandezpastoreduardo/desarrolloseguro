@@ -50,7 +50,7 @@ const PUBLIC_CHECKS_LATERAL = `LEFT JOIN LATERAL (
     'limitation', limitation,
     'evidence', evidence_json
   ) ORDER BY target_path, control_id, method) AS checks
-  FROM public.ds_check_results WHERE run_id = reports.id
+  FROM public.ds_public_check_results WHERE run_id = reports.id
 ) AS check_rows ON true`;
 
 export type ScanTrigger = "scheduled" | "requested";

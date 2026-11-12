@@ -474,7 +474,7 @@ describePostgres.sequential("PostgresScanStore", () => {
 
   it("accepts domain-v2 tracking and initial-response measurements in PostgreSQL", async () => {
     const job = await queueAndClaim("domain-v2");
-    const reportId = await completeDirectly(job, ["/"], makeDomainV2Checks());
+    const reportId = await completeDirectly(job, ["/"], makeDomainV2Checks(), "pass");
     const publicReport = await store.readPublicReport(reportId);
 
     expect(publicReport).toMatchObject({ profileVersion: "domain-v2", verdict: "pass" });
@@ -1032,6 +1032,10 @@ describePostgres.sequential("PostgresScanStore", () => {
   function makeDomainV2Checks(): ScanCheck[] {
     const checks = makeDomainV1Checks().map((check) => ({
       ...check,
+      status: "pass" as const,
+      summary: check.controlId === "DS-PRIV-05"
+        ? check.summary
+        : `Comprobación ${check.controlId}: pass.`,
       limitation: "Resultado limitado a las rutas públicas declaradas del perfil domain-v2.",
     }));
     checks.push(
