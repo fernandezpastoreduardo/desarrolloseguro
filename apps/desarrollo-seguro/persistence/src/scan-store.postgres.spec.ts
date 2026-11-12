@@ -510,6 +510,35 @@ describePostgres.sequential("PostgresScanStore", () => {
       .toMatchObject({ status: "pass", evidence: { tls10Accepted: false, tls11Accepted: false, tls12Accepted: true, tls13Accepted: true } });
   });
 
+  it("stores bounded TLS probe diagnostics for an inconclusive domain-v3 check", async () => {
+    const job = await queueAndClaim("domain-v3");
+    const checks = [
+      ...makeDomainV2Checks().map((check) => ({
+        ...check,
+        limitation: "Resultado limitado a las rutas públicas declaradas del perfil domain-v3.",
+      })),
+      {
+        ...makeDomainV2Checks()[1],
+        controlId: "DS-TLS-02",
+        method: "TLS",
+        status: "unknown" as const,
+        summary: "No se pudieron completar todas las pruebas de TLS. TLS 1.2: no se pudo completar la conexión. TLS 1.3: se agotó el tiempo de espera.",
+        limitation: "Resultado limitado a las rutas públicas declaradas del perfil domain-v3.",
+        evidence: { tls12ProbeError: "connection_failed", tls13ProbeError: "request_timeout" },
+      },
+    ];
+
+    const reportId = await completeDirectly(job, ["/"], checks, "inconclusive");
+    const report = await store.readPublicReport(reportId);
+
+    expect(report?.checks.find(({ controlId }) => controlId === "DS-TLS-02"))
+      .toMatchObject({
+        status: "unknown",
+        summary: "No se pudieron completar todas las pruebas de TLS. TLS 1.2: no se pudo completar la conexión. TLS 1.3: se agotó el tiempo de espera.",
+        evidence: { tls12ProbeError: "connection_failed", tls13ProbeError: "request_timeout" },
+      });
+  });
+
   it("rejects non-root scope for transport-v1", async () => {
     const job = await queueAndClaim("transport-v1");
 

@@ -230,6 +230,44 @@ describe("createTransportV1NetworkObserver", () => {
     expect(JSON.stringify(result)).not.toContain("private socket detail");
   });
 
+  it("runs the version matrix sequentially to stay within the network concurrency budget", async () => {
+    let activeRequests = 0;
+    let peakActiveRequests = 0;
+    const requestFactory: HttpsRequestFactory = vi.fn((options, callback) => {
+      const request = new EventEmitter();
+      Object.assign(request, {
+        end() {
+          activeRequests += 1;
+          peakActiveRequests = Math.max(peakActiveRequests, activeRequests);
+          setTimeout(() => {
+            callback(responseWith(200, {}, "", String(options.maxVersion ?? "TLSv1.3")));
+            activeRequests -= 1;
+          }, 5);
+          return this;
+        },
+        destroy() {
+          return this;
+        },
+      });
+      return request as unknown as ClientRequest;
+    });
+    const observer = createTransportV1NetworkObserver({
+      lookupFactory: () => vi.fn(),
+      httpsRequestFactory: requestFactory,
+      probeTlsVersions: true,
+    });
+
+    const result = await observer.observeTls(HOSTNAME, new AbortController().signal);
+
+    expect(peakActiveRequests).toBe(1);
+    expect(result.evidence).toMatchObject({
+      tls10Accepted: true,
+      tls11Accepted: true,
+      tls12Accepted: true,
+      tls13Accepted: true,
+    });
+  });
+
   it("passes only aggregate cookie signals across the broker evidence boundary", async () => {
     const observer = createTransportV1NetworkObserver({
       lookupFactory: () => vi.fn(),

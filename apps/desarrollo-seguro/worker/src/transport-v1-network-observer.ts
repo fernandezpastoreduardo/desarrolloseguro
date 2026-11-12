@@ -100,8 +100,10 @@ export function createTransportV1NetworkObserver(
       );
       if (!dependencies.probeTlsVersions || signal.aborted) return negotiated;
 
-      const versionResults = await Promise.all(TLS_VERSION_PROBES.map(async (probe) =>
-        collectProbe(
+      const versionResults: TransportV1ProbeResult[] = [];
+      for (const probe of TLS_VERSION_PROBES) {
+        if (signal.aborted) break;
+        versionResults.push(await collectProbe(
           () => requestPinnedHttps(
             {
               hostname,
@@ -125,8 +127,8 @@ export function createTransportV1NetworkObserver(
             requestsCount: result.requestsCount,
             bytesCount: result.bytesCount,
           }),
-        ),
-      ));
+        ));
+      }
       const versionEvidence: TransportV1Evidence = {};
       let requestsCount = negotiated.requestsCount;
       let bytesCount = negotiated.bytesCount;
