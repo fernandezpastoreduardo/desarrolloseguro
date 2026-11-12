@@ -494,6 +494,7 @@ describePostgres.sequential("PostgresScanStore", () => {
         controlId: "DS-TLS-02",
         method: "TLS",
         summary: "Se probaron por separado las cuatro versiones de TLS incluidas en este control.",
+        limitation: "Resultado limitado a las rutas públicas declaradas del perfil domain-v3.",
         evidence: { tls10Accepted: false, tls11Accepted: false, tls12Accepted: true, tls13Accepted: true },
       },
     ];
