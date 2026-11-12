@@ -99,7 +99,7 @@ broker_response="$(printf '%s' '{"protocolVersion":1,"hostname":"127.0.0.1","pro
     --cpus 0.5 \
     --tmpfs /tmp:rw,noexec,nosuid,size=16m,uid=1000,gid=1000 \
     "$broker_image_tag" 2>&1 || true)"
-if [[ "$broker_response" != *'egress_broker_startup_failed'* ]]; then
+if [[ "$broker_response" != *'egress_broker_startup_invalid'* ]]; then
   printf 'Egress broker rejected-scope probe returned: %s\n' "$broker_response" >&2
   printf 'egress_broker_entrypoint_probe_failed\n' >&2
   exit 1

@@ -181,6 +181,11 @@ assert.match(sandboxProbe, /cpu_limit_not_applied/u);
 assert.match(sandboxProbe, /default_network_route_present/u);
 assert.match(sandboxVerifier, /profileVersion":"controls-v1/u);
 assert.match(sandboxVerifier, /executor_entrypoint_probe_failed/u);
+assert.match(
+  sandboxVerifier,
+  /broker_response" != \*'egress_broker_startup_invalid'\*/u,
+  "the broker sandbox probe must expect the safe invalid-scope response",
+);
 assert.match(nginx, /proxy_pass https:\/\/development-security-api:3001/u);
 assert.match(nginx, /absolute_redirect off;/u);
 assert.match(nginx, /port_in_redirect off;/u);
