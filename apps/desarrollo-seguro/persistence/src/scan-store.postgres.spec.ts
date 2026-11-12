@@ -66,28 +66,41 @@ describePostgres.sequential("PostgresScanStore", () => {
   it("issues report badges only for a matching domain-v1 report and supports binding and revocation", async () => {
     const hostname = "grumphya.com";
     await store.ensureDomain(hostname, "on_demand", "domain-v1");
-    const job = await pool.query<{ id: string }>(
-      `INSERT INTO ds_scan_jobs(hostname, profile_version, trigger, state)
-       VALUES ($1, 'domain-v1', 'requested', 'completed') RETURNING id`,
-      [hostname],
-    );
-    const run = await pool.query<{ id: string }>(
-      `INSERT INTO ds_scan_runs(job_id, hostname, profile_version, scanner_version,
-        vantage, trigger, started_at, completed_at, expires_at, verdict, scope_json)
-       VALUES ($1, $2, 'domain-v1', 'test', 'same_vps', 'requested', now(), now(),
-        now() + interval '60 minutes', 'pass', '["/"]'::jsonb) RETURNING id`,
-      [job.rows[0].id, hostname],
-    );
+    await store.ensureFreshScan({
+      hostname,
+      profileVersion: "domain-v1",
+      trigger: "requested",
+    });
+    const job = await store.claimNextScan(new Date(), TEST_LEASE_MS);
+    if (!job) throw new Error("expected_claimed_badge_test_scan");
+    const reportId = await store.completeScan({
+      jobId: job.id,
+      leaseToken: job.leaseToken,
+      hostname,
+      profileVersion: "domain-v1",
+      scannerVersion: "test",
+      startedAt: new Date(Date.now() - 1000),
+      completedAt: new Date(),
+      verdict: "inconclusive",
+      scope: ["/"],
+      checks: makeDomainV1Checks(),
+      metrics: {
+        requestsCount: 0,
+        bytesCount: 0,
+        durationMs: 1,
+        pagesCount: 0,
+      },
+    });
     const tokenHash = "a".repeat(64);
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-    await expect(store.issueReportBadge({ hostname, reportId: run.rows[0].id, tokenHash, expiresAt })).resolves.toBe(true);
-    await expect(store.issueReportBadge({ hostname: "other.example", reportId: run.rows[0].id, tokenHash: "b".repeat(64), expiresAt })).resolves.toBe(false);
-    await expect(store.verifyReportBadge({ hostname: "other.example", reportId: run.rows[0].id, tokenHash, at: new Date() })).resolves.toBe(false);
-    await expect(store.verifyReportBadge({ hostname, reportId: run.rows[0].id, tokenHash, at: new Date() })).resolves.toBe(true);
-    await expect(store.verifyReportBadge({ hostname, reportId: run.rows[0].id, tokenHash, at: new Date(expiresAt.getTime() + 1) })).resolves.toBe(false);
-    await expect(store.revokeReportBadge({ hostname, reportId: run.rows[0].id, tokenHash, at: new Date() })).resolves.toBe(true);
-    await expect(store.verifyReportBadge({ hostname, reportId: run.rows[0].id, tokenHash, at: new Date() })).resolves.toBe(false);
+    await expect(store.issueReportBadge({ hostname, reportId, tokenHash, expiresAt })).resolves.toBe(true);
+    await expect(store.issueReportBadge({ hostname: "other.example", reportId, tokenHash: "b".repeat(64), expiresAt })).resolves.toBe(false);
+    await expect(store.verifyReportBadge({ hostname: "other.example", reportId, tokenHash, at: new Date() })).resolves.toBe(false);
+    await expect(store.verifyReportBadge({ hostname, reportId, tokenHash, at: new Date() })).resolves.toBe(true);
+    await expect(store.verifyReportBadge({ hostname, reportId, tokenHash, at: new Date(expiresAt.getTime() + 1) })).resolves.toBe(false);
+    await expect(store.revokeReportBadge({ hostname, reportId, tokenHash, at: new Date() })).resolves.toBe(true);
+    await expect(store.verifyReportBadge({ hostname, reportId, tokenHash, at: new Date() })).resolves.toBe(false);
   });
 
   it("shares one active job across concurrent requests", async () => {

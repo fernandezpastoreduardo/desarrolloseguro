@@ -443,12 +443,6 @@ export function PublicScanPortal() {
       {state === "ready" && !status && report && (
         <ReportResult report={report} />
       )}
-      {(status?.state === "updating" || status?.state === "failed") &&
-        analysisRequestState && (
-        <p className="ds-portal__analysis-status" role="status">
-          {getAnalysisRequestMessage(analysisRequestState)}
-        </p>
-      )}
       {isScanInProgress(status, analysisRequestState) && (
         <ScanProgress
           phase={getScanProgressPhase(status, analysisRequestState)}
