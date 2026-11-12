@@ -15,6 +15,7 @@ const DOCKER_COMMAND_TIMEOUT_MS = 10_000;
 const EXECUTOR_COMMAND_TIMEOUT_MS = 38_000;
 const BROKER_STOP_TIMEOUT_MS = 3_000;
 const MAX_DOCKER_COMMAND_OUTPUT_BYTES = 256 * 1024;
+const MAX_DOCKER_ERROR_OUTPUT_BYTES = 4 * 1024;
 const MAX_BROKER_STARTUP_OUTPUT_BYTES = 4 * 1024;
 const MAX_BROKER_STARTUP_ERROR_BYTES = 4 * 1024;
 const EGRESS_SOCKET_DIRECTORY = "/run/development-security-egress";
@@ -470,14 +471,17 @@ async function runDocker(
   allowNonZeroExit = false,
   timeoutMs = DOCKER_COMMAND_TIMEOUT_MS,
   dockerSocketPath = "/var/run/docker.sock",
+  acceptNonZeroStderr?: RegExp,
 ): Promise<string> {
   if (signal?.aborted) throw new Error("request_aborted");
   return new Promise((resolve, reject) => {
     const child = spawn(dockerBinary, dockerCommandArguments(dockerSocketPath, args), {
-      stdio: ["pipe", "pipe", "ignore"],
+      stdio: ["pipe", "pipe", acceptNonZeroStderr ? "pipe" : "ignore"],
     });
     const chunks: Buffer[] = [];
+    const errorChunks: Buffer[] = [];
     let receivedBytes = 0;
+    let receivedErrorBytes = 0;
     let settled = false;
     const timeout = setTimeout(() => {
       child.kill("SIGTERM");
@@ -495,7 +499,7 @@ async function runDocker(
       if (error) reject(error);
       else resolve(output);
     };
-    child.stdout.on("data", (chunk: Buffer) => {
+    child.stdout?.on("data", (chunk: Buffer) => {
       receivedBytes += chunk.byteLength;
       if (receivedBytes > maxOutputBytes) {
         child.kill("SIGTERM");
@@ -504,9 +508,22 @@ async function runDocker(
       }
       chunks.push(Buffer.from(chunk));
     });
+    if (acceptNonZeroStderr) {
+      child.stderr?.on("data", (chunk: Buffer) => {
+        receivedErrorBytes += chunk.byteLength;
+        if (receivedErrorBytes <= MAX_DOCKER_ERROR_OUTPUT_BYTES) {
+          errorChunks.push(Buffer.from(chunk));
+        }
+      });
+    }
     child.once("error", () => finish(new Error("docker_runtime_unavailable")));
     child.once("close", (code) => {
       if (code !== 0 && !allowNonZeroExit) {
+        const errorOutput = Buffer.concat(errorChunks).toString("utf8").trim();
+        if (acceptNonZeroStderr?.test(errorOutput)) {
+          finish(undefined, Buffer.concat(chunks).toString("utf8"));
+          return;
+        }
         finish(new Error("docker_runtime_command_failed"));
         return;
       }
@@ -517,7 +534,7 @@ async function runDocker(
       onAbort();
       return;
     }
-    child.stdin.end(input);
+    child.stdin?.end(input);
   });
 }
 
@@ -536,6 +553,7 @@ async function removeContainer(
       undefined,
       undefined,
       dockerSocketPath,
+      /\bno such container:/iu,
     );
     return true;
   } catch {
@@ -558,6 +576,7 @@ async function removeVolume(
       undefined,
       undefined,
       dockerSocketPath,
+      /\bno such volume\b/iu,
     );
     return true;
   } catch {

@@ -20,6 +20,7 @@ const dockerBehavior = {
   failBrokerInitialization: false,
   failExecutorRemoval: false,
   failVolumeRemoval: false,
+  executorContainerAlreadyAbsent: false,
   brokerExitsBeforeReady: false,
   executorOutput: undefined as string | undefined,
   executorExitCode: 0,
@@ -36,6 +37,7 @@ beforeEach(() => {
     failBrokerInitialization: false,
     failExecutorRemoval: false,
     failVolumeRemoval: false,
+    executorContainerAlreadyAbsent: false,
     brokerExitsBeforeReady: false,
     executorOutput: undefined,
     executorExitCode: 0,
@@ -93,7 +95,11 @@ beforeEach(() => {
       activeBroker?.finish(null, "", "SIGTERM");
       queueMicrotask(() => child.finish(0));
     } else if (args[0] === "rm" && args[2]?.startsWith("development-security-executor-") === true) {
-      queueMicrotask(() => child.finish(dockerBehavior.failExecutorRemoval ? 1 : 0));
+      if (dockerBehavior.executorContainerAlreadyAbsent) {
+        queueMicrotask(() => child.finish(1, "", null, "Error response from daemon: No such container: ephemeral\n"));
+      } else {
+        queueMicrotask(() => child.finish(dockerBehavior.failExecutorRemoval ? 1 : 0));
+      }
     } else if (args[0] === "volume" && args[1] === "rm") {
       queueMicrotask(() => child.finish(dockerBehavior.failVolumeRemoval ? 1 : 0));
     } else {
@@ -412,6 +418,19 @@ describe("createDockerRuntimeSessionFactory", () => {
     expect(dockerCalls.some((args) => args[0] === "volume" && args[1] === "rm")).toBe(true);
   });
 
+  it("treats an already absent executor container as successfully cleaned up", async () => {
+    dockerBehavior.executorContainerAlreadyAbsent = true;
+    const runner = createDockerRuntimeCoordinatorRunner(createDockerRuntimeSessionFactory({
+      executorImage: "executor:test",
+      brokerImage: "broker:test",
+    }));
+
+    await expect(runner.execute(REQUEST, new AbortController().signal)).resolves.toMatchObject({
+      verdict: "inconclusive",
+    });
+    expect(dockerCalls.some((args) => args[0] === "volume" && args[1] === "rm")).toBe(true);
+  });
+
   it("reports a volume cleanup failure after removing the containers", async () => {
     dockerBehavior.failVolumeRemoval = true;
     const runner = createDockerRuntimeCoordinatorRunner(createDockerRuntimeSessionFactory({
@@ -476,12 +495,18 @@ class FakeDockerChild extends EventEmitter {
     return true;
   }
 
-  finish(code: number | null, output = "", signal: NodeJS.Signals | null = null): void {
+  finish(
+    code: number | null,
+    output = "",
+    signal: NodeJS.Signals | null = null,
+    errorOutput = "",
+  ): void {
     if (this.stdout.writableEnded) return;
     this.exitCode = code;
     this.signalCode = signal;
     if (output.length > 0) this.stdout.write(output);
     this.stdout.end();
+    if (errorOutput.length > 0) this.stderr.write(errorOutput);
     this.stderr.end();
     queueMicrotask(() => this.emit("close", code, signal));
   }
