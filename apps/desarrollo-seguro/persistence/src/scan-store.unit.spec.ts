@@ -125,6 +125,29 @@ describe("PostgresScanStore unit behavior", () => {
     });
   });
 
+  it("maps an expired worker lease to a public executor failure", async () => {
+    const query = vi.fn().mockResolvedValue({
+      rows: [makePublicReportRow({
+        report_id: null,
+        hostname: "example.com",
+        enrollment: "on_demand",
+        profile_version: "domain-v1",
+        opted_out_at: null,
+        active_job_id: null,
+        last_failure_code: "worker_lease_expired",
+        last_failure_at: new Date("2026-11-11T10:00:00.000Z"),
+      })],
+    });
+    const store = new PostgresScanStore(makePool({ query }));
+
+    await expect(store.readPublicDomainSnapshot("example.com")).resolves.toMatchObject({
+      lastFailure: {
+        code: "executor_failed",
+        failedAt: new Date("2026-11-11T10:00:00.000Z"),
+      },
+    });
+  });
+
   it("rejects a persisted failure code outside the public allowlist", async () => {
     const query = vi.fn().mockResolvedValue({
       rows: [makePublicReportRow({

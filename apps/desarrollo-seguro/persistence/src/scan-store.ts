@@ -527,9 +527,14 @@ function parsePublicScanFailure(
 ): PublicDomainSnapshot["lastFailure"] {
   if (row.last_failure_code == null && row.last_failure_at == null) return null;
   return {
-    code: parseOneOf(row.last_failure_code, SCAN_FAILURE_CODES),
+    code: parseOneOf(mapPublicScanFailureCode(row.last_failure_code), SCAN_FAILURE_CODES),
     failedAt: parseDate(row.last_failure_at),
   };
+}
+
+function mapPublicScanFailureCode(value: unknown): unknown {
+  if (value === "worker_lease_expired") return "executor_failed";
+  return value;
 }
 
 function parsePublicChecks(value: unknown): PublicScanReportCheck[] {
