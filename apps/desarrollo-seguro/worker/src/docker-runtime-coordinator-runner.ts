@@ -32,6 +32,10 @@ const SAFE_BROKER_STARTUP_FAILURES = new Set([
   "egress_broker_socket_listen_failed",
   "runtime_broker_process_error",
   "runtime_broker_process_exited",
+  "runtime_broker_process_killed",
+  "runtime_broker_application_failed",
+  "runtime_broker_container_start_failed",
+  "runtime_broker_entrypoint_failed",
   "runtime_broker_ready_timeout",
 ]);
 const IMAGE_REFERENCE = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/u;
@@ -386,7 +390,29 @@ function waitForBrokerReady(
       if (SAFE_BROKER_STARTUP_FAILURES.has(code)) startupFailureCode = code;
     };
     const onError = () => finish(new Error(startupFailureCode ?? "runtime_broker_process_error"));
-    const onClose = () => finish(new Error(startupFailureCode ?? "runtime_broker_process_exited"));
+    const onClose = (exitCode: number | null, signalName: string | null) => {
+      if (startupFailureCode) {
+        finish(new Error(startupFailureCode));
+        return;
+      }
+      if (signalName === "SIGKILL") {
+        finish(new Error("runtime_broker_process_killed"));
+        return;
+      }
+      if (exitCode === 125) {
+        finish(new Error("runtime_broker_container_start_failed"));
+        return;
+      }
+      if (exitCode === 126 || exitCode === 127) {
+        finish(new Error("runtime_broker_entrypoint_failed"));
+        return;
+      }
+      if (exitCode === 1) {
+        finish(new Error("runtime_broker_application_failed"));
+        return;
+      }
+      finish(new Error("runtime_broker_process_exited"));
+    };
     child.stdout.on("data", onData);
     child.stderr.on("data", onStderr);
     child.once("error", onError);
