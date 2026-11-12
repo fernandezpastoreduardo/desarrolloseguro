@@ -63,6 +63,7 @@ describe("PublicScanPortal", () => {
     cleanup();
     window.history.replaceState({}, "", "/");
     vi.unstubAllGlobals();
+    vi.useRealTimers();
   });
 
   it("lets an authorized user request a bounded analysis for an unscanned domain", async () => {
@@ -124,6 +125,49 @@ describe("PublicScanPortal", () => {
       screen.getByRole("progressbar", { name: "Progreso del análisis" }),
     ).toHaveAttribute("data-phase", "queued");
   });
+
+  it("stops after one poll when an accepted request has no active job", async () => {
+    const status = {
+      hostname: "example.com",
+      enrollment: "on_demand",
+      state: "not_scanned",
+      failureCode: null,
+      activeJobId: null,
+      lastReport: null,
+      checkedAt: "2026-11-03T08:00:00.000Z",
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(Response.json(status))
+      .mockResolvedValueOnce(
+        Response.json({ hostname: "example.com", state: "queued" }, { status: 202 }),
+      )
+      .mockResolvedValueOnce(Response.json(status));
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+
+    render(<PublicScanPortal />);
+    await user.type(
+      screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }),
+      "example.com",
+    );
+    await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
+    await user.click(
+      await screen.findByRole("checkbox", {
+        name: /tengo autorización para solicitar este análisis/i,
+      }),
+    );
+    await user.click(screen.getByRole("button", { name: "Solicitar análisis" }));
+    expect(await screen.findByText(/solicitud añadida a la cola/i)).toBeVisible();
+
+    await new Promise((resolve) => globalThis.setTimeout(resolve, 5_100));
+    expect(screen.getByRole("alert").textContent).toMatch(
+      /no muestra ningún trabajo activo/i,
+    );
+    expect(screen.getByRole("button", { name: "Volver a solicitar análisis" })).toBeVisible();
+    expect(screen.queryByRole("progressbar", { name: "Progreso del análisis" })).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  }, 10_000);
 
   it("shows the stored checks and makes a stale report visibly historical", async () => {
     const fetchMock = vi.fn().mockResolvedValue(

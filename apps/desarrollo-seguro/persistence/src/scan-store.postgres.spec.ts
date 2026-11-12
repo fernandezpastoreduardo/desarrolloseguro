@@ -241,6 +241,7 @@ describePostgres.sequential("PostgresScanStore", () => {
       profileVersion: "domain-v1",
       optedOut: false,
     });
+    expect(snapshot?.activeJobId).toBeTruthy();
     expect(repeated).toEqual(requested);
   });
 

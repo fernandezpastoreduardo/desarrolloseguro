@@ -29,6 +29,8 @@ const ANALYSIS_REQUEST_MESSAGES: Record<string, string> = {
     "No se pudo actualizar el estado automáticamente. Consulta el dominio de nuevo dentro de un momento.",
   poll_timeout:
     "Todavía no hay un informe nuevo. Consulta el dominio de nuevo dentro de un momento.",
+  admission_lost:
+    "La solicitud se aceptó, pero el estado no muestra ningún trabajo activo ni un informe nuevo. No se puede confirmar el análisis; puedes volver a solicitarlo.",
   failed: "El análisis terminó sin generar un informe. Puedes volver a intentarlo.",
 };
 const ANALYSIS_REQUEST_STATES = [
@@ -43,7 +45,7 @@ const ACCEPT_JSON_HEADER = "application/json";
 const RETRY_AFTER_HEADER = "Retry-After";
 const MAX_RETRY_AFTER_SECONDS = 3_600;
 const ANALYSIS_STATUS_POLL_INTERVAL_MS = 5_000;
-const MAX_ANALYSIS_STATUS_POLLS = 24;
+const MAX_ANALYSIS_STATUS_POLLS = 180;
 const REPORT_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const DOMAIN_STATES = [
@@ -86,7 +88,8 @@ type AnalysisRequestState =
   | "error"
   | "failed"
   | "poll_error"
-  | "poll_timeout";
+  | "poll_timeout"
+  | "admission_lost";
 type DomainState = (typeof DOMAIN_STATES)[number];
 type ScanFailureCode = (typeof SCAN_FAILURE_CODES)[number];
 type Enrollment = (typeof ENROLLMENTS)[number];
@@ -172,14 +175,16 @@ export function PublicScanPortal() {
     useState<AnalysisRequestState | null>(null);
   const analysisStatusPollCount = useRef(0);
   const reportBeforeAnalysisId = useRef<string | null>(null);
+  const analysisRequestInFlight = useRef(false);
 
   useEffect(() => {
     if (reportId) void loadReport(reportId);
   }, [reportId]);
 
   useEffect(() => {
+    const pollingHostname = status?.hostname;
     if (
-      !status ||
+      !pollingHostname ||
       (analysisRequestState !== "queued" && analysisRequestState !== "running")
     ) {
       return;
@@ -192,7 +197,7 @@ export function PublicScanPortal() {
       analysisStatusPollCount.current += 1;
       try {
         const response = await fetch(
-          `${API_ROOT}/domains/${encodeURIComponent(status.hostname)}/status`,
+          `${API_ROOT}/domains/${encodeURIComponent(pollingHostname)}/status`,
           {
             method: "GET",
             headers: { Accept: ACCEPT_JSON_HEADER },
@@ -222,6 +227,13 @@ export function PublicScanPortal() {
           setAnalysisRequestState("failed");
           return;
         }
+        if (
+          payload.activeJobId === null &&
+          (payload.lastReport?.id ?? null) === reportBeforeAnalysisId.current
+        ) {
+          setAnalysisRequestState("admission_lost");
+          return;
+        }
 
         if (analysisStatusPollCount.current >= MAX_ANALYSIS_STATUS_POLLS) {
           setAnalysisRequestState("poll_timeout");
@@ -245,7 +257,7 @@ export function PublicScanPortal() {
       controller.abort();
       if (pollTimer !== undefined) window.clearTimeout(pollTimer);
     };
-  }, [analysisRequestState, status]);
+  }, [analysisRequestState, status?.hostname]);
 
   async function loadReport(id: string) {
     setState("loading");
@@ -329,9 +341,15 @@ export function PublicScanPortal() {
   }
 
   async function requestAnalysis() {
-    if (!status || !authorizationConfirmed || state === "loading") return;
+    if (
+      !status ||
+      !authorizationConfirmed ||
+      state === "loading" ||
+      analysisRequestInFlight.current
+    ) return;
     analysisStatusPollCount.current = 0;
     reportBeforeAnalysisId.current = status.lastReport?.id ?? null;
+    analysisRequestInFlight.current = true;
     setAnalysisRequestState("loading");
     try {
       const response = await fetch(
@@ -358,6 +376,8 @@ export function PublicScanPortal() {
       setAnalysisRequestState(payload.state);
     } catch {
       setAnalysisRequestState("error");
+    } finally {
+      analysisRequestInFlight.current = false;
     }
   }
 
@@ -589,6 +609,18 @@ function AnalysisRequestPanel({
   onRequest: () => void;
 }) {
   if (requestState !== null) {
+    if (isRetryableAnalysisRequestState(requestState)) {
+      return (
+        <div className="ds-portal__analysis-status">
+          <p className="ds-portal__failure" role="alert">
+            {getAnalysisRequestMessage(requestState)}
+          </p>
+          <button type="button" onClick={onRequest}>
+            Volver a solicitar análisis
+          </button>
+        </div>
+      );
+    }
     return (
       <p className="ds-portal__analysis-status" role="status">
         {getAnalysisRequestMessage(requestState)}
@@ -615,6 +647,18 @@ function AnalysisRequestPanel({
       </button>
     </div>
   );
+}
+
+function isRetryableAnalysisRequestState(
+  requestState: AnalysisRequestState,
+): boolean {
+  return [
+    "error",
+    "poll_error",
+    "poll_timeout",
+    "admission_lost",
+    "failed",
+  ].includes(requestState);
 }
 
 function ReportResult({ report }: { report: PublicReport }) {
@@ -664,7 +708,6 @@ function getScanProgressPhase(
   status: DomainStatus | null,
   requestState: AnalysisRequestState | null,
 ): "queued" | "running" {
-  if (requestState === "queued") return "queued";
   if (status?.state === "updating" || requestState === "running") {
     return "running";
   }

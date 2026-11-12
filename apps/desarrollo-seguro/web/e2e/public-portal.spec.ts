@@ -76,7 +76,7 @@ test("shows the report when an authorized analysis finishes", async ({ page }) =
   let statusReads = 0;
   await page.route("**/domains/report.example/status", async (route) => {
     statusReads += 1;
-    const state = statusReads === 3 ? "updating" : "not_scanned";
+    const state = statusReads >= 2 ? "updating" : "not_scanned";
     const response = {
       hostname: "report.example",
       enrollment: "on_demand",
@@ -162,6 +162,9 @@ test("shows the report when an authorized analysis finishes", async ({ page }) =
   await page.getByRole("button", { name: "Solicitar análisis" }).click();
   await expect(page.getByRole("status")).toHaveText("Solicitud añadida a la cola de análisis.");
 
+  await expect.poll(() => statusReads, { timeout: 10_000 }).toBeGreaterThanOrEqual(2);
+  await expect(page.getByRole("progressbar", { name: "Progreso del análisis" }))
+    .toHaveAttribute("data-phase", "running");
   await expect.poll(() => statusReads, { timeout: 25_000 }).toBe(4);
 
   await expect(page.getByRole("heading", { name: "Informe vigente" })).toBeVisible();
@@ -169,4 +172,46 @@ test("shows the report when an authorized analysis finishes", async ({ page }) =
     page.getByRole("heading", { name: "Resumen y puntuación" }),
   ).toBeVisible();
   await expect(page.getByText("Controles observados aprobados")).toBeVisible();
+});
+
+test("stops polling and reports an admission mismatch when no scan job appears", async ({
+  page,
+}) => {
+  let statusReads = 0;
+  await page.route("**/domains/stuck.example/status", async (route) => {
+    statusReads += 1;
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        hostname: "stuck.example",
+        enrollment: "on_demand",
+        state: "not_scanned",
+        failureCode: null,
+        activeJobId: null,
+        lastReport: null,
+        checkedAt: "2026-11-11T00:00:00.000Z",
+      }),
+    });
+  });
+  await page.route("**/analysis-requests", async (route) =>
+    route.fulfill({
+      status: 202,
+      contentType: "application/json",
+      body: JSON.stringify({ hostname: "stuck.example", state: "queued" }),
+    }),
+  );
+
+  await page.goto("/");
+  await page.getByRole("textbox", { name: "Dominio que quieres consultar" }).fill("stuck.example");
+  await page.getByRole("button", { name: "Consultar informe" }).click();
+  await page.getByRole("checkbox", { name: /tengo autorización/i }).check();
+  await page.getByRole("button", { name: "Solicitar análisis" }).click();
+
+  await expect(
+    page.getByRole("alert").filter({ hasText: /no muestra ningún trabajo activo/i }),
+  ).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("button", { name: "Volver a solicitar análisis" })).toBeVisible();
+  await expect(page.getByRole("progressbar", { name: "Progreso del análisis" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Aún no hay un informe" })).toBeVisible();
+  expect(statusReads).toBe(2);
 });
