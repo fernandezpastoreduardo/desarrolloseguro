@@ -34,14 +34,15 @@ DECLARE
 BEGIN
   SELECT pg_get_functiondef('public.ds_validate_scan_scope_before_insert()'::regprocedure)
   INTO function_definition;
-  updated_definition := replace(function_definition,
-    $old$NEW.profile_version IN ('controls-v1', 'controls-v2', 'controls-v3', 'domain-v1', 'transport-v1')$old$,
-    $new$NEW.profile_version IN ('controls-v1', 'controls-v2', 'controls-v3', 'domain-v1', 'domain-v2', 'transport-v1')$new$);
+  updated_definition := regexp_replace(function_definition,
+    $pattern$NEW[.]profile_version NOT IN[[:space:]]*[(][^)]*[)]$pattern$,
+    $new$NEW.profile_version NOT IN ('controls-v1', 'controls-v2', 'controls-v3', 'domain-v1', 'domain-v2', 'transport-v1')$new$);
   updated_definition := replace(updated_definition,
     $old$NEW.profile_version IN ('transport-v1', 'domain-v1')$old$,
     $new$NEW.profile_version IN ('transport-v1', 'domain-v1', 'domain-v2')$new$);
   IF updated_definition = function_definition
-    OR position('domain-v2' IN updated_definition) = 0 THEN
+    OR position($expected$NEW.profile_version NOT IN ('controls-v1', 'controls-v2', 'controls-v3', 'domain-v1', 'domain-v2', 'transport-v1')$expected$ IN updated_definition) = 0
+    OR position($expected$NEW.profile_version IN ('transport-v1', 'domain-v1', 'domain-v2')$expected$ IN updated_definition) = 0 THEN
     RAISE EXCEPTION 'domain_v2_scope_validator_extension_failed';
   END IF;
   EXECUTE updated_definition;

@@ -238,7 +238,7 @@ describePostgres.sequential("PostgresScanStore", () => {
     expect(snapshot).toMatchObject({
       hostname,
       enrollment: "on_demand",
-      profileVersion: "domain-v1",
+      profileVersion: "domain-v2",
       optedOut: false,
     });
     expect(snapshot?.activeJobId).toBeTruthy();
