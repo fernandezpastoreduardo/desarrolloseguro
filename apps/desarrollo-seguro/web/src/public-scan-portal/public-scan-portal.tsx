@@ -98,6 +98,26 @@ const CRITERION_EXPLANATIONS: Record<string, string> = {
   tracking: "Cuenta referencias del HTML inicial a una lista local de rastreadores conocidos; no confirma conexiones ni ejecuta scripts.",
   performance: "Mide el tiempo y tamaño de una única respuesta GET inicial. No mide la experiencia completa de una persona ni métricas Core Web Vitals.",
 };
+const CRITERION_RECOMMENDATIONS: Record<string, string> = {
+  "dns-integrity": "Revisa los registros DNS y confirma que apuntan a los servicios previstos.",
+  "transport-security": "Revisa el certificado y desactiva las versiones de TLS antiguas.",
+  "http-availability": "Comprueba que la portada responde y redirige las visitas a HTTPS.",
+  "security-headers": "Revisa las protecciones que faltan, en especial la política de contenido y la conexión segura persistente.",
+  "third-party-data-use": "Consulta las políticas y contratos de los proveedores; esta comprobación técnica no puede confirmar cómo tratan los datos.",
+  "initial-cookie-risk": "Comprueba la finalidad de las cookies y que las no esenciales esperan al consentimiento cuando sea necesario.",
+  tracking: "Revisa las referencias detectadas y confirma que cada herramienta se carga con la información y el consentimiento adecuados.",
+  performance: "Mide la página completa en distintos dispositivos antes de decidir qué optimizar.",
+};
+const CRITERION_FAIL_MEANINGS: Record<string, string> = {
+  "dns-integrity": "No se confirmó una resolución pública adecuada para el dominio.",
+  "transport-security": "El certificado o la versión de cifrado no superó las comprobaciones; esto puede afectar a la conexión segura.",
+  "http-availability": "La portada no respondió según lo esperado o se observó una conexión insegura.",
+  "security-headers": "Falta al menos una protección que el navegador puede usar frente a ciertos ataques.",
+  "third-party-data-use": "No hay fuentes suficientes para concluir sobre el uso de datos por terceros.",
+  "initial-cookie-risk": "Se encontró una cookie cuyo nombre coincide con una categoría de analítica o marketing; esto requiere revisar su finalidad, pero no prueba por sí solo un incumplimiento.",
+  tracking: "El HTML inicial contiene referencias a herramientas de seguimiento conocidas; la prueba no confirma que se hayan conectado o ejecutado.",
+  performance: "La respuesta inicial fue lenta en esta medición puntual; esto puede afectar a la carga, pero no representa la experiencia completa.",
+};
 const EVIDENCE_LABELS: Record<string, string> = {
   addressClass: "Tipo de dirección", aRecordCount: "Direcciones IPv4 encontradas", aaaaRecordCount: "Direcciones IPv6 encontradas",
   protocol: "Protocolo TLS negociado", certificateValid: "Certificado válido", hostnameMatches: "Certificado para este dominio",
@@ -765,8 +785,10 @@ function ReportSummary({
         </p>
         <p className="ds-portal__score-method">
           La puntuación solo se calcula con los criterios evaluados. Los que no
-          tienen evidencia quedan como desconocidos y no suman ni restan.
+          tienen evidencia quedan como desconocidos y no suman ni restan; una
+          puntuación alta con pocos datos no significa que el sitio esté libre de problemas.
         </p>
+        <p className="ds-portal__report-takeaway">{getReportTakeaway(report.ethicsAssessment.criteria)}</p>
         <p>{report.ethicsAssessment.interpretation}</p>
         <div className="ds-portal__report-categories">
           {REPORT_CATEGORIES.map((category) => {
@@ -786,7 +808,14 @@ function ReportSummary({
                 <ul className="ds-portal__ethics-criteria">
                   {criteria.map((criterion) => (
                     <li key={criterion.id} data-status={criterion.status}>
-                      <div><strong>{criterion.label}</strong><p>{CRITERION_EXPLANATIONS[criterion.id]}</p></div>
+                      <div>
+                        <strong>{criterion.label}</strong>
+                        <p><b>Qué comprueba:</b> {CRITERION_EXPLANATIONS[criterion.id]}</p>
+                        <p><b>Qué significa:</b> {getCriterionOutcome(criterion.id, criterion.status)}</p>
+                        {criterion.status !== "pass" && (
+                          <p><b>Qué revisar:</b> {CRITERION_RECOMMENDATIONS[criterion.id]}</p>
+                        )}
+                      </div>
                       <span>{getCheckStatusLabel(criterion.status)}</span>
                     </li>
                   ))}
@@ -1102,11 +1131,44 @@ function getCheckStatusLabel(status: string): string {
 function getCategoryScoreLabel(criteria: Array<{ status: string; weight: number }>): string {
   const assessed = criteria.filter((criterion) => criterion.status !== "unknown");
   if (assessed.length === 0) return "Sin datos suficientes";
+  if (assessed.length < criteria.length) {
+    return `Evaluación parcial · ${assessed.length} de ${criteria.length} aspectos`;
+  }
   const totalWeight = assessed.reduce((sum, criterion) => sum + criterion.weight, 0);
   const passedWeight = assessed
     .filter((criterion) => criterion.status === "pass")
     .reduce((sum, criterion) => sum + criterion.weight, 0);
   return `${Math.round((passedWeight / totalWeight) * 100)}/100 · ${assessed.length} de ${criteria.length} evaluados`;
+}
+
+function getReportTakeaway(criteria: Array<{ status: string }>): string {
+  const assessed = criteria.filter((criterion) => criterion.status !== "unknown");
+  const problems = assessed.filter((criterion) => criterion.status === "fail").length;
+  const unknown = criteria.length - assessed.length;
+  if (assessed.length === 0) return "Aún no hay comprobaciones suficientes para valorar el dominio.";
+  if (problems > 0) {
+    return `Se detectaron problemas en ${problems} de ${assessed.length} aspectos evaluados. Revisa los detalles por categoría.`;
+  }
+  if (unknown > 0) {
+    return `No se detectaron problemas en ${assessed.length} aspecto${assessed.length === 1 ? "" : "s"} evaluado${assessed.length === 1 ? "" : "s"}. ${unknown} aspecto${unknown === 1 ? "" : "s"} aún no tienen datos.`;
+  }
+  return `No se detectaron problemas en los ${assessed.length} aspectos evaluados.`;
+}
+
+function getCriterionOutcome(criterionId: string, status: string): string {
+  if (status === "unknown") return "No hay datos suficientes para confirmar si este punto está bien o necesita cambios.";
+  if (status === "fail") return CRITERION_FAIL_MEANINGS[criterionId] ?? "La comprobación encontró una condición que conviene revisar.";
+  const outcomes: Record<string, string> = {
+    "dns-integrity": "El dominio resolvió a direcciones públicas durante esta comprobación; esto no confirma quién lo controla.",
+    "transport-security": "La conexión superó las comprobaciones de TLS incluidas en este informe.",
+    "http-availability": "La portada respondió según lo esperado y usó una conexión segura en esta comprobación.",
+    "security-headers": "Las protecciones comprobadas estaban presentes en la respuesta observada.",
+    "third-party-data-use": "No se ha podido confirmar el uso que terceros hacen de los datos.",
+    "initial-cookie-risk": "No se reconocieron cookies con riesgo en la primera respuesta observada.",
+    tracking: "No se encontraron referencias conocidas a rastreadores en el HTML inicial; no se ejecutaron scripts.",
+    performance: "La respuesta inicial quedó dentro del umbral orientativo de esta comprobación; no representa la experiencia completa.",
+  };
+  return outcomes[criterionId] ?? "La comprobación no detectó un problema en este punto.";
 }
 
 function getControlLabel(controlId: string): string {

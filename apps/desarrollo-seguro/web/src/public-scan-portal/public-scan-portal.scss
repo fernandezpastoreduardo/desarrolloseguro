@@ -445,6 +445,7 @@ $ds-canvas: #f5f2ec;
 .ds-portal__ethics p { color: var(--ds-muted); line-height: 1.6; }
 .ds-portal__ethics-score { color: var(--ds-ink) !important; font-size: 1.25rem; font-weight: 800; }
 .ds-portal__ethics .ds-portal__score-method { font-size: 0.9rem; }
+.ds-portal__ethics .ds-portal__report-takeaway { border-left: 3px solid var(--ds-accent); padding: 12px 14px; color: var(--ds-ink); background: var(--ds-canvas); font-weight: 700; }
 .ds-portal__report-categories { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 22px; }
 .ds-portal__report-category { min-width: 0; border: 1px solid var(--ds-line); padding: 16px; background: var(--ds-canvas); }
 .ds-portal__category-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
@@ -455,7 +456,8 @@ $ds-canvas: #f5f2ec;
 .ds-portal__ethics-criteria li { display: flex; justify-content: space-between; gap: 12px; color: var(--ds-ink-soft); }
 .ds-portal__ethics-criteria li > div { min-width: 0; }
 .ds-portal__ethics-criteria li > div > strong { color: var(--ds-ink); font-size: 0.9rem; }
-.ds-portal__ethics-criteria li p { margin: 4px 0 0; font-size: 0.82rem; }
+.ds-portal__ethics-criteria li p { margin: 6px 0 0; font-size: 0.86rem; line-height: 1.55; }
+.ds-portal__ethics-criteria li p b { color: var(--ds-ink); }
 .ds-portal__ethics-criteria li > span { flex: 0 0 auto; color: var(--ds-accent-strong); font-family: var(--ds-mono); font-size: 0.64rem; text-transform: uppercase; }
 .ds-portal__ethics-reasons { color: var(--ds-muted); line-height: 1.5; }
 

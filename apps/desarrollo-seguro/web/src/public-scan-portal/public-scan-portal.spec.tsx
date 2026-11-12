@@ -197,6 +197,13 @@ describe("PublicScanPortal", () => {
     expect(screen.getByRole("heading", { name: "Resumen y puntuación" })).toBeVisible();
     expect(screen.getByText("100/100 · 1 de 8 criterios evaluados")).toBeVisible();
     expect(screen.getByText(/solo se calcula con los criterios evaluados/i)).toBeVisible();
+    expect(screen.getByText("No se detectaron problemas en 1 aspecto evaluado. 7 aspectos aún no tienen datos."))
+      .toBeVisible();
+    expect(screen.getByText("Evaluación parcial · 1 de 4 aspectos"))
+      .toBeVisible();
+    expect(screen.queryByText("100/100 · 1 de 4 evaluados")).not.toBeInTheDocument();
+    expect(screen.getAllByText(/qué significa:/i)).toHaveLength(8);
+    expect(screen.getAllByText("Sin datos suficientes").length).toBeGreaterThan(0);
     expect(screen.getByText(/no hay evidencia verificable sobre reutilización o venta/i)).toBeVisible();
     expect(screen.getByText(/solo se observó la portada/i)).toBeVisible();
     expect(screen.getByText(/origen indicado en el registro/i)).toBeVisible();

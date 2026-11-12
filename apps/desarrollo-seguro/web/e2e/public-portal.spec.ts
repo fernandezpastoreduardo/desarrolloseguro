@@ -207,6 +207,13 @@ test("shows the report when an authorized analysis finishes", async ({ page }) =
   await expect(page.getByText("Referencias a rastreadores conocidos").first()).toBeVisible();
   await expect(page.getByText("Tiempo de respuesta inicial")).toBeVisible();
   await expect(page.getByText("45.000 bytes")).toBeVisible();
+  await expect(page.getByText(/qué comprueba:/i).first()).toBeVisible();
+  await expect(page.getByText(/qué significa:/i).first()).toBeVisible();
+  await expect(page.getByText(/qué revisar:/i).first()).toBeVisible();
+  await expect(page.getByText(/No se detectaron problemas|Se detectaron problemas/)).toBeVisible();
+  await expect(page.getByText(/HTML inicial contiene referencias a herramientas de seguimiento conocidas/i))
+    .toBeVisible();
+  await expect(page.getByText(/Revisa las referencias detectadas/i)).toBeVisible();
   await expect(page.getByText("Hay controles observados que no se cumplen")).toBeVisible();
 });
 
