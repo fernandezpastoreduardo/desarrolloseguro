@@ -8,7 +8,6 @@ import {
 import {
   assessDomainEthics,
   normalizeHostname,
-  SCAN_FAILURE_CODES,
   type ScanFailureCode,
   type DomainEthicsAssessment,
 } from "@desarrolloseguro/core";
