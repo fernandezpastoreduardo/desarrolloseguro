@@ -102,7 +102,13 @@ export function createDockerRuntimeCoordinatorRunner(
         }
       }
       if (executionError !== undefined) {
-        if (signal.aborted) throw new Error("request_aborted", { cause: executionError });
+        if (
+          signal.aborted ||
+          (executionError instanceof Error &&
+            executionError.message === "request_aborted")
+        ) {
+          throw new Error("request_aborted", { cause: executionError });
+        }
         throw new Error(getRuntimeFailureCode(executionError), { cause: executionError });
       }
       if (!session || !result) throw new Error("executor_failed");

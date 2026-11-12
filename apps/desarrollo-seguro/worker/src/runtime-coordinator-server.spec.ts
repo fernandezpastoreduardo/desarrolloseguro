@@ -129,7 +129,7 @@ describe("runtime coordinator server", () => {
         { hostname: "sample.example.net", profileVersion: "transport-v1" },
         signal,
       ),
-    ).rejects.toThrow("runtime_coordinator_unavailable");
+    ).rejects.toThrow("coordinator_unavailable");
     expect(runner.execute).toHaveBeenCalledOnce();
 
     pending.resolve(makeResult());
