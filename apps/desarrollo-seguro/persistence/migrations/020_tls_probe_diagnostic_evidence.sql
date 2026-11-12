@@ -33,3 +33,35 @@ BEGIN
   EXECUTE updated_definition;
 END;
 $$;
+
+CREATE OR REPLACE VIEW public.ds_public_check_results AS
+SELECT
+  checks.run_id,
+  checks.control_id,
+  checks.status,
+  checks.required,
+  checks.severity,
+  checks.observed_at,
+  checks.target_path,
+  checks.method,
+  checks.summary,
+  checks.limitation,
+  COALESCE((
+    SELECT jsonb_object_agg(item.key, item.value)
+    FROM jsonb_each(checks.evidence_json) AS item(key, value)
+    WHERE item.key = ANY(CASE checks.control_id
+      WHEN 'DS-DNS-01' THEN ARRAY['addressClass', 'aRecordCount', 'aaaaRecordCount']
+      WHEN 'DS-TLS-01' THEN ARRAY['protocol', 'certificateValid', 'hostnameMatches']
+      WHEN 'DS-TLS-02' THEN ARRAY[
+        'tls10Accepted', 'tls11Accepted', 'tls12Accepted', 'tls13Accepted',
+        'tls10ProbeError', 'tls11ProbeError', 'tls12ProbeError', 'tls13ProbeError'
+      ]
+      WHEN 'DS-HTTP-01' THEN ARRAY['statusCode', 'redirectedToHttps', 'finalScheme']
+      WHEN 'DS-HDR-01' THEN ARRAY['finalScheme', 'hsts', 'nosniff', 'frameProtection', 'referrerPolicy', 'csp']
+      WHEN 'DS-PRIV-05' THEN ARRAY['inspected', 'cookieCount', 'insecureCookieCount', 'catalogMatchCount', 'consentPromptDetected']
+      WHEN 'DS-PRIV-06' THEN ARRAY['inspected', 'thirdPartyResourceReferences', 'knownTrackingResourceReferences']
+      WHEN 'DS-QUAL-02' THEN ARRAY['inspected', 'responseTimeMs', 'responseBytes']
+      ELSE ARRAY[]::text[]
+    END)
+  ), '{}'::jsonb) AS evidence_json
+FROM public.ds_check_results AS checks;
