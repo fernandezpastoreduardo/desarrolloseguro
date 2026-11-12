@@ -13,7 +13,7 @@ import {
 } from "./transport-v1-executor-protocol.js";
 import type { RuntimeCoordinatorRunner } from "./runtime-coordinator-server.js";
 
-const DEFAULT_BROKER_STARTUP_TIMEOUT_MS = 5_000;
+const DEFAULT_BROKER_STARTUP_TIMEOUT_MS = 20_000;
 const DOCKER_COMMAND_TIMEOUT_MS = 10_000;
 const EXECUTOR_COMMAND_TIMEOUT_MS = 38_000;
 const BROKER_STOP_TIMEOUT_MS = 3_000;
@@ -30,6 +30,9 @@ const SAFE_BROKER_STARTUP_FAILURES = new Set([
   "egress_broker_socket_directory_invalid",
   "egress_broker_socket_setup_failed",
   "egress_broker_socket_listen_failed",
+  "runtime_broker_process_error",
+  "runtime_broker_process_exited",
+  "runtime_broker_ready_timeout",
 ]);
 const IMAGE_REFERENCE = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/u;
 const NETWORK_REFERENCE = /^(?:none|[A-Za-z0-9][A-Za-z0-9_.-]{0,127})$/u;
@@ -353,7 +356,7 @@ function waitForBrokerReady(
     let buffer = "";
     let startupFailureCode: string | undefined;
     let settled = false;
-    const timer = setTimeout(() => finish(new Error("runtime_coordinator_unavailable")), timeoutMs);
+    const timer = setTimeout(() => finish(new Error("runtime_broker_ready_timeout")), timeoutMs);
     const onAbort = () => finish(new Error("request_aborted"));
     const finish = (error?: Error) => {
       if (settled) return;
@@ -382,8 +385,8 @@ function waitForBrokerReady(
       const code = chunk.toString("utf8").trim();
       if (SAFE_BROKER_STARTUP_FAILURES.has(code)) startupFailureCode = code;
     };
-    const onError = () => finish(new Error(startupFailureCode ?? "runtime_coordinator_unavailable"));
-    const onClose = () => finish(new Error(startupFailureCode ?? "runtime_coordinator_unavailable"));
+    const onError = () => finish(new Error(startupFailureCode ?? "runtime_broker_process_error"));
+    const onClose = () => finish(new Error(startupFailureCode ?? "runtime_broker_process_exited"));
     child.stdout.on("data", onData);
     child.stderr.on("data", onStderr);
     child.once("error", onError);
