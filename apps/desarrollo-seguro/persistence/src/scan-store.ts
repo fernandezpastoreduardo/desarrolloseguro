@@ -4,6 +4,8 @@ import {
   evaluateVerdict,
   projectPublicEvidence,
   sanitizeScanObservations,
+  parseScanFailureDiagnostic,
+  type ScanFailureDiagnostic,
 } from "@desarrolloseguro/core";
 import type { ScanFailureCode } from "@desarrolloseguro/core";
 export { SCAN_FAILURE_CODES };
@@ -105,7 +107,7 @@ export type PublicDomainSnapshot = {
   optedOut: boolean;
   activeJobId: string | null;
   lastReport: PublicScanReport | null;
-  lastFailure?: { code: ScanFailureCode; failedAt: Date } | null;
+  lastFailure?: { code: ScanFailureCode; failedAt: Date; diagnostic?: ScanFailureDiagnostic | null } | null;
 };
 
 export type EnsureScanInput = {
@@ -178,6 +180,7 @@ export interface ScanJobStore {
     leaseToken: string,
     failureCode: ScanFailureCode,
     maxAttempts: number,
+    diagnostic?: ScanFailureDiagnostic | null,
   ): Promise<ScanFailureDisposition>;
   completeScan(input: ScanRunInput): Promise<string>;
 }
@@ -246,6 +249,7 @@ export class PostgresScanStore implements ScanJobStore {
       `SELECT domains.hostname, domains.enrollment, domains.profile_version,
          domains.opted_out_at, active_job.id AS active_job_id,
          failed_job.public_error_code AS last_failure_code,
+         failed_job.failure_diagnostic AS last_failure_diagnostic,
          failed_job.finished_at AS last_failure_at,
          ${PUBLIC_REPORT_COLUMNS}, check_rows.checks
        FROM public.ds_domains AS domains
@@ -257,7 +261,7 @@ export class PostgresScanStore implements ScanJobStore {
          ORDER BY queued_at ASC LIMIT 1
        ) AS active_job ON true
        LEFT JOIN LATERAL (
-         SELECT public_error_code, finished_at FROM public.ds_scan_jobs
+         SELECT public_error_code, failure_diagnostic, finished_at FROM public.ds_scan_jobs
          WHERE hostname = domains.hostname
            AND profile_version = domains.profile_version
            AND state = 'failed'
@@ -412,6 +416,7 @@ export class PostgresScanStore implements ScanJobStore {
     leaseToken: string,
     failureCode: ScanFailureCode,
     maxAttempts: number,
+    diagnostic: ScanFailureDiagnostic | null = null,
   ): Promise<ScanFailureDisposition> {
     if (!SCAN_FAILURE_CODES.includes(failureCode)) {
       throw new Error("invalid_scan_failure_code");
@@ -420,10 +425,11 @@ export class PostgresScanStore implements ScanJobStore {
       throw new Error("invalid_scan_max_attempts");
     }
     let result: { rows: Array<{ ds_fail_scan: string }> };
+    const safeDiagnostic = diagnostic == null ? null : parseScanFailureDiagnostic(diagnostic);
     try {
       result = await this.pool.query<{ ds_fail_scan: string }>(
-        "SELECT ds_fail_scan($1, $2, $3, $4)",
-        [jobId, leaseToken, failureCode, maxAttempts],
+        "SELECT ds_fail_scan($1, $2, $3, $4, $5::jsonb)",
+        [jobId, leaseToken, failureCode, maxAttempts, safeDiagnostic ? JSON.stringify(safeDiagnostic) : null],
       );
     } catch (error) {
       if (error instanceof Error && error.message.includes("scan_lease_lost")) {
@@ -529,6 +535,7 @@ function parsePublicScanFailure(
   return {
     code: parseOneOf(mapPublicScanFailureCode(row.last_failure_code), SCAN_FAILURE_CODES),
     failedAt: parseDate(row.last_failure_at),
+    diagnostic: row.last_failure_diagnostic == null ? null : parseScanFailureDiagnostic(row.last_failure_diagnostic),
   };
 }
 

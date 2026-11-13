@@ -5,6 +5,7 @@ import {
   validateWwwRedirect,
   validateCompletedReport,
   validateTerminalFailure,
+  describeTerminalFailure,
   waitForPublicScanReport,
 } from "./smoke-public-domain-scan.mjs";
 
@@ -87,6 +88,23 @@ test("returns a safe terminal scan failure category to the deploy smoke", () => 
     { message: "public_scan_failure_code_invalid" },
   );
   assert.equal(validateTerminalFailure({ state: "updating", failureCode: null }), null);
+  assert.equal(describeTerminalFailure({
+    state: "failed",
+    failureCode: "executor_failed",
+    failureDiagnostic: {
+      stage: "executor",
+      code: "executor_application_failed",
+      probeFailures: [
+        { operation: "dns", code: "dns_resolution_failed" },
+        { operation: "http-get", code: "connection_failed" },
+      ],
+    },
+  }), "public_scan_terminal_executor_failed_executor_executor_application_failed_dns_dns_resolution_failed_http_get_connection_failed");
+  assert.equal(describeTerminalFailure({
+    state: "failed",
+    failureCode: "executor_failed",
+    failureDiagnostic: { stage: "executor", code: "secret /path" },
+  }), "executor_failed");
 });
 
 test("polls through a queued scan and emits safe progress before returning its fresh report", async () => {

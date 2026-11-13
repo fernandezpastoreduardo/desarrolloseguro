@@ -102,6 +102,36 @@ describe("runtime coordinator server", () => {
     expect(runner.execute).toHaveBeenCalledOnce();
   });
 
+  it("forwards safe executor diagnostics across the coordinator socket", async () => {
+    const runner: RuntimeCoordinatorRunner = {
+      execute: vi.fn(() => {
+        const error = new Error("executor_failed");
+        Object.defineProperty(error, "scanFailureDiagnostic", {
+          value: {
+            stage: "executor",
+            code: "executor_application_failed",
+            probeFailures: [{ operation: "dns", code: "dns_resolution_failed" }],
+          },
+        });
+        throw error;
+      }),
+    };
+    const socketPath = await startCoordinator(runner);
+    const executor = await createClient(socketPath);
+
+    await expect(executor.execute(
+      { hostname: "sample.example.net", profileVersion: "transport-v1" },
+      new AbortController().signal,
+    )).rejects.toMatchObject({
+      message: "executor_failed",
+      scanFailureDiagnostic: {
+        stage: "executor",
+        code: "executor_application_failed",
+        probeFailures: [{ operation: "dns", code: "dns_resolution_failed" }],
+      },
+    });
+  });
+
   it("rejects extra protocol fields before invoking the runtime", async () => {
     const runner: RuntimeCoordinatorRunner = { execute: vi.fn().mockResolvedValue(makeResult()) };
     const socketPath = await startCoordinator(runner);

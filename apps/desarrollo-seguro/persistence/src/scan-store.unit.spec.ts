@@ -125,6 +125,37 @@ describe("PostgresScanStore unit behavior", () => {
     });
   });
 
+  it("projects only allowlisted executor failure diagnostics", async () => {
+    const query = vi.fn().mockResolvedValue({
+      rows: [makePublicReportRow({
+        report_id: null,
+        hostname: "example.com",
+        enrollment: "on_demand",
+        profile_version: "domain-v1",
+        opted_out_at: null,
+        active_job_id: null,
+        last_failure_code: "executor_failed",
+        last_failure_at: new Date("2026-11-11T10:00:00.000Z"),
+        last_failure_diagnostic: {
+          stage: "executor",
+          code: "executor_application_failed",
+          probeFailures: [{ operation: "dns", code: "dns_resolution_failed" }],
+          secret: "must not be projected",
+        },
+      })],
+    });
+    const store = new PostgresScanStore(makePool({ query }));
+
+    const snapshot = await store.readPublicDomainSnapshot("example.com");
+
+    expect(snapshot?.lastFailure?.diagnostic).toEqual({
+      stage: "executor",
+      code: "executor_application_failed",
+      probeFailures: [{ operation: "dns", code: "dns_resolution_failed" }],
+    });
+    expect(JSON.stringify(snapshot)).not.toContain("must not be projected");
+  });
+
   it("maps an expired worker lease to a public executor failure", async () => {
     const query = vi.fn().mockResolvedValue({
       rows: [makePublicReportRow({
@@ -261,6 +292,24 @@ describe("PostgresScanStore unit behavior", () => {
     expect(query).not.toHaveBeenCalled();
   });
 
+  it("stores a sanitized failure diagnostic atomically with the terminal failure", async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [{ ds_fail_scan: "failed" }] });
+    const store = new PostgresScanStore(makePool({ query }));
+
+    await expect(store.failScan("job-id", "lease-token", "executor_failed", 3, {
+      stage: "executor",
+      code: "executor_application_failed",
+      probeFailures: [{ operation: "http-get", code: "connection_failed" }],
+    })).resolves.toBe("failed");
+
+    expect(query.mock.calls[0][0]).toContain("$5::jsonb");
+    expect(query.mock.calls[0][1][4]).toBe(JSON.stringify({
+      stage: "executor",
+      code: "executor_application_failed",
+      probeFailures: [{ operation: "http-get", code: "connection_failed" }],
+    }));
+  });
+
   it("calls only the guarded failure transition with a fixed category", async () => {
     const query = vi.fn().mockResolvedValue({
       rows: [{ ds_fail_scan: "retrying" }],
@@ -270,11 +319,12 @@ describe("PostgresScanStore unit behavior", () => {
     await expect(
       store.failScan("job-id", "lease-token", "executor_failed", 3),
     ).resolves.toBe("retrying");
-    expect(query).toHaveBeenCalledWith("SELECT ds_fail_scan($1, $2, $3, $4)", [
+    expect(query).toHaveBeenCalledWith("SELECT ds_fail_scan($1, $2, $3, $4, $5::jsonb)", [
       "job-id",
       "lease-token",
       "executor_failed",
       3,
+      null,
     ]);
   });
 

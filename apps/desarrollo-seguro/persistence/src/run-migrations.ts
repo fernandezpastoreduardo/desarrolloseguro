@@ -62,6 +62,7 @@ const MIGRATIONS = [
     version: "020_tls_probe_diagnostic_evidence",
     file: "020_tls_probe_diagnostic_evidence.sql",
   },
+  { version: "021_safe_scan_failure_diagnostics", file: "021_safe_scan_failure_diagnostics.sql" },
 ] as const;
 
 const MIGRATION_LOCK_ID = 728194032;

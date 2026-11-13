@@ -3,6 +3,7 @@ import {
   normalizeHostname,
   sanitizeScanObservations,
   SCAN_FAILURE_CODES,
+  parseScanFailureDiagnostic,
   type ScanFailureCode,
 } from "@desarrolloseguro/core";
 import {
@@ -132,6 +133,7 @@ export class ScanJobProcessor {
           claimed.leaseToken,
           getFailureCode(executorError),
           MAX_EXECUTOR_ATTEMPTS,
+          getFailureDiagnostic(executorError),
         );
       } catch (error) {
         if (error instanceof ScanLeaseLostError) return "lease_lost";
@@ -217,4 +219,9 @@ function getFailureCode(error: unknown): ScanFailureCode {
     return error.message as ScanFailureCode;
   }
   return "executor_failed";
+}
+
+function getFailureDiagnostic(error: unknown) {
+  if (!(error instanceof Error) || !("scanFailureDiagnostic" in error)) return null;
+  return parseScanFailureDiagnostic(error.scanFailureDiagnostic);
 }

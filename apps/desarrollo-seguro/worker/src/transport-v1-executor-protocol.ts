@@ -1,4 +1,4 @@
-import { normalizeHostname, SCAN_FAILURE_CODES, type ScanFailureCode } from "@desarrolloseguro/core";
+import { normalizeHostname, SCAN_FAILURE_CODES, parseScanFailureDiagnostic, type ScanFailureCode, type ScanFailureDiagnostic } from "@desarrolloseguro/core";
 import type { ScanCheck, ScanRunInput } from "@desarrolloseguro/persistence";
 import { isNetworkProbeFailureList, type NetworkProbeFailure, type ScanProfileVersion } from "./transport-v1-executor.js";
 
@@ -35,6 +35,7 @@ export type TransportV1ExecutorResponse =
       requestId: string;
       errorCode: "request_invalid" | ScanFailureCode;
       diagnostic?: TransportV1ExecutorDiagnostic;
+      failureDiagnostic?: ScanFailureDiagnostic;
     };
 
 export function parseTransportV1ExecutorRequest(
@@ -91,11 +92,18 @@ export function parseTransportV1ExecutorResponse(
     const diagnostic = value.diagnostic === undefined
       ? undefined
       : parseExecutorDiagnostic(value.diagnostic);
+    const failureDiagnostic = value.failureDiagnostic === undefined
+      ? undefined
+      : parseScanFailureDiagnostic(value.failureDiagnostic);
+    if (value.failureDiagnostic !== undefined && failureDiagnostic === null) {
+      throw new Error("executor_response_invalid");
+    }
     return {
       protocolVersion: 1,
       requestId: expectedRequestId,
       errorCode: value.errorCode,
       ...(diagnostic === undefined ? {} : { diagnostic }),
+      ...(failureDiagnostic == null ? {} : { failureDiagnostic }),
     };
   }
   return {

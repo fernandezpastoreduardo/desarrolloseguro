@@ -13,8 +13,10 @@ import {
   createJsonLineRuntimeDiagnostic,
   RUNTIME_DIAGNOSTIC_CODES,
   type RuntimeDiagnosticCode,
+  type RuntimeDiagnosticEvent,
   type RuntimeDiagnosticStage,
   type RuntimeDiagnosticWriter,
+  attachScanFailureDiagnostic,
 } from "./runtime-diagnostics.js";
 
 const DEFAULT_BROKER_STARTUP_TIMEOUT_MS = 20_000;
@@ -83,6 +85,7 @@ export type DockerRuntimeSessionFactory = {
     request: TransportV1ExecutorRequest,
     signal: AbortSignal,
   ): Promise<DockerRuntimeSession>;
+  getLastDiagnostic?(): RuntimeDiagnosticEvent | null;
 };
 
 /** Runs one executor/broker pair, validates its response, and always tears it down. */
@@ -103,6 +106,7 @@ export function createDockerRuntimeCoordinatorRunner(
           >
         | undefined;
       let executionError: unknown;
+      let executorDiagnostic: RuntimeDiagnosticEvent | null = null;
       try {
         session = await factory.create(request, signal);
         if (signal.aborted) throw new Error("request_aborted");
@@ -119,12 +123,13 @@ export function createDockerRuntimeCoordinatorRunner(
         }
         if ("errorCode" in response) {
           if (response.diagnostic?.category === "network_observation_unavailable") {
-            diagnostic({
+            executorDiagnostic = {
               type: "runtime_diagnostic",
               stage: "executor",
               code: "executor_application_failed",
               probeFailures: response.diagnostic.probeFailures,
-            });
+            };
+            diagnostic(executorDiagnostic);
           }
           throw new Error(
             response.errorCode === "request_invalid"
@@ -151,7 +156,17 @@ export function createDockerRuntimeCoordinatorRunner(
         ) {
           throw new Error("request_aborted", { cause: executionError });
         }
-        throw new Error(getRuntimeFailureCode(executionError), { cause: executionError });
+        const failure = new Error(getRuntimeFailureCode(executionError), { cause: executionError });
+        const runtimeDiagnostic = factory.getLastDiagnostic?.() ?? null;
+        const safeDiagnostic = executorDiagnostic ?? runtimeDiagnostic ?? {
+          type: "runtime_diagnostic" as const,
+          stage: "executor" as const,
+          code: "executor_application_failed" as const,
+        };
+        throw attachScanFailureDiagnostic(
+          failure,
+          safeDiagnostic,
+        );
       }
       if (!session || !result) throw new Error("executor_failed");
       return result;
@@ -187,8 +202,10 @@ export function createDockerRuntimeSessionFactory(
   const brokerNetwork = options.brokerNetwork ?? "none";
   const brokerStartupTimeoutMs = options.brokerStartupTimeoutMs ?? DEFAULT_BROKER_STARTUP_TIMEOUT_MS;
   const diagnosticWriter = options.diagnostic ?? createJsonLineRuntimeDiagnostic();
+  let lastDiagnostic: RuntimeDiagnosticEvent | null = null;
   const diagnostic: RuntimeDiagnosticWriter = (event) => {
     try {
+      lastDiagnostic = event;
       diagnosticWriter(event);
     } catch {
       // A diagnostic sink must never change runtime behavior.
@@ -209,7 +226,9 @@ export function createDockerRuntimeSessionFactory(
 
   return {
     diagnostic,
+    getLastDiagnostic: () => lastDiagnostic,
     async create(request, signal): Promise<DockerRuntimeSession> {
+      lastDiagnostic = null;
       if (signal.aborted) throw new Error("request_aborted");
       const runtimeId = randomUUID();
       const volumeName = `${VOLUME_PREFIX}${runtimeId}`;

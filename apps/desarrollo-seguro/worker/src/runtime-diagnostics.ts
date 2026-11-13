@@ -1,44 +1,14 @@
 import { isNetworkProbeFailureList, type NetworkProbeFailure } from "./transport-v1-executor.js";
+import {
+  SCAN_FAILURE_DIAGNOSTIC_CODES,
+  SCAN_FAILURE_DIAGNOSTIC_STAGES,
+  parseScanFailureDiagnostic,
+  type ScanFailureDiagnostic,
+} from "@desarrolloseguro/core";
 
-export const RUNTIME_DIAGNOSTIC_STAGES = [
-  "volume_create",
-  "volume_prepare",
-  "broker_start",
-  "broker_ready",
-  "executor",
-  "executor_container_cleanup",
-  "broker_container_cleanup",
-  "volume_cleanup",
-] as const;
+export const RUNTIME_DIAGNOSTIC_STAGES = SCAN_FAILURE_DIAGNOSTIC_STAGES;
 
-export const RUNTIME_DIAGNOSTIC_CODES = [
-  "docker_runtime_command_failed",
-  "docker_runtime_unavailable",
-  "docker_command_timeout",
-  "docker_command_output_too_large",
-  "docker_daemon_unavailable",
-  "docker_permission_denied",
-  "docker_resource_in_use",
-  "docker_removal_in_progress",
-  "runtime_coordinator_unavailable",
-  "runtime_coordinator_socket_untrusted",
-  "executor_response_invalid",
-  "executor_result_invalid",
-  "executor_application_failed",
-  "runtime_broker_process_error",
-  "runtime_broker_process_exited",
-  "runtime_broker_process_killed",
-  "runtime_broker_container_start_failed",
-  "runtime_broker_entrypoint_failed",
-  "runtime_broker_application_failed",
-  "runtime_broker_ready_timeout",
-  "runtime_broker_ready_failed",
-  "runtime_volume_create_failed",
-  "runtime_volume_prepare_failed",
-  "runtime_broker_start_failed",
-  "runtime_cleanup_retry",
-  "runtime_cleanup_failed",
-] as const;
+export const RUNTIME_DIAGNOSTIC_CODES = SCAN_FAILURE_DIAGNOSTIC_CODES;
 
 export type RuntimeDiagnosticStage = (typeof RUNTIME_DIAGNOSTIC_STAGES)[number];
 export type RuntimeDiagnosticCode = (typeof RUNTIME_DIAGNOSTIC_CODES)[number];
@@ -54,6 +24,34 @@ export type RuntimeDiagnosticEvent = {
 
 export type RuntimeDiagnosticWriter = (event: RuntimeDiagnosticEvent) => void;
 export type RuntimeDiagnosticSink = (line: string) => void;
+
+export function readScanFailureDiagnostic(error: unknown): ScanFailureDiagnostic | null {
+  if (!(error instanceof Error) || !("scanFailureDiagnostic" in error)) return null;
+  const value: unknown = error.scanFailureDiagnostic;
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  return parseScanFailureDiagnostic(value);
+}
+
+export function attachScanFailureDiagnostic<T extends Error>(
+  error: T,
+  diagnostic: RuntimeDiagnosticEvent | null | undefined,
+): T {
+  if (diagnostic && isSafeRuntimeDiagnosticEvent(diagnostic)) {
+    Object.defineProperty(error, "scanFailureDiagnostic", {
+      value: toScanFailureDiagnostic(diagnostic),
+      enumerable: false,
+    });
+  }
+  return error;
+}
+
+export function toScanFailureDiagnostic(event: RuntimeDiagnosticEvent): ScanFailureDiagnostic {
+  return {
+    stage: event.stage,
+    code: event.code,
+    ...(event.probeFailures ? { probeFailures: event.probeFailures } : {}),
+  };
+}
 
 /** Writes only allowlisted operational categories, never request or error payloads. */
 export function createJsonLineRuntimeDiagnostic(

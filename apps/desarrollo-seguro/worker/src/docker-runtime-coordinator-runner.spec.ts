@@ -363,7 +363,17 @@ describe("createDockerRuntimeSessionFactory", () => {
       diagnostic,
     }));
 
-    await expect(runner.execute(REQUEST, new AbortController().signal)).rejects.toThrow("executor_failed");
+    await expect(runner.execute(REQUEST, new AbortController().signal)).rejects.toMatchObject({
+      message: "executor_failed",
+      scanFailureDiagnostic: {
+        stage: "executor",
+        code: "executor_application_failed",
+        probeFailures: [
+          { operation: "dns", code: "dns_resolution_failed" },
+          { operation: "http-get", code: "connection_failed" },
+        ],
+      },
+    });
     expect(diagnostic).toHaveBeenCalledWith({
       type: "runtime_diagnostic",
       stage: "executor",

@@ -113,12 +113,16 @@ export class RuntimeCoordinatorExecutor implements ScanExecutor {
         clearTimeout(timer);
         signal.removeEventListener("abort", onAbort);
       };
-      const finishWithError = (code: string) => {
+      const finishWithError = (code: string, failureDiagnostic?: unknown) => {
         if (settled) return;
         settled = true;
         cleanup();
         socket.destroy();
-        reject(new Error(code));
+        const error = new Error(code);
+        if (failureDiagnostic !== undefined) {
+          Object.defineProperty(error, "scanFailureDiagnostic", { value: failureDiagnostic });
+        }
+        reject(error);
       };
 
       signal.addEventListener("abort", onAbort, { once: true });
@@ -146,6 +150,7 @@ export class RuntimeCoordinatorExecutor implements ScanExecutor {
               response.errorCode === "request_invalid"
                 ? "transport_failed"
                 : response.errorCode,
+              response.failureDiagnostic,
             );
             return;
           }

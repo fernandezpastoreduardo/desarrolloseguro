@@ -148,6 +148,7 @@ describe("PublicScanService", () => {
           lastFailure: {
             code: "broker_failed",
             failedAt: FIXED_NOW,
+            diagnostic: { stage: "broker_start", code: "docker_daemon_unavailable" },
           },
         }),
         readPublicReport: vi.fn(),
@@ -157,6 +158,7 @@ describe("PublicScanService", () => {
     await expect(service.getDomainStatus("example.com")).resolves.toMatchObject({
       state: "failed",
       failureCode: "broker_failed",
+      failureDiagnostic: { stage: "broker_start", code: "docker_daemon_unavailable" },
       lastReport: null,
     });
   });

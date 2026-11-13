@@ -11,6 +11,7 @@ import {
   projectPublicEvidence,
   type ScanFailureCode,
   type DomainEthicsAssessment,
+  type ScanFailureDiagnostic,
 } from "@desarrolloseguro/core";
 import {
   type EnsureScanResult,
@@ -63,6 +64,7 @@ export type PublicDomainStatus = {
   state: PublicDomainState;
   activeJobId: string | null;
   failureCode: ScanFailureCode | null;
+  failureDiagnostic: ScanFailureDiagnostic | null;
   lastReport: PublicReport | null;
   checkedAt: string;
 };
@@ -105,6 +107,7 @@ export class PublicScanService {
         state: "not_scanned",
         activeJobId: null,
         failureCode: null,
+        failureDiagnostic: null,
         lastReport: null,
         checkedAt: checkedAt.toISOString(),
       };
@@ -127,6 +130,7 @@ export class PublicScanService {
       state,
       activeJobId: isOptedOut ? null : snapshot.activeJobId,
       failureCode: state === "failed" ? snapshot.lastFailure?.code ?? null : null,
+      failureDiagnostic: state === "failed" ? snapshot.lastFailure?.diagnostic ?? null : null,
       lastReport: report ? toPublicReport(report) : null,
       checkedAt: checkedAt.toISOString(),
     };

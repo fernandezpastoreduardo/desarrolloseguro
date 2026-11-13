@@ -102,6 +102,32 @@ export function validateTerminalFailure(status) {
   return status.failureCode;
 }
 
+export function describeTerminalFailure(status) {
+  const failureCode = validateTerminalFailure(status);
+  if (!failureCode) return null;
+  const diagnostic = status.failureDiagnostic;
+  if (
+    !diagnostic ||
+    typeof diagnostic.stage !== "string" ||
+    typeof diagnostic.code !== "string" ||
+    !/^[a-z0-9_]+$/u.test(diagnostic.stage) ||
+    !/^[a-z0-9_]+$/u.test(diagnostic.code)
+  ) {
+    return failureCode;
+  }
+  const probeFailures = Array.isArray(diagnostic.probeFailures) ? diagnostic.probeFailures : [];
+  if (probeFailures.length > 5 || probeFailures.some((probe) =>
+    !probe || typeof probe.operation !== "string" || typeof probe.code !== "string" ||
+    !/^[a-z0-9-]+$/u.test(probe.operation) || !/^[a-z0-9_]+$/u.test(probe.code)
+  )) return failureCode;
+  const probes = probeFailures.map(({ operation, code }) => `${operation}_${code}`).join("_");
+  const detail = [failureCode, diagnostic.stage, diagnostic.code, probes]
+    .filter(Boolean)
+    .join("_")
+    .replaceAll("-", "_");
+  return `public_scan_terminal_${detail}`;
+}
+
 export async function waitForPublicScanReport({
   getStatus,
   previousReportId,
@@ -118,8 +144,8 @@ export async function waitForPublicScanReport({
 
   while (now() < deadline) {
     status = await getStatus();
-    const failureCode = validateTerminalFailure(status);
-    if (failureCode) throw new Error(`public_scan_terminal_${failureCode}`);
+    const failure = describeTerminalFailure(status);
+    if (failure) throw new Error(failure);
     if (status?.lastReport && status.lastReport.id !== previousReportId) {
       return validateCompletedReport(status, previousReportId);
     }

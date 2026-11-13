@@ -833,15 +833,24 @@ describePostgres.sequential("PostgresScanStore", () => {
     const second = await store.claimNextScan(new Date(), TEST_LEASE_MS);
     if (!second) throw new Error("expected_retry_claim");
     await expect(
-      store.failScan(second.id, second.leaseToken, "executor_failed", MAX_ATTEMPTS),
+      store.failScan(second.id, second.leaseToken, "executor_failed", MAX_ATTEMPTS, {
+        stage: "executor",
+        code: "executor_application_failed",
+        probeFailures: [{ operation: "dns", code: "dns_resolution_failed" }],
+      }),
     ).resolves.toBe("failed");
     const failed = await pool.query(
-      "SELECT state, public_error_code FROM ds_scan_jobs WHERE id = $1",
+      "SELECT state, public_error_code, failure_diagnostic FROM ds_scan_jobs WHERE id = $1",
       [first.id],
     );
     expect(failed.rows[0]).toEqual({
       state: "failed",
       public_error_code: "executor_failed",
+      failure_diagnostic: {
+        stage: "executor",
+        code: "executor_application_failed",
+        probeFailures: [{ operation: "dns", code: "dns_resolution_failed" }],
+      },
     });
   });
 

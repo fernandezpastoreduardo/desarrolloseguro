@@ -127,6 +127,7 @@ describe("ScanJobProcessor", () => {
       JOB.leaseToken,
       "broker_failed",
       3,
+      null,
     );
   });
 
@@ -532,10 +533,37 @@ describe("ScanJobProcessor", () => {
       JOB.leaseToken,
       "executor_failed",
       3,
+      null,
     );
     expect(JSON.stringify(vi.mocked(store.failScan).mock.calls)).not.toContain(
       "sensitive diagnostic",
     );
+  });
+
+  it("persists only allowlisted runtime failure diagnostics", async () => {
+    const store = makeStore(JOB);
+    const error = new Error("private docker output");
+    Object.defineProperty(error, "scanFailureDiagnostic", {
+      value: {
+        stage: "volume_create",
+        code: "docker_permission_denied",
+        privateMessage: "must not persist",
+      },
+    });
+    const processor = new ScanJobProcessor(store, {
+      execute: vi.fn().mockRejectedValue(error),
+    });
+
+    await expect(processor.processNext()).resolves.toBe("retrying");
+    expect(store.failScan).toHaveBeenCalledWith(
+      JOB.id,
+      JOB.leaseToken,
+      "executor_failed",
+      3,
+      { stage: "volume_create", code: "docker_permission_denied" },
+    );
+    expect(JSON.stringify(vi.mocked(store.failScan).mock.calls)).not.toContain("private docker output");
+    expect(JSON.stringify(vi.mocked(store.failScan).mock.calls)).not.toContain("must not persist");
   });
 
   function makeStore(job: ClaimedScanJob | null): ScanJobStore & {

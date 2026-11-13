@@ -10,6 +10,7 @@ import {
   parseTransportV1ExecutorResponse,
   type TransportV1ExecutorRequest,
 } from "./transport-v1-executor-protocol.js";
+import { readScanFailureDiagnostic } from "./runtime-diagnostics.js";
 
 const MAX_ACTIVE_JOBS = 1;
 const REQUEST_TIMEOUT_MS = 5_000;
@@ -224,7 +225,7 @@ function handleRequest(
           executionSettled = true;
           clearTimeout(executionTimer);
           if (!controller.signal.aborted && !socket.destroyed) {
-            sendFailure(socket, request.requestId, getRuntimeFailureCode(error));
+            sendFailure(socket, request.requestId, getRuntimeFailureCode(error), readScanFailureDiagnostic(error));
           }
           finish();
         },
@@ -232,7 +233,7 @@ function handleRequest(
       .catch((error: unknown) => {
         executionSettled = true;
         clearTimeout(executionTimer);
-        if (!socket.destroyed) sendFailure(socket, request.requestId, getRuntimeFailureCode(error));
+        if (!socket.destroyed) sendFailure(socket, request.requestId, getRuntimeFailureCode(error), readScanFailureDiagnostic(error));
         finish();
       })
       .finally(() => {
@@ -258,11 +259,13 @@ function sendFailure(
   socket: Socket,
   requestId: string,
   errorCode: "request_invalid" | ScanFailureCode = "executor_failed",
+  failureDiagnostic: ReturnType<typeof readScanFailureDiagnostic> = null,
 ): void {
   socket.end(JSON.stringify({
     protocolVersion: 1,
     requestId,
     errorCode,
+    ...(failureDiagnostic ? { failureDiagnostic } : {}),
   }));
 }
 
