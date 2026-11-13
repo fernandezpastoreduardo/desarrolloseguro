@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="es-ES">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, follow" />
+    <meta name="referrer" content="no-referrer" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'none'; style-src 'self'; img-src 'self'; form-action 'none'" />
+    <meta name="description" content="Ficha prototipo de Grumphya: resumen ético, privacidad, seguridad y rendimiento, con alcance y límites explícitos." />
+    <title>Ficha prototipo de Grumphya · Desarrollo Seguro</title>
+    <link rel="stylesheet" href="/app/site.css" />
+    <link rel="stylesheet" href="/app/prototype-report.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#contenido">Saltar al contenido</a>
+    <header class="site-header">
+      <a class="brand" href="index.html" aria-label="Desarrollo Seguro, inicio"><span class="brand-mark" aria-hidden="true">DS</span><span>DESARROLLO<strong>SEGURO</strong></span></a>
+      <nav class="main-nav" aria-label="Navegación principal"><a href="index.html">Inicio</a><a href="metodologia.html">Metodología</a><a href="privacidad.html">Privacidad y alcance</a><a href="sello.html">Sello e informes</a></nav>
+      <a class="header-cta" href="/app/">Abrir el buscador <span aria-hidden="true">↗</span></a>
+    </header>
+    <main id="contenido" class="prototype-report page-shell">
+      <header class="prototype-report__heading">
+        <p class="eyebrow"><span class="eyebrow-dot" aria-hidden="true"></span> FICHA PROTOTIPO · GRUMPHYA.COM</p>
+        <h1>¿Qué cuenta la evidencia <em>hasta ahora?</em></h1>
+        <p class="prototype-report__lead">Una lectura para público general: qué señales se observaron, qué podrían significar y qué preguntas siguen abiertas.</p>
+        <p class="prototype-report__notice" role="note"><strong>Prototipo basado en una captura histórica.</strong> Resume el informe mostrado el 11 de noviembre de 2026; no es un análisis actual ni sustituye el informe original verificable. No se han rellenado los datos desconocidos.</p>
+      </header>
+
+      <section class="prototype-summary" aria-labelledby="summary-title">
+        <div class="prototype-summary__top"><p class="eyebrow">RESUMEN ÉTICO Y TÉCNICO</p><span class="prototype-tag">HISTÓRICO · NO VIGENTE</span></div>
+        <h2 id="summary-title">64/100 <span>· 4 de 8 criterios evaluados</span></h2>
+        <p class="prototype-summary__plain">La lectura es parcial. Algunas protecciones básicas respondieron, pero se observó una carencia en las cabeceras de seguridad. La conexión TLS, el consentimiento de cookies, el uso dinámico de rastreadores y las prácticas de datos de terceros no quedaron demostrados.</p>
+        <p class="prototype-summary__meaning"><strong>En lenguaje sencillo:</strong> la puntuación resume solo las señales que llegaron a medirse. No significa que el sitio sea “64 % seguro” ni confirma cómo se usan los datos de las personas.</p>
+        <dl class="prototype-meta"><div><dt>Dominio</dt><dd>grumphya.com</dd></div><div><dt>Fecha de la captura</dt><dd>11 nov 2026, 13:52</dd></div><div><dt>Perfil mostrado</dt><dd>transport-v1</dd></div><div><dt>Alcance</dt><dd>Página pública principal (/)</dd></div></dl>
+      </section>
+
+      <section class="prototype-categories" aria-label="Evaluación por áreas">
+        <article class="prototype-category prototype-category--ethics">
+          <p class="prototype-category__index">01 · VALORACIÓN GENERAL</p><h2>Ética</h2><p class="prototype-category__status">Lectura incompleta</p>
+          <p>La evidencia técnica disponible no basta para juzgar si el servicio trata los datos de forma justa. La captura no comprobó el consentimiento real ni las prácticas de proveedores externos.</p>
+          <p class="prototype-category__takeaway">Conclusión: no se puede emitir un veredicto ético completo con esta muestra.</p>
+        </article>
+        <article class="prototype-category prototype-category--privacy">
+          <p class="prototype-category__index">02 · DATOS PERSONALES</p><h2>Privacidad</h2><p class="prototype-category__status">Parcial · varios aspectos desconocidos</p>
+          <p>La respuesta inicial incluyó cookies conocidas. La captura no observó si se guardan antes de aceptar, qué hace el banner de consentimiento ni si los terceros reutilizan o venden datos.</p>
+          <p class="prototype-category__takeaway">Para saberlo hace falta probar la página en un navegador y revisar el consentimiento y las conexiones posteriores.</p>
+        </article>
+        <article class="prototype-category prototype-category--security">
+          <p class="prototype-category__index">03 · PROTECCIÓN TÉCNICA</p><h2>Seguridad</h2><p class="prototype-category__status">Mixta · requiere revisión</p>
+          <p>DNS y respuesta web se mostraron como observados. La captura marcó fallos en cabeceras de seguridad y no concluyó TLS. Esto describe controles visibles, no vulnerabilidades explotables ni seguridad integral.</p>
+          <p class="prototype-category__takeaway">Conviene revisar la configuración de cabeceras y volver a medir el transporte cifrado con un perfil completo.</p>
+        </article>
+        <article class="prototype-category prototype-category--performance">
+          <p class="prototype-category__index">04 · EXPERIENCIA</p><h2>Rendimiento</h2><p class="prototype-category__status">Fuera de la captura del escáner</p>
+          <p>El informe histórico no midió rendimiento. Como referencia separada, el propietario aportó mediciones Lighthouse: escritorio 100/100 y móvil 92/100 en inicio, con LCP de 811 ms y 3.309 ms respectivamente.</p>
+          <p class="prototype-category__takeaway">Estas cifras evalúan rendimiento en una prueba distinta; no se incorporan al 64/100.</p>
+        </article>
+      </section>
+
+      <section class="prototype-evidence" aria-labelledby="evidence-title">
+        <div><p class="eyebrow">DETALLE SIN JERGA</p><h2 id="evidence-title">Qué se vio y qué falta</h2></div>
+        <div class="prototype-evidence__list">
+          <div><span class="prototype-evidence__state prototype-evidence__state--seen">Observado</span><p><strong>Resolución DNS y respuesta HTTP.</strong> El dominio resolvió y respondió a la comprobación pública.</p></div>
+          <div><span class="prototype-evidence__state prototype-evidence__state--risk">Revisar</span><p><strong>Cabeceras de seguridad.</strong> La captura histórica indicó controles con fallos; no se conservó aquí el detalle de cada cabecera.</p></div>
+          <div><span class="prototype-evidence__state prototype-evidence__state--unknown">Sin conclusión</span><p><strong>TLS, consentimiento, rastreo y prácticas de terceros.</strong> No hay evidencia suficiente en esa captura para afirmar que pasan o fallan.</p></div>
+          <div><span class="prototype-evidence__state prototype-evidence__state--unknown">Sin medición</span><p><strong>Rendimiento del escáner.</strong> Se muestran por separado los resultados Lighthouse aportados como referencia.</p></div>
+        </div>
+      </section>
+
+      <section class="prototype-seal" aria-labelledby="seal-link-title">
+        <div><p class="eyebrow">ENLACE PÚBLICO</p><h2 id="seal-link-title">Esta ficha tiene una dirección estable.</h2><p>Puede enlazarse desde Grumphya como ficha demostrativa. Para mostrar un sello verificado por el servidor se necesita un informe real persistido y emitir un token vigente; esta captura histórica no genera por sí sola ese sello.</p></div>
+        <a class="button button-primary" href="sello.html">Cómo funciona el sello <span aria-hidden="true">↗</span></a>
+      </section>
+
+      <p class="prototype-report__disclaimer">Desarrollo Seguro presenta observaciones públicas acotadas. Esta ficha prototipo no es certificación, auditoría independiente ni evaluación jurídica. La puntuación ética es provisional y solo tiene sentido junto a su evidencia, cobertura y fecha.</p>
+    </main>
+    <footer class="site-footer"><div class="page-shell footer-main"><a class="brand brand-footer" href="index.html"><span class="brand-mark" aria-hidden="true">DS</span><span>DESARROLLO<strong>SEGURO</strong></span></a><p>Informes técnicos con evidencia, alcance y límites visibles.</p><nav aria-label="Navegación del pie"><a href="metodologia.html">Metodología</a><a href="sello.html">Sello e informes</a><a href="/app/">Buscador</a></nav></div><div class="footer-bottom">© Desarrollo Seguro · desarrolloseguro.org</div></footer>
+  </body>
+</html>

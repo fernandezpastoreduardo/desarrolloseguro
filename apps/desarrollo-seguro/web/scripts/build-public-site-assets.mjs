@@ -14,13 +14,18 @@ const htmlPages = [
   "privacidad.html",
   "sello.html",
   "verificar.html",
+  "informe-grumphya-prototipo.html",
 ];
 const publicScripts = ["badge-api.mjs", "badge-widget.js", "verificar.js"];
+const prototypeStylesPath = resolve(repositoryRoot, "desarrollo-seguro/informe-grumphya-prototipo.scss");
 
 export async function buildPublicSiteAssets(outputDirectory = defaultOutputDirectory) {
   const { css } = sass.compile(sourcePath, { style: "compressed", sourceMap: false });
+  const { css: prototypeCss } = sass.compile(prototypeStylesPath, { style: "compressed", sourceMap: false });
   const digest = createHash("sha256").update(css).digest("hex").slice(0, 16);
+  const prototypeDigest = createHash("sha256").update(prototypeCss).digest("hex").slice(0, 16);
   const stylesheetName = `site-${digest}.css`;
+  const prototypeStylesheetName = `prototype-report-${prototypeDigest}.css`;
   const assetDirectory = join(outputDirectory, "assets");
   const publicSiteDirectory = join(outputDirectory, "desarrollo-seguro");
   await Promise.all([
@@ -29,12 +34,14 @@ export async function buildPublicSiteAssets(outputDirectory = defaultOutputDirec
   ]);
   await Promise.all([
     writeFile(join(assetDirectory, stylesheetName), css),
+    writeFile(join(assetDirectory, prototypeStylesheetName), prototypeCss),
     writeFile(join(outputDirectory, "site.css"), css),
   ]);
 
   await Promise.all(htmlPages.map(async (page) => {
     const source = await readFile(join(repositoryRoot, "desarrollo-seguro", page), "utf8");
-    const generated = source.replaceAll("/app/site.css", `/app/assets/${stylesheetName}`);
+    let generated = source.replaceAll("/app/site.css", `/app/assets/${stylesheetName}`);
+    generated = generated.replaceAll("/app/prototype-report.css", `/app/assets/${prototypeStylesheetName}`);
     if (generated === source) throw new Error("public_site_stylesheet_reference_missing");
     await writeFile(join(publicSiteDirectory, page), generated);
   }));

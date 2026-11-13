@@ -12,15 +12,17 @@ const pages = [
   "desarrollo-seguro/privacidad.html",
   "desarrollo-seguro/sello.html",
   "desarrollo-seguro/verificar.html",
+  "desarrollo-seguro/informe-grumphya-prototipo.html",
 ];
 const pageContents = await Promise.all(pages.map((path) => readFile(path, "utf8")));
 const [home, methodology, privacy, seal] = pageContents;
-const verifier = pageContents.at(-1);
+const verifier = pageContents[4];
 const styleSources = [
   "desarrollo-seguro/styles.scss",
   "apps/desarrollo-seguro/web/src/public-scan-portal/public-scan-portal.scss",
 ];
 const styles = await Promise.all(styleSources.map((path) => readFile(path, "utf8")));
+const prototypeStyles = await readFile("desarrollo-seguro/informe-grumphya-prototipo.scss", "utf8");
 
 for (const [index, html] of pageContents.entries()) {
   assert.match(html, /<html lang="es-ES">/u, `${pages[index]} declares Spanish`);
@@ -36,6 +38,7 @@ for (const [index, html] of pageContents.entries()) {
 assert.match(home, /href="metodologia\.html"/u);
 assert.match(home, /href="privacidad\.html"/u);
 assert.match(home, /href="sello\.html"/u);
+assert.match(home, /href="informe-grumphya-prototipo\.html"/u, "home page links to the Grumphya prototype report");
 assert.match(methodology, /Metodología|metodología/u);
 assert.match(privacy, /Privacidad|privacidad/u);
 assert.match(seal, /sello|distintivo/iu);
@@ -44,6 +47,16 @@ assert.match(verifier, /noindex, nofollow/u, "verification tokens are excluded f
 assert.match(verifier, /verificar\.js/u, "verification page loads its local verifier script");
 assert.match(verifier, /id="verification-result"/u, "verification page has an accessible result region");
 assert.match(seal, /badge-widget\.js/u, "seal page documents the live embeddable widget");
+const prototypeReport = pageContents.at(-1);
+assert.match(prototypeReport, /FICHA PROTOTIPO/u);
+assert.match(prototypeReport, /64\/100/u, "prototype preserves the score shown in the supplied historical report");
+assert.match(prototypeReport, /4 de 8 criterios/u);
+assert.match(prototypeReport, /Ética/u);
+assert.match(prototypeReport, /Privacidad/u);
+assert.match(prototypeReport, /Seguridad/u);
+assert.match(prototypeReport, /Rendimiento/u);
+assert.match(prototypeReport, /no es un análisis actual/u);
+assert.match(prototypeStyles, /\.prototype-summary/u, "prototype report styling is maintained in Sass");
 assert.match(verifier, /no-referrer/u, "verification links do not leak tokens through referrers");
 assert.match(styles[0], /\$navy:\s*#/u, "the public site uses Sass design tokens");
 assert.match(styles[1], /\$ds-coral:\s*#/u, "the app uses Sass design tokens");
@@ -123,6 +136,12 @@ try {
     const generatedPage = await readFile(join(buildDirectory, page), "utf8");
     assert.match(generatedPage, new RegExp(`href="/app/assets/site-${stylesheetHash}\\.css"`, "u"));
   }
+  const generatedPrototype = await readFile(join(buildDirectory, pages.at(-1)), "utf8");
+  const reportStylesheet = generatedPrototype.match(/href="(\/app\/assets\/prototype-report-[a-f0-9]{16}\.css)"/u)?.[1];
+  assert.ok(reportStylesheet, "prototype page references a fingerprinted Sass stylesheet");
+  const prototypeCss = await readFile(join(buildDirectory, reportStylesheet.replace(/^\/app\//u, "")), "utf8");
+  const prototypeHash = createHash("sha256").update(prototypeCss).digest("hex").slice(0, 16);
+  assert.equal(reportStylesheet, `/app/assets/prototype-report-${prototypeHash}.css`);
   await access(join(buildDirectory, "desarrollo-seguro/badge-widget.js"));
   await access(join(buildDirectory, "desarrollo-seguro/verificar.js"));
 } finally {
