@@ -295,7 +295,7 @@ describePostgres.sequential(
          has_function_privilege(current_user, 'public.ds_claim_next_scan(integer)', 'EXECUTE') AS can_claim,
          has_function_privilege(current_user, 'public.ds_renew_scan_lease(uuid,uuid,integer)', 'EXECUTE') AS can_renew,
          has_function_privilege(current_user, 'public.ds_recover_expired_scan_leases(integer)', 'EXECUTE') AS can_recover,
-         has_function_privilege(current_user, 'public.ds_fail_scan(uuid,uuid,text,integer)', 'EXECUTE') AS can_fail,
+         has_function_privilege(current_user, 'public.ds_fail_scan(uuid,uuid,text,integer,jsonb)', 'EXECUTE') AS can_fail,
          has_function_privilege(current_user, 'public.ds_complete_scan(uuid,uuid,timestamptz,text,timestamptz,text,jsonb,jsonb,jsonb)', 'EXECUTE') AS can_complete,
          has_function_privilege(current_user, 'public.ds_purge_expired_reports(timestamptz)', 'EXECUTE') AS can_purge_reports,
          has_table_privilege(current_user, 'public.ds_scan_runs', 'SELECT') AS can_read_reports,
@@ -330,7 +330,7 @@ describePostgres.sequential(
          (has_function_privilege(current_user, 'public.ds_claim_next_scan(integer)', 'EXECUTE')
            OR has_function_privilege(current_user, 'public.ds_renew_scan_lease(uuid,uuid,integer)', 'EXECUTE')
            OR has_function_privilege(current_user, 'public.ds_recover_expired_scan_leases(integer)', 'EXECUTE')
-           OR has_function_privilege(current_user, 'public.ds_fail_scan(uuid,uuid,text,integer)', 'EXECUTE')
+           OR has_function_privilege(current_user, 'public.ds_fail_scan(uuid,uuid,text,integer,jsonb)', 'EXECUTE')
            OR has_function_privilege(current_user, 'public.ds_complete_scan(uuid,uuid,timestamptz,text,timestamptz,text,jsonb,jsonb,jsonb)', 'EXECUTE')) AS can_execute_worker_functions,
          has_table_privilege(current_user, 'public.ds_scan_runs', 'SELECT') AS can_read_reports,
          (has_table_privilege(current_user, 'public.ds_scan_runs', 'INSERT')

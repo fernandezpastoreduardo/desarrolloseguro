@@ -468,7 +468,7 @@ async function applyRuntimeGrants(pool: Pool): Promise<void> {
       ON public.ds_domains TO ${READ_ROLE};
     GRANT SELECT (
       id, hostname, profile_version, state, queued_at, finished_at,
-      public_error_code
+      public_error_code, failure_diagnostic
     )
       ON public.ds_scan_jobs TO ${READ_ROLE};
     GRANT SELECT (id, hostname, profile_version, scanner_version, vantage,
@@ -490,7 +490,7 @@ async function applyRuntimeGrants(pool: Pool): Promise<void> {
     GRANT EXECUTE ON FUNCTION public.ds_claim_next_scan(integer),
       public.ds_renew_scan_lease(uuid, uuid, integer),
       public.ds_recover_expired_scan_leases(integer),
-      public.ds_fail_scan(uuid, uuid, text, integer),
+      public.ds_fail_scan(uuid, uuid, text, integer, jsonb),
       public.ds_complete_scan(uuid, uuid, timestamptz, text, timestamptz,
         text, jsonb, jsonb, jsonb) TO ${WORKER_ROLE};
     GRANT EXECUTE ON FUNCTION public.ds_purge_expired_reports(timestamptz)

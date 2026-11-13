@@ -170,6 +170,7 @@ describePostgres.sequential(
         api_can_select_raw_evidence: boolean;
         api_can_select_lease_token: boolean;
         api_can_select_failure_code: boolean;
+        api_can_select_failure_diagnostic: boolean;
         api_can_issue_badges: boolean;
         api_can_revoke_badges: boolean;
         api_can_select_metrics: boolean;
@@ -217,6 +218,7 @@ describePostgres.sequential(
          has_column_privilege('ds_api', 'public.ds_check_results', 'evidence_json', 'SELECT') AS api_can_select_raw_evidence,
          has_column_privilege('ds_api', 'public.ds_scan_jobs', 'lease_token', 'SELECT') AS api_can_select_lease_token,
          has_column_privilege('ds_api', 'public.ds_scan_jobs', 'public_error_code', 'SELECT') AS api_can_select_failure_code,
+         has_column_privilege('ds_api', 'public.ds_scan_jobs', 'failure_diagnostic', 'SELECT') AS api_can_select_failure_diagnostic,
          has_table_privilege('ds_api', 'public.ds_report_badges', 'INSERT') AS api_can_issue_badges,
          has_column_privilege('ds_api', 'public.ds_report_badges', 'revoked_at', 'UPDATE') AS api_can_revoke_badges,
          has_table_privilege('ds_api', 'public.ds_scan_metrics', 'SELECT') AS api_can_select_metrics,
@@ -276,6 +278,7 @@ describePostgres.sequential(
         api_can_select_raw_evidence: false,
         api_can_select_lease_token: false,
         api_can_select_failure_code: true,
+        api_can_select_failure_diagnostic: true,
         api_can_issue_badges: true,
         api_can_revoke_badges: true,
         api_can_select_metrics: false,
