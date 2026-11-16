@@ -6,13 +6,39 @@
     <meta name="description" content="Informes públicos y diseño de un sello enlazado a un registro verificable." /><title>Sello e informes · Desarrollo Seguro</title><link rel="stylesheet" href="/app/site.css" />
   </head>
   <body><a class="skip-link" href="#contenido">Saltar al contenido</a><header class="site-header">
-    <a class="brand" href="index.html" aria-label="Desarrollo Seguro, inicio"><span class="brand-mark" aria-hidden="true">DS</span><span>DESARROLLO<strong>SEGURO</strong></span></a><nav class="main-nav" aria-label="Navegación principal"><a href="index.html">Inicio</a><a href="metodologia.html">Metodología</a><a href="privacidad.html">Privacidad y alcance</a><a aria-current="page" href="sello.html">Sello e informes</a></nav><a class="header-cta" href="/app/">Abrir el buscador <span aria-hidden="true">↗</span></a>
+    <a class="brand" href="index.html" aria-label="Desarrollo Seguro, inicio"><img class="brand-logo" src="assets/desarrollo-seguro-logo-v1.svg" alt="DesarrolloSeguro.org" /></a><nav class="main-nav" aria-label="Navegación principal"><a href="index.html">Inicio</a><a href="metodologia.html">Metodología</a><a href="privacidad.html">Privacidad y alcance</a><a aria-current="page" href="sello.html">Sello e informes</a></nav><a class="header-cta" href="/app/">Abrir el buscador <span aria-hidden="true">↗</span></a>
   </header><main id="contenido"><section class="inner-hero page-shell"><p class="eyebrow"><span class="eyebrow-dot" aria-hidden="true"></span> INFORMES PÚBLICOS · SELLO VERIFICABLE</p><h1>Un sello útil lleva de vuelta a <em>su informe.</em></h1><p class="inner-lead">El distintivo debe enlazar a un registro alojado en Desarrollo Seguro, donde cualquiera pueda comprobar dominio, estado, fecha y alcance del informe.</p></section>
     <section class="seal-content page-shell"><div class="seal-explainer"><div class="seal-visual" aria-label="Muestra visual, no es un sello emitido"><div class="seal-orbit"></div><div class="seal-mark"><span>DS</span><strong>SELLO<br />DEMO</strong><small>NO ES UN SELLO EMITIDO</small></div><span class="seal-caption">EL ENLACE APUNTA AL REGISTRO</span></div><div class="seal-copy"><p class="eyebrow">IDENTIDAD Y TRAZABILIDAD</p><h2>La imagen no es la prueba.</h2><p>Una imagen puede copiarse. Por eso el elemento importante es su enlace único al registro oficial: el registro muestra el dominio evaluado y el estado actual del informe para que se pueda contrastar la copia.</p><p>El sistema de emisión debe limitarse a sitios autorizados y a informes elegibles. Cada sello tendrá identificador propio y validación del lado del servidor.</p><a class="button button-primary" href="/app/">Consultar informes <span aria-hidden="true">↗</span></a></div></div>
       <section class="verification-route"><div><p class="eyebrow">VERIFICACIÓN ACTIVA</p><h2>Comprueba un sello en línea.</h2><p>El enlace personal del sello abre <code>/desarrollo-seguro/verificar.html</code>. La página consulta al servidor sin caché y muestra el dominio, el identificador del informe y el resultado actual.</p></div><a class="route-link" href="verificar.html">Abrir el verificador <span aria-hidden="true">↗</span></a></section>
       <section class="verification-route"><div><p class="eyebrow">INTEGRACIÓN WEB</p><h2>Inserta un distintivo que se valida en cada visita.</h2><p>El backend de un sitio autorizado debe recibir el token y URL devueltos al emitir el sello y completar estos atributos con sus valores. El widget solo muestra el enlace cuando el servidor lo valida desde el origen autorizado; al copiar el fragmento a otro origen queda oculto como no verificado.</p><pre><code>&lt;a data-ds-verified-badge data-token="TOKEN" data-hostname="grumphya.com" data-report-id="UUID" hidden&gt;Comprobando sello…&lt;/a&gt;
 &lt;script src="https://desarrolloseguro.org/desarrollo-seguro/badge-widget.js" defer&gt;&lt;/script&gt;</code></pre></div></section>
+      <section class="lighthouse-evidence" aria-labelledby="lighthouse-heading">
+        <div class="lighthouse-evidence__intro">
+          <p class="eyebrow">GRUMPHYA · EVIDENCIA DE RENDIMIENTO</p>
+          <h2 id="lighthouse-heading">Mediciones Lighthouse de referencia</h2>
+          <p>Resultados aportados para cuatro vistas del prototipo. Cada valor es la mediana de tres mediciones del 12 de noviembre de 2026 a las 14:32, sobre el commit <code>c8ac871</code>.</p>
+        </div>
+        <div class="lighthouse-evidence__grid">
+          <article class="lighthouse-card">
+            <h3>Inicio · Escritorio</h3>
+            <dl><div><dt>Rendimiento</dt><dd>100 %</dd></div><div><dt>Accesibilidad</dt><dd>100 %</dd></div><div><dt>Buenas prácticas</dt><dd>100 %</dd></div><div><dt>SEO</dt><dd>100 %</dd></div><div><dt>LCP</dt><dd>810,94 ms</dd></div><div><dt>CLS</dt><dd>0</dd></div><div><dt>TBT</dt><dd>0 ms</dd></div><div><dt>Speed Index</dt><dd>512,21 ms</dd></div></dl>
+          </article>
+          <article class="lighthouse-card">
+            <h3>Inicio · Móvil</h3>
+            <dl><div><dt>Rendimiento</dt><dd>92 %</dd></div><div><dt>Accesibilidad</dt><dd>100 %</dd></div><div><dt>Buenas prácticas</dt><dd>100 %</dd></div><div><dt>SEO</dt><dd>100 %</dd></div><div><dt>LCP</dt><dd>3.308,92 ms</dd></div><div><dt>CLS</dt><dd>0</dd></div><div><dt>TBT</dt><dd>36 ms</dd></div><div><dt>Speed Index</dt><dd>1.098,69 ms</dd></div></dl>
+          </article>
+          <article class="lighthouse-card">
+            <h3>El muro de la vergüenza · Escritorio</h3>
+            <dl><div><dt>Rendimiento</dt><dd>98 %</dd></div><div><dt>Accesibilidad</dt><dd>100 %</dd></div><div><dt>Buenas prácticas</dt><dd>100 %</dd></div><div><dt>SEO</dt><dd>100 %</dd></div><div><dt>LCP</dt><dd>710,12 ms</dd></div><div><dt>CLS</dt><dd>0,08</dd></div><div><dt>TBT</dt><dd>0 ms</dd></div><div><dt>Speed Index</dt><dd>513,9 ms</dd></div></dl>
+          </article>
+          <article class="lighthouse-card">
+            <h3>El muro de la vergüenza · Móvil</h3>
+            <dl><div><dt>Rendimiento</dt><dd>86 %</dd></div><div><dt>Accesibilidad</dt><dd>100 %</dd></div><div><dt>Buenas prácticas</dt><dd>100 %</dd></div><div><dt>SEO</dt><dd>100 %</dd></div><div><dt>LCP</dt><dd>3.163,6 ms</dd></div><div><dt>CLS</dt><dd>0,18</dd></div><div><dt>TBT</dt><dd>33 ms</dd></div><div><dt>Speed Index</dt><dd>1.284,12 ms</dd></div></dl>
+          </article>
+        </div>
+        <p class="lighthouse-evidence__note">Referencia histórica aportada por el autor; no se consulta en vivo ni representa un análisis de seguridad. El sello verificable requiere un informe elegible emitido por el servidor.</p>
+      </section>
       <div class="seal-caveat"><span aria-hidden="true">!</span><p>El endpoint requiere un informe real del dominio autorizado, un token vigente y no revocado. El sello acredita el enlace a ese informe, no es una certificación, auditoría integral ni garantía de seguridad.</p></div>
       <div class="method-cta"><p>Consulta el informe y comprueba la evidencia disponible.</p><a class="button button-primary" href="/app/">Ir al buscador <span aria-hidden="true">↗</span></a></div></section></main>
-    <footer class="site-footer"><div class="page-shell footer-main"><a class="brand brand-footer" href="index.html"><span class="brand-mark" aria-hidden="true">DS</span><span>DESARROLLO<strong>SEGURO</strong></span></a><p>Informes técnicos con evidencia, alcance y límites visibles.</p><nav aria-label="Navegación del pie"><a href="index.html">Inicio</a><a href="metodologia.html">Metodología</a><a href="privacidad.html">Privacidad y alcance</a><a href="/app/">Buscador</a></nav></div><div class="footer-bottom">© Desarrollo Seguro · desarrolloseguro.org</div></footer></body>
+    <footer class="site-footer"><div class="page-shell footer-main"><a class="brand brand-footer" href="index.html"><img class="brand-logo brand-logo--footer" src="assets/desarrollo-seguro-logo-v1.svg" alt="DesarrolloSeguro.org" /></a><p>Informes técnicos con evidencia, alcance y límites visibles.</p><nav aria-label="Navegación del pie"><a href="index.html">Inicio</a><a href="metodologia.html">Metodología</a><a href="privacidad.html">Privacidad y alcance</a><a href="/app/">Buscador</a></nav></div><div class="footer-bottom">© Desarrollo Seguro · desarrolloseguro.org</div></footer></body>
 </html>

@@ -17,6 +17,7 @@ const htmlPages = [
   "informe-grumphya-prototipo.html",
 ];
 const publicScripts = ["badge-api.mjs", "badge-widget.js", "verificar.js"];
+const publicAssets = ["assets/desarrollo-seguro-logo-v1.svg"];
 const prototypeStylesPath = resolve(repositoryRoot, "desarrollo-seguro/informe-grumphya-prototipo.scss");
 
 export async function buildPublicSiteAssets(outputDirectory = defaultOutputDirectory) {
@@ -48,6 +49,12 @@ export async function buildPublicSiteAssets(outputDirectory = defaultOutputDirec
   await Promise.all(publicScripts.map(async (script) => {
     const source = await readFile(join(repositoryRoot, "desarrollo-seguro", script));
     await writeFile(join(publicSiteDirectory, script), source);
+  }));
+  await Promise.all(publicAssets.map(async (asset) => {
+    const source = await readFile(join(repositoryRoot, "desarrollo-seguro", asset));
+    const target = join(publicSiteDirectory, asset);
+    await mkdir(dirname(target), { recursive: true });
+    await writeFile(target, source);
   }));
   return stylesheetName;
 }

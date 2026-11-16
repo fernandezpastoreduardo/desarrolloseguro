@@ -29,6 +29,8 @@ for (const [index, html] of pageContents.entries()) {
   assert.match(html, /<main\b/u, `${pages[index]} has a main landmark`);
   assert.match(html, /href="\/app\/"/u, `${pages[index]} links to the app`);
   assert.match(html, /href="\/app\/site\.css"/u, `${pages[index]} loads compiled Sass`);
+  assert.match(html, /assets\/desarrollo-seguro-logo-v1\.svg/u, `${pages[index]} uses the approved local logo`);
+  assert.doesNotMatch(html, /brand-mark/u, `${pages[index]} does not use the retired placeholder mark`);
   assert.doesNotMatch(html, /href="\/desarrollo-seguro\/styles\.css"/u);
   assert.doesNotMatch(html, /href="#(?!contenido\b)[^"]+"/u, `${pages[index]} has no section-navigation anchors`);
   assert.match(html, /href="(?:\.\/)?(?:index|metodologia|privacidad|sello)\.html"/u, `${pages[index]} has page navigation`);
@@ -151,6 +153,7 @@ try {
   assert.equal(reportStylesheet, `/app/assets/prototype-report-${prototypeHash}.css`);
   await access(join(buildDirectory, "desarrollo-seguro/badge-widget.js"));
   await access(join(buildDirectory, "desarrollo-seguro/verificar.js"));
+  await access(join(buildDirectory, "desarrollo-seguro/assets/desarrollo-seguro-logo-v1.svg"));
 } finally {
   await rm(buildDirectory, { recursive: true, force: true });
 }
