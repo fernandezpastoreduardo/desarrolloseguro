@@ -163,6 +163,10 @@ describePostgres.sequential("PostgresScanStore", () => {
         "UPDATE ds_scan_jobs SET queued_at = clock_timestamp() - interval '25 hours' WHERE id = $1",
         [job.id],
       );
+      await pool.query(
+        "UPDATE ds_scan_runs SET completed_at = clock_timestamp() - interval '2 hours' WHERE id = $1",
+        [reportId],
+      );
       return reportId;
     };
 
