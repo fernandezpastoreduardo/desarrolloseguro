@@ -31,6 +31,7 @@ const PUBLIC_STORAGE_ERROR = "development_security_unavailable";
 const PUBLIC_SCAN_READ_FAILED = "PUBLIC_SCAN_READ_FAILED";
 const PUBLIC_SCAN_ADMISSION_FAILED = "PUBLIC_SCAN_ADMISSION_FAILED";
 const ANALYSIS_AUTHORIZATION_REQUIRED = "analysis_authorization_required";
+const PUBLIC_HISTORY_LIMIT = 12;
 
 export type PublicDomainState =
   "fresh" | "updating" | "stale" | "failed" | "not_scanned" | "unavailable";
@@ -64,6 +65,19 @@ export type PublicReport = {
   }>;
 };
 
+export type PublicReportHistoryEntry = {
+  id: string;
+  hostname: string;
+  profileVersion: string;
+  completedAt: string;
+  expiresAt: string;
+  verdict: PublicReport["verdict"];
+  score: number | null;
+  assessedCriteria: number;
+  totalCriteria: number;
+  certificationState: PublicBetaCertificationResponse["state"] | null;
+};
+
 export type PublicBetaCertificationResponse = {
   policyVersion: "beta-0.1";
   state: "pending" | "active" | "suspended";
@@ -95,6 +109,10 @@ type PublicReadStore = Pick<
   PostgresScanStore,
   "readPublicDomainSnapshot" | "readPublicReport"
 > & {
+  readPublicReportHistory?: (
+    hostname: string,
+    limit: number,
+  ) => Promise<PublicScanReport[]>;
   requestOnDemandScan?: (hostname: string) => Promise<EnsureScanResult>;
 };
 
@@ -164,6 +182,22 @@ export class PublicScanService {
       return toPublicReport(report);
     } catch (error) {
       if (error instanceof NotFoundException) throw error;
+      this.logger.error(PUBLIC_SCAN_READ_FAILED);
+      throw new ServiceUnavailableException(PUBLIC_STORAGE_ERROR);
+    }
+  }
+
+  async getReportHistory(input: unknown): Promise<PublicReportHistoryEntry[]> {
+    const hostname = normalizeRequestHostname(input);
+    const readHistory = this.store.scanStore.readPublicReportHistory;
+    if (!readHistory) {
+      this.logger.error(PUBLIC_SCAN_READ_FAILED);
+      throw new ServiceUnavailableException(PUBLIC_STORAGE_ERROR);
+    }
+    try {
+      const reports = await readHistory.call(this.store.scanStore, hostname, PUBLIC_HISTORY_LIMIT);
+      return reports.map(toPublicHistoryEntry);
+    } catch {
       this.logger.error(PUBLIC_SCAN_READ_FAILED);
       throw new ServiceUnavailableException(PUBLIC_STORAGE_ERROR);
     }
@@ -256,6 +290,22 @@ function toPublicReport(report: PublicScanReport): PublicReport {
       limitation: check.limitation,
       evidence: projectPublicEvidence(check.controlId, check.evidence),
     })),
+  };
+}
+
+function toPublicHistoryEntry(report: PublicScanReport): PublicReportHistoryEntry {
+  const publicReport = toPublicReport(report);
+  return {
+    id: publicReport.id,
+    hostname: publicReport.hostname,
+    profileVersion: publicReport.profileVersion,
+    completedAt: publicReport.completedAt,
+    expiresAt: publicReport.expiresAt,
+    verdict: publicReport.verdict,
+    score: publicReport.ethicsAssessment.score,
+    assessedCriteria: publicReport.ethicsAssessment.assessedCriteria,
+    totalCriteria: publicReport.ethicsAssessment.totalCriteria,
+    certificationState: publicReport.certification?.state ?? null,
   };
 }
 

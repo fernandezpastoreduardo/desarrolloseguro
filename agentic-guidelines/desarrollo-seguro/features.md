@@ -30,6 +30,19 @@ elegible posterior la reactiva.
 o histórico; un sello suspendido deja de verificarse aunque su token siga
 existiendo; la ficha pública muestra el estado y la fecha de última evaluación.
 
+## F6. Historial público y comparabilidad
+
+**Incremento B-01 disponible:** el endpoint `GET /domains/:hostname/history`
+devuelve hasta doce resúmenes de informes externos, ordenados por fecha. La
+respuesta solo contiene identificadores UUID, perfil, fechas, veredicto,
+puntuación provisional y estado de certificación. La ficha React muestra los
+enlaces a cada informe y advierte que las puntuaciones solo son comparables
+entre perfiles iguales.
+
+**Pendiente para completar B:** caché pública de aproximadamente una hora,
+eliminación de fichas no certificadas tras 30 días de inactividad y la cola
+completa con progreso SSE. Esas políticas no se simulan en este incremento.
+
 ## F3. Escaneo automatizado
 
 El worker y el coordinador están en Compose; el coordinador crea un executor de red deshabilitada y un broker de salida acotado. La admisión compartida limita la cola a diez trabajos simultáneos en espera y una ejecución global, con máximo 1000 dominios `on_demand`. En pruebas, las migraciones `012` y `013` desactivan el cooldown de 24 horas y la caché de informes recientes; los límites antiabuso por minuto y de capacidad permanecen activos. Antes de considerar completo el runtime público, el workflow manual debe pasar sus gates, aplicar solo Desarrollo Seguro y validar un informe `domain-v3` reciente de `grumphya.com`. No se hacen POST al sitio analizado, autenticación en esos sitios, fuzzing, fuerza bruta ni exploración arbitraria.

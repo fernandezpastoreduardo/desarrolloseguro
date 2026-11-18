@@ -30,6 +30,10 @@ describe("PublicScanController routes", () => {
       handler: PublicScanController.prototype.getReport,
       route: "reports/:reportId",
     },
+    {
+      handler: PublicScanController.prototype.getReportHistory,
+      route: "domains/:hostname/history",
+    },
   ])("serves $route as a non-cacheable GET route", ({ handler, route }) => {
     expect(Reflect.getMetadata(PATH_METADATA, handler)).toBe(route);
     expect(Reflect.getMetadata(METHOD_METADATA, handler)).toBe(

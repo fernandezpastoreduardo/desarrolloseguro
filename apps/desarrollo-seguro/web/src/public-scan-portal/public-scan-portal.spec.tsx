@@ -171,8 +171,8 @@ describe("PublicScanPortal", () => {
   }, 10_000);
 
   it("shows the stored checks and makes a stale report visibly historical", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      Response.json({
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(Response.json({
         hostname: "example.com",
         enrollment: "on_demand",
         state: "stale",
@@ -180,8 +180,21 @@ describe("PublicScanPortal", () => {
         activeJobId: null,
         lastReport: PUBLIC_REPORT,
         checkedAt: "2026-11-03T08:10:00.000Z",
-      }),
-    );
+      }))
+      .mockResolvedValueOnce(Response.json([
+        {
+          id: PUBLIC_REPORT.id,
+          hostname: PUBLIC_REPORT.hostname,
+          profileVersion: PUBLIC_REPORT.profileVersion,
+          completedAt: PUBLIC_REPORT.completedAt,
+          expiresAt: PUBLIC_REPORT.expiresAt,
+          verdict: PUBLIC_REPORT.verdict,
+          score: PUBLIC_REPORT.ethicsAssessment.score,
+          assessedCriteria: PUBLIC_REPORT.ethicsAssessment.assessedCriteria,
+          totalCriteria: PUBLIC_REPORT.ethicsAssessment.totalCriteria,
+          certificationState: null,
+        },
+      ]));
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
 
@@ -193,6 +206,8 @@ describe("PublicScanPortal", () => {
     await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
 
     expect(await screen.findByText("Histórico")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Historial de observaciones" })).toBeVisible();
+    expect(screen.getByText("1 informe")).toBeVisible();
     expect(screen.getByText(REPORT_SUMMARY)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Resumen y puntuación" })).toBeVisible();
     expect(screen.getByText("100/100 · provisional · 1 de 8 criterios evaluados")).toBeVisible();
@@ -237,6 +252,7 @@ describe("PublicScanPortal", () => {
           checkedAt: "2026-11-03T08:10:00.000Z",
         }),
       )
+      .mockResolvedValueOnce(Response.json([]))
       .mockResolvedValueOnce(
         Response.json({ hostname: "example.com", state: "queued" }, { status: 202 }),
       );

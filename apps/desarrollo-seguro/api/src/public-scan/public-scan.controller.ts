@@ -14,6 +14,7 @@ import {
   type PublicAnalysisRequest,
   type PublicDomainStatus,
   type PublicReport,
+  type PublicReportHistoryEntry,
 } from "./public-scan.service.js";
 import { PublicScanRateLimitGuard } from "./public-scan-rate-limit.js";
 
@@ -46,5 +47,13 @@ export class PublicScanController {
   @Header("Cache-Control", CACHE_CONTROL_NO_STORE)
   getReport(@Param("reportId") reportId: string): Promise<PublicReport> {
     return this.scans.getReport(reportId);
+  }
+
+  @Get("domains/:hostname/history")
+  @Header("Cache-Control", CACHE_CONTROL_NO_STORE)
+  getReportHistory(
+    @Param("hostname") hostname: string,
+  ): Promise<PublicReportHistoryEntry[]> {
+    return this.scans.getReportHistory(hostname);
   }
 }

@@ -248,6 +248,36 @@ describe("PostgresScanStore unit behavior", () => {
     expect(query.mock.calls[0][0]).toContain("domains.opted_out_at IS NULL");
   });
 
+  it("reads bounded history only for public domain reports", async () => {
+    const query = vi.fn().mockResolvedValue({
+      rows: [
+        makePublicReportRow({ report_id: "8d140e17-68d6-489a-b451-7e87408187ae" }),
+        makePublicReportRow({ report_id: "123e4567-e89b-42d3-a456-426614174000" }),
+      ],
+    });
+    const store = new PostgresScanStore(makePool({ query }));
+
+    const history = await store.readPublicReportHistory("example.com", 12);
+
+    expect(history).toHaveLength(2);
+    expect(query.mock.calls[0][0]).toContain("domains.opted_out_at IS NULL");
+    expect(query.mock.calls[0][0]).toContain("LIMIT $2");
+    expect(query.mock.calls[0][1]).toEqual(["example.com", 12]);
+  });
+
+  it.each([0, -1, 13, 1.5, Number.NaN])(
+    "rejects an invalid public history limit %s before querying",
+    async (limit) => {
+      const query = vi.fn();
+      const store = new PostgresScanStore(makePool({ query }));
+
+      await expect(store.readPublicReportHistory("example.com", limit)).rejects.toThrow(
+        "invalid_public_history_limit",
+      );
+      expect(query).not.toHaveBeenCalled();
+    },
+  );
+
   it.each([0, -1, 5 * 60 * 1000 + 1, 1.5, Number.NaN])(
     "rejects invalid lease duration %s before querying the database",
     async (leaseDurationMs) => {

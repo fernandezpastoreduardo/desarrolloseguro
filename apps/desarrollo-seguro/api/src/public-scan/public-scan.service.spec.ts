@@ -10,6 +10,52 @@ const FIXED_NOW = new Date("2026-11-03T10:00:00.000Z");
 afterEach(() => vi.useRealTimers());
 
 describe("PublicScanService", () => {
+  it("returns a bounded public history ordered by the store", async () => {
+    const reports = [
+      makeReport({ id: REPORT_ID, completedAt: new Date("2026-11-03T10:01:00.000Z") }),
+      makeReport({ id: "123e4567-e89b-42d3-a456-426614174000", completedAt: new Date("2026-11-02T10:01:00.000Z") }),
+    ];
+    const readPublicReportHistory = vi.fn().mockResolvedValue(reports);
+    const service = new PublicScanService({
+      scanStore: {
+        readPublicDomainSnapshot: vi.fn(),
+        readPublicReport: vi.fn(),
+        readPublicReportHistory,
+      },
+    });
+
+    await expect(service.getReportHistory(" EXAMPLE.COM. ")).resolves.toEqual([
+      expect.objectContaining({
+        id: REPORT_ID,
+        hostname: "example.com",
+        profileVersion: "controls-v3",
+        score: null,
+        assessedCriteria: 0,
+        totalCriteria: 8,
+      }),
+      expect.objectContaining({
+        id: "123e4567-e89b-42d3-a456-426614174000",
+      }),
+    ]);
+    expect(readPublicReportHistory).toHaveBeenCalledExactlyOnceWith("example.com", 12);
+  });
+
+  it("does not expose storage details when history cannot be read", async () => {
+    const readPublicReportHistory = vi.fn().mockRejectedValue(new Error(INTERNAL_STORAGE_ERROR));
+    const service = new PublicScanService({
+      scanStore: {
+        readPublicDomainSnapshot: vi.fn(),
+        readPublicReport: vi.fn(),
+        readPublicReportHistory,
+      },
+    });
+
+    await expect(service.getReportHistory("example.com")).rejects.toMatchObject({
+      status: 503,
+      message: "development_security_unavailable",
+    });
+  });
+
   it("returns a truthful not-scanned status without starting work", async () => {
     const readPublicDomainSnapshot = vi.fn().mockResolvedValue(null);
     const readPublicReport = vi.fn();

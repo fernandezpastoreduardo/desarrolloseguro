@@ -46,6 +46,7 @@ const RETRY_AFTER_HEADER = "Retry-After";
 const MAX_RETRY_AFTER_SECONDS = 3_600;
 const ANALYSIS_STATUS_POLL_INTERVAL_MS = 5_000;
 const MAX_ANALYSIS_STATUS_POLLS = 180;
+const PUBLIC_HISTORY_LIMIT = 12;
 const REPORT_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const DOMAIN_STATES = [
@@ -208,6 +209,18 @@ type DomainStatus = {
   lastReport: PublicReport | null;
   checkedAt: string;
 };
+type PublicReportHistoryEntry = {
+  id: string;
+  hostname: string;
+  profileVersion: ProfileVersion;
+  completedAt: string;
+  expiresAt: string;
+  verdict: ScanVerdict;
+  score: number | null;
+  assessedCriteria: number;
+  totalCriteria: number;
+  certificationState: "pending" | "active" | "suspended" | null;
+};
 
 const STATE_LABELS: Record<string, string> = {
   fresh: "Informe vigente",
@@ -229,6 +242,7 @@ export function PublicScanPortal() {
   const [state, setState] = useState<PortalState>("idle");
   const [status, setStatus] = useState<DomainStatus | null>(null);
   const [report, setReport] = useState<PublicReport | null>(null);
+  const [history, setHistory] = useState<PublicReportHistoryEntry[]>([]);
   const [message, setMessage] = useState("");
   const [darkTheme, setDarkTheme] = useState(false);
   const [authorizationConfirmed, setAuthorizationConfirmed] = useState(false);
@@ -277,6 +291,7 @@ export function PublicScanPortal() {
           payload.lastReport &&
           payload.lastReport.id !== reportBeforeAnalysisId.current
         ) {
+          void loadHistory(payload.hostname);
           setAnalysisRequestState(null);
           return;
         }
@@ -324,6 +339,7 @@ export function PublicScanPortal() {
     setState("loading");
     setMessage("");
     setStatus(null);
+    setHistory([]);
     let publicError = GENERIC_ERROR;
     try {
       const response = await fetch(
@@ -348,6 +364,7 @@ export function PublicScanPortal() {
       }
       setReport(payload);
       setDomain(payload.hostname);
+      await loadHistory(payload.hostname);
       setState("ready");
     } catch {
       setReport(null);
@@ -373,6 +390,7 @@ export function PublicScanPortal() {
     setState("loading");
     setMessage("");
     setReport(null);
+    setHistory([]);
     let publicError = GENERIC_ERROR;
     try {
       const response = await fetch(
@@ -392,12 +410,33 @@ export function PublicScanPortal() {
       if (!isDomainStatus(payload)) throw new Error("invalid_status_response");
       setStatus(payload);
       setReport(payload.lastReport);
+      if (payload.lastReport) void loadHistory(payload.hostname);
       setState("ready");
     } catch {
       setStatus(null);
       setReport(null);
       setState("error");
       setMessage(publicError);
+    }
+  }
+
+  async function loadHistory(hostname: string): Promise<void> {
+    try {
+      const response = await fetch(
+        `${API_ROOT}/domains/${encodeURIComponent(hostname)}/history`,
+        {
+          method: "GET",
+          headers: { Accept: ACCEPT_JSON_HEADER },
+          credentials: "omit",
+          cache: "no-store",
+        },
+      );
+      if (!response.ok) throw new Error("invalid_history_response");
+      const payload: unknown = await readPublicJson(response);
+      if (!isPublicReportHistory(payload)) throw new Error("invalid_history_response");
+      setHistory(payload.slice(0, PUBLIC_HISTORY_LIMIT));
+    } catch {
+      setHistory([]);
     }
   }
 
@@ -515,6 +554,7 @@ export function PublicScanPortal() {
         <DomainResult
           status={status}
           report={report}
+          history={history}
           authorizationConfirmed={authorizationConfirmed}
           onAuthorizationChange={setAuthorizationConfirmed}
           analysisRequestState={analysisRequestState}
@@ -522,7 +562,7 @@ export function PublicScanPortal() {
         />
       )}
       {state === "ready" && !status && report && (
-        <ReportResult report={report} />
+        <ReportResult report={report} history={history} />
       )}
       {isScanInProgress(status, analysisRequestState) && (
         <ScanProgress
@@ -567,6 +607,7 @@ export function PublicScanPortal() {
 function DomainResult({
   status,
   report,
+  history,
   authorizationConfirmed,
   onAuthorizationChange,
   analysisRequestState,
@@ -574,6 +615,7 @@ function DomainResult({
 }: {
   status: DomainStatus;
   report: PublicReport | null;
+  history: PublicReportHistoryEntry[];
   authorizationConfirmed: boolean;
   onAuthorizationChange: (confirmed: boolean) => void;
   analysisRequestState: AnalysisRequestState | null;
@@ -653,7 +695,7 @@ function DomainResult({
           />
         </>
       )}
-      <ReportSummary report={report} state={status.state} />
+      <ReportSummary report={report} state={status.state} history={history} />
     </section>
   );
 }
@@ -722,12 +764,12 @@ function isRetryableAnalysisRequestState(
   ].includes(requestState);
 }
 
-function ReportResult({ report }: { report: PublicReport }) {
+function ReportResult({ report, history }: { report: PublicReport; history: PublicReportHistoryEntry[] }) {
   return (
     <section className="ds-portal__result" aria-labelledby="ds-result-heading">
       <p className="ds-portal__eyebrow">Informe público · {report.hostname}</p>
       <h2 id="ds-result-heading">Detalle del informe</h2>
-      <ReportSummary report={report} state="historical" />
+      <ReportSummary report={report} state="historical" history={history} />
     </section>
   );
 }
@@ -778,9 +820,11 @@ function getScanProgressPhase(
 function ReportSummary({
   report,
   state,
+  history,
 }: {
   report: PublicReport;
   state: string;
+  history: PublicReportHistoryEntry[];
 }) {
   const isCurrent = state === "fresh";
   return (
@@ -888,6 +932,7 @@ function ReportSummary({
           <dd>{report.profileVersion}</dd>
         </div>
       </dl>
+      <ReportHistory history={history} currentReportId={report.id} />
       <h3>Alcance observado</h3>
       <ul className="ds-portal__scope">
         {report.scope.map((scopeItem) => (
@@ -899,6 +944,42 @@ function ReportSummary({
         informe. No acredita la seguridad completa del sitio.
       </p>
     </>
+  );
+}
+
+function ReportHistory({
+  history,
+  currentReportId,
+}: {
+  history: PublicReportHistoryEntry[];
+  currentReportId: string;
+}) {
+  if (history.length === 0) return null;
+  return (
+    <section className="ds-portal__history" aria-labelledby="report-history-heading">
+      <div className="ds-portal__history-heading">
+        <div>
+          <p className="ds-portal__eyebrow">Trazabilidad pública</p>
+          <h3 id="report-history-heading">Historial de observaciones</h3>
+        </div>
+        <span>{history.length} informe{history.length === 1 ? "" : "s"}</span>
+      </div>
+      <p className="ds-portal__disclaimer">
+        Las puntuaciones solo son comparables cuando comparten el mismo perfil de controles.
+        Cada ficha conserva su fecha y alcance originales.
+      </p>
+      <ol className="ds-portal__history-list">
+        {history.map((entry) => (
+          <li key={entry.id} data-current={entry.id === currentReportId}>
+            <a href={`?report=${encodeURIComponent(entry.id)}`}>
+              <span>{formatDate(entry.completedAt)}</span>
+              <strong>{entry.score === null ? "Sin puntuación" : `${entry.score}/100`}</strong>
+              <small>{entry.profileVersion} · {getHistoryVerdictLabel(entry.verdict)}</small>
+            </a>
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 }
 
@@ -1005,6 +1086,25 @@ function isPublicReport(value: unknown): value is PublicReport {
     return false;
   }
   return true;
+}
+
+function isPublicReportHistory(value: unknown): value is PublicReportHistoryEntry[] {
+  return Array.isArray(value) && value.length <= PUBLIC_HISTORY_LIMIT && value.every((entry) => {
+    if (!isRecord(entry)) return false;
+    return (
+      isUuid(entry.id) &&
+      isPublicHostname(entry.hostname) &&
+      isOneOf(entry.profileVersion, PROFILE_VERSIONS) &&
+      isIsoTimestamp(entry.completedAt) &&
+      isIsoTimestamp(entry.expiresAt) &&
+      isOneOf(entry.verdict, SCAN_VERDICTS) &&
+      (entry.score === null || (isInteger(entry.score) && entry.score >= 0 && entry.score <= 100)) &&
+      isInteger(entry.assessedCriteria) && entry.assessedCriteria >= 0 &&
+      isInteger(entry.totalCriteria) && entry.totalCriteria > 0 &&
+      entry.assessedCriteria <= entry.totalCriteria &&
+      (entry.certificationState === null || isOneOf(entry.certificationState, ["pending", "active", "suspended"] as const))
+    );
+  });
 }
 
 function isPublicCertification(value: unknown): value is PublicReport["certification"] {
@@ -1365,6 +1465,10 @@ function getControlLabel(controlId: string): string {
     "DS-QUAL-02": "Tiempo y tamaño de respuesta",
   };
   return labels[controlId] ?? controlId;
+}
+
+function getHistoryVerdictLabel(verdict: ScanVerdict): string {
+  return VERDICT_LABELS[verdict] ?? "Resultado no concluyente";
 }
 
 function formatEvidenceValue(value: string | number | boolean, key: string): string {

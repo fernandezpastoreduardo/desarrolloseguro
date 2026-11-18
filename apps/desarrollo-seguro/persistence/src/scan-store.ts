@@ -28,6 +28,7 @@ const TRIGGERS = ["scheduled", "requested"] as const;
 const VERDICTS = ["pass", "fail", "inconclusive"] as const;
 const SEVERITIES = ["critical", "high", "medium", "low", "info"] as const;
 const INVALID_PUBLIC_REPORT_ROW = "invalid_public_report_row";
+const MAX_PUBLIC_HISTORY_LIMIT = 12;
 const PUBLIC_REPORT_COLUMNS = `
   reports.id AS report_id,
   reports.hostname AS report_hostname,
@@ -347,6 +348,29 @@ export class PostgresScanStore implements ScanJobStore {
     );
     const row = result.rows[0];
     return row ? parsePublicScanReport(row) : null;
+  }
+
+  async readPublicReportHistory(
+    hostname: string,
+    limit: number,
+  ): Promise<PublicScanReport[]> {
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_PUBLIC_HISTORY_LIMIT) {
+      throw new Error("invalid_public_history_limit");
+    }
+    const result = await this.pool.query<Record<string, unknown>>(
+      `SELECT ${PUBLIC_REPORT_COLUMNS}, check_rows.checks
+       FROM public.ds_scan_runs AS reports
+       INNER JOIN public.ds_domains AS domains
+         ON domains.hostname = reports.hostname
+       ${PUBLIC_CHECKS_LATERAL}
+       WHERE reports.hostname = $1
+         AND reports.profile_version IN ('domain-v1', 'domain-v2', 'domain-v3')
+         AND domains.opted_out_at IS NULL
+       ORDER BY reports.completed_at DESC
+       LIMIT $2`,
+      [hostname, limit],
+    );
+    return result.rows.map(parsePublicScanReport);
   }
 
   async close(): Promise<void> {
