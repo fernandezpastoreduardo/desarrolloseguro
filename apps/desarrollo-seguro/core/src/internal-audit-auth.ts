@@ -62,8 +62,8 @@ export function createTechnicalJwt(options: TechnicalJwtOptions): string {
 function validateOptions(options: TechnicalJwtOptions): void {
   if (
     typeof options.kid !== "string" || !BASE64URL.test(options.kid) || options.kid.length > 64 ||
-    typeof options.issuer !== "string" || options.issuer.length === 0 || options.issuer.length > 128 ||
-    typeof options.audience !== "string" || options.audience.length === 0 || options.audience.length > 128 ||
+    options.issuer !== INTERNAL_AUDIT_JWT_ISSUER ||
+    options.audience !== INTERNAL_AUDIT_JWT_AUDIENCE ||
     typeof options.subject !== "string" || options.subject.length === 0 || options.subject.length > 128 ||
     options.hostname !== "grumphya.com" ||
     options.environment !== "production" ||

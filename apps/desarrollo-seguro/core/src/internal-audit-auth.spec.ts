@@ -52,4 +52,18 @@ describe("technical audit JWT", () => {
       ttlSeconds: 301,
     })).toThrow("internal_audit_auth_config_invalid");
   });
+
+  it("rejects issuer or audience values outside the fixed contract", () => {
+    const { privateKey } = generateKeyPairSync("ed25519");
+    expect(() => createTechnicalJwt({
+      privateKey,
+      kid: "ds-auditor-2026",
+      issuer: "untrusted-issuer",
+      audience: "grumphya-audit",
+      subject: "desarrollo-seguro-audit",
+      hostname: "grumphya.com",
+      environment: "production",
+      scopes: ["application"],
+    })).toThrow("internal_audit_auth_config_invalid");
+  });
 });
