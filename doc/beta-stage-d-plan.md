@@ -28,7 +28,10 @@ flujos de login, frontera de autorización y logout; no admite credenciales ni
 identificadores de usuarios reales. D-05 añade observaciones acotadas de E2E,
 rendimiento, accesibilidad y responsive: solo conserva un código de métrica,
 un valor con unidad y límites, un hash de muestra y la fecha; no conserva
-HTML, capturas, trazas, URLs ni datos de usuario.
+HTML, capturas, trazas, URLs ni datos de usuario. D-06 añade señales
+agregadas de almacenamiento, terceros, consentimiento, transparencia y
+minimización: conserva códigos y contadores booleanos, sin nombres de cookies,
+dominios, textos, scripts ni conclusiones sobre venta de datos.
 
 ## Orden propuesto
 

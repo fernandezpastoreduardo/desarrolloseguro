@@ -19,6 +19,10 @@ conservan credenciales, tokens, correos o IDs de usuarios reales. Las
 observaciones D-05 solo conservan códigos de métrica allowlisted, valores
 acotados con unidad, hash de muestra y timestamp; nunca HTML, capturas,
 trazas, URLs ni datos de usuario.
+Las observaciones D-06 solo conservan señales agregadas allowlisted de
+almacenamiento, terceros, consentimiento, transparencia y minimización; no
+conservan nombres de cookies, dominios, textos, scripts ni permiten inferir
+venta de datos.
 
 El adaptador de acceso D-01 autoriza únicamente operaciones `GET` contra
 recursos allowlisted y rutas sin query, fragmento, salto de directorio ni
