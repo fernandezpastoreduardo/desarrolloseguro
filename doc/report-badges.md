@@ -1,6 +1,13 @@
 # Sello verificable de informe
 
-El API puede emitir un identificador aleatorio de 256 bits ligado a un informe persistido de `grumphya.com` con perfil `domain-v1`, `domain-v2` o `domain-v3` (el perfil activo actual es `domain-v3`). Solo guarda su SHA-256. Cada sello dura 30 días, puede revocarse y desaparece si la política de retención elimina el informe. No se emite desde datos de muestra ni desde un informe inexistente.
+El API puede emitir un identificador aleatorio de 256 bits ligado al informe certificado vigente de `grumphya.com` con perfil `domain-v1`, `domain-v2` o `domain-v3` (el perfil activo actual es `domain-v3`). Solo guarda su SHA-256. Cada sello dura 30 días, puede revocarse y desaparece si la política de retención elimina el informe. No se emite desde datos de muestra, desde un informe pendiente o desde un informe bloqueado.
+
+La certificación beta se persiste por dominio (`pending`, `active` o
+`suspended`). La emisión y la verificación requieren una certificación
+`active` y que `report_id` coincida con `certified_report_id`; los informes
+históricos no generan un sello verificable. Una suspensión oculta
+automáticamente el sello y una evaluación elegible posterior lo reactiva sin
+cambiar el dominio autorizado.
 
 ## Emisión
 

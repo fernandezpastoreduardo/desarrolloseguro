@@ -21,6 +21,7 @@ import {
   type PostgresScanStore,
   type PublicDomainSnapshot,
   type PublicScanReport,
+  type PublicBetaCertification,
   type PublicScanSeverity,
   type PublicScanStatus,
 } from "@desarrolloseguro/persistence";
@@ -47,6 +48,7 @@ export type PublicReport = {
   verdict: "pass" | "fail" | "inconclusive";
   ethicsAssessment: DomainEthicsAssessment;
   betaCertification: ReturnType<typeof assessBetaCertification>;
+  certification: PublicBetaCertificationResponse | null;
   scope: string[];
   checks: Array<{
     controlId: string;
@@ -60,6 +62,15 @@ export type PublicReport = {
     limitation: string;
     evidence: Record<string, string | number | boolean>;
   }>;
+};
+
+export type PublicBetaCertificationResponse = {
+  policyVersion: "beta-0.1";
+  state: "pending" | "active" | "suspended";
+  latestAssessmentStatus: "eligible" | "pending" | "blocked";
+  score: number | null;
+  lastCheckedAt: string;
+  certifiedReportId: string | null;
 };
 
 export type PublicDomainStatus = {
@@ -231,6 +242,7 @@ function toPublicReport(report: PublicScanReport): PublicReport {
     verdict: report.verdict,
     ethicsAssessment: assessDomainEthics(report.checks),
     betaCertification: assessBetaCertification(toBetaObservations(report.checks)),
+    certification: toPublicCertification(report.certification),
     scope: report.scope,
     checks: report.checks.map((check) => ({
       controlId: check.controlId,
@@ -244,6 +256,20 @@ function toPublicReport(report: PublicScanReport): PublicReport {
       limitation: check.limitation,
       evidence: projectPublicEvidence(check.controlId, check.evidence),
     })),
+  };
+}
+
+function toPublicCertification(
+  certification: PublicBetaCertification | null,
+): PublicBetaCertificationResponse | null {
+  if (!certification) return null;
+  return {
+    policyVersion: certification.policyVersion,
+    state: certification.state,
+    latestAssessmentStatus: certification.latestAssessmentStatus,
+    score: certification.score,
+    lastCheckedAt: certification.lastCheckedAt.toISOString(),
+    certifiedReportId: certification.certifiedReportId,
   };
 }
 

@@ -309,6 +309,10 @@ async function applyRuntimeGrants(pool: Pool): Promise<void> {
       target_path, method, summary, limitation
     ) ON public.ds_check_results TO ds_read;
     GRANT SELECT ON public.ds_public_check_results TO ds_read;
+    GRANT SELECT (hostname, policy_version, state, latest_report_id,
+      certified_report_id, latest_assessment_status, latest_assessment,
+      state_reason, last_checked_at, activated_at, suspended_at)
+      ON public.ds_beta_certifications TO ds_read;
     GRANT SELECT, INSERT ON public.ds_report_badges TO ds_api;
     GRANT EXECUTE ON FUNCTION ds_ensure_fresh_scan(text, text, text)
       TO ds_api;

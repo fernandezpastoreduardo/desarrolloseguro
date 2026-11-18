@@ -124,6 +124,10 @@ Este documento representa una **toma de requisitos inicial**, no una especificac
 - Flujo de propuesta, revisión, aprobación, publicación y versionado del estándar.
 - Criterios de aceptación y pruebas automatizadas para cada requisito.
 
-**Relación con el código actual:** el README del repositorio describe una fase académica de observación y presentación de evidencias, sin certificación operativa ni escaneo completo activado. **Este documento describe el producto objetivo y las decisiones iniciales del MVP**, y no sustituye ese estado real ni autoriza a presentar el sello como una certificación ya implementada.
+**Relación con el código actual:** la Beta 0.1 ya persiste un estado acotado
+de certificación y dispone de un sello verificable ligado a un informe
+elegible. **Este documento describe el producto objetivo y las decisiones
+iniciales del MVP**; la implementación beta no equivale a una certificación
+independiente, legal ni completa.
 
 **Regla de evolución:** toda decisión posterior deberá quedar registrada y, si contradice una de estas premisas, el documento deberá actualizarse explícitamente; una decisión histórica no obliga a mantener patrones técnicos obsoletos o inconsistentes.

@@ -63,12 +63,12 @@ describePostgres.sequential("PostgresScanStore", () => {
     });
   });
 
-  it("issues report badges only for a matching domain-v1 report and supports binding and revocation", async () => {
+  it("issues report badges only for a matching eligible report and supports binding and revocation", async () => {
     const hostname = "grumphya.com";
-    await store.ensureDomain(hostname, "on_demand", "domain-v1");
+    await store.ensureDomain(hostname, "on_demand", "domain-v3");
     await store.ensureFreshScan({
       hostname,
-      profileVersion: "domain-v1",
+      profileVersion: "domain-v3",
       trigger: "requested",
     });
     const job = await store.claimNextScan(new Date(), TEST_LEASE_MS);
@@ -77,13 +77,13 @@ describePostgres.sequential("PostgresScanStore", () => {
       jobId: job.id,
       leaseToken: job.leaseToken,
       hostname,
-      profileVersion: "domain-v1",
+      profileVersion: "domain-v3",
       scannerVersion: "test",
       startedAt: new Date(Date.now() - 1000),
       completedAt: new Date(),
-      verdict: "inconclusive",
+      verdict: "pass",
       scope: ["/"],
-      checks: makeDomainV1Checks(),
+      checks: makeEligibleDomainV3Checks(),
       metrics: {
         requestsCount: 0,
         bytesCount: 0,
@@ -101,6 +101,90 @@ describePostgres.sequential("PostgresScanStore", () => {
     await expect(store.verifyReportBadge({ hostname, reportId, tokenHash, at: new Date(expiresAt.getTime() + 1) })).resolves.toBe(false);
     await expect(store.revokeReportBadge({ hostname, reportId, tokenHash, at: new Date() })).resolves.toBe(true);
     await expect(store.verifyReportBadge({ hostname, reportId, tokenHash, at: new Date() })).resolves.toBe(false);
+  });
+
+  it("does not issue a badge while the certification is pending", async () => {
+    const hostname = "pending.example.net";
+    await store.ensureDomain(hostname, "on_demand", "domain-v1");
+    await store.ensureFreshScan({ hostname, profileVersion: "domain-v1", trigger: "requested" });
+    const job = await store.claimNextScan(new Date(), TEST_LEASE_MS);
+    if (!job) throw new Error("expected_claimed_pending_scan");
+    const reportId = await store.completeScan({
+      jobId: job.id,
+      leaseToken: job.leaseToken,
+      hostname,
+      profileVersion: "domain-v1",
+      scannerVersion: "test",
+      startedAt: new Date(Date.now() - 1000),
+      completedAt: new Date(),
+      verdict: "inconclusive",
+      scope: ["/"],
+      checks: makeDomainV1Checks(),
+      metrics: { requestsCount: 0, bytesCount: 0, durationMs: 1, pagesCount: 0 },
+    });
+
+    const certification = await pool.query(
+      "SELECT state, latest_assessment_status FROM ds_beta_certifications WHERE hostname = $1",
+      [hostname],
+    );
+    expect(certification.rows[0]).toEqual({ state: "pending", latest_assessment_status: "pending" });
+    await expect(
+      store.issueReportBadge({ hostname, reportId, tokenHash: "c".repeat(64), expiresAt: new Date(Date.now() + 86_400_000) }),
+    ).resolves.toBe(false);
+  });
+
+  it("suspends and reactivates the certification across eligible reports", async () => {
+    const hostname = "lifecycle.example.net";
+    await store.ensureDomain(hostname, "on_demand", "domain-v3");
+
+    const completeLifecycleScan = async (
+      checks: ScanCheck[],
+      verdict: "pass" | "fail",
+    ): Promise<string> => {
+      await store.ensureFreshScan({ hostname, profileVersion: "domain-v3", trigger: "requested" });
+      const job = await store.claimNextScan(new Date(), TEST_LEASE_MS);
+      if (!job) throw new Error("expected_claimed_lifecycle_scan");
+      return store.completeScan({
+        jobId: job.id,
+        leaseToken: job.leaseToken,
+        hostname,
+        profileVersion: "domain-v3",
+        scannerVersion: "test",
+        startedAt: new Date(Date.now() - 1000),
+        completedAt: new Date(),
+        verdict,
+        scope: ["/"],
+        checks,
+        metrics: { requestsCount: 0, bytesCount: 0, durationMs: 1, pagesCount: 0 },
+      });
+    };
+
+    const eligibleReportId = await completeLifecycleScan(makeEligibleDomainV3Checks(), "pass");
+    await expect(
+      pool.query("SELECT state FROM ds_beta_certifications WHERE hostname = $1", [hostname]),
+    ).resolves.toMatchObject({ rows: [{ state: "active" }] });
+
+    const tokenHash = "d".repeat(64);
+    const expiresAt = new Date(Date.now() + 86_400_000);
+    await expect(store.issueReportBadge({ hostname, reportId: eligibleReportId, tokenHash, expiresAt })).resolves.toBe(true);
+
+    const blockedChecks = makeEligibleDomainV3Checks().map((check) =>
+      check.controlId === "DS-TLS-01"
+        ? { ...check, status: "fail" as const, summary: "Comprobación DS-TLS-01: fail.", evidence: { protocol: "TLSv1.3", certificateValid: false, hostnameMatches: true } }
+        : check,
+    );
+    const blockedReportId = await completeLifecycleScan(blockedChecks, "fail");
+    expect(blockedReportId).not.toBe(eligibleReportId);
+    await expect(
+      pool.query("SELECT state FROM ds_beta_certifications WHERE hostname = $1", [hostname]),
+    ).resolves.toMatchObject({ rows: [{ state: "suspended" }] });
+    await expect(store.verifyReportBadge({ hostname, reportId: eligibleReportId, tokenHash, at: new Date() })).resolves.toBe(false);
+
+    const reactivatedReportId = await completeLifecycleScan(makeEligibleDomainV3Checks(), "pass");
+    await expect(
+      pool.query("SELECT state, certified_report_id FROM ds_beta_certifications WHERE hostname = $1", [hostname]),
+    ).resolves.toMatchObject({ rows: [{ state: "active", certified_report_id: reactivatedReportId }] });
+    await expect(store.issueReportBadge({ hostname, reportId: reactivatedReportId, tokenHash: "e".repeat(64), expiresAt })).resolves.toBe(true);
   });
 
   it("shares one active job across concurrent requests", async () => {
@@ -1122,6 +1206,21 @@ describePostgres.sequential("PostgresScanStore", () => {
       },
     );
     return checks;
+  }
+
+  function makeEligibleDomainV3Checks(): ScanCheck[] {
+    return [
+      ...makeDomainV2Checks(),
+      {
+        ...CHECK,
+        controlId: "DS-TLS-02",
+        method: "TLS",
+        status: "pass",
+        summary: "Comprobación DS-TLS-02: pass.",
+        limitation: "Resultado limitado a las rutas públicas declaradas del perfil domain-v3.",
+        evidence: { tls10Accepted: false, tls11Accepted: false, tls12Accepted: true, tls13Accepted: true },
+      },
+    ];
   }
 
   function safeDnsCheck(evidence: Record<string, unknown> = {}): ScanCheck {

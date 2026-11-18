@@ -39,7 +39,17 @@ const PUBLIC_REPORT_COLUMNS = `
   reports.completed_at AS report_completed_at,
   reports.expires_at AS report_expires_at,
   reports.verdict AS report_verdict,
-  reports.scope_json AS report_scope`;
+  reports.scope_json AS report_scope,
+  (SELECT c.state FROM public.ds_beta_certifications AS c
+   WHERE c.hostname = reports.hostname AND c.policy_version = 'beta-0.1') AS certification_state,
+  (SELECT c.latest_assessment_status FROM public.ds_beta_certifications AS c
+   WHERE c.hostname = reports.hostname AND c.policy_version = 'beta-0.1') AS certification_assessment_status,
+  (SELECT c.latest_assessment FROM public.ds_beta_certifications AS c
+   WHERE c.hostname = reports.hostname AND c.policy_version = 'beta-0.1') AS certification_assessment,
+  (SELECT c.last_checked_at FROM public.ds_beta_certifications AS c
+   WHERE c.hostname = reports.hostname AND c.policy_version = 'beta-0.1') AS certification_last_checked_at,
+  (SELECT c.certified_report_id FROM public.ds_beta_certifications AS c
+   WHERE c.hostname = reports.hostname AND c.policy_version = 'beta-0.1') AS certification_report_id`;
 const PUBLIC_CHECKS_LATERAL = `LEFT JOIN LATERAL (
   SELECT jsonb_agg(jsonb_build_object(
     'controlId', control_id,
@@ -91,6 +101,16 @@ export type PublicScanReport = {
   verdict: ScanVerdict;
   scope: string[];
   checks: PublicScanReportCheck[];
+  certification: PublicBetaCertification | null;
+};
+
+export type PublicBetaCertification = {
+  policyVersion: "beta-0.1";
+  state: "pending" | "active" | "suspended";
+  latestAssessmentStatus: "eligible" | "pending" | "blocked";
+  score: number | null;
+  lastCheckedAt: Date;
+  certifiedReportId: string | null;
 };
 
 export type ReportBadgeRecord = {
@@ -209,6 +229,11 @@ export class PostgresScanStore implements ScanJobStore {
       `INSERT INTO public.ds_report_badges(token_hash, hostname, report_id, expires_at)
        SELECT $1, reports.hostname, reports.id, $4
        FROM public.ds_scan_runs AS reports
+       INNER JOIN public.ds_beta_certifications AS certification
+         ON certification.hostname = reports.hostname
+        AND certification.policy_version = 'beta-0.1'
+        AND certification.state = 'active'
+        AND certification.certified_report_id = reports.id
        WHERE reports.id = $2 AND reports.hostname = $3
          AND reports.profile_version IN ('domain-v1', 'domain-v2', 'domain-v3')
        RETURNING token_hash`,
@@ -222,6 +247,11 @@ export class PostgresScanStore implements ScanJobStore {
       `SELECT 1 FROM public.ds_report_badges AS badges
        INNER JOIN public.ds_scan_runs AS reports
          ON reports.id = badges.report_id AND reports.hostname = badges.hostname
+       INNER JOIN public.ds_beta_certifications AS certification
+         ON certification.hostname = reports.hostname
+        AND certification.policy_version = 'beta-0.1'
+        AND certification.state = 'active'
+        AND certification.certified_report_id = reports.id
        WHERE badges.token_hash = $1 AND badges.hostname = $2 AND badges.report_id = $3
          AND badges.revoked_at IS NULL AND badges.expires_at > $4
        LIMIT 1`,
@@ -251,7 +281,7 @@ export class PostgresScanStore implements ScanJobStore {
          failed_job.public_error_code AS last_failure_code,
          failed_job.failure_diagnostic AS last_failure_diagnostic,
          failed_job.finished_at AS last_failure_at,
-         ${PUBLIC_REPORT_COLUMNS}, check_rows.checks
+       ${PUBLIC_REPORT_COLUMNS}, check_rows.checks
        FROM public.ds_domains AS domains
        LEFT JOIN LATERAL (
          SELECT id FROM public.ds_scan_jobs
@@ -269,7 +299,17 @@ export class PostgresScanStore implements ScanJobStore {
        ) AS failed_job ON true
        LEFT JOIN LATERAL (
          SELECT id, hostname, profile_version, scanner_version, vantage,
-           trigger, started_at, completed_at, expires_at, verdict, scope_json
+           trigger, started_at, completed_at, expires_at, verdict, scope_json,
+           (SELECT c.state FROM public.ds_beta_certifications AS c
+            WHERE c.hostname = ds_scan_runs.hostname AND c.policy_version = 'beta-0.1') AS certification_state,
+           (SELECT c.latest_assessment_status FROM public.ds_beta_certifications AS c
+            WHERE c.hostname = ds_scan_runs.hostname AND c.policy_version = 'beta-0.1') AS certification_assessment_status,
+           (SELECT c.latest_assessment FROM public.ds_beta_certifications AS c
+            WHERE c.hostname = ds_scan_runs.hostname AND c.policy_version = 'beta-0.1') AS certification_assessment,
+           (SELECT c.last_checked_at FROM public.ds_beta_certifications AS c
+            WHERE c.hostname = ds_scan_runs.hostname AND c.policy_version = 'beta-0.1') AS certification_last_checked_at,
+           (SELECT c.certified_report_id FROM public.ds_beta_certifications AS c
+            WHERE c.hostname = ds_scan_runs.hostname AND c.policy_version = 'beta-0.1') AS certification_report_id
          FROM public.ds_scan_runs
          WHERE hostname = domains.hostname
            AND profile_version = domains.profile_version
@@ -525,6 +565,38 @@ function parsePublicScanReport(row: Record<string, unknown>): PublicScanReport {
     verdict: parseOneOf(row.report_verdict, VERDICTS),
     scope: parseStringArray(row.report_scope),
     checks: parsePublicChecks(row.checks),
+    certification: parsePublicBetaCertification(row),
+  };
+}
+
+function parsePublicBetaCertification(
+  row: Record<string, unknown>,
+): PublicBetaCertification | null {
+  if (row.certification_state === null || row.certification_state === undefined) {
+    return null;
+  }
+  if (
+    !["pending", "active", "suspended"].includes(String(row.certification_state)) ||
+    !["eligible", "pending", "blocked"].includes(String(row.certification_assessment_status)) ||
+    !(row.certification_last_checked_at instanceof Date)
+  ) {
+    throw new Error(INVALID_PUBLIC_REPORT_ROW);
+  }
+  const assessment = row.certification_assessment;
+  if (!isPlainRecord(assessment)) throw new Error(INVALID_PUBLIC_REPORT_ROW);
+  const rawScore = assessment.score;
+  if (rawScore !== null && typeof rawScore !== "number") {
+    throw new Error(INVALID_PUBLIC_REPORT_ROW);
+  }
+  return {
+    policyVersion: "beta-0.1",
+    state: row.certification_state as PublicBetaCertification["state"],
+    latestAssessmentStatus:
+      row.certification_assessment_status as PublicBetaCertification["latestAssessmentStatus"],
+    score: rawScore,
+    lastCheckedAt: row.certification_last_checked_at,
+    certifiedReportId:
+      typeof row.certification_report_id === "string" ? row.certification_report_id : null,
   };
 }
 

@@ -395,7 +395,7 @@ describePostgres.sequential(
       const result = await targetAdminPool?.query(
         "SELECT count(*)::integer AS migration_count FROM public.ds_schema_migrations",
       );
-      expect(result?.rows[0].migration_count).toBe(22);
+      expect(result?.rows[0].migration_count).toBe(23);
 
       const client = await targetAdminPool!.connect();
       try {

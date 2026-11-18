@@ -1,8 +1,7 @@
 # Beta 0.1 — evaluación Beta en el informe público
 
 Este incremento proyecta los controles ya sanitizados de un informe público
-en la política `beta-0.1`. No crea todavía una certificación persistida ni
-emite un sello.
+en la política `beta-0.1` y persiste el ciclo de vida de la certificación.
 
 ## Comportamiento
 
@@ -21,5 +20,19 @@ La proyección reutiliza únicamente estados, identificadores y resúmenes ya
 permitidos por el contrato público. No expone valores de cookies, cabeceras
 completas, contenido HTML, direcciones IP ni diagnósticos internos.
 
-La evaluación no implica todavía una certificación activa. La persistencia de
-estados y la elegibilidad del sello corresponden a incrementos posteriores.
+## Ciclo de vida persistido
+
+Cada dominio tiene como máximo una certificación `beta-0.1` vigente:
+
+- `pending`: todavía no hay evidencia suficiente para emitir el sello.
+- `active`: existe un informe elegible con puntuación mínima de 90 y sin fallo TLS crítico.
+- `suspended`: una certificación activa ha recibido un informe bloqueante.
+
+Un informe con evidencia desconocida no revoca por sí mismo una certificación activa: queda registrado como revisión pendiente y se conserva el último informe elegible. Un fallo TLS crítico o una puntuación inferior al umbral suspende el sello; un informe elegible posterior lo reactiva.
+
+La transición se realiza en la base de datos al completar el informe. Los
+eventos se guardan en `ds_beta_certification_events` y no contienen HTML,
+cabeceras completas, cookies crudas ni secretos.
+
+Los sellos solo se emiten y verifican cuando `state = active` y el informe
+coincide con `certified_report_id`.

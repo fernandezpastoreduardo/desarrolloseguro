@@ -1,7 +1,7 @@
 # Beta 0.1 — política de puntuación y elegibilidad
 
-Este documento define el primer incremento implementable de la Beta 0.1. No
-representa todavía una certificación persistida ni una ficha pública.
+Este documento define la política de la Beta 0.1. La evaluación se persiste
+por dominio y alimenta el estado público de la certificación.
 
 ## Controles incluidos
 
@@ -26,8 +26,15 @@ obligatorios desconocidos no puede activar una certificación.
 - `blocked`: existe un fallo crítico o la puntuación concluyente es inferior a
   90.
 
-En este incremento los controles TLS son críticos. La transición de estado y
-la persistencia de la evaluación se implementarán en features posteriores.
+Los controles TLS son críticos. La migración 023 aplica estas transiciones:
+
+- el primer resultado `eligible` activa la certificación;
+- un resultado bloqueante suspende una certificación que estaba activa;
+- un resultado `pending` conserva una certificación activa mientras se revisa
+  la evidencia;
+- un resultado `eligible` posterior reactiva una certificación suspendida.
+
+Los fallos del worker no generan un informe y no alteran el estado anterior.
 
 ## Límites
 

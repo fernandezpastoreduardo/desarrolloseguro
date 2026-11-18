@@ -16,6 +16,20 @@ Un informe identifica hostname, perfil, rutas cubiertas, métodos, resultados, f
 
 **Criterios:** solo se publican campos permitidos; el contenido libre se redacta o sustituye por texto controlado; cada control incluye limitaciones; ningún `pass` se presenta como certificación, cumplimiento legal o ausencia de vulnerabilidades.
 
+## F5. Certificación beta y sello verificable
+
+La migración 023 conserva una certificación por dominio y política. Los estados
+`pending`, `active` y `suspended` se derivan al completar un informe; los
+eventos de transición quedan registrados sin guardar contenido sensible.
+El sello solo se emite y verifica para el informe certificado vigente de una
+certificación `active`. La evidencia incompleta mantiene una certificación
+activa en revisión; un incumplimiento bloqueante la suspende y un informe
+elegible posterior la reactiva.
+
+**Criterios:** no se puede emitir un sello para un informe pendiente, bloqueado
+o histórico; un sello suspendido deja de verificarse aunque su token siga
+existiendo; la ficha pública muestra el estado y la fecha de última evaluación.
+
 ## F3. Escaneo automatizado
 
 El worker y el coordinador están en Compose; el coordinador crea un executor de red deshabilitada y un broker de salida acotado. La admisión compartida limita la cola a diez trabajos simultáneos en espera y una ejecución global, con máximo 1000 dominios `on_demand`. En pruebas, las migraciones `012` y `013` desactivan el cooldown de 24 horas y la caché de informes recientes; los límites antiabuso por minuto y de capacidad permanecen activos. Antes de considerar completo el runtime público, el workflow manual debe pasar sus gates, aplicar solo Desarrollo Seguro y validar un informe `domain-v3` reciente de `grumphya.com`. No se hacen POST al sitio analizado, autenticación en esos sitios, fuzzing, fuerza bruta ni exploración arbitraria.

@@ -67,6 +67,10 @@ const MIGRATIONS = [
     version: "022_tls_probe_summary_contract",
     file: "022_tls_probe_summary_contract.sql",
   },
+  {
+    version: "023_beta_certification_lifecycle",
+    file: "023_beta_certification_lifecycle.sql",
+  },
 ] as const;
 
 const MIGRATION_LOCK_ID = 728194032;

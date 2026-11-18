@@ -188,6 +188,14 @@ type PublicReport = {
     reasons: string[];
     interpretation: string;
   };
+  certification: {
+    policyVersion: "beta-0.1";
+    state: "pending" | "active" | "suspended";
+    latestAssessmentStatus: "eligible" | "pending" | "blocked";
+    score: number | null;
+    lastCheckedAt: string;
+    certifiedReportId: string | null;
+  } | null;
   scope: string[];
   checks: PublicCheck[];
 };
@@ -777,6 +785,7 @@ function ReportSummary({
   const isCurrent = state === "fresh";
   return (
     <>
+      <CertificationStatus certification={report.certification} />
       <section className="ds-portal__ethics" aria-labelledby="ethics-summary-heading">
         <p className="ds-portal__eyebrow">Resumen del dominio</p>
         <h3 id="ethics-summary-heading">Resumen y puntuación</h3>
@@ -893,6 +902,31 @@ function ReportSummary({
   );
 }
 
+function CertificationStatus({ certification }: { certification: PublicReport["certification"] }) {
+  if (!certification) return null;
+  const labels = {
+    pending: "En revisión",
+    active: "Certificación beta activa",
+    suspended: "Certificación suspendida",
+  } as const;
+  const explanations = {
+    pending: "Todavía no hay evidencia suficiente para emitir el sello.",
+    active: "El último informe elegible mantiene el sello verificable.",
+    suspended: "El sello permanece oculto hasta obtener una evaluación elegible.",
+  } as const;
+  return (
+    <section className="ds-portal__certification" data-state={certification.state} aria-labelledby="certification-heading">
+      <p className="ds-portal__eyebrow">Certificación beta · {certification.policyVersion}</p>
+      <h3 id="certification-heading">{labels[certification.state]}</h3>
+      <p>{explanations[certification.state]}</p>
+      <p className="ds-portal__certification-meta">
+        Última evaluación: {formatDate(certification.lastCheckedAt)}
+        {certification.score === null ? " · puntuación pendiente" : ` · ${certification.score}/100`}
+      </p>
+    </section>
+  );
+}
+
 function normalizeDomainInput(input: string): string | null {
   const hostname = input.trim().toLowerCase();
   return isPublicHostname(hostname) ? hostname : null;
@@ -939,6 +973,7 @@ function isPublicReport(value: unknown): value is PublicReport {
     !isIsoTimestamp(value.expiresAt) ||
     !isOneOf(value.verdict, SCAN_VERDICTS) ||
     !isEthicsAssessment(value.ethicsAssessment) ||
+    !isPublicCertification(value.certification) ||
     !Array.isArray(value.checks) ||
     value.checks.length === 0 ||
     value.checks.length > MAX_REPORT_CHECKS ||
@@ -970,6 +1005,17 @@ function isPublicReport(value: unknown): value is PublicReport {
     return false;
   }
   return true;
+}
+
+function isPublicCertification(value: unknown): value is PublicReport["certification"] {
+  if (value === null || value === undefined) return true;
+  return isRecord(value) &&
+    value.policyVersion === "beta-0.1" &&
+    isOneOf(value.state, ["pending", "active", "suspended"] as const) &&
+    isOneOf(value.latestAssessmentStatus, ["eligible", "pending", "blocked"] as const) &&
+    (value.score === null || (isInteger(value.score) && value.score >= 0 && value.score <= 100)) &&
+    isIsoTimestamp(value.lastCheckedAt) &&
+    (value.certifiedReportId === null || isUuid(value.certifiedReportId));
 }
 
 function isEthicsAssessment(value: unknown): value is PublicReport["ethicsAssessment"] {

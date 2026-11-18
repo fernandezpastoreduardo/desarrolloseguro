@@ -13,6 +13,14 @@ La puntuación se normaliza solo con categorías concluyentes. Una categoría
 desconocida no suma ni resta, pero mantiene la evaluación en estado pendiente.
 Un fallo TLS crítico o una puntuación inferior a 90 bloquean la elegibilidad.
 
-Esta evaluación no equivale todavía a una certificación persistida ni habilita
-el sello. Tampoco interpreta consentimiento real, venta de datos, ejecución
-dinámica de scripts o rendimiento completo.
+La migración 023 persiste una certificación por dominio y versión de política.
+`pending` indica que faltan controles concluyentes; `active` exige todas las
+categorías observables, puntuación igual o superior a 90 y TLS sin fallo
+crítico; `suspended` se aplica cuando una certificación activa recibe un
+incumplimiento bloqueante. Un informe elegible posterior reactiva una
+certificación suspendida. La evidencia incompleta durante una certificación
+activa conserva provisionalmente el sello y marca la última evaluación como
+`pending`.
+
+La evaluación tampoco interpreta consentimiento real, venta de datos,
+ejecución dinámica de scripts o rendimiento completo.

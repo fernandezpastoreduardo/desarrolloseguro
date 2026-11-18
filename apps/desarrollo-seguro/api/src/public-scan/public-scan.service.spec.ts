@@ -564,6 +564,7 @@ describe("PublicScanService", () => {
         "verdict",
         "ethicsAssessment",
         "betaCertification",
+        "certification",
         "scope",
         "checks",
       ].sort(),
