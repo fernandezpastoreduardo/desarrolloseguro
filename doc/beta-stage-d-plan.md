@@ -43,8 +43,8 @@ y superficie API allowlisted; el snapshot D-02 solo proyecta TLS cuando hay
 transporte verificado y mantiene la cobertura incompleta para red, privilegios
 o cabeceras que no estén demostrados. El lector de producción fija el origen
 `https://grumphya.com`, usa GET sin credenciales y valida cada respuesta con el
-parser de su recurso; el inventario de dependencias permanece bloqueado hasta
-que exista un contrato explícito.
+parser de su recurso; el inventario de dependencias se limita a contadores de
+riesgo y un digest, sin nombres de paquetes ni SBOM.
 
 ## Orden propuesto
 

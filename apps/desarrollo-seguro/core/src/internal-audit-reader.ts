@@ -1,6 +1,7 @@
 import { authorizeInternalAuditOperation, type AuthorizedInternalAuditOperation } from "./internal-audit-access.js";
 import type { InternalAuditRequest } from "./internal-audit-contract.js";
 import { parseInternalDeploymentAttestation, type InternalDeploymentAttestation } from "./internal-deployment-attestation.js";
+import { parseInternalDependencyInventory, type InternalDependencyInventory } from "./internal-dependency-inventory.js";
 import { parseInternalInfrastructureSnapshot, type InternalInfrastructureSnapshot } from "./internal-infrastructure.js";
 import { parseInternalPrivacyObservation, type InternalPrivacyObservation } from "./internal-privacy-observation.js";
 import { parseInternalQualityObservation, type InternalQualityObservation } from "./internal-quality-observation.js";
@@ -9,6 +10,7 @@ import { parseSyntheticAuthObservation, type SyntheticAuthObservation } from "./
 export type InternalAuditResource =
   | InternalInfrastructureSnapshot
   | InternalDeploymentAttestation
+  | InternalDependencyInventory
   | SyntheticAuthObservation
   | InternalPrivacyObservation
   | InternalQualityObservation;
@@ -28,9 +30,6 @@ export async function readInternalAuditResource(
   fetcher: InternalAuditFetcher,
 ): Promise<InternalAuditResource> {
   const operation = authorizeInternalAuditOperation(request, operationInput);
-  if (operation.resource === "dependency_inventory") {
-    throw new Error("internal_audit_resource_contract_missing");
-  }
   const response = await fetchResource(operation, fetcher);
   let payload: unknown;
   try {
@@ -60,7 +59,7 @@ async function fetchResource(
 }
 
 function parseResource(
-  resource: Exclude<AuthorizedInternalAuditOperation["resource"], "dependency_inventory">,
+  resource: AuthorizedInternalAuditOperation["resource"],
   payload: unknown,
 ): InternalAuditResource {
   switch (resource) {
@@ -68,6 +67,8 @@ function parseResource(
       return parseInternalInfrastructureSnapshot(payload);
     case "deployment_attestation":
       return parseInternalDeploymentAttestation(payload);
+    case "dependency_inventory":
+      return parseInternalDependencyInventory(payload);
     case "synthetic_browser_flow":
       return parseSyntheticAuthObservation(payload);
     case "privacy_observation":

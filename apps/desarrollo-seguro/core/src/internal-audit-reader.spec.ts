@@ -47,7 +47,7 @@ describe("internal production audit reader", () => {
     expect(result).toMatchObject({ snapshotHash: "a".repeat(64) });
   });
 
-  it("fails closed on HTTP errors and uncontracted resources", async () => {
+  it("fails closed on HTTP errors", async () => {
     const fetcher = vi.fn().mockResolvedValue({
       ok: false,
       status: 403,
@@ -61,13 +61,27 @@ describe("internal production audit reader", () => {
     }, fetcher)).rejects.toThrow("internal_audit_resource_unavailable");
     expect(fetcher).toHaveBeenCalledOnce();
 
+  });
+
+  it("reads only the aggregate dependency inventory contract", async () => {
+    const fetcher = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        observedAt: "2026-11-18T19:00:00.000Z",
+        inventoryDigest: `sha256:${"c".repeat(64)}`,
+        packageCount: 20,
+        vulnerablePackageCount: 0,
+        highRiskCount: 0,
+        criticalRiskCount: 0,
+      }),
+    });
     await expect(readInternalAuditResource(request, {
       resource: "dependency_inventory",
       method: "GET",
       hostname: "grumphya.com",
       path: "/audit/dependencies",
-    }, fetcher)).rejects.toThrow("internal_audit_resource_contract_missing");
-    expect(fetcher).toHaveBeenCalledOnce();
+    }, fetcher)).resolves.toMatchObject({ packageCount: 20 });
   });
 
   it("rejects a reader response that is not valid bounded evidence", async () => {

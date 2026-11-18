@@ -37,7 +37,8 @@ El snapshot D-02 solo proyecta `infrastructure.tls` si contiene transporte
 verificado; no convierte exposición o privilegios en conclusiones sobre red o
 cabeceras. El lector de producción fija el origen `https://grumphya.com`, usa
 GET sin credenciales y valida cada JSON con el parser del recurso. El inventario
-de dependencias no se lee mientras no tenga contrato explícito.
+de dependencias solo conserva contadores de riesgo y un digest; no conserva
+nombres de paquetes ni un SBOM.
 
 El adaptador de acceso D-01 autoriza únicamente operaciones `GET` contra
 recursos allowlisted y rutas sin query, fragmento, salto de directorio ni

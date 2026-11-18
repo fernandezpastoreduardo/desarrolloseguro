@@ -117,6 +117,27 @@ describe("internal audit evidence projection", () => {
     ]);
   });
 
+  it("projects dependency risk from aggregate counters only", () => {
+    const evidence = projectInternalAuditEvidence([{
+      kind: "dependency_inventory",
+      observation: {
+        observedAt,
+        inventoryDigest: `sha256:${"4".repeat(64)}`,
+        packageCount: 20,
+        vulnerablePackageCount: 0,
+        highRiskCount: 0,
+        criticalRiskCount: 0,
+      },
+    }]);
+    expect(evidence).toEqual([
+      expect.objectContaining({
+        criterionId: "application.dependencies",
+        status: "pass",
+        reasonCode: "dependency_risk_not_observed",
+      }),
+    ]);
+  });
+
   it("rejects unknown envelopes and raw observation data", () => {
     expect(() => projectInternalAuditEvidence([{ kind: "quality", observation: { html: "<body>" } }]))
       .toThrow("internal_audit_projection_invalid");

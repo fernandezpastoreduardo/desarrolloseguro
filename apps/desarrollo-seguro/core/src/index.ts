@@ -17,3 +17,4 @@ export * from "./internal-privacy-observation.js";
 export * from "./internal-audit-projection.js";
 export * from "./internal-audit-report.js";
 export * from "./internal-audit-reader.js";
+export * from "./internal-dependency-inventory.js";

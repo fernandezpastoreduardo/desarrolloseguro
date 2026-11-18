@@ -4,6 +4,7 @@ import {
   type InternalAuditEvidence,
 } from "./internal-audit-contract.js";
 import { parseInternalDeploymentAttestation } from "./internal-deployment-attestation.js";
+import { parseInternalDependencyInventory } from "./internal-dependency-inventory.js";
 import { parseInternalInfrastructureSnapshot } from "./internal-infrastructure.js";
 import { parseInternalPrivacyObservation } from "./internal-privacy-observation.js";
 import { parseInternalQualityObservation } from "./internal-quality-observation.js";
@@ -15,6 +16,7 @@ const ENVELOPE_KINDS = [
   "privacy",
   "deployment_attestation",
   "infrastructure_snapshot",
+  "dependency_inventory",
 ] as const;
 type EnvelopeKind = (typeof ENVELOPE_KINDS)[number];
 
@@ -110,6 +112,18 @@ function projectEnvelope(input: unknown): readonly ProjectedEvidence[] {
       reasonCode: transportAssessment.reasonCode,
     }];
   }
+  if (input.kind === "dependency_inventory") {
+    const observation = parseInternalDependencyInventory(input.observation);
+    const assessment = assessDependencyInventory(observation.criticalRiskCount, observation.highRiskCount);
+    return [{
+      criterionId: "application.dependencies",
+      scope: "application",
+      status: assessment.status,
+      source: "production_observation",
+      observedAt: observation.observedAt,
+      reasonCode: assessment.reasonCode,
+    }];
+  }
   const observation = parseInternalPrivacyObservation(input.observation);
   const criterionId = privacyCriterion(observation.area, observation.signalCode);
   return [{
@@ -133,6 +147,19 @@ function assessInfrastructureTransport(
     return { status: "pass", reasonCode: "infrastructure_transport_verified" };
   }
   return { status: "unknown", reasonCode: "infrastructure_transport_not_applicable" };
+}
+
+function assessDependencyInventory(
+  criticalRiskCount: number,
+  highRiskCount: number,
+): { status: "pass" | "fail" | "unknown"; reasonCode: string } {
+  if (criticalRiskCount > 0) {
+    return { status: "fail", reasonCode: "critical_dependency_risk_observed" };
+  }
+  if (highRiskCount > 0) {
+    return { status: "unknown", reasonCode: "high_dependency_risk_observed" };
+  }
+  return { status: "pass", reasonCode: "dependency_risk_not_observed" };
 }
 
 function toEvidence(
