@@ -55,3 +55,10 @@ La Beta queda lista para revisión humana cuando se hayan aportado las dos
 pruebas operativas que no pueden reproducirse aquí: un informe público real de
 `grumphya.com` desde el runtime aislado y una ejecución controlada del scheduler
 horario. La definición del MVP queda fuera de este cierre.
+
+Este cierre no declara cumplidos los criterios de transición a una certificación
+definitiva del plan maestro: la auditoría privada de producción de Grumphya, la
+puntuación interna/global con umbral de 90/100, las notificaciones operativas y
+la validación efectiva del VPS siguen siendo dependencias posteriores. Tampoco
+se presenta una puntuación absoluta ficticia ni se modifica el repositorio de
+Grumphya para suplirlas.
