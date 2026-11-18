@@ -131,7 +131,7 @@ for (const scheduler of [retentionScheduler, certificationScheduler]) {
   assert.match(scheduler, /service_completed_successfully/u);
   assert.match(scheduler, /cap_drop:\s*\[ALL\]/u);
   assert.match(scheduler, /read_only:\s*true/u);
-  assert.match(scheduler, /healthcheck:\n\s+test:\s*\[CMD-SHELL, test -s \/proc\/1\/cmdline\]/u);
+  assert.match(scheduler, /healthcheck:\n\s+test:\s*\[CMD-SHELL, test -r \/proc\/1\/cmdline && head -c 1 \/proc\/1\/cmdline \| grep -q \.\]/u);
   assert.doesNotMatch(scheduler, /kill -0 1/u);
   assert.doesNotMatch(scheduler, /development-security-egress|ports:|docker\.sock/u);
 }
