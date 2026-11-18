@@ -25,6 +25,8 @@ Configura en `/opt/grumphya/.secrets/grumphya_env`, sin registrar valores:
   red Docker compartida ni una red abierta).
 - `AUDIT_RELEASE_MANIFEST_PUBLIC_KEY` (PEM pública de la atestación de
   releases).
+- `AUDIT_RELEASE_MANIFEST_ALLOWED_KIDS` (los `kid` exactos de las claves de
+  atestación activas, incluido el que configure Desarrollo Seguro).
 
 La primera identidad preparada por Desarrollo Seguro usa `kid`
 `ds-auditor-2026`. Verifica la PEM recibida mediante un canal seguro y

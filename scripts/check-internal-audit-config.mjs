@@ -16,6 +16,7 @@ const required = [
   "AUDIT_JWT_AUDIENCE",
   "AUDIT_TECHNICAL_AUTH_KID",
   "AUDIT_RELEASE_ATTESTATION_PUBLIC_KEY_FILE",
+  "AUDIT_RELEASE_ATTESTATION_KID",
   "AUDIT_ALLOWED_NETWORKS",
   "AUDIT_TECHNICAL_AUTH_ALLOWED_KIDS",
 ];
@@ -89,6 +90,11 @@ if (
   !kids.includes(process.env.AUDIT_TECHNICAL_AUTH_KID)
 ) {
   console.error("internal_audit_config_kids_invalid");
+  process.exit(1);
+}
+
+if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u.test(process.env.AUDIT_RELEASE_ATTESTATION_KID)) {
+  console.error("internal_audit_config_attestation_kid_invalid");
   process.exit(1);
 }
 

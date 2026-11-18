@@ -67,6 +67,10 @@ allowlisted. La atestación EdDSA firma la serialización canónica de todos los
 campos salvo `attestation`; la clave pública se fija en Desarrollo Seguro y se
 rota con solapamiento de `kid`s.
 
+La configuración local asocia esa PEM a un único
+`AUDIT_RELEASE_ATTESTATION_KID`; el preflight rechaza una clave sin `kid`, un
+identificador con formato inválido o una clave privada en el fichero público.
+
 El adaptador de acceso D-01 autoriza únicamente operaciones `GET` contra
 recursos allowlisted y rutas sin query, fragmento, salto de directorio ni
 credenciales embebidas en la URL. El JWT solo viaja en la cabecera

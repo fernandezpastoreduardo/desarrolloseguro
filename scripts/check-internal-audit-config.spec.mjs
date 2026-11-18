@@ -24,6 +24,7 @@ const baseEnv = {
   AUDIT_JWT_AUDIENCE: "grumphya-audit",
   AUDIT_TECHNICAL_AUTH_KID: "ds-auditor-2026",
   AUDIT_RELEASE_ATTESTATION_PUBLIC_KEY_FILE: publicKey,
+  AUDIT_RELEASE_ATTESTATION_KID: "grumphya-release-2026",
   AUDIT_ALLOWED_NETWORKS: "172.29.0.0/24",
   AUDIT_TECHNICAL_AUTH_ALLOWED_KIDS: "ds-auditor-2026",
 };
@@ -69,5 +70,12 @@ const privateAttestation = spawnSync(process.execPath, [script], {
 });
 assert.equal(privateAttestation.status, 1);
 assert.match(privateAttestation.stderr, /internal_audit_config_file_invalid=AUDIT_RELEASE_ATTESTATION_PUBLIC_KEY_FILE/u);
+
+const invalidAttestationKid = spawnSync(process.execPath, [script], {
+  env: { ...baseEnv, AUDIT_RELEASE_ATTESTATION_KID: "not valid" },
+  encoding: "utf8",
+});
+assert.equal(invalidAttestationKid.status, 1);
+assert.match(invalidAttestationKid.stderr, /internal_audit_config_attestation_kid_invalid/u);
 
 console.log("internal audit config tests passed");

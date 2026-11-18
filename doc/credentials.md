@@ -6,7 +6,8 @@ La auditoría privada D permanece desactivada (`AUDIT_ENABLED=false`) hasta
 completar el contrato externo con Grumphya. Cuando se autorice su activación,
 el runtime de Desarrollo Seguro necesita `AUDIT_JWT_PRIVATE_KEY_FILE`,
 `AUDIT_JWT_ISSUER`, `AUDIT_JWT_AUDIENCE`, `AUDIT_TECHNICAL_AUTH_KID`,
-`AUDIT_RELEASE_ATTESTATION_PUBLIC_KEY_FILE`, `AUDIT_ALLOWED_NETWORKS` y
+`AUDIT_RELEASE_ATTESTATION_PUBLIC_KEY_FILE`, `AUDIT_RELEASE_ATTESTATION_KID`,
+`AUDIT_ALLOWED_NETWORKS` y
 `AUDIT_TECHNICAL_AUTH_ALLOWED_KIDS`. Las dos claves se guardan en ficheros
 separados con permisos de propietario; la privada JWT nunca sale de Desarrollo
 Seguro y la privada de firma de releases solo vive en Actions de Grumphya. El
