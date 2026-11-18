@@ -36,9 +36,11 @@ commits ni logs.
 ## Recursos y escritura
 
 Publica las rutas JSON versionadas allowlisted bajo `/audit/` con la envolvente
-`beta-d-0.2` y la atestación EdDSA definida en el handoff. Una petición sin
-identidad o con claims inválidos debe devolver un rechazo categórico y no tocar
-la base de datos.
+`beta-d-0.2` y la atestación EdDSA definida en el handoff. Mantén `/audit/privacy`
+para señales de privacidad/transparencia ética y `/audit/ai` como ruta separada
+para `ai_disclosure_present`; no mezcles ambas señales en una sola respuesta.
+Una petición sin identidad o con claims inválidos debe devolver un rechazo
+categórico y no tocar la base de datos.
 
 Las rutas de lectura no son un canal de escritura. Implementa un canal de
 ingesta autenticado, allowlisted y TLS para las evidencias que envíe Desarrollo

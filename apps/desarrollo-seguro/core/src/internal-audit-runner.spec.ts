@@ -156,6 +156,65 @@ describe("internal audit runner", () => {
     });
   });
 
+  it("reads the dedicated AI observation with the AI scope", async () => {
+    const fetcher = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      headers: { get: () => "application/json" },
+      json: async () => signedAuditEvidence({
+        area: "transparency",
+        status: "pass",
+        signalCode: "ai_disclosure_present",
+        value: 1,
+        unit: "boolean",
+        sampleRef: `sha256:${"f".repeat(64)}`,
+        observedAt,
+      }),
+    }));
+
+    await expect(runInternalAudit({
+      request: { ...request, scopes: ["ai"] },
+      auditRef,
+      observedAt,
+      operations: [operation("ai_observation", "/audit/ai")],
+      fetcher,
+      auth: TEST_AUDIT_AUTH,
+    })).resolves.toMatchObject({
+      status: "completed",
+      completedOperations: 1,
+    });
+  });
+
+  it("rejects an AI disclosure delivered through the privacy route", async () => {
+    const fetcher = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      headers: { get: () => "application/json" },
+      json: async () => signedAuditEvidence({
+        area: "transparency",
+        status: "pass",
+        signalCode: "ai_disclosure_present",
+        value: 1,
+        unit: "boolean",
+        sampleRef: `sha256:${"g".repeat(64)}`,
+        observedAt,
+      }),
+    }));
+
+    await expect(runInternalAudit({
+      request: { ...request, scopes: ["privacy", "ai"] },
+      auditRef,
+      observedAt,
+      operations: [operation("privacy_observation", "/audit/privacy")],
+      fetcher,
+      auth: TEST_AUDIT_AUTH,
+    })).resolves.toEqual({
+      status: "failed",
+      completedOperations: 0,
+      reasonCode: "internal_audit_resource_invalid",
+    });
+  });
+
   it("stops before reading when the audit is already cancelled", async () => {
     const controller = new AbortController();
     controller.abort();

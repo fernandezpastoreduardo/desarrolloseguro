@@ -138,6 +138,8 @@ function parseResource(
       return parseSyntheticAuthObservation(payload);
     case "privacy_observation":
       return parseInternalPrivacyObservation(payload);
+    case "ai_observation":
+      return parseInternalPrivacyObservation(payload);
     case "performance_observation":
       return parseInternalQualityObservation(payload);
   }

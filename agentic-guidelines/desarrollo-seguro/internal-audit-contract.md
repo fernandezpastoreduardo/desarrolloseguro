@@ -52,10 +52,12 @@ interno solo cuando todos los recursos solicitados se han podido validar. Si
 una lectura falla o una respuesta es inválida, devuelve una categoría de fallo
 y ningún informe parcial; el reintento debe iniciar una nueva ejecución con un
 `auditRef` nuevo. No se reintenta en paralelo ni se reutilizan respuestas de
-una ejecución anterior. Además, comprueba el scope efectivo de la evidencia
-después de validarla: una señal de divulgación de IA requiere `ai` y una señal
-de transparencia ética requiere `ethics`, aunque ambas lleguen por el recurso
-agregado de privacidad. El informe también rechaza evidencias con timestamp
+una ejecución anterior. Además, comprueba el scope efectivo y la ruta de la
+evidencia después de validarla: `/audit/privacy` solo puede entregar señales
+de privacidad o transparencia ética; `/audit/ai` solo puede entregar
+`ai_disclosure_present` y requiere el scope `ai`. Una señal de divulgación de
+IA requiere `ai` y una señal de transparencia ética requiere `ethics`. El
+informe también rechaza evidencias con timestamp
 posterior al instante de la auditoría. La ejecución acepta un `AbortSignal`;
 si se cancela antes o durante una lectura, no construye informe parcial y
 devuelve únicamente `internal_audit_cancelled`.

@@ -42,6 +42,7 @@ describe("internal audit runtime configuration", () => {
       "/audit/auth",
       "/audit/quality",
       "/audit/privacy",
+      "/audit/ai",
     ]);
     rmSync(directory, { recursive: true, force: true });
   });

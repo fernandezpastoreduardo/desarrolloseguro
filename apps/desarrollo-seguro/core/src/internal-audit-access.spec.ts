@@ -28,6 +28,20 @@ describe("internal audit access policy", () => {
     });
   });
 
+  it("authorizes the dedicated AI observation route only by its exact path", () => {
+    expect(authorizeInternalAuditOperation({ ...request, scopes: ["ai"] }, {
+      resource: "ai_observation",
+      method: "GET",
+      hostname: "grumphya.com",
+      path: "/audit/ai",
+    })).toEqual({
+      resource: "ai_observation",
+      method: "GET",
+      hostname: "grumphya.com",
+      path: "/audit/ai",
+    });
+  });
+
   it.each([
     { method: "POST" },
     { hostname: "other.example" },

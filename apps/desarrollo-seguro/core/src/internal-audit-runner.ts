@@ -15,6 +15,7 @@ const RESOURCE_NAMES = [
   "dependency_inventory",
   "synthetic_browser_flow",
   "privacy_observation",
+  "ai_observation",
   "performance_observation",
 ] as const;
 type ResourceName = (typeof RESOURCE_NAMES)[number];
@@ -75,14 +76,16 @@ export async function runInternalAudit(input: InternalAuditRunInput): Promise<In
         ...input.auth,
         signal: input.signal,
       });
-      if (!requiredScopes(operationResource(operation), resource).every((scope) => request.scopes.includes(scope))) {
+      const resourceName = operationResource(operation);
+      if (!requiredScopes(resourceName, resource).every((scope) => request.scopes.includes(scope))) {
         return {
           status: "failed",
           completedOperations: index,
           reasonCode: "internal_audit_operation_not_authorized",
         };
       }
-      observations.push({ kind: envelopeKind(operationResource(operation)), observation: resource });
+      validateResourceContract(resourceName, resource);
+      observations.push({ kind: envelopeKind(resourceName), observation: resource });
     } catch (error) {
       return {
         status: "failed",
@@ -146,7 +149,7 @@ function operationResource(input: unknown): ResourceName {
 function envelopeKind(resource: ResourceName): EnvelopeKind {
   if (resource === "synthetic_browser_flow") return "synthetic_auth";
   if (resource === "performance_observation") return "quality";
-  if (resource === "privacy_observation") return "privacy";
+  if (resource === "privacy_observation" || resource === "ai_observation") return "privacy";
   return resource;
 }
 
@@ -155,6 +158,7 @@ function resourceScope(resource: ResourceName): InternalAuditRequest["scopes"][n
   if (resource === "deployment_attestation" || resource === "dependency_inventory") return "application";
   if (resource === "synthetic_browser_flow") return "authentication";
   if (resource === "performance_observation") return "quality";
+  if (resource === "ai_observation") return "ai";
   return "privacy";
 }
 
@@ -162,10 +166,20 @@ function requiredScopes(
   resourceName: ResourceName,
   resource: InternalAuditResource,
 ): readonly InternalAuditRequest["scopes"][number][] {
+  if (resourceName === "ai_observation") return ["ai"];
   if (resourceName !== "privacy_observation") return [resourceScope(resourceName)];
   const observation = resource as InternalPrivacyObservation;
   if (observation.area !== "transparency") return ["privacy"];
   return observation.signalCode === "ai_disclosure_present" ? ["ai"] : ["ethics"];
+}
+
+function validateResourceContract(resourceName: ResourceName, resource: InternalAuditResource): void {
+  if (resourceName !== "privacy_observation" && resourceName !== "ai_observation") return;
+  const observation = resource as InternalPrivacyObservation;
+  const isAiDisclosure = observation.area === "transparency" && observation.signalCode === "ai_disclosure_present";
+  if (resourceName === "ai_observation" ? !isAiDisclosure : isAiDisclosure) {
+    throw new Error("internal_audit_resource_invalid");
+  }
 }
 
 function toFailureReason(error: unknown): InternalAuditFailureReason {

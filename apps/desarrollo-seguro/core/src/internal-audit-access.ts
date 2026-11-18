@@ -9,6 +9,7 @@ const ALLOWED_RESOURCES = [
   "dependency_inventory",
   "synthetic_browser_flow",
   "privacy_observation",
+  "ai_observation",
   "performance_observation",
 ] as const;
 type InternalAuditResource = (typeof ALLOWED_RESOURCES)[number];
@@ -19,6 +20,7 @@ const RESOURCE_PATHS: Record<InternalAuditResource, string> = {
   dependency_inventory: "/audit/dependencies",
   synthetic_browser_flow: "/audit/auth",
   privacy_observation: "/audit/privacy",
+  ai_observation: "/audit/ai",
   performance_observation: "/audit/quality",
 };
 

@@ -25,6 +25,7 @@ const OPERATIONS = [
   { resource: "synthetic_browser_flow", method: "GET", hostname: "grumphya.com", path: "/audit/auth" },
   { resource: "performance_observation", method: "GET", hostname: "grumphya.com", path: "/audit/quality" },
   { resource: "privacy_observation", method: "GET", hostname: "grumphya.com", path: "/audit/privacy" },
+  { resource: "ai_observation", method: "GET", hostname: "grumphya.com", path: "/audit/ai" },
 ] as const;
 
 const DEFAULT_SCOPES = [

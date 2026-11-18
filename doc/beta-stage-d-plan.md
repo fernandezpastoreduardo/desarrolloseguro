@@ -116,8 +116,11 @@ catálogo provisional; no se interpreta como evidencia de producción.
 
 El worker incluye una entrada opt-in `pnpm --filter
 @desarrolloseguro/worker audit:run`. Solo construye el JWT técnico y ejecuta
-las operaciones allowlisted cuando `AUDIT_ENABLED=true` y todas las claves
-restringidas están disponibles; no forma parte del arranque normal, no acepta
-dominios o rutas por argumentos y solo emite un resumen categórico. No se
-ejecuta ni se activa mientras Grumphya no entregue el contrato de producción.
+las siete operaciones allowlisted, incluida la ruta dedicada `/audit/ai`, cuando
+`AUDIT_ENABLED=true` y todas las claves restringidas están disponibles; no forma
+parte del arranque normal, no acepta dominios o rutas por argumentos y solo
+emite un resumen categórico. La ruta de privacidad no puede transportar la
+señal de divulgación de IA: el runner la rechaza si no llega por `/audit/ai`.
+No se ejecuta ni se activa mientras Grumphya no entregue el contrato de
+producción.
 
