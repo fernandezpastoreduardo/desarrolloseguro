@@ -127,7 +127,10 @@ Se añadió `pnpm certification:preflight` como puerta operativa reproducible.
 Ejecutada contra el endpoint público actual devuelve `certification_transition_not_ready`:
 el proceso falla por la precondición real y no por un timeout genérico. Cuando
 exista una certificación activa, la misma puerta exigirá que el sello apunte al
-último informe y que un ciclo programado produzca un `reportId` nuevo.
+último informe y que un ciclo programado produzca un `reportId` nuevo. El fallo
+incluye únicamente categorías acotadas (`report`, `certification_state`,
+`assessment`, `certified_report` y `report_refreshed`); no imprime el contenido
+del informe ni valores arbitrarios de la respuesta.
 
 ### Mejoras no bloqueantes
 

@@ -13,6 +13,7 @@ case "$MODE" in
     pnpm audit:preflight
     node scripts/check-internal-audit-config.spec.mjs
     node --test scripts/check-internal-audit-resources.spec.mjs
+    node --test scripts/check-certification-transition.spec.mjs
     bash scripts/ci-preflight.sh
     pnpm quality:check
     pnpm sandbox:check
