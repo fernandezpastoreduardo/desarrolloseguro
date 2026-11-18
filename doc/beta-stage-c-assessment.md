@@ -25,6 +25,8 @@ La evaluación separa cuatro niveles que no son equivalentes:
   vencidas cada hora.
 - La migración `027` permite reintentar fallos terminales sin convertirlos en
   una admisión completada que bloquee el dominio.
+- La migración `028` ignora resultados con `completed_at` anterior al último
+  estado consolidado y bloquea la fila de certificación durante la decisión.
 - `certification-scheduler` usa el rol `ds_retention`, un secreto separado y
   una conexión TLS validada en producción.
 - La cola da prioridad a trabajos `requested` sobre `scheduled` y mantiene un
@@ -44,7 +46,7 @@ La evaluación separa cuatro niveles que no son equivalentes:
 
 - La suite local documentada reúne 713 pruebas.
 - PostgreSQL aislado pasó 94/94 pruebas, incluidas las de ciclo de
-  certificación, prioridad, admisión y scheduler.
+  certificación, prioridad, admisión, scheduler y resultados fuera de orden.
 - El CI del commit `1ef0814` pasó Playwright, auditoría de dependencias,
   quality gates, PostgreSQL e imágenes/Trivy en el run
   `44343419747`.
