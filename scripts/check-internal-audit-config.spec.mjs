@@ -17,7 +17,7 @@ const baseEnv = {
   ...process.env,
   AUDIT_ENABLED: "true",
   AUDIT_JWT_PRIVATE_KEY_FILE: privateKey,
-  AUDIT_JWT_ISSUER: "desarrollo-seguro-auditor",
+  AUDIT_JWT_ISSUER: "desarrolloseguro-audit",
   AUDIT_JWT_AUDIENCE: "grumphya-audit",
   AUDIT_TECHNICAL_AUTH_KID: "ds-auditor-2026",
   AUDIT_RELEASE_ATTESTATION_PUBLIC_KEY_FILE: publicKey,

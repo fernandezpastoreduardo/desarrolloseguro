@@ -8,7 +8,7 @@ allowlisted y conservará estados, códigos, contadores, digests y timestamps.
 
 ## Identidad y límites
 
-- Emisor: identidad técnica `desarrollo-seguro-auditor`.
+- Emisor: identidad técnica `desarrolloseguro-audit`.
 - Entorno: `production` y únicamente `https://grumphya.com`.
 - Permiso: `GET` de solo lectura con un JWT técnico EdDSA de corta duración,
   sin acceso a base de datos, consola,
@@ -49,10 +49,13 @@ de 24 horas, ventanas mayores de 24 horas, firmas inválidas y cardinalidades
 distintas de una.
 
 El JWT técnico lo emite Desarrollo Seguro con `iss`, `sub`, `aud`, `iat`,
-`exp`, `jti`, `kid`, `hostname`, `environment` y `scope`. Grumphya debe validar
+`exp`, `jti`, `kid`, `domain`, `hostname`, `environment` y `scope`. Grumphya debe validar
 firma, issuer, audience, `kid`, entorno, dominio, scopes, expiración y
 revocación antes de leer cualquier evidencia. Nunca se comparte la clave
 privada ni se acepta una cookie o un JWT de usuario para este canal.
+El `iss` debe ser exactamente `desarrolloseguro-audit`, `aud` exactamente
+`grumphya-audit`, `domain` exactamente `grumphya.com` y cada valor de `scope`
+usa el formato `audit:<recurso>`.
 
 ## Cuentas y datos sintéticos
 

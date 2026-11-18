@@ -38,7 +38,9 @@ verificado; no convierte exposición o privilegios en conclusiones sobre red o
 cabeceras. El lector de producción fija el origen `https://grumphya.com`, usa
 GET con una identidad técnica JWT EdDSA de corta duración y valida cada JSON
 con el parser del recurso. El JWT incluye `iss`, `sub`, `aud`, `iat`, `exp`,
-`jti`, `kid`, `hostname`, `environment` y `scope`; no se envía ninguna cookie
+`jti`, `kid`, `domain`, `hostname`, `environment` y `scope`; `iss` es
+`desarrolloseguro-audit`, `aud` es `grumphya-audit`, `domain` es
+`grumphya.com` y cada scope usa el formato `audit:<recurso>`. No se envía ninguna cookie
 ni credencial de usuario. El inventario
 de dependencias solo conserva contadores de riesgo y un digest; no conserva
 nombres de paquetes ni un SBOM.

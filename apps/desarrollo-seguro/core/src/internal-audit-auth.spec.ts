@@ -8,9 +8,9 @@ describe("technical audit JWT", () => {
     const token = createTechnicalJwt({
       privateKey,
       kid: "ds-auditor-2026",
-      issuer: "desarrollo-seguro-auditor",
+      issuer: "desarrolloseguro-audit",
       audience: "grumphya-audit",
-      subject: "desarrollo-seguro-auditor",
+      subject: "desarrolloseguro-audit",
       hostname: "grumphya.com",
       environment: "production",
       scopes: ["infrastructure", "application"],
@@ -24,15 +24,16 @@ describe("technical audit JWT", () => {
       typ: "JWT",
     });
     expect(JSON.parse(Buffer.from(encodedPayload, "base64url").toString())).toMatchObject({
-      iss: "desarrollo-seguro-auditor",
+      iss: "desarrolloseguro-audit",
       aud: "grumphya-audit",
-      sub: "desarrollo-seguro-auditor",
+      sub: "desarrolloseguro-audit",
       iat: 1795032000,
       exp: 1795032300,
       jti: "audit-jti-1",
+      domain: "grumphya.com",
       hostname: "grumphya.com",
       environment: "production",
-      scope: "infrastructure application",
+      scope: "audit:infrastructure audit:application",
     });
     expect(encodedSignature).toMatch(/^[A-Za-z0-9_-]+$/u);
   });

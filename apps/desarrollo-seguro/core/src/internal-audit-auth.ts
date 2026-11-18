@@ -4,6 +4,8 @@ import { createPrivateKey, sign, type KeyLike } from "node:crypto";
 const DEFAULT_TTL_SECONDS = 300;
 const MAX_TTL_SECONDS = 300;
 const BASE64URL = /^[A-Za-z0-9_-]+$/u;
+export const INTERNAL_AUDIT_JWT_ISSUER = "desarrolloseguro-audit" as const;
+export const INTERNAL_AUDIT_JWT_AUDIENCE = "grumphya-audit" as const;
 
 export type TechnicalJwtOptions = {
   privateKey: KeyLike | string;
@@ -42,9 +44,10 @@ export function createTechnicalJwt(options: TechnicalJwtOptions): string {
     iat: issuedAt,
     exp: issuedAt + ttlSeconds,
     jti: (options.idFactory ?? randomUUID)(),
+    domain: options.hostname,
     hostname: options.hostname,
     environment: options.environment,
-    scope: options.scopes.join(" "),
+    scope: options.scopes.map((scope) => `audit:${scope}`).join(" "),
   };
   const encodedHeader = encodeJson(header);
   const encodedPayload = encodeJson(payload);
