@@ -2,6 +2,8 @@
 
 Esta carpeta reúne documentación técnica del proyecto independiente Desarrollo Seguro.
 
+> **Estado de esta documentación:** los documentos actuales explican la versión anterior del proyecto. El reinicio está pendiente de toma de requisitos y plan acordado; por tanto, estas páginas no describen todavía el producto objetivo. Se actualizarán al completar cada feature nueva.
+
 ## Guías
 
 - [Desarrollo local](development.md): requisitos, comandos y comprobaciones.

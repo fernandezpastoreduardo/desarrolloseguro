@@ -1,13 +1,13 @@
-# Guías de Desarrollo Seguro
+# Guías para agentes
 
-Esta carpeta reúne el contexto del producto, los controles observables y las decisiones de implementación de Desarrollo Seguro. Para usar, desarrollar y operar el sistema, empieza por [`../doc/README.md`](../doc/README.md).
+Lee primero [`../AGENTS.md`](../AGENTS.md): contiene el proceso obligatorio, los límites de actuación y las reglas de prevalencia para el reinicio del proyecto.
 
-## Orden de lectura
+## Fuente de verdad
 
-1. [`desarrollo-seguro/README.md`](desarrollo-seguro/README.md): alcance y estado.
-2. [`desarrollo-seguro/features.md`](desarrollo-seguro/features.md): capacidades y criterios de aceptación.
-3. [`desarrollo-seguro/controls-and-evidence.md`](desarrollo-seguro/controls-and-evidence.md): controles y límites de evidencia.
-4. [`desarrollo-seguro/scanner-safety.md`](desarrollo-seguro/scanner-safety.md): límites de red y seguridad del escáner.
-5. [`desarrollo-seguro/operations.md`](desarrollo-seguro/operations.md) y [`desarrollo-seguro/test-plan.md`](desarrollo-seguro/test-plan.md): operación y verificación.
+- Las features nuevas se definen aquí antes de implementar cualquier código.
+- Cada definición debe precisar propósito, alcance, exclusiones, comportamiento, privacidad, seguridad y criterios de aceptación; pregunta al usuario por lo que no esté definido.
+- Las guías y especificaciones existentes bajo `desarrollo-seguro/` describen la implementación anterior. Son material histórico que se puede consultar para entenderla, pero no son requisitos ni restricciones para la nueva arquitectura.
+- `doc/` se mantiene para explicar a personas el producto y sus procedimientos. Al finalizar una feature se actualiza allí la documentación del comportamiento nuevo.
+- `wanna-bes.md` solo registra elementos que el usuario haya aplazado expresamente; se limpia cuando se implementan.
 
-Las guías generales de arquitectura y calidad están en [`../AGENTS.md`](../AGENTS.md). Cuando el código y una guía discrepen, confirma primero el comportamiento actual mediante código y pruebas, y actualiza la guía junto con la corrección.
+No conviertas descripciones de código existente, decisiones antiguas o supuestos del agente en requisitos del producto nuevo. Si hace falta decidirlos, incorpóralos a la toma de requisitos.
