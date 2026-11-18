@@ -154,7 +154,7 @@ describe("PublicScanPortal", () => {
     );
     await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
     await user.click(
-      screen.getByRole("checkbox", {
+      await screen.findByRole("checkbox", {
         name: /tengo autorización para solicitar este análisis/i,
       }),
     );
