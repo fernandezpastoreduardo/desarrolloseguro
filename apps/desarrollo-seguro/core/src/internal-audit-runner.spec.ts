@@ -45,8 +45,8 @@ describe("internal audit runner", () => {
       auditRef,
       observedAt,
       operations: [
-        operation("deployment_attestation", "/internal/audit/deployment"),
-        operation("performance_observation", "/internal/audit/performance"),
+        operation("deployment_attestation", "/audit/deployment"),
+        operation("performance_observation", "/audit/quality"),
       ],
       fetcher,
     });
@@ -59,7 +59,7 @@ describe("internal audit runner", () => {
     expect(fetcher).toHaveBeenCalledTimes(2);
     expect(fetcher).toHaveBeenNthCalledWith(
       1,
-      "https://grumphya.com/internal/audit/deployment",
+      "https://grumphya.com/audit/deployment",
       { method: "GET", redirect: "error", cache: "no-store" },
     );
   });
@@ -75,7 +75,7 @@ describe("internal audit runner", () => {
       request,
       auditRef,
       observedAt,
-      operations: [operation("performance_observation", "/internal/audit/performance")],
+      operations: [operation("performance_observation", "/audit/quality")],
       fetcher,
     })).resolves.toEqual({
       status: "failed",
@@ -92,8 +92,8 @@ describe("internal audit runner", () => {
       auditRef,
       observedAt,
       operations: [
-        operation("performance_observation", "/internal/audit/performance-a"),
-        operation("performance_observation", "/internal/audit/performance-b"),
+        operation("performance_observation", "/audit/quality"),
+        operation("performance_observation", "/audit/quality"),
       ],
       fetcher,
     })).rejects.toThrow("internal_audit_run_invalid");
@@ -107,7 +107,7 @@ describe("internal audit runner", () => {
       request: { ...request, scopes: ["infrastructure"] },
       auditRef,
       observedAt,
-      operations: [operation("performance_observation", "/internal/audit/performance")],
+      operations: [operation("performance_observation", "/audit/quality")],
       fetcher,
     })).rejects.toThrow("internal_audit_run_invalid");
     expect(fetcher).not.toHaveBeenCalled();
@@ -150,7 +150,7 @@ describe("internal audit runner", () => {
       request,
       auditRef,
       observedAt,
-      operations: [operation("performance_observation", "/internal/audit/performance")],
+      operations: [operation("performance_observation", "/audit/quality")],
       fetcher,
       signal: controller.signal,
     })).resolves.toEqual({
@@ -175,7 +175,7 @@ describe("internal audit runner", () => {
       request,
       auditRef,
       observedAt,
-      operations: [operation("performance_observation", "/internal/audit/performance")],
+      operations: [operation("performance_observation", "/audit/quality")],
       fetcher,
       signal: controller.signal,
     })).resolves.toEqual({

@@ -13,6 +13,15 @@ const ALLOWED_RESOURCES = [
 ] as const;
 type InternalAuditResource = (typeof ALLOWED_RESOURCES)[number];
 
+const RESOURCE_PATHS: Record<InternalAuditResource, string> = {
+  infrastructure_snapshot: "/audit/infrastructure",
+  deployment_attestation: "/audit/deployment",
+  dependency_inventory: "/audit/dependencies",
+  synthetic_browser_flow: "/audit/auth",
+  privacy_observation: "/audit/privacy",
+  performance_observation: "/audit/quality",
+};
+
 export type AuthorizedInternalAuditOperation = {
   resource: InternalAuditResource;
   method: "GET";
@@ -40,7 +49,7 @@ export function authorizeInternalAuditOperation(
       typeof resource !== "string" ||
       !isAllowedResource(resource) ||
       typeof path !== "string" ||
-      !isSafePath(path)
+      !isAllowlistedPath(resource, path)
     ) {
       throw new Error("internal_audit_operation_not_authorized");
     }
@@ -54,16 +63,8 @@ function isAllowedResource(value: string): value is InternalAuditResource {
   return ALLOWED_RESOURCES.includes(value as InternalAuditResource);
 }
 
-function isSafePath(value: string): boolean {
-  return (
-    value.length > 0 &&
-    value.length <= 128 &&
-    value.startsWith("/") &&
-    !value.includes("?") &&
-    !value.includes("#") &&
-    !value.includes("..") &&
-    !/[\r\n]/u.test(value)
-  );
+function isAllowlistedPath(resource: InternalAuditResource, value: string): boolean {
+  return value === RESOURCE_PATHS[resource];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

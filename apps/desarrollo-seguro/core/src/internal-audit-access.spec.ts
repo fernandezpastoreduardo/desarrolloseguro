@@ -32,6 +32,8 @@ describe("internal audit access policy", () => {
     { method: "POST" },
     { hostname: "other.example" },
     { resource: "shell" },
+    { path: "/audit/deployment" },
+    { path: "/audit/not-allowlisted" },
     { path: "/audit/infrastructure?include=secrets" },
     { path: "/audit/../users" },
   ])("rejects an operation outside the read-only contract: %o", (override) => {
