@@ -60,4 +60,14 @@ const malformedKey = spawnSync(process.execPath, [script], {
 assert.equal(malformedKey.status, 1);
 assert.match(malformedKey.stderr, /internal_audit_config_file_invalid=AUDIT_JWT_PRIVATE_KEY_FILE/u);
 
+const privateAttestationKey = join(tempRoot, "attestation-private.pem");
+writeFileSync(privateAttestationKey, attestationKeys.privateKey.export({ type: "pkcs8", format: "pem" }));
+chmodSync(privateAttestationKey, 0o400);
+const privateAttestation = spawnSync(process.execPath, [script], {
+  env: { ...baseEnv, AUDIT_RELEASE_ATTESTATION_PUBLIC_KEY_FILE: privateAttestationKey },
+  encoding: "utf8",
+});
+assert.equal(privateAttestation.status, 1);
+assert.match(privateAttestation.stderr, /internal_audit_config_file_invalid=AUDIT_RELEASE_ATTESTATION_PUBLIC_KEY_FILE/u);
+
 console.log("internal audit config tests passed");

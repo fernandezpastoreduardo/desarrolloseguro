@@ -41,6 +41,14 @@ for (const name of ["AUDIT_JWT_PRIVATE_KEY_FILE", "AUDIT_RELEASE_ATTESTATION_PUB
     if (!stats.isFile() || (stats.mode & 0o077) !== 0 || pem.length === 0) {
       throw new Error("invalid_file");
     }
+    const expectsPrivateKey = name === "AUDIT_JWT_PRIVATE_KEY_FILE";
+    if (
+      expectsPrivateKey
+        ? !pem.includes("PRIVATE KEY") || pem.includes("PUBLIC KEY")
+        : !pem.includes("PUBLIC KEY") || pem.includes("PRIVATE KEY")
+    ) {
+      throw new Error("invalid_pem_kind");
+    }
     const key = name === "AUDIT_JWT_PRIVATE_KEY_FILE"
       ? createPrivateKey(pem)
       : createPublicKey(pem);
