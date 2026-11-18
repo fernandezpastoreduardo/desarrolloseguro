@@ -123,6 +123,12 @@ contiene dos eventos iniciales `NULL → pending`; no hay ninguna transición a
 `active`, `suspended` ni reactivación. Esto explica por qué el scheduler puede
 completar su ciclo sin encolar una auditoría periódica.
 
+Se añadió `pnpm certification:preflight` como puerta operativa reproducible.
+Ejecutada contra el endpoint público actual devuelve `certification_transition_not_ready`:
+el proceso falla por la precondición real y no por un timeout genérico. Cuando
+exista una certificación activa, la misma puerta exigirá que el sello apunte al
+último informe y que un ciclo programado produzca un `reportId` nuevo.
+
 ### Mejoras no bloqueantes
 
 - SSE o streaming de progreso.
