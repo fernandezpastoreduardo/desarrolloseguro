@@ -1,6 +1,7 @@
 import { parseInternalAuditRequest, type InternalAuditRequest } from "./internal-audit-contract.js";
 import { buildInternalAuditReport, type InternalAuditReport } from "./internal-audit-report.js";
 import { readInternalAuditResource, type InternalAuditFetcher, type InternalAuditResource } from "./internal-audit-reader.js";
+import type { InternalPrivacyObservation } from "./internal-privacy-observation.js";
 
 const SHA256 = /^sha256:[a-f0-9]{64}$/u;
 const RESOURCE_NAMES = [
@@ -36,11 +37,13 @@ export type InternalAuditRunResult =
     reasonCode:
       | "internal_audit_resource_unavailable"
       | "internal_audit_resource_invalid"
+      | "internal_audit_operation_not_authorized"
       | "internal_audit_run_failed";
   };
 type InternalAuditFailureReason =
   | "internal_audit_resource_unavailable"
   | "internal_audit_resource_invalid"
+  | "internal_audit_operation_not_authorized"
   | "internal_audit_run_failed";
 
 export async function runInternalAudit(input: InternalAuditRunInput): Promise<InternalAuditRunResult> {
@@ -51,6 +54,13 @@ export async function runInternalAudit(input: InternalAuditRunInput): Promise<In
   for (const [index, operation] of input.operations.entries()) {
     try {
       const resource = await readInternalAuditResource(request, operation, input.fetcher);
+      if (!requiredScopes(operationResource(operation), resource).every((scope) => request.scopes.includes(scope))) {
+        return {
+          status: "failed",
+          completedOperations: index,
+          reasonCode: "internal_audit_operation_not_authorized",
+        };
+      }
       observations.push({ kind: envelopeKind(operationResource(operation)), observation: resource });
     } catch (error) {
       return {
@@ -127,12 +137,25 @@ function resourceScope(resource: ResourceName): InternalAuditRequest["scopes"][n
   return "privacy";
 }
 
+function requiredScopes(
+  resourceName: ResourceName,
+  resource: InternalAuditResource,
+): readonly InternalAuditRequest["scopes"][number][] {
+  if (resourceName !== "privacy_observation") return [resourceScope(resourceName)];
+  const observation = resource as InternalPrivacyObservation;
+  if (observation.area !== "transparency") return ["privacy"];
+  return observation.signalCode === "ai_disclosure_present" ? ["ai"] : ["ethics"];
+}
+
 function toFailureReason(error: unknown): InternalAuditFailureReason {
   if (error instanceof Error && error.message === "internal_audit_resource_unavailable") {
     return "internal_audit_resource_unavailable";
   }
   if (error instanceof Error && error.message === "internal_audit_resource_invalid") {
     return "internal_audit_resource_invalid";
+  }
+  if (error instanceof Error && error.message === "internal_audit_operation_not_authorized") {
+    return "internal_audit_operation_not_authorized";
   }
   return "internal_audit_run_failed";
 }

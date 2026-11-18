@@ -45,7 +45,10 @@ interno solo cuando todos los recursos solicitados se han podido validar. Si
 una lectura falla o una respuesta es inválida, devuelve una categoría de fallo
 y ningún informe parcial; el reintento debe iniciar una nueva ejecución con un
 `auditRef` nuevo. No se reintenta en paralelo ni se reutilizan respuestas de
-una ejecución anterior.
+una ejecución anterior. Además, comprueba el scope efectivo de la evidencia
+después de validarla: una señal de divulgación de IA requiere `ai` y una señal
+de transparencia ética requiere `ethics`, aunque ambas lleguen por el recurso
+agregado de privacidad.
 
 El adaptador de acceso D-01 autoriza únicamente operaciones `GET` contra
 recursos allowlisted y rutas sin query, fragmento, salto de directorio ni

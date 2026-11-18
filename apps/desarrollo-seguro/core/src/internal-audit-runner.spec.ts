@@ -112,4 +112,32 @@ describe("internal audit runner", () => {
     })).rejects.toThrow("internal_audit_run_invalid");
     expect(fetcher).not.toHaveBeenCalled();
   });
+
+  it("does not let a privacy scope read an AI disclosure signal", async () => {
+    const fetcher = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        area: "transparency",
+        status: "pass",
+        signalCode: "ai_disclosure_present",
+        value: 1,
+        unit: "boolean",
+        sampleRef: `sha256:${"e".repeat(64)}`,
+        observedAt,
+      }),
+    }));
+
+    await expect(runInternalAudit({
+      request: { ...request, scopes: ["privacy"] },
+      auditRef,
+      observedAt,
+      operations: [operation("privacy_observation", "/internal/audit/privacy")],
+      fetcher,
+    })).resolves.toEqual({
+      status: "failed",
+      completedOperations: 0,
+      reasonCode: "internal_audit_operation_not_authorized",
+    });
+  });
 });
