@@ -25,7 +25,10 @@ atestación de producción con digest del artefacto, digest de dependencias y
 códigos de controles allowlisted, sin guardar SBOM, código fuente ni secretos.
 D-04 añade observaciones de autenticación sintética con una referencia hash y
 flujos de login, frontera de autorización y logout; no admite credenciales ni
-identificadores de usuarios reales.
+identificadores de usuarios reales. D-05 añade observaciones acotadas de E2E,
+rendimiento, accesibilidad y responsive: solo conserva un código de métrica,
+un valor con unidad y límites, un hash de muestra y la fecha; no conserva
+HTML, capturas, trazas, URLs ni datos de usuario.
 
 ## Orden propuesto
 
