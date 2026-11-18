@@ -21,6 +21,9 @@ En el árbol `main` se han ejecutado correctamente:
 - `pnpm build`
 - `pnpm migrations:check`
 - `pnpm test` fuera del sandbox para permitir los tests HTTP locales
+- `pnpm ci:verify audit` fuera del sandbox; la política de producción no detectó
+  vulnerabilidades altas o críticas. Queda registrada una alerta alta de
+  desarrollo sin parche upstream, según la política documentada.
 
 La suite ejecutada reúne 713 pruebas de los paquetes core, web, persistence,
 API y worker. Además, el 18 de noviembre de 2026 se levantó una base PostgreSQL
