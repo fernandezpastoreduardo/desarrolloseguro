@@ -18,4 +18,6 @@ export * from "./internal-audit-projection.js";
 export * from "./internal-audit-report.js";
 export * from "./internal-audit-reader.js";
 export * from "./internal-audit-runner.js";
+export * from "./internal-audit-auth.js";
+export * from "./internal-audit-evidence-envelope.js";
 export * from "./internal-dependency-inventory.js";

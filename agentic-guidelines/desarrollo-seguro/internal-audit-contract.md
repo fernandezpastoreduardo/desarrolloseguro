@@ -36,7 +36,10 @@ reinterpretan como controles distintos.
 El snapshot D-02 solo proyecta `infrastructure.tls` si contiene transporte
 verificado; no convierte exposición o privilegios en conclusiones sobre red o
 cabeceras. El lector de producción fija el origen `https://grumphya.com`, usa
-GET sin credenciales y valida cada JSON con el parser del recurso. El inventario
+GET con una identidad técnica JWT EdDSA de corta duración y valida cada JSON
+con el parser del recurso. El JWT incluye `iss`, `sub`, `aud`, `iat`, `exp`,
+`jti`, `kid`, `hostname`, `environment` y `scope`; no se envía ninguna cookie
+ni credencial de usuario. El inventario
 de dependencias solo conserva contadores de riesgo y un digest; no conserva
 nombres de paquetes ni un SBOM.
 
@@ -53,9 +56,19 @@ posterior al instante de la auditoría. La ejecución acepta un `AbortSignal`;
 si se cancela antes o durante una lectura, no construye informe parcial y
 devuelve únicamente `internal_audit_cancelled`.
 
+Las respuestas de producción usan la envolvente `beta-d-0.2` con las claves
+exactas `schemaVersion`, `observedAt`, `validUntil`, `environment`,
+`deploymentDigest`, `cardinality`, `evidence` y `attestation`. `cardinality` es
+exactamente `1` en esta versión; el lector rechaza arrays, respuestas fuera de
+la ventana de 24 horas, timestamps futuros, HTML, firmas inválidas y `kid`s no
+allowlisted. La atestación EdDSA firma la serialización canónica de todos los
+campos salvo `attestation`; la clave pública se fija en Desarrollo Seguro y se
+rota con solapamiento de `kid`s.
+
 El adaptador de acceso D-01 autoriza únicamente operaciones `GET` contra
 recursos allowlisted y rutas sin query, fragmento, salto de directorio ni
-credenciales. No abre conexiones por sí mismo, no concede permisos a Grumphya
+credenciales embebidas en la URL. El JWT solo viaja en la cabecera
+`Authorization`; no abre conexiones por sí mismo, no concede permisos a Grumphya
 y no convierte fixtures en evidencias de producción. El evaluador interno conserva el score externo en `null` y solo
 calcula una puntuación interna cuando hay cobertura completa; `unknown` deja
 la evaluación incompleta y un fallo crítico la bloquea. D-02 a D-08 requieren

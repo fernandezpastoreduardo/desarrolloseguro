@@ -10,11 +10,13 @@ allowlisted y conservará estados, códigos, contadores, digests y timestamps.
 
 - Emisor: identidad técnica `desarrollo-seguro-auditor`.
 - Entorno: `production` y únicamente `https://grumphya.com`.
-- Permiso: `GET` de solo lectura, sin acceso a base de datos, consola,
+- Permiso: `GET` de solo lectura con un JWT técnico EdDSA de corta duración,
+  sin acceso a base de datos, consola,
   archivos, variables, usuarios reales ni rutas arbitrarias.
 - Transporte: HTTPS con validación de certificado; las redirecciones se
   rechazan.
-- Respuesta: `application/json` con tamaño máximo acordado; HTML, texto libre,
+- Respuesta: `application/json` con tamaño máximo acordado y la envolvente
+  `beta-d-0.2`; HTML, texto libre,
   cabeceras completas, cookies y secretos hacen fallar la auditoría de forma
   segura.
 - Retención: máximo 30 días para el informe privado y sus digests; revocación
@@ -36,9 +38,21 @@ semánticos y no añadir contenido de usuario:
 | `privacy` | contadores booleanos de almacenamiento, terceros, consentimiento y transparencia |
 | `ai` | estado de controles de transparencia, minimización, revisión humana y uso de IA |
 
-Cada respuesta debe incluir `schemaVersion`, `observedAt`, `environment`,
-`deploymentDigest` y `evidence` tipada. `environment` debe ser exactamente
-`production`; un valor diferente se rechaza.
+Cada respuesta debe incluir exactamente `schemaVersion`, `observedAt`,
+`validUntil`, `environment`, `deploymentDigest`, `cardinality`, `evidence` y
+`attestation`. `environment` debe ser exactamente `production`; un valor
+diferente se rechaza. En esta versión `schemaVersion` es `beta-d-0.2` y
+`cardinality` es `1`. `attestation` contiene `alg: EdDSA`, un `kid` de release
+allowlisted y una firma base64url sobre la serialización canónica del resto de
+la envolvente. Desarrollo Seguro rechaza timestamps futuros, evidencia de más
+de 24 horas, ventanas mayores de 24 horas, firmas inválidas y cardinalidades
+distintas de una.
+
+El JWT técnico lo emite Desarrollo Seguro con `iss`, `sub`, `aud`, `iat`,
+`exp`, `jti`, `kid`, `hostname`, `environment` y `scope`. Grumphya debe validar
+firma, issuer, audience, `kid`, entorno, dominio, scopes, expiración y
+revocación antes de leer cualquier evidencia. Nunca se comparte la clave
+privada ni se acepta una cookie o un JWT de usuario para este canal.
 
 ## Cuentas y datos sintéticos
 
@@ -55,8 +69,9 @@ pruebas destructivas.
 ## Aceptación antes de activar D
 
 1. Grumphya documenta la identidad, scopes, revocación, contacto y retención.
-2. Un preflight sin credenciales confirma que las rutas devuelven JSON versionado
-   y rechaza HTML o redirecciones.
+2. Un preflight autenticado con el JWT técnico confirma que las rutas devuelven
+   JSON versionado y rechaza HTML o redirecciones; una petición sin identidad
+   debe ser rechazada por Grumphya.
 3. La cuenta sintética y sus datos se prueban en un entorno aislado.
 4. El digest de despliegue y el de dependencias corresponden al artefacto que
    está sirviendo producción.

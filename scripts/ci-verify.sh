@@ -10,6 +10,8 @@ fi
 case "$MODE" in
   quality)
     pnpm migrations:check
+    pnpm audit:preflight
+    node scripts/check-internal-audit-config.spec.mjs
     bash scripts/ci-preflight.sh
     pnpm quality:check
     pnpm sandbox:check

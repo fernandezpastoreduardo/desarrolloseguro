@@ -1,6 +1,11 @@
 import { parseInternalAuditRequest, type InternalAuditRequest } from "./internal-audit-contract.js";
 import { buildInternalAuditReport, type InternalAuditReport } from "./internal-audit-report.js";
-import { readInternalAuditResource, type InternalAuditFetcher, type InternalAuditResource } from "./internal-audit-reader.js";
+import {
+  readInternalAuditResource,
+  type InternalAuditFetcher,
+  type InternalAuditReaderOptions,
+  type InternalAuditResource,
+} from "./internal-audit-reader.js";
 import type { InternalPrivacyObservation } from "./internal-privacy-observation.js";
 
 const SHA256 = /^sha256:[a-f0-9]{64}$/u;
@@ -27,6 +32,7 @@ export type InternalAuditRunInput = {
   observedAt: string;
   operations: readonly unknown[];
   fetcher: InternalAuditFetcher;
+  auth: Omit<InternalAuditReaderOptions, "signal">;
   signal?: AbortSignal;
 };
 
@@ -39,6 +45,9 @@ export type InternalAuditRunResult =
       | "internal_audit_resource_unavailable"
       | "internal_audit_resource_invalid"
       | "internal_audit_operation_not_authorized"
+      | "internal_audit_auth_failed"
+      | "internal_audit_attestation_invalid"
+      | "internal_audit_evidence_stale"
       | "internal_audit_cancelled"
       | "internal_audit_run_failed";
   };
@@ -46,6 +55,9 @@ type InternalAuditFailureReason =
   | "internal_audit_resource_unavailable"
   | "internal_audit_resource_invalid"
   | "internal_audit_operation_not_authorized"
+  | "internal_audit_auth_failed"
+  | "internal_audit_attestation_invalid"
+  | "internal_audit_evidence_stale"
   | "internal_audit_cancelled"
   | "internal_audit_run_failed";
 
@@ -59,7 +71,10 @@ export async function runInternalAudit(input: InternalAuditRunInput): Promise<In
       return { status: "failed", completedOperations: index, reasonCode: "internal_audit_cancelled" };
     }
     try {
-      const resource = await readInternalAuditResource(request, operation, input.fetcher, input.signal);
+      const resource = await readInternalAuditResource(request, operation, input.fetcher, {
+        ...input.auth,
+        signal: input.signal,
+      });
       if (!requiredScopes(operationResource(operation), resource).every((scope) => request.scopes.includes(scope))) {
         return {
           status: "failed",
@@ -165,6 +180,15 @@ function toFailureReason(error: unknown): InternalAuditFailureReason {
   }
   if (error instanceof Error && error.message === "internal_audit_cancelled") {
     return "internal_audit_cancelled";
+  }
+  if (error instanceof Error && error.message === "internal_audit_auth_failed") {
+    return "internal_audit_auth_failed";
+  }
+  if (error instanceof Error && error.message === "internal_audit_attestation_invalid") {
+    return "internal_audit_attestation_invalid";
+  }
+  if (error instanceof Error && error.message === "internal_audit_evidence_stale") {
+    return "internal_audit_evidence_stale";
   }
   return "internal_audit_run_failed";
 }

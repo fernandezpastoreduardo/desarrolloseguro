@@ -1,4 +1,7 @@
 import { authorizeInternalAuditOperation, type AuthorizedInternalAuditOperation } from "./internal-audit-access.js";
+import { parseInternalAuditResponseEnvelope } from "./internal-audit-evidence-envelope.js";
+import type { TechnicalJwtProvider } from "./internal-audit-auth.js";
+import type { KeyLike } from "node:crypto";
 import type { InternalAuditRequest } from "./internal-audit-contract.js";
 import { parseInternalDeploymentAttestation, type InternalDeploymentAttestation } from "./internal-deployment-attestation.js";
 import { parseInternalDependencyInventory, type InternalDependencyInventory } from "./internal-dependency-inventory.js";
@@ -17,7 +20,13 @@ export type InternalAuditResource =
 
 export type InternalAuditFetcher = (
   url: string,
-  init: { method: "GET"; redirect: "error"; cache: "no-store"; signal?: AbortSignal },
+  init: {
+    method: "GET";
+    redirect: "error";
+    cache: "no-store";
+    headers: Readonly<Record<string, string>>;
+    signal?: AbortSignal;
+  },
 ) => Promise<{
   ok: boolean;
   status: number;
@@ -25,14 +34,21 @@ export type InternalAuditFetcher = (
   json: () => Promise<unknown>;
 }>;
 
+export type InternalAuditReaderOptions = {
+  technicalJwt: TechnicalJwtProvider;
+  releaseAttestationPublicKeys: ReadonlyMap<string, KeyLike | string>;
+  clock?: () => Date;
+  signal?: AbortSignal;
+};
+
 export async function readInternalAuditResource(
   request: InternalAuditRequest,
   operationInput: unknown,
   fetcher: InternalAuditFetcher,
-  signal?: AbortSignal,
+  options: InternalAuditReaderOptions,
 ): Promise<InternalAuditResource> {
   const operation = authorizeInternalAuditOperation(request, operationInput);
-  const response = await fetchResource(operation, fetcher, signal);
+  const response = await fetchResource(operation, fetcher, options);
   let payload: unknown;
   try {
     payload = await response.json();
@@ -41,23 +57,53 @@ export async function readInternalAuditResource(
     throw new Error("internal_audit_resource_invalid", { cause: error });
   }
   try {
-    return parseResource(operation.resource, payload);
-  } catch {
-    throw new Error("internal_audit_resource_invalid");
+    const envelope = parseInternalAuditResponseEnvelope(payload, {
+      publicKeys: options.releaseAttestationPublicKeys,
+      now: options.clock,
+    });
+    const resource = parseResource(operation.resource, envelope.evidence);
+    if (resource.observedAt !== envelope.observedAt) {
+      throw new Error("internal_audit_resource_invalid");
+    }
+    return resource;
+  } catch (error) {
+    if (error instanceof Error && (
+      error.message === "internal_audit_attestation_invalid" ||
+      error.message === "internal_audit_evidence_stale"
+    )) {
+      throw error;
+    }
+    throw new Error("internal_audit_resource_invalid", { cause: error });
   }
 }
 
 async function fetchResource(
   operation: AuthorizedInternalAuditOperation,
   fetcher: InternalAuditFetcher,
-  signal?: AbortSignal,
+  options: InternalAuditReaderOptions,
 ): Promise<Awaited<ReturnType<InternalAuditFetcher>>> {
+  const signal = options.signal;
   if (signal?.aborted) throw new Error("internal_audit_cancelled");
+  let token: string;
+  try {
+    token = options.technicalJwt();
+  } catch (error) {
+    throw new Error("internal_audit_auth_failed", { cause: error });
+  }
+  if (typeof token !== "string" || token.length === 0 || token.length > 4096) {
+    throw new Error("internal_audit_auth_failed");
+  }
   let response: Awaited<ReturnType<InternalAuditFetcher>>;
   try {
     response = await fetcher(
       `https://${operation.hostname}${operation.path}`,
-      { method: "GET", redirect: "error", cache: "no-store", ...(signal ? { signal } : {}) },
+      {
+        method: "GET",
+        redirect: "error",
+        cache: "no-store",
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        ...(signal ? { signal } : {}),
+      },
     );
   } catch (error) {
     if (isAbortError(error)) throw new Error("internal_audit_cancelled", { cause: error });

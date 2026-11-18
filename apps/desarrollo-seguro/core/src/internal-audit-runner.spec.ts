@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { runInternalAudit } from "./internal-audit-runner.js";
+import { signedAuditEvidence, TEST_AUDIT_AUTH } from "./internal-audit-test-support.js";
 
 const request = {
   hostname: "grumphya.com",
@@ -10,7 +11,7 @@ const request = {
 } as const;
 
 const auditRef = `sha256:${"a".repeat(64)}`;
-const observedAt = "2026-11-18T18:00:00.000Z";
+const observedAt = "2026-11-18T19:45:00.000Z";
 
 function operation(resource: string, path: string) {
   return { resource, method: "GET", hostname: "grumphya.com", path };
@@ -22,7 +23,7 @@ describe("internal audit runner", () => {
       ok: true,
       status: 200,
       headers: { get: () => "application/json" },
-      json: async () => url.endsWith("/deployment")
+      json: async () => signedAuditEvidence(url.endsWith("/deployment")
         ? {
           observedAt,
           environment: "production",
@@ -38,7 +39,7 @@ describe("internal audit runner", () => {
           unit: "milliseconds",
           sampleRef: `sha256:${"d".repeat(64)}`,
           observedAt,
-        },
+        }),
     }));
 
     const result = await runInternalAudit({
@@ -50,6 +51,7 @@ describe("internal audit runner", () => {
         operation("performance_observation", "/audit/quality"),
       ],
       fetcher,
+      auth: TEST_AUDIT_AUTH,
     });
 
     expect(result.status).toBe("completed");
@@ -61,7 +63,12 @@ describe("internal audit runner", () => {
     expect(fetcher).toHaveBeenNthCalledWith(
       1,
       "https://grumphya.com/audit/deployment",
-      { method: "GET", redirect: "error", cache: "no-store" },
+      {
+        method: "GET",
+        redirect: "error",
+        cache: "no-store",
+        headers: { Accept: "application/json", Authorization: "Bearer test-technical-jwt" },
+      },
     );
   });
 
@@ -79,6 +86,7 @@ describe("internal audit runner", () => {
       observedAt,
       operations: [operation("performance_observation", "/audit/quality")],
       fetcher,
+      auth: TEST_AUDIT_AUTH,
     })).resolves.toEqual({
       status: "failed",
       completedOperations: 0,
@@ -98,6 +106,7 @@ describe("internal audit runner", () => {
         operation("performance_observation", "/audit/quality"),
       ],
       fetcher,
+      auth: TEST_AUDIT_AUTH,
     })).rejects.toThrow("internal_audit_run_invalid");
     expect(fetcher).not.toHaveBeenCalled();
   });
@@ -111,6 +120,7 @@ describe("internal audit runner", () => {
       observedAt,
       operations: [operation("performance_observation", "/audit/quality")],
       fetcher,
+      auth: TEST_AUDIT_AUTH,
     })).rejects.toThrow("internal_audit_run_invalid");
     expect(fetcher).not.toHaveBeenCalled();
   });
@@ -120,7 +130,7 @@ describe("internal audit runner", () => {
       ok: true,
       status: 200,
       headers: { get: () => "application/json" },
-      json: async () => ({
+      json: async () => signedAuditEvidence({
         area: "transparency",
         status: "pass",
         signalCode: "ai_disclosure_present",
@@ -137,6 +147,7 @@ describe("internal audit runner", () => {
       observedAt,
       operations: [operation("privacy_observation", "/audit/privacy")],
       fetcher,
+      auth: TEST_AUDIT_AUTH,
     })).resolves.toEqual({
       status: "failed",
       completedOperations: 0,
@@ -155,6 +166,7 @@ describe("internal audit runner", () => {
       observedAt,
       operations: [operation("performance_observation", "/audit/quality")],
       fetcher,
+      auth: TEST_AUDIT_AUTH,
       signal: controller.signal,
     })).resolves.toEqual({
       status: "failed",
@@ -185,6 +197,7 @@ describe("internal audit runner", () => {
       observedAt,
       operations: [operation("performance_observation", "/audit/quality")],
       fetcher,
+      auth: TEST_AUDIT_AUTH,
       signal: controller.signal,
     })).resolves.toEqual({
       status: "failed",
