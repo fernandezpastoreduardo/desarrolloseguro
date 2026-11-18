@@ -5,3 +5,4 @@ export * from "./domain-ethics-score.js";
 export * from "./scan-failure-codes.js";
 export * from "./public-evidence.js";
 export * from "./scan-failure-diagnostic.js";
+export * from "./beta-certification-policy.js";
