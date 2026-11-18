@@ -7,8 +7,11 @@ import {
 } from "@nestjs/common";
 import {
   assessDomainEthics,
+  assessBetaCertification,
   normalizeHostname,
   projectPublicEvidence,
+  type BetaControlId,
+  type BetaControlObservation,
   type ScanFailureCode,
   type DomainEthicsAssessment,
   type ScanFailureDiagnostic,
@@ -43,6 +46,7 @@ export type PublicReport = {
   expiresAt: string;
   verdict: "pass" | "fail" | "inconclusive";
   ethicsAssessment: DomainEthicsAssessment;
+  betaCertification: ReturnType<typeof assessBetaCertification>;
   scope: string[];
   checks: Array<{
     controlId: string;
@@ -226,6 +230,7 @@ function toPublicReport(report: PublicScanReport): PublicReport {
     expiresAt: report.expiresAt.toISOString(),
     verdict: report.verdict,
     ethicsAssessment: assessDomainEthics(report.checks),
+    betaCertification: assessBetaCertification(toBetaObservations(report.checks)),
     scope: report.scope,
     checks: report.checks.map((check) => ({
       controlId: check.controlId,
@@ -240,4 +245,21 @@ function toPublicReport(report: PublicScanReport): PublicReport {
       evidence: projectPublicEvidence(check.controlId, check.evidence),
     })),
   };
+}
+
+function toBetaObservations(
+  checks: PublicScanReport["checks"],
+): BetaControlObservation[] {
+  return checks.flatMap((check) => {
+    if (!isBetaControlId(check.controlId)) return [];
+    return [{
+      controlId: check.controlId,
+      status: check.status === "pass" || check.status === "fail" ? check.status : "unknown",
+      summary: check.summary,
+    }];
+  });
+}
+
+function isBetaControlId(value: string): value is BetaControlId {
+  return ["DS-TLS-01", "DS-TLS-02", "DS-HDR-01", "DS-PRIV-05"].includes(value as BetaControlId);
 }

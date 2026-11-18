@@ -329,6 +329,77 @@ describe("PublicScanService", () => {
     expect(publicReport.checks[0]).toHaveProperty("evidence", { addressClass: "public", aRecordCount: 1 });
   });
 
+  it("adds a Beta assessment using only the supported public controls", async () => {
+    const report = makeReport({
+      checks: [
+        {
+          controlId: "DS-TLS-01",
+          status: "pass",
+          required: true,
+          severity: "high",
+          observedAt: FIXED_NOW,
+          targetPath: "/",
+          method: "TLS",
+          summary: "Comprobación DS-TLS-01: pass.",
+          limitation: "Resultado limitado al perfil domain-v3.",
+          evidence: { certificateValid: true, hostnameMatches: true, protocol: "TLSv1.3" },
+        },
+        {
+          controlId: "DS-TLS-02",
+          status: "pass",
+          required: true,
+          severity: "high",
+          observedAt: FIXED_NOW,
+          targetPath: "/",
+          method: "TLS",
+          summary: "Comprobación DS-TLS-02: pass.",
+          limitation: "Resultado limitado al perfil domain-v3.",
+          evidence: { tls10Accepted: false, tls11Accepted: false, tls12Accepted: true, tls13Accepted: true },
+        },
+        {
+          controlId: "DS-HDR-01",
+          status: "pass",
+          required: true,
+          severity: "medium",
+          observedAt: FIXED_NOW,
+          targetPath: "/",
+          method: "GET",
+          summary: "Comprobación DS-HDR-01: pass.",
+          limitation: "Resultado limitado al perfil domain-v3.",
+          evidence: { hsts: true, nosniff: true, frameProtection: true, referrerPolicy: true, csp: true },
+        },
+        {
+          controlId: "DS-PRIV-05",
+          status: "fail",
+          required: true,
+          severity: "medium",
+          observedAt: FIXED_NOW,
+          targetPath: "/",
+          method: "GET",
+          summary: "Comprobación DS-PRIV-05: fail.",
+          limitation: "Resultado limitado al perfil domain-v3.",
+          evidence: { inspected: true, cookieCount: 1, insecureCookieCount: 0, catalogMatchCount: 1, consentPromptDetected: true },
+        },
+      ],
+    });
+    const service = new PublicScanService({
+      scanStore: {
+        readPublicDomainSnapshot: vi.fn(),
+        readPublicReport: vi.fn().mockResolvedValue(report),
+      },
+    });
+
+    const publicReport = await service.getReport(REPORT_ID);
+
+    expect(publicReport.betaCertification).toMatchObject({
+      policyVersion: "beta-0.1",
+      score: 70,
+      eligibility: "blocked",
+      assessedCategories: 3,
+      totalCategories: 3,
+    });
+  });
+
   it.each([
     { expiresAt: "2026-11-03T10:00:00.001Z", expectedState: "fresh" },
     { expiresAt: "2026-11-03T10:00:00.000Z", expectedState: "stale" },
@@ -492,6 +563,7 @@ describe("PublicScanService", () => {
         "expiresAt",
         "verdict",
         "ethicsAssessment",
+        "betaCertification",
         "scope",
         "checks",
       ].sort(),
