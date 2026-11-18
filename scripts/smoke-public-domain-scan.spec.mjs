@@ -63,6 +63,44 @@ test("accepts a refreshed domain-v3 report with TLS matrix, tracking and perform
   assert.equal(report.checks.length, 9);
 });
 
+test("accepts a diagnostic TLS matrix when a legacy version cannot negotiate", () => {
+  const status = completedStatus();
+  const tlsCheck = status.lastReport.checks.find(({ controlId }) => controlId === "DS-TLS-02");
+  if (!tlsCheck) throw new Error("tls_fixture_missing");
+  tlsCheck.status = "unknown";
+  tlsCheck.summary = "No se pudieron completar todas las pruebas de TLS. TLS 1.0: falló la solicitud HTTPS.";
+  tlsCheck.evidence = {
+    tls10ProbeError: "https_request_failed",
+    tls11ProbeError: "https_request_failed",
+    tls12Accepted: true,
+    tls13Accepted: true,
+  };
+  const transportCriterion = status.lastReport.ethicsAssessment.criteria.find(({ id }) => id === "transport-security");
+  if (!transportCriterion) throw new Error("transport_criterion_missing");
+  transportCriterion.status = "unknown";
+  status.lastReport.ethicsAssessment.assessedCriteria = 6;
+
+  assert.equal(validateCompletedReport(status, "previous-report-id").id, status.lastReport.id);
+});
+
+test("rejects a TLS unknown without a complete boolean-or-diagnostic matrix", () => {
+  const status = completedStatus();
+  const tlsCheck = status.lastReport.checks.find(({ controlId }) => controlId === "DS-TLS-02");
+  if (!tlsCheck) throw new Error("tls_fixture_missing");
+  tlsCheck.status = "unknown";
+  tlsCheck.summary = "No se pudieron completar todas las pruebas de TLS.";
+  tlsCheck.evidence = { tls12Accepted: true };
+  const transportCriterion = status.lastReport.ethicsAssessment.criteria.find(({ id }) => id === "transport-security");
+  if (!transportCriterion) throw new Error("transport_criterion_missing");
+  transportCriterion.status = "unknown";
+  status.lastReport.ethicsAssessment.assessedCriteria = 6;
+
+  assert.throws(
+    () => validateCompletedReport(status, "previous-report-id"),
+    { message: "public_scan_ethics_assessment_incomplete" },
+  );
+});
+
 test("accepts www HTTPS redirect to the canonical domain without an exposed port", () => {
   assert.equal(
     validateWwwRedirect(301, "https://desarrolloseguro.org/").href,
