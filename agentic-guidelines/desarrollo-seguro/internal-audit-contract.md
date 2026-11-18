@@ -35,7 +35,9 @@ secretos fuera de la imagen y superficie API allowlisted; los demás no se
 reinterpretan como controles distintos.
 El snapshot D-02 solo proyecta `infrastructure.tls` si contiene transporte
 verificado; no convierte exposición o privilegios en conclusiones sobre red o
-cabeceras.
+cabeceras. El lector de producción fija el origen `https://grumphya.com`, usa
+GET sin credenciales y valida cada JSON con el parser del recurso. El inventario
+de dependencias no se lee mientras no tenga contrato explícito.
 
 El adaptador de acceso D-01 autoriza únicamente operaciones `GET` contra
 recursos allowlisted y rutas sin query, fragmento, salto de directorio ni

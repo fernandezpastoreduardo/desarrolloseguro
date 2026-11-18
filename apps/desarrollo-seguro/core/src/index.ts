@@ -16,3 +16,4 @@ export * from "./internal-quality-observation.js";
 export * from "./internal-privacy-observation.js";
 export * from "./internal-audit-projection.js";
 export * from "./internal-audit-report.js";
+export * from "./internal-audit-reader.js";
