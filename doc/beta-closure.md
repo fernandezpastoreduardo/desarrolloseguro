@@ -23,10 +23,11 @@ En el árbol `main` se han ejecutado correctamente:
 - `pnpm test` fuera del sandbox para permitir los tests HTTP locales
 
 La suite ejecutada reúne 713 pruebas de los paquetes core, web, persistence,
-API y worker. Las pruebas PostgreSQL opt-in se omiten cuando no existe una base
-aislada configurada; deben ejecutarse en CI o con `DS_TEST_POSTGRES_ISOLATED=1`
-y una base local dedicada. Los diagnósticos Docker esperables de los dobles de
-worker no se consideran fallos de la suite.
+API y worker. Además, el 18 de noviembre de 2026 se levantó una base PostgreSQL
+efímera con la misma imagen de CI y `pnpm test:postgres` pasó 94/94 pruebas
+(93 de persistence y 1 de worker), incluido el ciclo de certificación y sus
+políticas de admisión. El contenedor se eliminó al terminar. Los diagnósticos
+Docker esperables de los dobles de worker no se consideran fallos de la suite.
 
 La política de admisión se conserva en migraciones append-only: la caché de 60
 minutos y la ventana de 24 horas se reactivan en 025; 026 añade las auditorías
