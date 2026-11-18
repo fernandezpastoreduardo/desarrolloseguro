@@ -100,6 +100,9 @@ function validateRunInput(input: InternalAuditRunInput, request: InternalAuditRe
   if (new Set(resources).size !== resources.length) {
     throw new Error("internal_audit_run_invalid");
   }
+  if (resources.some((resource) => !request.scopes.includes(resourceScope(resource)))) {
+    throw new Error("internal_audit_run_invalid");
+  }
 }
 
 function operationResource(input: unknown): ResourceName {
@@ -114,6 +117,14 @@ function envelopeKind(resource: ResourceName): EnvelopeKind {
   if (resource === "performance_observation") return "quality";
   if (resource === "privacy_observation") return "privacy";
   return resource;
+}
+
+function resourceScope(resource: ResourceName): InternalAuditRequest["scopes"][number] {
+  if (resource === "infrastructure_snapshot") return "infrastructure";
+  if (resource === "deployment_attestation" || resource === "dependency_inventory") return "application";
+  if (resource === "synthetic_browser_flow") return "authentication";
+  if (resource === "performance_observation") return "quality";
+  return "privacy";
 }
 
 function toFailureReason(error: unknown): InternalAuditFailureReason {

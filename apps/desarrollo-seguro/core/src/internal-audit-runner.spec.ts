@@ -99,4 +99,17 @@ describe("internal audit runner", () => {
     })).rejects.toThrow("internal_audit_run_invalid");
     expect(fetcher).not.toHaveBeenCalled();
   });
+
+  it("rejects a resource outside the request scopes before making requests", async () => {
+    const fetcher = vi.fn();
+
+    await expect(runInternalAudit({
+      request: { ...request, scopes: ["infrastructure"] },
+      auditRef,
+      observedAt,
+      operations: [operation("performance_observation", "/internal/audit/performance")],
+      fetcher,
+    })).rejects.toThrow("internal_audit_run_invalid");
+    expect(fetcher).not.toHaveBeenCalled();
+  });
 });
