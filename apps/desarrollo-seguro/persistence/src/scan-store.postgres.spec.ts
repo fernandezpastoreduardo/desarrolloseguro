@@ -144,14 +144,15 @@ describePostgres.sequential("PostgresScanStore", () => {
       await store.ensureFreshScan({ hostname, profileVersion: "domain-v3", trigger: "requested" });
       const job = await store.claimNextScan(new Date(), TEST_LEASE_MS);
       if (!job) throw new Error("expected_claimed_lifecycle_scan");
+      const completedAt = new Date(Date.now() - 2 * 60 * 60 * 1000);
       const reportId = await store.completeScan({
         jobId: job.id,
         leaseToken: job.leaseToken,
         hostname,
         profileVersion: "domain-v3",
         scannerVersion: "test",
-        startedAt: new Date(Date.now() - 1000),
-        completedAt: new Date(),
+        startedAt: new Date(completedAt.getTime() - 1000),
+        completedAt,
         verdict,
         scope: ["/"],
         checks,
@@ -162,10 +163,6 @@ describePostgres.sequential("PostgresScanStore", () => {
       await pool.query(
         "UPDATE ds_scan_jobs SET queued_at = clock_timestamp() - interval '25 hours' WHERE id = $1",
         [job.id],
-      );
-      await pool.query(
-        "UPDATE ds_scan_runs SET completed_at = clock_timestamp() - interval '2 hours' WHERE id = $1",
-        [reportId],
       );
       return reportId;
     };
