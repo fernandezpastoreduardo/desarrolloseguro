@@ -68,7 +68,7 @@ assert.match(prototypeReport, /no es un análisis actual/u);
 assert.match(prototypeStyles, /\.prototype-report__hero/u, "prototype report has its own high-impact Sass hero");
 assert.match(verifier, /no-referrer/u, "verification links do not leak tokens through referrers");
 assert.match(styles[0], /\$navy:\s*#/u, "the public site uses Sass design tokens");
-assert.match(styles[1], /\$ds-coral:\s*#/u, "the app uses Sass design tokens");
+assert.match(styles[1], /\$ds-teal:\s*#/u, "the app uses Sass design tokens");
 for (const obsoleteCss of [
   "desarrollo-seguro/styles.css",
   "apps/desarrollo-seguro/web/src/public-scan-portal/public-scan-portal.css",

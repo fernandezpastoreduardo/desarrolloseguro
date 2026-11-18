@@ -492,11 +492,19 @@ export function PublicScanPortal() {
           href="/"
           aria-label="Desarrollo Seguro, volver a presentación"
         >
-          <span className="ds-portal__brand-name">
-            Desarrollo <strong>Seguro</strong>
-          </span>
+          <img
+            className="ds-portal__brand-logo"
+            src="/app/assets/desarrollo-seguro-logo-v1.svg"
+            alt="DesarrolloSeguro.org"
+          />
           <span className="ds-portal__brand-note">Consulta de informes</span>
         </a>
+        <nav className="ds-portal__nav" aria-label="Navegación principal">
+          <a href="/desarrollo-seguro/">Inicio</a>
+          <a href="/desarrollo-seguro/metodologia.html">Metodología</a>
+          <a href="/desarrollo-seguro/privacidad.html">Privacidad</a>
+          <a href="/desarrollo-seguro/sello.html">Sello</a>
+        </nav>
         <button
           className="ds-portal__theme"
           type="button"

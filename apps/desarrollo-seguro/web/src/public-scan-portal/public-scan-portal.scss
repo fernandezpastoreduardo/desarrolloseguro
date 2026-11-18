@@ -1,29 +1,38 @@
-$ds-ink: #0a1b34;
-$ds-navy: #0a1d38;
-$ds-coral: #f45d4a;
-$ds-paper: #fffefa;
-$ds-canvas: #f5f2ec;
+$ds-ink: #202222;
+$ds-navy: #141414;
+$ds-teal: #007e79;
+$ds-teal-dark: #004b49;
+$ds-paper: #fffaf0;
+$ds-canvas: #f5ede1;
+$ds-canvas-deep: #ebe0d0;
+$ds-line: #cfc5b6;
+$ds-muted: #59615f;
+$ds-serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia,
+  serif;
+$ds-sans: "Avenir Next", "Trebuchet MS", "Segoe UI", sans-serif;
+$ds-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 
 .ds-portal {
   --ds-ink: #{$ds-ink};
-  --ds-ink-soft: #314057;
+  --ds-ink-soft: #33445c;
   --ds-navy: #{$ds-navy};
-  --ds-accent: #{$ds-coral};
-  --ds-accent-strong: #d94330;
+  --ds-accent: #{$ds-teal};
+  --ds-accent-strong: #{$ds-teal-dark};
+  --ds-accent-soft: #8ed8cd;
   --ds-paper: #{$ds-paper};
   --ds-canvas: #{$ds-canvas};
-  --ds-canvas-deep: #e9e5dc;
-  --ds-line: #d4d6d9;
-  --ds-muted: #677386;
+  --ds-canvas-deep: #{$ds-canvas-deep};
+  --ds-line: #{$ds-line};
+  --ds-muted: #{$ds-muted};
   --ds-content: 1190px;
-  --ds-serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia,
-    serif;
-  --ds-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --ds-serif: #{$ds-serif};
+  --ds-sans: #{$ds-sans};
+  --ds-mono: #{$ds-mono};
   min-height: 100vh;
   border-left: 4px solid var(--ds-accent);
   background: var(--ds-canvas);
   color: var(--ds-ink);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--ds-sans);
   transition:
     background-color 180ms ease,
     color 180ms ease;
@@ -31,7 +40,7 @@ $ds-canvas: #f5f2ec;
   &[data-theme="dark"] {
     --ds-ink: #f4f1eb;
     --ds-ink-soft: #d4d9e1;
-    --ds-navy: #0a1d38;
+    --ds-navy: #141414;
     --ds-paper: #111f33;
     --ds-canvas: #0b1728;
     --ds-canvas-deep: #14253b;
@@ -76,42 +85,37 @@ $ds-canvas: #f5f2ec;
 .ds-portal__topbar {
   display: flex;
   width: 100%;
-  min-height: 88px;
+  min-height: 94px;
   margin-inline: auto;
   align-items: center;
   justify-content: space-between;
-  gap: 30px;
+  gap: 24px;
   border-top: 4px solid var(--ds-accent);
   border-bottom: 1px solid var(--ds-line);
   padding-inline: max(36px, calc((100% - 1320px) / 2));
-  background: var(--ds-paper);
+  background: #fffaf0e8;
 }
 
 .ds-portal__brand {
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 22px;
+  gap: 15px;
   color: var(--ds-navy);
   text-decoration: none;
 }
 
-.ds-portal__brand-name {
-  display: inline-flex;
-  flex-direction: column;
-  font-size: 0.85rem;
-  font-weight: 800;
-  letter-spacing: 0.11em;
-  line-height: 1.05;
-  text-transform: uppercase;
-  white-space: nowrap;
+.ds-portal__brand-logo {
+  display: block;
+  width: 172px;
+  height: 68px;
+  object-fit: contain;
+  object-position: left center;
+  transition: transform 180ms ease;
 }
 
-.ds-portal__brand-name strong {
-  color: var(--ds-accent);
-  font-size: 1.08rem;
-  font-weight: 900;
-  letter-spacing: 0.08em;
+.ds-portal__brand:hover .ds-portal__brand-logo {
+  transform: translateY(-2px);
 }
 
 .ds-portal__brand-note {
@@ -119,13 +123,55 @@ $ds-canvas: #f5f2ec;
   padding: 7px 0 7px 15px;
   color: var(--ds-muted);
   font-family: var(--ds-mono);
-  font-size: 0.62rem;
+  font-size: 0.59rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
 .ds-portal[data-theme="dark"] .ds-portal__brand {
   color: var(--ds-paper);
+}
+
+.ds-portal__nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(16px, 2vw, 30px);
+  margin-left: auto;
+}
+
+.ds-portal__nav a {
+  position: relative;
+  padding-block: 10px;
+  color: var(--ds-ink-soft);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color 180ms ease;
+}
+
+.ds-portal__nav a::after {
+  position: absolute;
+  right: 0;
+  bottom: 2px;
+  left: 0;
+  height: 2px;
+  background: var(--ds-accent);
+  content: "";
+  transform: scaleX(0);
+  transform-origin: right;
+  transition: transform 180ms ease;
+}
+
+.ds-portal__nav a:hover {
+  color: var(--ds-accent-strong);
+}
+
+.ds-portal__nav a:hover::after,
+.ds-portal__nav a:focus-visible::after {
+  transform: scaleX(1);
+  transform-origin: left;
 }
 
 .ds-portal__theme {
@@ -190,8 +236,8 @@ $ds-canvas: #f5f2ec;
   padding: 70px max(36px, calc((100% - var(--ds-content)) / 2));
   color: #f8f5ee;
   background:
-    radial-gradient(ellipse at 78% 46%, #1e3652 0, transparent 40%),
-    linear-gradient(112deg, #081b35 0%, #0b203b 100%);
+    radial-gradient(ellipse at 78% 46%, #1d4b48 0, transparent 40%),
+    linear-gradient(112deg, #141414 0%, #004b49 100%);
 }
 
 .ds-portal__hero::before {
@@ -245,7 +291,7 @@ $ds-canvas: #f5f2ec;
 }
 
 .ds-portal__hero .ds-portal__eyebrow {
-  color: #ff806a;
+  color: var(--ds-accent-soft);
 }
 
 .ds-portal__hero .ds-portal__eyebrow::before {
@@ -253,7 +299,7 @@ $ds-canvas: #f5f2ec;
   height: 8px;
   border-radius: 50%;
   background: currentColor;
-  box-shadow: 0 0 0 5px #f2543f22;
+  box-shadow: 0 0 0 5px #007e7922;
   content: "";
 }
 
@@ -396,7 +442,7 @@ $ds-canvas: #f5f2ec;
 }
 
 .ds-portal__hero-footnote span:first-child {
-  color: #ff806a;
+  color: var(--ds-accent-soft);
 }
 
 .ds-portal__result,
@@ -405,15 +451,15 @@ $ds-canvas: #f5f2ec;
   width: min(var(--ds-content), calc(100% - 72px));
   margin: 48px auto 0;
   border-top: 3px solid var(--ds-accent);
-  box-shadow: 0 12px 30px #081b3514;
+  box-shadow: 0 12px 30px #20222214;
 }
 
 .ds-portal__notice {
-  border-top-color: #a9362a;
+  border-top-color: var(--ds-accent-strong);
 }
 
 .ds-portal__notice strong {
-  color: #a9362a;
+  color: var(--ds-accent-strong);
 }
 
 .ds-portal__notice p,
@@ -752,6 +798,18 @@ $ds-canvas: #f5f2ec;
 }
 
 @media (max-width: 800px) {
+  .ds-portal__topbar {
+    flex-wrap: wrap;
+    padding-block: 14px;
+  }
+
+  .ds-portal__nav {
+    order: 3;
+    width: 100%;
+    justify-content: flex-start;
+    gap: 22px;
+  }
+
   .ds-portal__hero {
     min-height: auto;
     grid-template-columns: 1fr;
@@ -784,6 +842,19 @@ $ds-canvas: #f5f2ec;
 
   .ds-portal__brand {
     gap: 10px;
+  }
+
+  .ds-portal__brand-logo {
+    width: 150px;
+    height: 58px;
+  }
+
+  .ds-portal__nav {
+    gap: 16px;
+  }
+
+  .ds-portal__nav a {
+    font-size: 0.64rem;
   }
 
   .ds-portal__brand-note {
@@ -881,6 +952,15 @@ $ds-canvas: #f5f2ec;
 @media (prefers-reduced-motion: reduce) {
   .ds-portal {
     transition: none;
+  }
+
+  .ds-portal *,
+  .ds-portal *::before,
+  .ds-portal *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
   }
 
   .ds-portal__scan-progress-indicator {

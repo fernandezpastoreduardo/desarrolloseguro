@@ -28,4 +28,12 @@ pnpm build
 
 Para el flujo TDD y el análisis estático privado con SonarQube local, consulta [Desarrollo guiado por pruebas](test-driven-development.md) y [SonarQube Community Build local](sonarqube-local.md).
 
+## Identidad visual pública
+
+Las páginas informativas y el portal `/app/` comparten el logotipo SVG local,
+los tokens Sass de color, tipografía y espaciado, y no cargan recursos de
+terceros. El portal mantiene su modo oscuro y sus estados de análisis, pero su
+encabezado enlaza con la misma navegación pública. Las transiciones se
+desactivan cuando el navegador solicita movimiento reducido.
+
 La configuración del proyecto fija Node/pnpm en `package.json`, `.nvmrc` y `pnpm-lock.yaml`. CI usa las mismas versiones.

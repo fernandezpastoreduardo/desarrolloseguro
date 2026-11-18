@@ -14,6 +14,12 @@ test("renders the public portal and allows changing its theme", async ({
 
   await expect(page).toHaveTitle("Desarrollo Seguro · Consulta de informes");
   await expect(
+    page.getByRole("img", { name: "DesarrolloSeguro.org" }),
+  ).toHaveAttribute("src", "/app/assets/desarrollo-seguro-logo-v1.svg");
+  await expect(page.getByRole("navigation", { name: "Navegación principal" })).toContainText(
+    "Metodología",
+  );
+  await expect(
     page.getByRole("heading", { name: "¿Qué se ve desde fuera?" }),
   ).toBeVisible();
   await expect(
