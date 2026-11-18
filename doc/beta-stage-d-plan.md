@@ -76,6 +76,9 @@ Antes de D-01 deben acordarse, fuera de este repositorio:
 Si alguno de estos contratos no existe, D queda pendiente sin sustituirlo por
 fixtures o análisis del repositorio.
 
+El contrato operativo que debe entregar Grumphya antes del preflight está
+desglosado en [`beta-stage-d-grumphya-handoff.md`](beta-stage-d-grumphya-handoff.md).
+
 El informe interno rechaza evidencias posteriores al instante de la auditoría
 y el runner comprueba scopes finos para las señales de ética e IA antes de
 proyectarlas. También admite cancelación cooperativa antes o durante una
