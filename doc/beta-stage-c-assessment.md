@@ -151,3 +151,13 @@ demostrada. Su estado correcto sigue siendo **pendiente de evidencia de
 transición de certificación en producción**: aún no se ha observado una
 auditoría programada que actualice un informe, sello y estado de certificación.
 No se amplían retroactivamente los criterios para exigir D.
+
+### Comprobación de estado del VPS (19 de noviembre de 2026)
+
+Una segunda consulta de solo lectura confirmó que los schedulers de retención
+y certificación siguen `healthy` y que el certificador continúa emitiendo
+`certification_audit_cycle_completed` con `affectedCount: 0`. El estado público
+de `grumphya.com` sigue `stale`, la certificación sigue `pending` y no hay un
+informe certificado activo que pueda activar una auditoría periódica. Esta
+observación confirma continuidad del servicio, pero no añade evidencia de la
+transición funcional que falta para aceptar C.

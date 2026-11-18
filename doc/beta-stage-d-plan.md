@@ -150,3 +150,10 @@ de DS y la pública de atestación del despliegue externo, y proporcionar la ACL
 `false` el contenedor termina con `internal_audit_disabled`; las claves no se
 copian ni se leen en ese caso.
 
+La comprobación operativa del 19 de noviembre de 2026 mantiene el preflight D
+en estado pendiente: las siete rutas públicas de Grumphya (`infrastructure`,
+`deployment`, `dependencies`, `auth`, `quality`, `privacy` y `ai`) responden
+`404 application/json`, y el VPS todavía no contiene la clave pública de
+atestación. No se envía el JWT ni se crea un informe privado mientras falte
+alguno de esos recursos.
+
