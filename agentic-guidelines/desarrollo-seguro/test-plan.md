@@ -4,6 +4,12 @@
 
 La suite cubre reglas del core, persistencia, API de estado/informe, políticas de ingesta, Compose y configuración TLS. CI ejecuta lint, typecheck, tests, build, integración PostgreSQL efímera, políticas estáticas y un smoke aislado de la imagen. El job de despliegue verifica después que `.com` redirige a `.org` sin exponer `:8080` y solicita un informe real nuevo de `grumphya.com`; exige `domain-v3`, nueve controles, al menos cinco comprobaciones concluyentes, medición de todas las versiones TLS, cookies/rastreadores/rendimiento inicial y puntuación consistente.
 
+Una prueba de implementación o de CI no demuestra por sí sola operación en
+producción ni aceptación de una etapa. Para aceptar C se necesita, además,
+evidencia del scheduler horario real, actualización de certificación/sello,
+recuperación ante fallo y notificación autorizada. La auditoría privada de D y
+la puntuación global absoluta se validan por separado.
+
 La suite PostgreSQL puede crear/borrar bases y roles globales. En local requiere `DS_TEST_POSTGRES_ISOLATED=1`, URL de loopback sin query/fragmento y base administrativa con prefijo `development_security_test_`. Ejecutarla solo contra un cluster local dedicado. CI usa un servicio PostgreSQL/pgvector efímero.
 
 Las pruebas de políticas TLS generan certificados sintéticos temporales. No demuestran configuración de certificados reales, conectividad de producción, reglas del host, egress, carga ni restauración de backups. El modelo de amenazas y la evidencia exigida para scans están en [scanner-safety.md](scanner-safety.md); las pruebas locales del transporte no sustituyen las pruebas de aislamiento del runtime real.

@@ -2,7 +2,7 @@
 
 Esta carpeta reúne documentación técnica del proyecto independiente Desarrollo Seguro.
 
-> **Estado de esta documentación:** las páginas describen la Beta 0.1 y se actualizan con cada incremento TDD. El cierre de la entrega anterior al MVP está en [beta-closure.md](beta-closure.md).
+> **Estado de esta documentación:** las páginas describen la Beta 0.1 y se actualizan con cada incremento TDD. El estado y cierre documental de la Beta están en [beta-closure.md](beta-closure.md).
 
 ## Guías
 
@@ -14,6 +14,9 @@ Esta carpeta reúne documentación técnica del proyecto independiente Desarroll
 - [Verificación](verification.md): alcance y límites de las comprobaciones actuales.
 - [Historial público](public-report-history.md): contrato del historial acotado y comparabilidad de informes.
 - [Cierre de Beta](beta-closure.md): estado por etapa, puertas ejecutadas y dependencias operativas.
+- [Evaluación de C](beta-stage-c-assessment.md): niveles de validación, criterios satisfechos y bloqueantes.
+- [Plan de D](beta-stage-d-plan.md): incrementos de auditoría privada y tareas separadas por repositorio.
+- [Cierre global](beta-global-closure-plan.md): validación integral, certificación definitiva y parada antes del MVP.
 - [Calidad](quality-baseline.md): criterios de calidad.
 - [Alcance del producto](desarrollo-seguro.md): propósito, estado y límites del prototipo.
 

@@ -1,16 +1,23 @@
 # Cierre de la Beta 0.1
 
-Este documento fija el estado de la última entrega anterior a la definición del
-MVP. No autoriza despliegues ni sustituye la validación operativa del VPS.
+Este documento fija el estado de la entrega Beta revisada antes de definir el
+MVP. Separa implementación, validación automatizada, validación operativa y
+aceptación de etapa. No autoriza despliegues ni sustituye la validación
+operativa del VPS.
 
 ## Estado por etapa
 
-| Etapa | Estado | Evidencia local | Pendiente explícito |
-| --- | --- | --- | --- |
-| A · lectura y evaluación pública | Implementada en código | Perfiles `domain-v1`/`domain-v2`/`domain-v3`, proyección pública allowlisted, resumen ético, sello verificable y UUID de informe | Ejecutar el runtime aislado en VPS con egress y un informe real de Grumphya |
-| B · historial y comparabilidad | Implementada | `GET /history`, UUIDs, perfiles comparables, purga pública a 30 días, caché a 60 minutos y ventana de admisión a 24 horas | La interfaz usa estado consultable; no se añade SSE hasta tener una necesidad de producto y una prueba de contrato |
-| C · auditoría periódica | Implementada localmente | Migraciones 026/027, scheduler horario, prioridad `requested` sobre `scheduled`, un slot global, recuperación de leases, reintento tras fallo y eventos de transición | Operar el scheduler en VPS, medir recuperación y conectar un canal de notificación autorizado |
-| D · auditoría privada de Grumphya | Preparada como dependencia | El sello público solo apunta al informe público certificado; no se añaden credenciales ni cambios al repositorio de Grumphya | Requiere autorización y contrato de lectura privada, alcance, retención y adaptador aislado antes de implementar controles privados |
+| Etapa | Implementación | Validación automatizada | Validación operativa | Aceptación |
+| --- | --- | --- | --- | --- |
+| A · lectura y evaluación pública | Presente en código | Tests, PostgreSQL aislado, CI y smoke contractual | No hay un informe real válido producido por el runtime actual de VPS; el deploy anterior pasó salud pero falló el smoke | Pendiente de validación operativa |
+| B · historial y comparabilidad | Presente en código | Tests de historial, UUID, perfiles comparables, retención y Playwright | No hay evidencia de un recorrido real sobre producción en la versión actual | Pendiente de validación operativa |
+| C · auditoría periódica | Presente localmente | Migraciones 026/027, tests del scheduler y PostgreSQL aislado | Los schedulers no están en Compose ni hay ejecución horaria, recuperación o notificación demostrada en VPS | **No aceptada; pendiente de validación operativa** |
+| D · auditoría privada de Grumphya | No implementada por diseño | No aplica | No aplica | Posterior a C |
+
+Las etapas son independientes: A no requiere B, C ni D; B no requiere C ni D;
+C no requiere D. La puntuación interna pertenece a D. La puntuación global
+absoluta y la transición automática a certificación definitiva pertenecen al
+cierre global de la Beta, no al cierre de C.
 
 ## Puertas ejecutadas
 
@@ -49,16 +56,22 @@ ventana para trabajos completados.
   los trabajos manuales tienen prioridad al reclamar el único slot global.
 - No se modifica el repositorio, dominio, CI ni correo de Grumphya.
 
-## Criterio para detener la Beta
+## Criterio para cerrar esta revisión
 
-La Beta queda lista para revisión humana cuando se hayan aportado las dos
-pruebas operativas que no pueden reproducirse aquí: un informe público real de
-`grumphya.com` desde el runtime aislado y una ejecución controlada del scheduler
-horario. La definición del MVP queda fuera de este cierre.
+La etapa C no se declara completada mientras no existan una ejecución controlada
+del scheduler horario en el entorno donde opera el servicio, evidencia de la
+actualización de la certificación/sello, prueba de recuperación ante fallo y un
+canal de notificación autorizado. Estas son validaciones operativas pendientes,
+no nuevas funcionalidades.
 
-Este cierre no declara cumplidos los criterios de transición a una certificación
-definitiva del plan maestro: la auditoría privada de producción de Grumphya, la
-puntuación interna/global con umbral de 90/100, las notificaciones operativas y
-la validación efectiva del VPS siguen siendo dependencias posteriores. Tampoco
-se presenta una puntuación absoluta ficticia ni se modifica el repositorio de
-Grumphya para suplirlas.
+El cierre global de Beta es posterior a A, B, C y D. Solo entonces se validará
+la operación integral, la puntuación externa e interna, la puntuación global
+absoluta, los estados de certificación, los sellos, las auditorías periódicas,
+las notificaciones y las evidencias de producción. La definición del MVP queda
+fuera de este cierre. No se presenta una puntuación absoluta ficticia ni se
+modifica el repositorio de Grumphya para suplir evidencias.
+
+Los informes detallados de esta revisión están en
+[`beta-stage-c-assessment.md`](beta-stage-c-assessment.md), el plan de D en
+[`beta-stage-d-plan.md`](beta-stage-d-plan.md) y el plan de cierre global en
+[`beta-global-closure-plan.md`](beta-global-closure-plan.md).

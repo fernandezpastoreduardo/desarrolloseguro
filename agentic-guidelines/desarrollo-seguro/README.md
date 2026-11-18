@@ -2,6 +2,11 @@
 
 > Este documento y las especificaciones asociadas describen la implementación actual de la Beta. El cierre y las dependencias operativas están en [`../../doc/beta-closure.md`](../../doc/beta-closure.md). Sigue [`../../AGENTS.md`](../../AGENTS.md) y no definas el MVP dentro de esta entrega.
 
+La evaluación específica de C, el plan incremental de D y el cierre global
+están en [`../../doc/beta-stage-c-assessment.md`](../../doc/beta-stage-c-assessment.md),
+[`../../doc/beta-stage-d-plan.md`](../../doc/beta-stage-d-plan.md) y
+[`../../doc/beta-global-closure-plan.md`](../../doc/beta-global-closure-plan.md).
+
 Desarrollo Seguro es una aplicación independiente en desarrollo para observar controles técnicos visibles en sitios web y mostrar evidencia acotada. Sus paquetes, API, base de datos y contenedores son propios; no comparte credenciales, tablas, servicios ni volúmenes con otras aplicaciones. Un proxy externo publica el portal en su dominio.
 
 ## Estado actual

@@ -26,5 +26,6 @@ la ventana. La migración beta 025 reactiva la caché de una hora y el intervalo
 de 24 horas entre admisiones cuando la caché ha caducado. La migración 027 permite
 reintentar tras un fallo terminal, porque la ventana solo se aplica a trabajos
 completados. La coordinación de
-auditorías/progreso sigue usando el estado consultable; un canal SSE queda
-pendiente de la etapa B completa.
+auditorías/progreso sigue usando el estado consultable. Un canal SSE puede
+añadirse como mejora posterior, pero no es un criterio de aceptación de B ni
+una dependencia de C.

@@ -39,9 +39,10 @@ puntuación provisional y estado de certificación. La ficha React muestra los
 enlaces a cada informe y advierte que las puntuaciones solo son comparables
 entre perfiles iguales.
 
-**Pendiente para completar B:** caché pública de aproximadamente una hora,
-eliminación de fichas no certificadas tras 30 días de inactividad y la cola
-completa con progreso SSE. Esas políticas no se simulan en este incremento.
+**Estado de B:** además del historial, la Beta aplica la caché pública de una
+hora, elimina fichas no certificadas tras 30 días de inactividad y conserva la
+comparabilidad por perfil. El progreso se consulta mediante el estado de la
+admisión; SSE es opcional y no forma parte de la aceptación de B.
 
 ## F3. Escaneo automatizado
 

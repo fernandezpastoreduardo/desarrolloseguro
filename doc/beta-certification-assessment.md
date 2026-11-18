@@ -1,7 +1,9 @@
 # Evaluación Beta en informes públicos
 
 Los informes públicos incluyen `betaCertification`, una lectura provisional de
-los controles que ya tienen evidencia observable en el perfil del dominio.
+los controles externos que ya tienen evidencia observable en el perfil del
+dominio. Esta evaluación no es la puntuación interna de D ni la puntuación
+global absoluta del cierre de Beta.
 
 En esta primera integración se consideran tres categorías:
 
@@ -24,3 +26,11 @@ activa conserva provisionalmente el sello y marca la última evaluación como
 
 La evaluación tampoco interpreta consentimiento real, venta de datos,
 ejecución dinámica de scripts o rendimiento completo.
+
+La puntuación externa debe seguir siendo comparable entre Grumphya y los
+dominios públicos no certificados cuando comparten perfil. Los resultados
+internos se calculan por separado durante D; no se mezclan auditorías ni se
+rellenan criterios pendientes para alcanzar el umbral. La certificación
+definitiva solo se puede conceder en el cierre global cuando exista cobertura
+externa e interna suficiente, la puntuación global redondeada sea al menos
+90/100 y no haya incumplimientos críticos.
