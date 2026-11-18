@@ -20,7 +20,9 @@ evidencias se aceptan como estados, códigos y timestamps; se rechazan HTML,
 cabeceras, cookies, secretos y texto libre. Este contrato no concede acceso ni
 simula evidencias de producción. D-02 ya valida snapshots de infraestructura
 con digest SHA-256, exposición, privilegios y transporte TLS allowlisted, sin
-comandos, rutas, variables ni datos de base de datos.
+comandos, rutas, variables ni datos de base de datos. D-03 añade una
+atestación de producción con digest del artefacto, digest de dependencias y
+códigos de controles allowlisted, sin guardar SBOM, código fuente ni secretos.
 
 ## Orden propuesto
 
