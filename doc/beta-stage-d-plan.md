@@ -133,3 +133,11 @@ operaciones correspondientes; `ethics` requiere también `privacy`, porque esa
 es la ruta de transporte de la transparencia ética. No se ejecuta ni se activa
 mientras Grumphya no entregue el contrato de producción.
 
+El aprovisionamiento local de la identidad DS está separado del arranque:
+`pnpm audit:identity:provision` genera una única clave Ed25519 privada y su
+PEM público con permisos restringidos, calcula una huella pública y termina
+con `enabled=false`. No sobrescribe claves existentes ni intenta adivinar la
+ACL de red. El operador comparte solo el PEM público y la huella con
+Grumphya; el `kid` y `AUDIT_ALLOWED_NETWORKS` se coordinan antes de cualquier
+activación.
+

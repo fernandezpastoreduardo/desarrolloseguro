@@ -12,6 +12,7 @@ case "$MODE" in
     pnpm migrations:check
     pnpm audit:preflight
     node scripts/check-internal-audit-config.spec.mjs
+    node scripts/test-internal-audit-identity-policy.mjs
     node --test scripts/check-internal-audit-resources.spec.mjs
     node scripts/test-internal-audit-route-policy.mjs
     node --test scripts/check-certification-transition.spec.mjs

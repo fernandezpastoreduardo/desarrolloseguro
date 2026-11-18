@@ -27,3 +27,24 @@ se pueden inferir desde el contenedor de Desarrollo Seguro.
 Usa valores únicos y aleatorios para cada entorno, limita permisos de lectura y conserva la clave privada de la CA fuera del servidor de aplicación. No guardes secretos en Git, logs, imágenes Docker ni documentación. `.gitignore` excluye `.secrets/`. El worker y los schedulers de retención y certificación usan sus URL en ficheros separados y exigen una CA verificada en producción. El rol de retención solo ejecuta los purgados protegidos de 90 días, de inactividad pública de 30 días y el encolado horario de certificaciones activas; ambos schedulers operan en Compose sin egress ni puertos y sus procesos se reinician de forma aislada durante la verificación de deploy.
 
 El repositorio no genera ni almacena estos secretos, no incluye un gestor de secretos y no configura credenciales de otra aplicación. Rota credenciales y certificados según el procedimiento operativo del entorno.
+
+## Preparar la identidad de Desarrollo Seguro
+
+Cuando Grumphya confirme que puede recibir la identidad técnica, un operador
+con acceso root puede ejecutar `pnpm audit:identity:provision` en el VPS. El
+comando crea una clave Ed25519 privada en
+`/opt/desarrollo-seguro/secrets/audit_jwt_private.pem` (`0400`, solo `root`) y
+su clave pública en `audit_jwt_public.pem` (`0444`). Es idempotente por
+diseño: si cualquiera de los dos ficheros ya existe, falla y no sobrescribe
+una identidad que pueda seguir activa. La salida solo contiene el `kid`, la
+ruta pública, su huella SHA-256 y `enabled=false`; nunca muestra la privada ni
+activa el worker.
+
+Entrega a Grumphya únicamente el PEM público y comprueba la huella por un
+canal independiente. El `kid` por defecto es `ds-auditor-2026` y puede
+cambiarse al generar una identidad nueva con
+`AUDIT_TECHNICAL_AUTH_KID`, siempre que coincida con la lista de rotación de
+Grumphya. `AUDIT_ALLOWED_NETWORKS` no se inventa en este paso: debe recoger la
+IP/CIDR que observe el proxy de Grumphya en la petición real. La auditoría
+permanece desactivada hasta que Grumphya confirme claves, ACL, rutas JSON,
+atestación, TLS y roles PostgreSQL.

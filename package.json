@@ -18,6 +18,7 @@
     "migrations:check": "node scripts/check-migration-registry.mjs",
     "certification:preflight": "node scripts/check-certification-transition.mjs",
     "audit:preflight": "node scripts/check-internal-audit-config.mjs",
+    "audit:identity:provision": "bash scripts/provision-internal-audit-identity.sh",
     "audit:resources:preflight": "node scripts/check-internal-audit-resources.mjs",
     "ci:verify": "bash scripts/ci-verify.sh",
     "quality:check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",

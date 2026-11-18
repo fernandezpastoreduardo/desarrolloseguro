@@ -89,3 +89,11 @@ autenticado que el catálogo de producción está publicado: no envía identidad
 cookies ni cuerpos, exige `401`/`403` en JSON para peticiones anónimas y emite
 un código por recurso cuando recibe `404`, HTML o una respuesta sin rechazo.
 No interpreta una respuesta de la puerta como evidencia de auditoría.
+
+La identidad técnica de Desarrollo Seguro se prepara de forma separada con
+`pnpm audit:identity:provision`. El comando exige root, genera una única clave
+Ed25519 privada y su PEM público con permisos restringidos, muestra solo la
+huella pública y termina con `enabled=false`. Si ya existe cualquiera de las
+claves, falla sin sobrescribirla. El operador entrega a Grumphya únicamente el
+PEM público y la huella; no se inventa `AUDIT_ALLOWED_NETWORKS` hasta conocer
+la IP/CIDR que observe allí el proxy real.
