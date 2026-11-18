@@ -1,6 +1,6 @@
-# Implementación anterior: alcance y estado
+# Beta 0.1: alcance y estado
 
-> Este documento y las especificaciones asociadas describen la versión anterior. Se conservan como referencia histórica, pero no definen el alcance, arquitectura, stack ni criterios del reinicio. Sigue [`../../AGENTS.md`](../../AGENTS.md) y crea especificaciones nuevas tras la toma de requisitos.
+> Este documento y las especificaciones asociadas describen la implementación actual de la Beta. El cierre y las dependencias operativas están en [`../../doc/beta-closure.md`](../../doc/beta-closure.md). Sigue [`../../AGENTS.md`](../../AGENTS.md) y no definas el MVP dentro de esta entrega.
 
 Desarrollo Seguro es una aplicación independiente en desarrollo para observar controles técnicos visibles en sitios web y mostrar evidencia acotada. Sus paquetes, API, base de datos y contenedores son propios; no comparte credenciales, tablas, servicios ni volúmenes con otras aplicaciones. Un proxy externo publica el portal en su dominio.
 
