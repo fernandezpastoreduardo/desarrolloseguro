@@ -45,7 +45,7 @@ La evaluación separa cuatro niveles que no son equivalentes:
 ### Validación automatizada
 
 - La suite local documentada reúne 713 pruebas.
-- PostgreSQL aislado pasó 94/94 pruebas, incluidas las de ciclo de
+- PostgreSQL aislado pasó 95/95 pruebas, incluidas las de ciclo de
   certificación, prioridad, admisión, scheduler y resultados fuera de orden.
 - El CI del commit `1ef0814` pasó Playwright, auditoría de dependencias,
   quality gates, PostgreSQL e imágenes/Trivy en el run
