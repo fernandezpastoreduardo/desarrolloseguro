@@ -93,6 +93,30 @@ describe("internal audit evidence projection", () => {
     ]);
   });
 
+  it("projects infrastructure TLS only when the snapshot has verified transport", () => {
+    const evidence = projectInternalAuditEvidence([{
+      kind: "infrastructure_snapshot",
+      observation: {
+        observedAt,
+        snapshotHash: "c".repeat(64),
+        services: [{
+          name: "api",
+          imageDigest: `sha256:${"3".repeat(64)}`,
+          exposure: "internal",
+          privilege: "rootless",
+          transport: "internal_tls_verified",
+        }],
+      },
+    }]);
+    expect(evidence).toEqual([
+      expect.objectContaining({
+        criterionId: "infrastructure.tls",
+        status: "pass",
+        reasonCode: "infrastructure_transport_verified",
+      }),
+    ]);
+  });
+
   it("rejects unknown envelopes and raw observation data", () => {
     expect(() => projectInternalAuditEvidence([{ kind: "quality", observation: { html: "<body>" } }]))
       .toThrow("internal_audit_projection_invalid");

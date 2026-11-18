@@ -33,6 +33,9 @@ certificación.
 De D-03 solo se proyectan a puntuación los checks explícitos de dependencias,
 secretos fuera de la imagen y superficie API allowlisted; los demás no se
 reinterpretan como controles distintos.
+El snapshot D-02 solo proyecta `infrastructure.tls` si contiene transporte
+verificado; no convierte exposición o privilegios en conclusiones sobre red o
+cabeceras.
 
 El adaptador de acceso D-01 autoriza únicamente operaciones `GET` contra
 recursos allowlisted y rutas sin query, fragmento, salto de directorio ni

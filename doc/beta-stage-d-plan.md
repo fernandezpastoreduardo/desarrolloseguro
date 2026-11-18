@@ -39,7 +39,9 @@ El ensamblador D-08 produce un informe interno redacted para
 estado incompleto o bloqueado cuando faltan controles; nunca eleva una
 certificación por sí solo. El proyector solo convierte en criterios los
 checks D-03 explícitos de dependencias auditadas, secretos fuera de la imagen
-y superficie API allowlisted; el resto mantiene la cobertura incompleta.
+y superficie API allowlisted; el snapshot D-02 solo proyecta TLS cuando hay
+transporte verificado y mantiene la cobertura incompleta para red, privilegios
+o cabeceras que no estén demostrados.
 
 ## Orden propuesto
 

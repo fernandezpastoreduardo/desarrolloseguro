@@ -4,11 +4,18 @@ import {
   type InternalAuditEvidence,
 } from "./internal-audit-contract.js";
 import { parseInternalDeploymentAttestation } from "./internal-deployment-attestation.js";
+import { parseInternalInfrastructureSnapshot } from "./internal-infrastructure.js";
 import { parseInternalPrivacyObservation } from "./internal-privacy-observation.js";
 import { parseInternalQualityObservation } from "./internal-quality-observation.js";
 import { parseSyntheticAuthObservation } from "./internal-synthetic-auth.js";
 
-const ENVELOPE_KINDS = ["synthetic_auth", "quality", "privacy", "deployment_attestation"] as const;
+const ENVELOPE_KINDS = [
+  "synthetic_auth",
+  "quality",
+  "privacy",
+  "deployment_attestation",
+  "infrastructure_snapshot",
+] as const;
 type EnvelopeKind = (typeof ENVELOPE_KINDS)[number];
 
 type ProjectedEvidence = {
@@ -83,6 +90,26 @@ function projectEnvelope(input: unknown): readonly ProjectedEvidence[] {
       return [];
     });
   }
+  if (input.kind === "infrastructure_snapshot") {
+    const observation = parseInternalInfrastructureSnapshot(input.observation);
+    const transports = observation.services.map((service) => service.transport);
+    const hasUnknownTransport = transports.includes("unknown");
+    const hasVerifiedTransport = transports.some((transport) =>
+      transport === "tls_verified" || transport === "internal_tls_verified",
+    );
+    const transportAssessment = assessInfrastructureTransport(
+      hasUnknownTransport,
+      hasVerifiedTransport,
+    );
+    return [{
+      criterionId: "infrastructure.tls",
+      scope: "infrastructure",
+      status: transportAssessment.status,
+      source: "production_observation",
+      observedAt: observation.observedAt,
+      reasonCode: transportAssessment.reasonCode,
+    }];
+  }
   const observation = parseInternalPrivacyObservation(input.observation);
   const criterionId = privacyCriterion(observation.area, observation.signalCode);
   return [{
@@ -93,6 +120,19 @@ function projectEnvelope(input: unknown): readonly ProjectedEvidence[] {
     observedAt: observation.observedAt,
     reasonCode: observation.signalCode,
   }];
+}
+
+function assessInfrastructureTransport(
+  hasUnknownTransport: boolean,
+  hasVerifiedTransport: boolean,
+): { status: "pass" | "unknown"; reasonCode: string } {
+  if (hasUnknownTransport) {
+    return { status: "unknown", reasonCode: "infrastructure_transport_incomplete" };
+  }
+  if (hasVerifiedTransport) {
+    return { status: "pass", reasonCode: "infrastructure_transport_verified" };
+  }
+  return { status: "unknown", reasonCode: "infrastructure_transport_not_applicable" };
 }
 
 function toEvidence(
