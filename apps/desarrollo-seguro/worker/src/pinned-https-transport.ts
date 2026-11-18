@@ -270,7 +270,7 @@ function makeRequest(input: MakeRequestInput): Promise<MakeRequestResult> {
             finishWithError("response_size_limit_exceeded");
           }
         });
-        response.once("error", () => finishWithError("https_request_failed"));
+        response.once("error", (error) => finishWithError(sanitizeRequestError(error)));
         response.once("end", () => {
           if (settled) return;
           settled = true;

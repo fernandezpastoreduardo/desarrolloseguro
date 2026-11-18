@@ -3,9 +3,10 @@ import {
   request as httpsRequest,
   type RequestOptions,
 } from "node:https";
+import { EventEmitter } from "node:events";
 import { createRequire } from "node:module";
 import type { LookupFunction } from "node:net";
-import type { IncomingMessage, ServerResponse } from "node:http";
+import type { ClientRequest, IncomingMessage, ServerResponse } from "node:http";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getCanonicalScanPaths } from "@desarrolloseguro/core";
 import type {
@@ -422,6 +423,43 @@ describe("requestPinnedHttps", () => {
         },
       ),
     ).rejects.toThrow("response_size_limit_exceeded");
+  });
+
+  it("preserves a safe TLS category emitted by the response", async () => {
+    const response = new EventEmitter() as IncomingMessage;
+    Object.assign(response, {
+      statusCode: 200,
+      headers: {},
+      socket: { remoteAddress: LOOPBACK_ADDRESS },
+      resume: () => undefined,
+    });
+    const request = new EventEmitter() as ClientRequest;
+    Object.assign(request, {
+      end: () => queueMicrotask(() => {
+        request.emit("response", response);
+        response.emit("error", Object.assign(new Error("tls detail"), {
+          code: "ERR_SSL_UNSUPPORTED_PROTOCOL",
+        }));
+      }),
+      destroy: () => request,
+    });
+
+    await expect(requestPinnedHttps(
+      {
+        hostname: FIXTURE_HOSTNAME,
+        path: FIXTURE_ROOT_PATH,
+        method: "HEAD",
+        allowedPaths: FIXTURE_REQUEST_PATHS,
+        signal: new AbortController().signal,
+      },
+      {
+        lookupFactory: createLoopbackLookup,
+        requestFactory: (_options, callback) => {
+          request.once("response", callback);
+          return request;
+        },
+      },
+    )).rejects.toThrow("tls_handshake_failed");
   });
 });
 
