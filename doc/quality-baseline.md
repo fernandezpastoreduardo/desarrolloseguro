@@ -32,6 +32,8 @@ pnpm test:postgres
 
 `pnpm test:postgres` requiere una base temporal dedicada y las variables `DS_TEST_POSTGRES_ISOLATED=1` y `DS_TEST_DATABASE_URL`. No apunta a la base local de desarrollo ni a producción.
 
+La auditoría de dependencias se ejecuta con una política diferenciada: `pnpm audit --prod --audit-level high` bloquea vulnerabilidades altas o críticas en dependencias de runtime; `pnpm audit --audit-level critical` bloquea las críticas en herramientas de desarrollo y deja registradas las altas no corregidas por upstream. En noviembre de 2026 `picomatch@4.0.7` aparece como alerta alta de desarrollo sin versión parcheada publicada; la alerta permanece visible y se revisará cuando exista una actualización.
+
 Al añadir una métrica de cobertura, fija primero su configuración y umbrales en los paquetes que la midan, registra la salida de una ejecución completa y distingue entre código medido y código excluido. La cobertura ayuda a localizar rutas sin pruebas; no demuestra por sí sola que los controles estén bien especificados.
 
 `pnpm quality:sonar` sube los cinco informes LCOV a la instancia local descrita en [sonarqube-local.md](sonarqube-local.md). La puerta Sonar espera el Quality Gate configurado localmente. No se ha enviado código al servicio SonarQube Cloud ni a GitHub para este análisis.

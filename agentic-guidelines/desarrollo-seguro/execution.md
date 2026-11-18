@@ -25,6 +25,8 @@ La suite puede crear y borrar roles/base de datos dentro del cluster indicado. N
 
 `.github/workflows/ci.yml` ejecuta políticas, lint, typecheck, tests, build, pruebas PostgreSQL aisladas, smoke de la imagen de API y auditoría de dependencias. No despliega a producción ni escanea dominios públicos. El smoke ejecuta el contenedor contra una base y certificados sintéticos en una red aislada.
 
+La auditoría separa el riesgo de producción del de las herramientas de desarrollo: `pnpm audit --prod --audit-level high` bloquea cualquier vulnerabilidad alta o crítica que pueda llegar al runtime; `pnpm audit --audit-level critical` mantiene visibles las alertas de desarrollo y bloquea las críticas. Una alerta alta de desarrollo sin parche publicado no se oculta ni bloquea por sí sola la entrega, pero debe quedar registrada en el log y revisarse cuando el upstream publique una corrección. La política está protegida por `scripts/test-development-security-dependency-audit-policy.mjs`.
+
 ## Alcance del trabajo
 
 Una tarea de código no autoriza una exploración de red real ni una alteración de una base productiva. Mantén los tests con fixtures y loopback. El escaneo solo podrá activarse después de cerrar los gates de [scanner-safety.md](scanner-safety.md), demostrar límites de recursos y documentar una aprobación operativa separada.

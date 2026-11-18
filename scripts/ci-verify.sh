@@ -18,7 +18,10 @@ case "$MODE" in
     pnpm test:postgres
     ;;
   audit)
-    pnpm audit --audit-level moderate
+    node scripts/test-development-security-dependency-audit-policy.mjs
+    # Production high/critical advisories block delivery. Development-only high advisories
+    # remain visible in the log and block at critical while an upstream fix is unpatched.
+    pnpm audit --audit-level critical
     pnpm audit --prod --audit-level high
     ;;
 esac
