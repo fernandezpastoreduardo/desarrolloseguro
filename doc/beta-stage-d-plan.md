@@ -18,7 +18,9 @@ solicitudes explícitas para `grumphya.com` en `production`, con el auditor
 `desarrollo-seguro`, scopes allowlisted y retención máxima de 30 días. Las
 evidencias se aceptan como estados, códigos y timestamps; se rechazan HTML,
 cabeceras, cookies, secretos y texto libre. Este contrato no concede acceso ni
-simula evidencias de producción.
+simula evidencias de producción. D-02 ya valida snapshots de infraestructura
+con digest SHA-256, exposición, privilegios y transporte TLS allowlisted, sin
+comandos, rutas, variables ni datos de base de datos.
 
 ## Orden propuesto
 

@@ -8,7 +8,10 @@ calidad, privacidad, ética e IA y limita la retención de evidencias a 30 días
 Una evidencia interna contiene únicamente `criterionId`, `scope`, `status`,
 `source`, `observedAt` y `reasonCode`. Los criterios y códigos están
 allowlisted. No se aceptan HTML, cabeceras completas, cookies crudas, secretos,
-identificadores de usuario, texto libre ni destinos alternativos.
+identificadores de usuario, texto libre ni destinos alternativos. El snapshot
+de infraestructura D-02 solo conserva nombres seguros, digests SHA-256,
+exposición, privilegios y estado de transporte; nunca comandos, rutas,
+variables de entorno o datos de bases.
 
 El adaptador de acceso D-01 autoriza únicamente operaciones `GET` contra
 recursos allowlisted y rutas sin query, fragmento, salto de directorio ni

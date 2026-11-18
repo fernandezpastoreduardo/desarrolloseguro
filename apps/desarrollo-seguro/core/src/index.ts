@@ -9,3 +9,4 @@ export * from "./beta-certification-policy.js";
 export * from "./internal-audit-contract.js";
 export * from "./internal-audit-score.js";
 export * from "./internal-audit-access.js";
+export * from "./internal-infrastructure.js";
