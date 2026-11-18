@@ -195,6 +195,63 @@ describePostgres.sequential("PostgresScanStore", () => {
     await expect(store.issueReportBadge({ hostname, reportId: reactivatedReportId, tokenHash: "e".repeat(64), expiresAt })).resolves.toBe(true);
   });
 
+  it("does not let an older report overwrite a newer certification state", async () => {
+    const hostname = "ordered-certification.example.net";
+    await store.ensureDomain(hostname, "on_demand", "domain-v3");
+
+    const completeScanAt = async (completedAt: Date, checks: ScanCheck[], verdict: "pass" | "fail") => {
+      await store.ensureFreshScan({ hostname, profileVersion: "domain-v3", trigger: "requested" });
+      const job = await store.claimNextScan(new Date(), TEST_LEASE_MS);
+      if (!job) throw new Error("expected_claimed_ordered_scan");
+      const reportId = await store.completeScan({
+        jobId: job.id,
+        leaseToken: job.leaseToken,
+        hostname,
+        profileVersion: "domain-v3",
+        scannerVersion: TEST_SCANNER,
+        startedAt: new Date(completedAt.getTime() - 1_000),
+        completedAt,
+        verdict,
+        scope: ["/"],
+        checks,
+        metrics: { requestsCount: 0, bytesCount: 0, durationMs: 1, pagesCount: 0 },
+      });
+      await pool.query(
+        "UPDATE ds_scan_jobs SET queued_at = clock_timestamp() - interval '25 hours' WHERE id = $1",
+        [job.id],
+      );
+      return reportId;
+    };
+
+    const newerCompletedAt = new Date(Date.now() - 60 * 60 * 1000);
+    const eligibleReportId = await completeScanAt(newerCompletedAt, makeEligibleDomainV3Checks(), "pass");
+    const olderChecks = makeEligibleDomainV3Checks().map((check) =>
+      check.controlId === "DS-TLS-01"
+        ? {
+          ...check,
+          status: "fail" as const,
+          summary: "Comprobación DS-TLS-01: fail.",
+          evidence: { protocol: "TLSv1.3", certificateValid: false, hostnameMatches: true },
+        }
+        : check,
+    );
+    const olderReportId = await completeScanAt(
+      new Date(newerCompletedAt.getTime() - 60 * 60 * 1000),
+      olderChecks,
+      "fail",
+    );
+
+    await expect(
+      pool.query(
+        "SELECT state, latest_report_id, certified_report_id FROM ds_beta_certifications WHERE hostname = $1",
+        [hostname],
+      ),
+    ).resolves.toMatchObject({
+      rows: [{ state: "active", latest_report_id: eligibleReportId, certified_report_id: eligibleReportId }],
+    });
+    expect(olderReportId).not.toBe(eligibleReportId);
+  });
+
   it("queues due certified audits and gives manual requests priority", async () => {
     const hostname = "scheduled-certification.example.net";
     const completedAt = new Date(Date.now() - 2 * 60 * 60 * 1000);
