@@ -1,6 +1,8 @@
 const SCHEDULER_NOTIFICATION_CATEGORIES = [
   "retention_cycle_failed",
   "certification_audit_cycle_failed",
+  "retention_cycle_completed",
+  "certification_audit_cycle_completed",
   "retention_scheduler_failed",
   "certification_scheduler_failed",
 ] as const;

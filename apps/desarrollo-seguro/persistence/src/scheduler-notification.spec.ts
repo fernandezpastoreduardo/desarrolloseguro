@@ -8,6 +8,7 @@ describe("scheduler notifications", () => {
   it("accepts only the allowlisted categories", () => {
     expect(isSchedulerNotificationCategory("retention_cycle_failed")).toBe(true);
     expect(isSchedulerNotificationCategory("certification_scheduler_failed")).toBe(true);
+    expect(isSchedulerNotificationCategory("retention_cycle_completed")).toBe(true);
     expect(isSchedulerNotificationCategory("database-password")).toBe(false);
     expect(isSchedulerNotificationCategory(undefined)).toBe(false);
   });

@@ -60,13 +60,16 @@ describe("report retention scheduler", () => {
     vi.useFakeTimers();
     const query = vi.fn().mockResolvedValue({ rows: [{ deleted_rows: 0 }] });
     const controller = new AbortController();
+    const onSuccess = vi.fn();
     const scheduler = runRetentionScheduler({ query }, {
       signal: controller.signal,
       now: () => new Date("2026-11-10T12:00:00.000Z"),
       onError: vi.fn(),
+      onSuccess,
     });
 
     await vi.waitFor(() => expect(query).toHaveBeenCalledTimes(2));
+    expect(onSuccess).toHaveBeenCalledWith("retention_cycle_completed");
     await vi.advanceTimersByTimeAsync(RETENTION_INTERVAL_MS);
     await vi.waitFor(() => expect(query).toHaveBeenCalledTimes(4));
 

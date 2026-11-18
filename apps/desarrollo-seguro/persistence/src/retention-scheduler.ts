@@ -112,6 +112,7 @@ export async function runRetentionScheduler(
     now?: () => Date;
     intervalMs?: number;
     onError?: (category: string) => void;
+    onSuccess?: (category: string) => void;
   },
 ): Promise<void> {
   const intervalMs = options.intervalMs ?? RETENTION_INTERVAL_MS;
@@ -133,6 +134,8 @@ export async function runRetentionScheduler(
     }
     if (failed) {
       options.onError?.(RETENTION_FAILURE);
+    } else {
+      options.onSuccess?.("retention_cycle_completed");
     }
     if (options.signal.aborted) return;
     await waitForNextCycle(intervalMs, options.signal);
@@ -199,6 +202,8 @@ if (
       signal: controller.signal,
       onError: (category) =>
         emitSchedulerNotification(category, (line) => process.stderr.write(line)),
+      onSuccess: (category) =>
+        emitSchedulerNotification(category, (line) => process.stdout.write(line)),
     });
   } catch {
     emitSchedulerNotification(

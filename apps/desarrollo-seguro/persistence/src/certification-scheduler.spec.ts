@@ -42,15 +42,18 @@ describe("certification audit scheduler", () => {
       .mockRejectedValueOnce(new Error("database detail"))
       .mockResolvedValue({ rows: [{ ds_enqueue_due_certification_scans: 0 }] });
     const onError = vi.fn();
+    const onSuccess = vi.fn();
     const controller = new AbortController();
     const scheduler = runCertificationScheduler({ query }, {
       signal: controller.signal,
       onError,
+      onSuccess,
     });
 
     await vi.waitFor(() => expect(onError).toHaveBeenCalledWith("certification_audit_cycle_failed"));
     await vi.advanceTimersByTimeAsync(CERTIFICATION_AUDIT_INTERVAL_MS);
     await vi.waitFor(() => expect(query).toHaveBeenCalledTimes(2));
+    expect(onSuccess).toHaveBeenCalledWith("certification_audit_cycle_completed");
     controller.abort();
     await scheduler;
   });

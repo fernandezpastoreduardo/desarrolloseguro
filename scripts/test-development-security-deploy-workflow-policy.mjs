@@ -126,6 +126,11 @@ assert.match(
   /up --detach --no-deps --wait\s+development-security-runtime-coordinator[\s\S]*up --detach --no-deps --wait\s+development-security-api\s+development-security-worker\s+development-security-retention-scheduler\s+development-security-certification-scheduler\s+development-security-web/u,
   "deployment must wait for the isolated runtime coordinator before starting scanner and scheduler services",
 );
+assert.match(
+  normalizedDeployScript,
+  /logs --no-color --tail=20\s+development-security-retention-scheduler\s+development-security-certification-scheduler/u,
+  "deployment must expose only bounded scheduler evidence",
+);
 assert.doesNotMatch(deployScript, /grumphya|caddy reload|compose down/iu);
 assert.match(archiveGateway, /SSH_ORIGINAL_COMMAND/u);
 assert.match(archiveGateway, /MAX_ARCHIVE_BYTES=50000000/u);

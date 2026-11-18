@@ -47,3 +47,10 @@ docker compose --project-name "$PROJECT_NAME" --file "$COMPOSE_FILE" \
   ps development-security-api development-security-runtime-coordinator \
   development-security-worker development-security-retention-scheduler \
   development-security-certification-scheduler development-security-web
+
+# Scheduler logs are bounded JSONL categories only; keep their first-cycle
+# evidence visible to the deploy log without exposing database or target data.
+docker compose --project-name "$PROJECT_NAME" --file "$COMPOSE_FILE" \
+  logs --no-color --tail=20 \
+  development-security-retention-scheduler \
+  development-security-certification-scheduler
