@@ -35,4 +35,31 @@ describe("scheduler notifications", () => {
     ).toThrow("scheduler_notification_category_invalid");
     expect(write).not.toHaveBeenCalled();
   });
+
+  it("emits only a bounded aggregate count when supplied", () => {
+    const write = vi.fn();
+
+    emitSchedulerNotification(
+      "certification_audit_cycle_completed",
+      write,
+      () => new Date("2026-11-18T16:00:00.000Z"),
+      2,
+    );
+
+    expect(write).toHaveBeenCalledWith(
+      '{"event":"ds_scheduler_notification","category":"certification_audit_cycle_completed","observedAt":"2026-11-18T16:00:00.000Z","affectedCount":2}\n',
+    );
+  });
+
+  it("rejects unbounded aggregate counts", () => {
+    const write = vi.fn();
+
+    expect(() => emitSchedulerNotification(
+      "retention_cycle_completed",
+      write,
+      undefined,
+      1_001,
+    )).toThrow("scheduler_notification_count_invalid");
+    expect(write).not.toHaveBeenCalled();
+  });
 });

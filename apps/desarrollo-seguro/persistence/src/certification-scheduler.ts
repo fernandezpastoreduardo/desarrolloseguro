@@ -33,7 +33,7 @@ export async function runCertificationScheduler(
     now?: () => Date;
     intervalMs?: number;
     onError?: (category: string) => void;
-    onSuccess?: (category: string) => void;
+    onSuccess?: (category: string, affectedCount: number) => void;
   },
 ): Promise<void> {
   const intervalMs = options.intervalMs ?? CERTIFICATION_AUDIT_INTERVAL_MS;
@@ -43,8 +43,8 @@ export async function runCertificationScheduler(
 
   while (!options.signal.aborted) {
     try {
-      await runCertificationAuditCycle(pool, options.now);
-      options.onSuccess?.("certification_audit_cycle_completed");
+      const affectedCount = await runCertificationAuditCycle(pool, options.now);
+      options.onSuccess?.("certification_audit_cycle_completed", affectedCount);
     } catch {
       options.onError?.(CERTIFICATION_AUDIT_FAILURE);
     }
@@ -91,8 +91,13 @@ if (
       signal: controller.signal,
       onError: (category) =>
         emitSchedulerNotification(category, (line) => process.stderr.write(line)),
-      onSuccess: (category) =>
-        emitSchedulerNotification(category, (line) => process.stdout.write(line)),
+      onSuccess: (category, affectedCount) =>
+        emitSchedulerNotification(
+          category,
+          (line) => process.stdout.write(line),
+          undefined,
+          affectedCount,
+        ),
     });
   } catch {
     emitSchedulerNotification(

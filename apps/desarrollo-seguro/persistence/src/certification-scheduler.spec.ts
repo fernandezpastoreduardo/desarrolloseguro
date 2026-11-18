@@ -53,7 +53,7 @@ describe("certification audit scheduler", () => {
     await vi.waitFor(() => expect(onError).toHaveBeenCalledWith("certification_audit_cycle_failed"));
     await vi.advanceTimersByTimeAsync(CERTIFICATION_AUDIT_INTERVAL_MS);
     await vi.waitFor(() => expect(query).toHaveBeenCalledTimes(2));
-    expect(onSuccess).toHaveBeenCalledWith("certification_audit_cycle_completed");
+    expect(onSuccess).toHaveBeenCalledWith("certification_audit_cycle_completed", 0);
     controller.abort();
     await scheduler;
   });

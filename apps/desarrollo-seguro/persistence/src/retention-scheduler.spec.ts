@@ -69,7 +69,7 @@ describe("report retention scheduler", () => {
     });
 
     await vi.waitFor(() => expect(query).toHaveBeenCalledTimes(2));
-    expect(onSuccess).toHaveBeenCalledWith("retention_cycle_completed");
+    expect(onSuccess).toHaveBeenCalledWith("retention_cycle_completed", 0);
     await vi.advanceTimersByTimeAsync(RETENTION_INTERVAL_MS);
     await vi.waitFor(() => expect(query).toHaveBeenCalledTimes(4));
 

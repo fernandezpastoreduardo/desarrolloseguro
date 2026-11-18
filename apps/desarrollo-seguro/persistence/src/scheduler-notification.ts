@@ -23,15 +23,24 @@ export function emitSchedulerNotification(
   category: string,
   write: (line: string) => void,
   now: () => Date = () => new Date(),
+  affectedCount?: number,
 ): void {
   if (!isSchedulerNotificationCategory(category)) {
     throw new Error("scheduler_notification_category_invalid");
   }
+  if (
+    affectedCount !== undefined &&
+    (!Number.isSafeInteger(affectedCount) || affectedCount < 0 || affectedCount > 1_000)
+  ) {
+    throw new Error("scheduler_notification_count_invalid");
+  }
+  const payload = {
+    event: "ds_scheduler_notification",
+    category,
+    observedAt: now().toISOString(),
+    ...(affectedCount === undefined ? {} : { affectedCount }),
+  };
   write(
-    `${JSON.stringify({
-      event: "ds_scheduler_notification",
-      category,
-      observedAt: now().toISOString(),
-    })}\n`,
+    `${JSON.stringify(payload)}\n`,
   );
 }
