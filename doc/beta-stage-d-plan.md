@@ -23,6 +23,9 @@ con digest SHA-256, exposición, privilegios y transporte TLS allowlisted, sin
 comandos, rutas, variables ni datos de base de datos. D-03 añade una
 atestación de producción con digest del artefacto, digest de dependencias y
 códigos de controles allowlisted, sin guardar SBOM, código fuente ni secretos.
+D-04 añade observaciones de autenticación sintética con una referencia hash y
+flujos de login, frontera de autorización y logout; no admite credenciales ni
+identificadores de usuarios reales.
 
 ## Orden propuesto
 

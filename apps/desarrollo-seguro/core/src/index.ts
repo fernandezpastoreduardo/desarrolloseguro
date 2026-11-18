@@ -11,3 +11,4 @@ export * from "./internal-audit-score.js";
 export * from "./internal-audit-access.js";
 export * from "./internal-infrastructure.js";
 export * from "./internal-deployment-attestation.js";
+export * from "./internal-synthetic-auth.js";

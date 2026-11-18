@@ -13,7 +13,9 @@ de infraestructura D-02 solo conserva nombres seguros, digests SHA-256,
 exposición, privilegios y estado de transporte; nunca comandos, rutas,
 variables de entorno o datos de bases. La atestación D-03 solo conserva
 digests SHA-256 y códigos de controles allowlisted; no recibe SBOM completo,
-código fuente ni secretos.
+código fuente ni secretos. Las observaciones D-04 de autenticación solo
+identifican una cuenta sintética mediante hash y un flujo allowlisted; nunca
+conservan credenciales, tokens, correos o IDs de usuarios reales.
 
 El adaptador de acceso D-01 autoriza únicamente operaciones `GET` contra
 recursos allowlisted y rutas sin query, fragmento, salto de directorio ni
