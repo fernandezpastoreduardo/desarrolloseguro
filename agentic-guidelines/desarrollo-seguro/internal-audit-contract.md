@@ -26,6 +26,10 @@ venta de datos.
 El proyector D-07 transforma cada observación tipada en un criterio interno,
 rechaza criterios duplicados antes del cálculo y conserva `externalScore` en
 `null`.
+El ensamblador D-08 solo genera un informe interno para
+`grumphya.com`/`production` con una referencia hash y evidencia ya proyectada;
+si falta cobertura devuelve estado incompleto o bloqueado y no concede sello ni
+certificación.
 
 El adaptador de acceso D-01 autoriza únicamente operaciones `GET` contra
 recursos allowlisted y rutas sin query, fragmento, salto de directorio ni

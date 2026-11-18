@@ -34,6 +34,10 @@ minimización: conserva códigos y contadores booleanos, sin nombres de cookies,
 dominios, textos, scripts ni conclusiones sobre venta de datos.
 El proyector D-07 traduce observaciones tipadas a un único criterio interno,
 rechaza duplicados antes de puntuar y mantiene `externalScore` en `null`.
+El ensamblador D-08 produce un informe interno redacted para
+`grumphya.com`/`production`, con referencia hash, evidencia proyectada y
+estado incompleto o bloqueado cuando faltan controles; nunca eleva una
+certificación por sí solo.
 
 ## Orden propuesto
 
