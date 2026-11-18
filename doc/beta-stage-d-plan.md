@@ -75,3 +75,9 @@ Antes de D-01 deben acordarse, fuera de este repositorio:
 
 Si alguno de estos contratos no existe, D queda pendiente sin sustituirlo por
 fixtures o análisis del repositorio.
+
+El informe interno rechaza evidencias posteriores al instante de la auditoría
+y el runner comprueba scopes finos para las señales de ética e IA antes de
+proyectarlas. Esto evita mezclar observaciones de ejecuciones distintas o
+conceder cobertura por una autorización más amplia de la necesaria.
+
