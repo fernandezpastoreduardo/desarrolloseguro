@@ -114,6 +114,11 @@ conserva la respuesta. En el estado actual la puerta falla con
 `internal_audit_resource_unavailable` porque Grumphya aún publica `404` en el
 catálogo provisional; no se interpreta como evidencia de producción.
 
+La puerta estática `test-internal-audit-route-policy.mjs` mantiene sincronizados
+los siete pares recurso/ruta entre el preflight, la autorización, el runtime y
+el runner. Un cambio de catálogo que olvide una de esas capas falla en CI antes
+de poder desplegarse.
+
 El worker incluye una entrada opt-in `pnpm --filter
 @desarrolloseguro/worker audit:run`. Solo construye el JWT técnico y ejecuta
 las siete operaciones allowlisted, incluida la ruta dedicada `/audit/ai`, cuando
