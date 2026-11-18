@@ -3,18 +3,19 @@ import {
   type InternalAuditCriterion,
   type InternalAuditEvidence,
 } from "./internal-audit-contract.js";
+import { parseInternalDeploymentAttestation } from "./internal-deployment-attestation.js";
 import { parseInternalPrivacyObservation } from "./internal-privacy-observation.js";
 import { parseInternalQualityObservation } from "./internal-quality-observation.js";
 import { parseSyntheticAuthObservation } from "./internal-synthetic-auth.js";
 
-const ENVELOPE_KINDS = ["synthetic_auth", "quality", "privacy"] as const;
+const ENVELOPE_KINDS = ["synthetic_auth", "quality", "privacy", "deployment_attestation"] as const;
 type EnvelopeKind = (typeof ENVELOPE_KINDS)[number];
 
 type ProjectedEvidence = {
   criterionId: InternalAuditCriterion;
   scope: string;
   status: "pass" | "fail" | "unknown" | "not_applicable";
-  source: "production_observation" | "synthetic_check";
+  source: "production_observation" | "synthetic_check" | "deployment_attestation";
   observedAt: string;
   reasonCode: string;
 };
@@ -23,7 +24,7 @@ export function projectInternalAuditEvidence(input: unknown): readonly InternalA
   if (!Array.isArray(input) || input.length === 0 || input.length > 32) {
     throw new Error("internal_audit_projection_invalid");
   }
-  const projected = input.map((item) => {
+  const projected = input.flatMap((item) => {
     try {
       return projectEnvelope(item);
     } catch {
@@ -41,41 +42,72 @@ export function projectInternalAuditEvidence(input: unknown): readonly InternalA
   }
 }
 
-function projectEnvelope(input: unknown): ProjectedEvidence {
+function projectEnvelope(input: unknown): readonly ProjectedEvidence[] {
   if (!isRecord(input) || !hasExactKeys(input, ["kind", "observation"]) || !isEnvelopeKind(input.kind)) {
     throw new Error("internal_audit_projection_invalid");
   }
   if (input.kind === "synthetic_auth") {
     const observation = parseSyntheticAuthObservation(input.observation);
-    return {
+    return [{
       criterionId: "authentication.authorization",
       scope: "authentication",
       status: observation.status,
       source: "synthetic_check",
       observedAt: observation.observedAt,
       reasonCode: observation.reasonCode,
-    };
+    }];
   }
   if (input.kind === "quality") {
     const observation = parseInternalQualityObservation(input.observation);
-    return {
+    return [{
       criterionId: qualityCriterion(observation.kind),
       scope: "quality",
       status: observation.status,
       source: "production_observation",
       observedAt: observation.observedAt,
       reasonCode: observation.metricCode,
-    };
+    }];
+  }
+  if (input.kind === "deployment_attestation") {
+    const observation = parseInternalDeploymentAttestation(input.observation);
+    return observation.checks.flatMap((check): ProjectedEvidence[] => {
+      if (check === "dependency_audit_passed") {
+        return [toEvidence("application.dependencies", "application", observation.observedAt, "deployment_attestation")];
+      }
+      if (check === "secrets_not_in_image") {
+        return [toEvidence("application.secrets", "application", observation.observedAt, "deployment_attestation")];
+      }
+      if (check === "api_surface_allowlisted") {
+        return [toEvidence("infrastructure.network", "infrastructure", observation.observedAt, "deployment_attestation")];
+      }
+      return [];
+    });
   }
   const observation = parseInternalPrivacyObservation(input.observation);
   const criterionId = privacyCriterion(observation.area, observation.signalCode);
-  return {
+  return [{
     criterionId,
     scope: criterionScope(criterionId),
     status: observation.status,
     source: "production_observation",
     observedAt: observation.observedAt,
     reasonCode: observation.signalCode,
+  }];
+}
+
+function toEvidence(
+  criterionId: InternalAuditCriterion,
+  scope: string,
+  observedAt: string,
+  source: "deployment_attestation",
+): ProjectedEvidence {
+  return {
+    criterionId,
+    scope,
+    status: "pass",
+    source,
+    observedAt,
+    reasonCode: "attestation_check_passed",
   };
 }
 

@@ -74,6 +74,25 @@ describe("internal audit evidence projection", () => {
       .toThrow("internal_audit_projection_duplicate");
   });
 
+  it("projects only explicit deployment attestation checks", () => {
+    const evidence = projectInternalAuditEvidence([{
+      kind: "deployment_attestation",
+      observation: {
+        observedAt,
+        environment: "production",
+        artifactDigest: `sha256:${"1".repeat(64)}`,
+        dependencyDigest: `sha256:${"2".repeat(64)}`,
+        checks: ["dependency_audit_passed", "secrets_not_in_image", "api_surface_allowlisted"],
+      },
+    }]);
+
+    expect(evidence.map(({ criterionId, source }) => ({ criterionId, source }))).toEqual([
+      { criterionId: "application.dependencies", source: "deployment_attestation" },
+      { criterionId: "application.secrets", source: "deployment_attestation" },
+      { criterionId: "infrastructure.network", source: "deployment_attestation" },
+    ]);
+  });
+
   it("rejects unknown envelopes and raw observation data", () => {
     expect(() => projectInternalAuditEvidence([{ kind: "quality", observation: { html: "<body>" } }]))
       .toThrow("internal_audit_projection_invalid");

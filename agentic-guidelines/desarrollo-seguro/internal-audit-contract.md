@@ -30,6 +30,9 @@ El ensamblador D-08 solo genera un informe interno para
 `grumphya.com`/`production` con una referencia hash y evidencia ya proyectada;
 si falta cobertura devuelve estado incompleto o bloqueado y no concede sello ni
 certificación.
+De D-03 solo se proyectan a puntuación los checks explícitos de dependencias,
+secretos fuera de la imagen y superficie API allowlisted; los demás no se
+reinterpretan como controles distintos.
 
 El adaptador de acceso D-01 autoriza únicamente operaciones `GET` contra
 recursos allowlisted y rutas sin query, fragmento, salto de directorio ni

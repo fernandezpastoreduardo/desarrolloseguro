@@ -37,7 +37,9 @@ rechaza duplicados antes de puntuar y mantiene `externalScore` en `null`.
 El ensamblador D-08 produce un informe interno redacted para
 `grumphya.com`/`production`, con referencia hash, evidencia proyectada y
 estado incompleto o bloqueado cuando faltan controles; nunca eleva una
-certificación por sí solo.
+certificación por sí solo. El proyector solo convierte en criterios los
+checks D-03 explícitos de dependencias auditadas, secretos fuera de la imagen
+y superficie API allowlisted; el resto mantiene la cobertura incompleta.
 
 ## Orden propuesto
 
