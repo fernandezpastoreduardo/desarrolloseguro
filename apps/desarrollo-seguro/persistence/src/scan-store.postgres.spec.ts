@@ -398,7 +398,7 @@ describePostgres.sequential("PostgresScanStore", () => {
     expect(running.rows[0].count).toBe(1);
   });
 
-  it("queues a new scan even when a recent report exists during development", async () => {
+  it("returns the recent report instead of queueing a duplicate scan", async () => {
     const first = await queueAndClaim();
     const reportId = await complete(first);
 
@@ -408,11 +408,10 @@ describePostgres.sequential("PostgresScanStore", () => {
       trigger: "requested",
     });
 
-    expect(fresh.kind).toBe("queued");
-    expect(fresh).not.toEqual({ kind: "cached", reportId });
+    expect(fresh).toEqual({ kind: "cached", reportId });
   });
 
-  it("does not reuse reports at least 60 minutes old", async () => {
+  it("enforces the 24-hour admission window after the report cache expires", async () => {
     const job = await queueAndClaim();
     const staleCompletedAt = new Date(Date.now() - 61 * 60 * 1000);
     await complete(
@@ -421,13 +420,27 @@ describePostgres.sequential("PostgresScanStore", () => {
       new Date(staleCompletedAt.getTime() - 60_000),
       staleCompletedAt,
     );
+    await pool.query(
+      "UPDATE ds_scan_jobs SET queued_at = clock_timestamp() - interval '2 hours' WHERE id = $1",
+      [job.id],
+    );
 
+    const rateLimited = await store.ensureFreshScan({
+      hostname: TEST_HOSTNAME,
+      profileVersion: TEST_PROFILE,
+      trigger: "requested",
+    });
+    expect(rateLimited).toEqual({ kind: "rate_limited" });
+
+    await pool.query(
+      "UPDATE ds_scan_jobs SET queued_at = clock_timestamp() - interval '25 hours' WHERE id = $1",
+      [job.id],
+    );
     const expired = await store.ensureFreshScan({
       hostname: TEST_HOSTNAME,
       profileVersion: TEST_PROFILE,
       trigger: "requested",
     });
-
     expect(expired.kind).toBe("queued");
   });
 

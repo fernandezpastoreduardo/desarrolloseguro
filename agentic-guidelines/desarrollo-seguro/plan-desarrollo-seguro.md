@@ -28,8 +28,10 @@ El modelo de amenazas y el contrato local de controles están documentados en [`
    allowlist pública y no se cachea. El scheduler ya elimina tras 30 días los
    informes públicos `on_demand` inactivos sin certificación activa mediante
    una función protegida y conserva certificaciones y dominios monitorizados.
-   La caché de una hora y el progreso SSE siguen pendientes de la etapa B
-   completa.
+   La migración 025 reactiva la reutilización de un informe durante 60 minutos
+   y limita una nueva admisión del mismo dominio a una cada 24 horas cuando la
+   caché ha caducado. El progreso se expone mediante el estado consultable del
+   trabajo; el canal SSE sigue pendiente de la etapa B completa.
 
 1. **Solicitud desde buscador y cuotas compartidas: completado.** El formulario pide confirmación de autorización; API y PostgreSQL admiten `on_demand` con límites de cola, concurrencia, frecuencia y almacenamiento. Tras encolar, el portal consulta el estado cada cinco segundos hasta 24 veces y presenta el informe nuevo cuando queda guardado. Playwright prueba búsqueda, solicitud y recepción del informe con API simulada; el recorrido del worker con fixture prueba persistencia sin tráfico externo.
 2. **Runtime aislado: código y Compose listos; validación VPS pendiente.** El runner Docker por trabajo crea un volumen efímero y contenedores separados, limita recursos, usa `network none` en el executor, valida respuesta y limpia recursos. `pnpm sandbox:check` pasó localmente; Compose define worker/coordinador y scripts idempotentes para red y firewall dedicado. En el VPS falta aplicar y comprobar el firewall con señuelos para host, RFC1918, loopback, link-local e IPv6 y confirmar que HTTP/HTTPS del broker sale correctamente. Mantener la admisión sin procesar hasta cerrar esa verificación.

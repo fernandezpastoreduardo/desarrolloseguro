@@ -75,6 +75,10 @@ const MIGRATIONS = [
     version: "024_public_report_inactivity_retention",
     file: "024_public_report_inactivity_retention.sql",
   },
+  {
+    version: "025_enable_public_scan_admission_policies",
+    file: "025_enable_public_scan_admission_policies.sql",
+  },
 ] as const;
 
 const MIGRATION_LOCK_ID = 728194032;

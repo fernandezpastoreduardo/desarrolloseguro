@@ -22,5 +22,7 @@ informes `on_demand` sin certificación activa. El scheduler diario ejecuta una
 función `SECURITY DEFINER` con el rol aislado `ds_retention`; elimina únicamente
 los informes públicos y sus trabajos terminados, conserva los informes
 certificados y los dominios monitorizados, y rechaza cortes más recientes de
-la ventana. La caché de una hora y la coordinación de auditorías/progreso
-siguen pendientes de la etapa B completa.
+la ventana. La migración beta 025 reactiva la caché de una hora y el intervalo
+de 24 horas entre admisiones cuando la caché ha caducado. La coordinación de
+auditorías/progreso sigue usando el estado consultable; un canal SSE queda
+pendiente de la etapa B completa.
