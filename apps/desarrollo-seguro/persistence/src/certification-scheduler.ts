@@ -1,6 +1,7 @@
 import { Pool, type PoolConfig } from "pg";
 import { pathToFileURL } from "node:url";
 import { resolveRetentionPoolConfig } from "./retention-scheduler.js";
+import { emitSchedulerNotification } from "./scheduler-notification.js";
 
 export const CERTIFICATION_AUDIT_INTERVAL_MS = 60 * 60 * 1_000;
 const CERTIFICATION_AUDIT_FAILURE = "certification_audit_cycle_failed";
@@ -86,10 +87,14 @@ if (
   try {
     await runCertificationScheduler(pool, {
       signal: controller.signal,
-      onError: (category) => process.stderr.write(`${category}\n`),
+      onError: (category) =>
+        emitSchedulerNotification(category, (line) => process.stderr.write(line)),
     });
   } catch {
-    process.stderr.write("certification_scheduler_failed\n");
+    emitSchedulerNotification(
+      "certification_scheduler_failed",
+      (line) => process.stderr.write(line),
+    );
     process.exitCode = 1;
   } finally {
     await pool.end();

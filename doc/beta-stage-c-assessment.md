@@ -31,8 +31,11 @@ La evaluación separa cuatro niveles que no son equivalentes:
   único slot global.
 - Worker, leases, transiciones de certificación y proyección del sello están
   implementados en código.
-- Los schedulers de retención y certificación permanecen fuera de Compose por
-  decisión operativa documentada.
+- Los schedulers de retención y certificación están definidos en Compose con el
+  rol `ds_retention`, sin egress ni puertos, y se arrancan desde el script de
+  despliegue del proyecto.
+- Los fallos de ambos procesos tienen un canal local autorizado: JSONL
+  allowlisted en los logs del contenedor, limitado a categoría y timestamp.
 
 ### Validación automatizada
 
@@ -55,8 +58,9 @@ La evaluación separa cuatro niveles que no son equivalentes:
   job de deploy quedó omitido. No existe, por tanto, evidencia operativa de
   ese commit en el VPS.
 - No existe evidencia de una ejecución horaria real, de recuperación del
-  scheduler, de actualización de sello tras una auditoría programada ni de un
-  canal de notificación autorizado.
+  scheduler ni de actualización de sello tras una auditoría programada en el
+  VPS. El canal de notificación ya está implementado y cubierto localmente,
+  pero queda pendiente observarlo en operación.
 
 ## Criterios de aceptación
 
@@ -68,7 +72,7 @@ La evaluación separa cuatro niveles que no son equivalentes:
 | Recuperación y cancelación segura | Cubierto parcialmente por tests de worker/runtime | Falta prueba operativa de caída y recuperación |
 | Actualización de informe, puntuación, ficha y sello | Implementada en código | Falta observar una transición real producida por C |
 | Estados de certificación | Implementados y probados localmente | Falta ciclo operativo `active`/`suspended`/reactivación |
-| Notificaciones ante incidencias | No hay canal operativo autorizado | Bloqueante para aceptar C |
+| Notificaciones ante incidencias | Implementado como JSONL allowlisted en logs del scheduler; falta observarlo en VPS | Bloqueante para aceptar C hasta validación operativa |
 
 ## Clasificación
 

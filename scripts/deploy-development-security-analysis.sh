@@ -39,7 +39,11 @@ docker compose --project-name "$PROJECT_NAME" --file "$COMPOSE_FILE" \
   up --detach --no-deps --wait development-security-runtime-coordinator
 docker compose --project-name "$PROJECT_NAME" --file "$COMPOSE_FILE" \
   up --detach --no-deps --wait \
-  development-security-api development-security-worker development-security-web
+  development-security-api development-security-worker \
+  development-security-retention-scheduler \
+  development-security-certification-scheduler development-security-web
 
 docker compose --project-name "$PROJECT_NAME" --file "$COMPOSE_FILE" \
-  ps development-security-api development-security-runtime-coordinator development-security-worker development-security-web
+  ps development-security-api development-security-runtime-coordinator \
+  development-security-worker development-security-retention-scheduler \
+  development-security-certification-scheduler development-security-web

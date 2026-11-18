@@ -57,6 +57,8 @@ const api = serviceBlock("development-security-api");
 const web = serviceBlock("development-security-web");
 const worker = serviceBlock("development-security-worker");
 const runtimeCoordinator = serviceBlock("development-security-runtime-coordinator");
+const retentionScheduler = serviceBlock("development-security-retention-scheduler");
+const certificationScheduler = serviceBlock("development-security-certification-scheduler");
 
 assert.match(database, /pgvector\/pgvector:0\.8\.7-pg17/u);
 assert.match(database, /development-security-postgres:\/var\/lib\/postgresql\/data/u);
@@ -119,6 +121,18 @@ assert.match(runtimeCoordinator, /DS_RUNTIME_EGRESS_NETWORK:\s*development-secur
 assert.match(runtimeCoordinator, /cap_drop:\s*\[ALL\]/u);
 assert.match(runtimeCoordinator, /cap_add:\s*\[CHOWN, FOWNER\]/u);
 assert.match(runtimeCoordinator, /read_only:\s*true/u);
+for (const scheduler of [retentionScheduler, certificationScheduler]) {
+  assert.match(scheduler, /target:\s*development-security-production/u);
+  assert.match(scheduler, /development_security_retention_database_url/u);
+  assert.match(scheduler, /internal_tls_ca\.crt/u);
+  assert.match(scheduler, /DS_RETENTION_DATABASE_URL_FILE=/u);
+  assert.match(scheduler, /DS_RETENTION_DATABASE_TLS_CA_FILE=/u);
+  assert.match(scheduler, /development-security-backend/u);
+  assert.match(scheduler, /service_completed_successfully/u);
+  assert.match(scheduler, /cap_drop:\s*\[ALL\]/u);
+  assert.match(scheduler, /read_only:\s*true/u);
+  assert.doesNotMatch(scheduler, /development-security-egress|ports:|docker\.sock/u);
+}
 assert.match(compose, /development-security-backend:\n    internal: true/u);
 assert.match(compose, /development-security-edge:\n    internal: true/u);
 assert.match(

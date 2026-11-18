@@ -259,6 +259,84 @@ services:
     networks:
       - development-security-backend
 
+  development-security-retention-scheduler:
+    image: ${DEVELOPMENT_SECURITY_IMAGE:-desarrolloseguro-api:local}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development-security-production
+    restart: unless-stopped
+    user: "0:0"
+    privileged: false
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE, FOWNER]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 64
+    mem_limit: 256m
+    cpus: 0.25
+    read_only: true
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        install -d -o node -g node -m 0700 /run/development-security-secrets
+        install -o node -g node -m 0400 /run/secrets/development_security_retention_database_url /run/development-security-secrets/retention-database-url
+        install -o node -g node -m 0444 /run/secrets/internal_tls_ca.crt /run/development-security-secrets/database-ca.crt
+        export DS_RETENTION_DATABASE_URL_FILE=/run/development-security-secrets/retention-database-url
+        export DS_RETENTION_DATABASE_TLS_CA_FILE=/run/development-security-secrets/database-ca.crt
+        exec su -p node -s /bin/sh -c 'exec node apps/desarrollo-seguro/persistence/dist/retention-scheduler.js'
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+      - /run/development-security-secrets:rw,noexec,nosuid,size=16m
+    environment:
+      NODE_ENV: production
+    secrets:
+      - development_security_retention_database_url
+      - internal_tls_ca.crt
+    depends_on:
+      development-security-migrate:
+        condition: service_completed_successfully
+    networks:
+      - development-security-backend
+
+  development-security-certification-scheduler:
+    image: ${DEVELOPMENT_SECURITY_IMAGE:-desarrolloseguro-api:local}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development-security-production
+    restart: unless-stopped
+    user: "0:0"
+    privileged: false
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE, FOWNER]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 64
+    mem_limit: 256m
+    cpus: 0.25
+    read_only: true
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        install -d -o node -g node -m 0700 /run/development-security-secrets
+        install -o node -g node -m 0400 /run/secrets/development_security_retention_database_url /run/development-security-secrets/retention-database-url
+        install -o node -g node -m 0444 /run/secrets/internal_tls_ca.crt /run/development-security-secrets/database-ca.crt
+        export DS_RETENTION_DATABASE_URL_FILE=/run/development-security-secrets/retention-database-url
+        export DS_RETENTION_DATABASE_TLS_CA_FILE=/run/development-security-secrets/database-ca.crt
+        exec su -p node -s /bin/sh -c 'exec node apps/desarrollo-seguro/persistence/dist/certification-scheduler.js'
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+      - /run/development-security-secrets:rw,noexec,nosuid,size=16m
+    environment:
+      NODE_ENV: production
+    secrets:
+      - development_security_retention_database_url
+      - internal_tls_ca.crt
+    depends_on:
+      development-security-migrate:
+        condition: service_completed_successfully
+    networks:
+      - development-security-backend
+
   development-security-web:
     image: ${DEVELOPMENT_SECURITY_WEB_IMAGE:-desarrolloseguro-web:local}
     build:

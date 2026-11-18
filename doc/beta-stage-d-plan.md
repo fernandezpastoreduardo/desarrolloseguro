@@ -8,9 +8,14 @@ mínimos. No consultará ni extraerá datos privados de usuarios, no modificará
 producción, no ejecutará pruebas destructivas y no sustituirá las evidencias
 externas ya cubiertas por A y B.
 
-La implementación de D no comienza con este documento. Cada entrega futura
+La implementación de D comienza con el contrato local D-01. Cada entrega
 deberá seguir TDD, mantener TypeScript estricto y aportar evidencia de
-producción antes de considerarse aceptada.
+producción antes de considerarse aceptada. El contrato actual solo permite
+solicitudes explícitas para `grumphya.com` en `production`, con el auditor
+`desarrollo-seguro`, scopes allowlisted y retención máxima de 30 días. Las
+evidencias se aceptan como estados, códigos y timestamps; se rechazan HTML,
+cabeceras, cookies, secretos y texto libre. Este contrato no concede acceso ni
+simula evidencias de producción.
 
 ## Orden propuesto
 

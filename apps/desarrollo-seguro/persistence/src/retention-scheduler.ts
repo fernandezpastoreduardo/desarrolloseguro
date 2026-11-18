@@ -3,6 +3,7 @@ import { X509Certificate } from "node:crypto";
 import { checkServerIdentity } from "node:tls";
 import { pathToFileURL } from "node:url";
 import { Pool, type PoolConfig } from "pg";
+import { emitSchedulerNotification } from "./scheduler-notification.js";
 
 export const RETENTION_WINDOW_MS = 90 * 24 * 60 * 60 * 1_000;
 export const PUBLIC_INACTIVITY_WINDOW_MS = 30 * 24 * 60 * 60 * 1_000;
@@ -196,10 +197,14 @@ if (
   try {
     await runRetentionScheduler(pool, {
       signal: controller.signal,
-      onError: (category) => process.stderr.write(`${category}\n`),
+      onError: (category) =>
+        emitSchedulerNotification(category, (line) => process.stderr.write(line)),
     });
   } catch {
-    process.stderr.write("retention_scheduler_failed\n");
+    emitSchedulerNotification(
+      "retention_scheduler_failed",
+      (line) => process.stderr.write(line),
+    );
     process.exitCode = 1;
   } finally {
     await pool.end();

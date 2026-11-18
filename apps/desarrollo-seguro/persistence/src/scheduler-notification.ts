@@ -1,0 +1,35 @@
+const SCHEDULER_NOTIFICATION_CATEGORIES = [
+  "retention_cycle_failed",
+  "certification_audit_cycle_failed",
+  "retention_scheduler_failed",
+  "certification_scheduler_failed",
+] as const;
+
+export type SchedulerNotificationCategory =
+  (typeof SCHEDULER_NOTIFICATION_CATEGORIES)[number];
+
+export function isSchedulerNotificationCategory(
+  value: unknown,
+): value is SchedulerNotificationCategory {
+  return (
+    typeof value === "string" &&
+    (SCHEDULER_NOTIFICATION_CATEGORIES as readonly string[]).includes(value)
+  );
+}
+
+export function emitSchedulerNotification(
+  category: string,
+  write: (line: string) => void,
+  now: () => Date = () => new Date(),
+): void {
+  if (!isSchedulerNotificationCategory(category)) {
+    throw new Error("scheduler_notification_category_invalid");
+  }
+  write(
+    `${JSON.stringify({
+      event: "ds_scheduler_notification",
+      category,
+      observedAt: now().toISOString(),
+    })}\n`,
+  );
+}
