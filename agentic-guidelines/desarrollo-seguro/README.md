@@ -17,7 +17,7 @@ El stack Compose conecta el portal a la red de entrada dedicada; API y PostgreSQ
 
 Un estado `pass` describe los controles observados por el perfil indicado; no certifica el sitio, su seguridad global, cumplimiento legal ni ausencia de vulnerabilidades. `same_vps` identifica el punto de observación y no representa una verificación independiente desde otra red.
 
-El código del escáner admite observaciones reales en el broker aislado. Las pruebas locales cubren resolución y fijación por conexión, redirecciones, límites de transporte, canal sin credenciales y persistencia en PostgreSQL temporal con fixtures. La migración `025` reactiva para la Beta el intervalo de 24 horas y la reutilización de informes durante 60 minutos; se mantienen límites antiabuso por minuto, una ejecución simultánea y hasta diez trabajos en espera. La calidad del runtime real en VPS solo se considera comprobada cuando el smoke posterior al deploy genera y valida un informe nuevo de `grumphya.com`.
+El código del escáner admite observaciones reales en el broker aislado. Las pruebas locales cubren resolución y fijación por conexión, redirecciones, límites de transporte, canal sin credenciales y persistencia en PostgreSQL temporal con fixtures. La migración `025` reactiva para la Beta el intervalo de 24 horas y la reutilización de informes durante 60 minutos; `027` permite reintentar fallos terminales sin contar una admisión fallida como completada. Se mantienen límites antiabuso por minuto, una ejecución simultánea y hasta diez trabajos en espera. La calidad del runtime real en VPS solo se considera comprobada cuando el smoke posterior al deploy genera y valida un informe nuevo de `grumphya.com`.
 
 ## Guías
 
