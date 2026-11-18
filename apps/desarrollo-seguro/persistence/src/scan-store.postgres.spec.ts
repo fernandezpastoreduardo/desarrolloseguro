@@ -522,7 +522,7 @@ describePostgres.sequential("PostgresScanStore", () => {
         controlId: "DS-TLS-02",
         method: "TLS",
         status: "unknown" as const,
-        summary: "Comprobación DS-TLS-02: unknown.",
+        summary: "No se pudieron completar todas las pruebas de TLS. TLS 1.2: no se pudo completar la conexión. TLS 1.3: se agotó el tiempo de espera.",
         limitation: "Resultado limitado a las rutas públicas declaradas del perfil domain-v3.",
         evidence: { tls12ProbeError: "connection_failed", tls13ProbeError: "request_timeout" },
       },

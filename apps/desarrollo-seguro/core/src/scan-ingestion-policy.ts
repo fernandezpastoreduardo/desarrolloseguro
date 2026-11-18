@@ -383,6 +383,12 @@ function getSafeCheckSummary(
   evidence: Record<string, SafeEvidenceValue>,
 ): string {
   if (controlId === "DS-TLS-02") {
+    const tlsVersions = [
+      "tls10Accepted",
+      "tls11Accepted",
+      "tls12Accepted",
+      "tls13Accepted",
+    ] as const;
     const diagnostics = [
       ["TLS 1.0", evidence.tls10ProbeError],
       ["TLS 1.1", evidence.tls11ProbeError],
@@ -391,6 +397,9 @@ function getSafeCheckSummary(
     ].filter((entry): entry is [string, string] => typeof entry[1] === "string");
     if (diagnostics.length > 0) {
       return `No se pudieron completar todas las pruebas de TLS. ${diagnostics.map(([version, code]) => `${version}: ${getTlsProbeErrorLabel(code)}.`).join(" ")}`;
+    }
+    if (tlsVersions.every((key) => typeof evidence[key] === "boolean")) {
+      return `Comprobación ${controlId}: ${status}.`;
     }
     return "No se pudieron determinar todas las versiones de TLS; faltan resultados de una o más pruebas.";
   }

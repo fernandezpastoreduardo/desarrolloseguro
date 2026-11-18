@@ -23,6 +23,7 @@ const SCAN_JOB_ERROR_CODES: ReadonlySet<ScanJobErrorCode> = new Set([
   "scan_profile_controls_incomplete",
   "scan_profile_not_catalogued",
   "scan_scope_not_allowlisted",
+  "scan_check_payload_not_allowlisted",
   "scan_verdict_does_not_match_checks",
   "invalid_scan_checks",
   "invalid_scan_report",
