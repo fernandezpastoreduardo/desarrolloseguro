@@ -171,6 +171,14 @@ describePostgres.sequential("PostgresScanStore", () => {
     await expect(
       pool.query("SELECT state FROM ds_beta_certifications WHERE hostname = $1", [hostname]),
     ).resolves.toMatchObject({ rows: [{ state: "active" }] });
+    await expect(
+      pool.query(
+        "SELECT from_state, to_state, report_id, reason_code FROM ds_beta_certification_events WHERE hostname = $1 ORDER BY created_at",
+        [hostname],
+      ),
+    ).resolves.toMatchObject({
+      rows: [{ from_state: null, to_state: "active", report_id: eligibleReportId, reason_code: "eligible_assessment" }],
+    });
 
     const tokenHash = "d".repeat(64);
     const expiresAt = new Date(Date.now() + 86_400_000);
@@ -186,13 +194,83 @@ describePostgres.sequential("PostgresScanStore", () => {
     await expect(
       pool.query("SELECT state FROM ds_beta_certifications WHERE hostname = $1", [hostname]),
     ).resolves.toMatchObject({ rows: [{ state: "suspended" }] });
+    await expect(
+      pool.query(
+        "SELECT from_state, to_state, report_id, reason_code FROM ds_beta_certification_events WHERE hostname = $1 ORDER BY created_at",
+        [hostname],
+      ),
+    ).resolves.toMatchObject({
+      rows: [
+        { from_state: null, to_state: "active", report_id: eligibleReportId, reason_code: "eligible_assessment" },
+        { from_state: "active", to_state: "suspended", report_id: blockedReportId, reason_code: "blocked_assessment" },
+      ],
+    });
     await expect(store.verifyReportBadge({ hostname, reportId: eligibleReportId, tokenHash, at: new Date() })).resolves.toBe(false);
 
     const reactivatedReportId = await completeLifecycleScan(makeEligibleDomainV3Checks(), "pass");
     await expect(
       pool.query("SELECT state, certified_report_id FROM ds_beta_certifications WHERE hostname = $1", [hostname]),
     ).resolves.toMatchObject({ rows: [{ state: "active", certified_report_id: reactivatedReportId }] });
+    await expect(
+      pool.query(
+        "SELECT from_state, to_state, report_id, reason_code FROM ds_beta_certification_events WHERE hostname = $1 ORDER BY created_at",
+        [hostname],
+      ),
+    ).resolves.toMatchObject({
+      rows: [
+        { from_state: null, to_state: "active", report_id: eligibleReportId, reason_code: "eligible_assessment" },
+        { from_state: "active", to_state: "suspended", report_id: blockedReportId, reason_code: "blocked_assessment" },
+        { from_state: "suspended", to_state: "active", report_id: reactivatedReportId, reason_code: "eligible_assessment" },
+      ],
+    });
     await expect(store.issueReportBadge({ hostname, reportId: reactivatedReportId, tokenHash: "e".repeat(64), expiresAt })).resolves.toBe(true);
+  });
+
+  it("keeps an active certification and badge during a pending reassessment", async () => {
+    const hostname = "pending-reassessment.example.net";
+    await store.ensureDomain(hostname, "on_demand", "domain-v3");
+    const completeAt = async (completedAt: Date, checks: ScanCheck[], verdict: "pass" | "inconclusive") => {
+      await store.ensureFreshScan({ hostname, profileVersion: "domain-v3", trigger: "requested" });
+      const job = await store.claimNextScan(new Date(), TEST_LEASE_MS);
+      if (!job) throw new Error("expected_claimed_pending_reassessment_scan");
+      const reportId = await store.completeScan({
+        jobId: job.id,
+        leaseToken: job.leaseToken,
+        hostname,
+        profileVersion: "domain-v3",
+        scannerVersion: TEST_SCANNER,
+        startedAt: new Date(completedAt.getTime() - 1_000),
+        completedAt,
+        verdict,
+        scope: ["/"],
+        checks,
+        metrics: { requestsCount: 0, bytesCount: 0, durationMs: 1, pagesCount: 0 },
+      });
+      await pool.query(
+        "UPDATE ds_scan_jobs SET queued_at = clock_timestamp() - interval '25 hours' WHERE id = $1",
+        [job.id],
+      );
+      return reportId;
+    };
+
+    const eligibleReportId = await completeAt(new Date(Date.now() - 2 * 60 * 60 * 1000), makeEligibleDomainV3Checks(), "pass");
+    const pendingChecks = makeEligibleDomainV3Checks().map((check) =>
+      check.controlId === "DS-HDR-01"
+        ? { ...check, status: "unknown" as const, summary: "Comprobación DS-HDR-01: unknown." }
+        : check,
+    );
+    const pendingReportId = await completeAt(new Date(Date.now() - 60 * 60 * 1000), pendingChecks, "inconclusive");
+    const tokenHash = "f".repeat(64);
+    const expiresAt = new Date(Date.now() + 86_400_000);
+
+    await expect(
+      pool.query("SELECT state, latest_assessment_status, certified_report_id FROM ds_beta_certifications WHERE hostname = $1", [hostname]),
+    ).resolves.toMatchObject({
+      rows: [{ state: "active", latest_assessment_status: "pending", certified_report_id: eligibleReportId }],
+    });
+    expect(pendingReportId).not.toBe(eligibleReportId);
+    await expect(store.issueReportBadge({ hostname, reportId: eligibleReportId, tokenHash, expiresAt })).resolves.toBe(true);
+    await expect(store.verifyReportBadge({ hostname, reportId: eligibleReportId, tokenHash, at: new Date() })).resolves.toBe(true);
   });
 
   it("does not let an older report overwrite a newer certification state", async () => {
