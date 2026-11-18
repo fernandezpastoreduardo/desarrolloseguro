@@ -63,6 +63,14 @@ test("formats pending state as safe categorical diagnostics", () => {
   );
 });
 
+test("formats the persisted blocked assessment without degrading it to invalid", () => {
+  const status = activeStatus();
+  status.lastReport.certification.state = "suspended";
+  status.lastReport.certification.latestAssessmentStatus = "blocked";
+  status.lastReport.certification.certifiedReportId = null;
+  assert.match(describeCertificationTransition(status), /assessment=blocked/u);
+});
+
 test("does not echo arbitrary external values in diagnostics", () => {
   const status = activeStatus();
   status.lastReport.certification.state = "unexpected-secret-value";

@@ -5,7 +5,7 @@ export const CERTIFICATION_API_URL =
   "https://desarrolloseguro.org/api/desarrollo-seguro/v1/domains/grumphya.com/status";
 
 const CERTIFICATION_STATES = new Set(["pending", "active", "suspended"]);
-const ASSESSMENT_STATUSES = new Set(["pending", "eligible", "ineligible"]);
+const ASSESSMENT_STATUSES = new Set(["pending", "eligible", "blocked"]);
 
 export function validateCertificationTransition(status, previousReportId = null) {
   if (!status || status.hostname !== "grumphya.com") {
