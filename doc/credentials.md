@@ -12,6 +12,10 @@ separados con permisos de propietario; la privada JWT nunca sale de Desarrollo
 Seguro y la privada de firma de releases solo vive en Actions de Grumphya. El
 preflight `pnpm audit:preflight` falla si la auditoría está activada sin todos
 los valores, si una red es abierta o si un `kid` no está en la lista activa.
+El preflight también valida que la clave JWT privada y la clave pública de
+atestación sean PEM Ed25519 utilizables y que issuer/audience conserven
+exactamente el contrato `desarrolloseguro-audit`/`grumphya-audit`; un archivo
+arbitrario o una clave de otra familia falla antes de arrancar el runtime.
 El contrato externo fija `AUDIT_JWT_ISSUER=desarrolloseguro-audit` y
 `AUDIT_JWT_AUDIENCE=grumphya-audit`; el token añade `domain=grumphya.com` y
 scopes con el formato `audit:<recurso>`.

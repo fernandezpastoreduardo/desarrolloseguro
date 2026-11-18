@@ -1,4 +1,5 @@
 import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
+import { generateKeyPairSync } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -8,8 +9,10 @@ const script = join(process.cwd(), "scripts/check-internal-audit-config.mjs");
 const tempRoot = mkdtempSync(join(tmpdir(), "ds-audit-config-"));
 const privateKey = join(tempRoot, "jwt.pem");
 const publicKey = join(tempRoot, "attestation.pem");
-writeFileSync(privateKey, "private-key");
-writeFileSync(publicKey, "public-key");
+const jwtKeys = generateKeyPairSync("ed25519");
+const attestationKeys = generateKeyPairSync("ed25519");
+writeFileSync(privateKey, jwtKeys.privateKey.export({ type: "pkcs8", format: "pem" }));
+writeFileSync(publicKey, attestationKeys.publicKey.export({ type: "spki", format: "pem" }));
 chmodSync(privateKey, 0o400);
 chmodSync(publicKey, 0o400);
 
@@ -42,5 +45,19 @@ const broadNetwork = spawnSync(process.execPath, [script], {
 });
 assert.equal(broadNetwork.status, 1);
 assert.match(broadNetwork.stderr, /internal_audit_config_networks_invalid/u);
+
+const wrongClaims = spawnSync(process.execPath, [script], {
+  env: { ...baseEnv, AUDIT_JWT_AUDIENCE: "other-service" },
+  encoding: "utf8",
+});
+assert.equal(wrongClaims.status, 1);
+assert.match(wrongClaims.stderr, /internal_audit_config_claims_invalid/u);
+
+const malformedKey = spawnSync(process.execPath, [script], {
+  env: { ...baseEnv, AUDIT_JWT_PRIVATE_KEY_FILE: publicKey },
+  encoding: "utf8",
+});
+assert.equal(malformedKey.status, 1);
+assert.match(malformedKey.stderr, /internal_audit_config_file_invalid=AUDIT_JWT_PRIVATE_KEY_FILE/u);
 
 console.log("internal audit config tests passed");

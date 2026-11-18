@@ -1,7 +1,10 @@
 import { readFileSync, statSync } from "node:fs";
+import { createPrivateKey, createPublicKey } from "node:crypto";
 import { isIP } from "node:net";
 
 const enabled = process.env.AUDIT_ENABLED === "true";
+const EXPECTED_ISSUER = "desarrolloseguro-audit";
+const EXPECTED_AUDIENCE = "grumphya-audit";
 if (!enabled) {
   console.log("internal_audit_disabled");
   process.exit(0);
@@ -22,12 +25,27 @@ if (missing.length > 0) {
   process.exit(1);
 }
 
+if (
+  process.env.AUDIT_JWT_ISSUER !== EXPECTED_ISSUER ||
+  process.env.AUDIT_JWT_AUDIENCE !== EXPECTED_AUDIENCE
+) {
+  console.error("internal_audit_config_claims_invalid");
+  process.exit(1);
+}
+
 for (const name of ["AUDIT_JWT_PRIVATE_KEY_FILE", "AUDIT_RELEASE_ATTESTATION_PUBLIC_KEY_FILE"]) {
   const file = process.env[name];
   try {
     const stats = statSync(file);
-    if (!stats.isFile() || (stats.mode & 0o077) !== 0 || readFileSync(file, "utf8").trim().length === 0) {
+    const pem = readFileSync(file, "utf8").trim();
+    if (!stats.isFile() || (stats.mode & 0o077) !== 0 || pem.length === 0) {
       throw new Error("invalid_file");
+    }
+    const key = name === "AUDIT_JWT_PRIVATE_KEY_FILE"
+      ? createPrivateKey(pem)
+      : createPublicKey(pem);
+    if (key.asymmetricKeyType !== "ed25519") {
+      throw new Error("invalid_key_type");
     }
   } catch {
     console.error(`internal_audit_config_file_invalid=${name}`);
