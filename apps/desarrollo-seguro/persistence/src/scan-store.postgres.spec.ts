@@ -1031,6 +1031,77 @@ describePostgres.sequential("PostgresScanStore", () => {
     expect(remaining.rows[0]).toEqual({ runs: 0, checks: 0, metrics: 0 });
   });
 
+  it("purges inactive public reports while preserving monitored and certified domains", async () => {
+    const completedAt = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
+    const completeOldReport = async (
+      hostname: string,
+      enrollment: "monitored" | "on_demand",
+      profileVersion: "domain-v1" | "domain-v3",
+      checks: ScanCheck[],
+      verdict: "pass" | "inconclusive",
+    ): Promise<string> => {
+      await store.ensureDomain(hostname, enrollment, profileVersion);
+      await store.ensureFreshScan({ hostname, profileVersion, trigger: "requested" });
+      const job = await store.claimNextScan(new Date(), TEST_LEASE_MS);
+      if (!job) throw new Error("expected_claimed_inactivity_scan");
+      return store.completeScan({
+        jobId: job.id,
+        leaseToken: job.leaseToken,
+        hostname,
+        profileVersion,
+        scannerVersion: TEST_SCANNER,
+        startedAt: new Date(completedAt.getTime() - 1_000),
+        completedAt,
+        verdict,
+        scope: ["/"],
+        checks,
+        metrics: { requestsCount: 0, bytesCount: 0, durationMs: 1, pagesCount: 0 },
+      });
+    };
+
+    const inactiveReport = await completeOldReport(
+      "inactive-public.example.net",
+      "on_demand",
+      "domain-v1",
+      makeDomainV1Checks(),
+      "pass",
+    );
+    const monitoredReport = await completeOldReport(
+      "monitored-public.example.net",
+      "monitored",
+      "domain-v1",
+      makeDomainV1Checks(),
+      "pass",
+    );
+    const certifiedReport = await completeOldReport(
+      "certified-public.example.net",
+      "on_demand",
+      "domain-v3",
+      makeEligibleDomainV3Checks(),
+      "pass",
+    );
+    const tooRecentCutoff = new Date(Date.now() - 29 * 24 * 60 * 60 * 1000);
+    await expect(
+      pool.query("SELECT public.ds_purge_inactive_public_reports($1)", [tooRecentCutoff]),
+    ).rejects.toThrow("public_report_inactivity_window_not_reached");
+
+    const purge = await pool.query<{ ds_purge_inactive_public_reports: number }>(
+      "SELECT public.ds_purge_inactive_public_reports($1)",
+      [new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)],
+    );
+    expect(purge.rows[0].ds_purge_inactive_public_reports).toBe(9);
+    const remaining = await pool.query(
+      `SELECT
+         (SELECT count(*) FROM ds_scan_runs WHERE id = $1)::integer AS inactive_runs,
+         (SELECT count(*) FROM ds_scan_runs WHERE id IN ($2, $3))::integer AS preserved_runs,
+         (SELECT count(*) FROM ds_scan_jobs WHERE id IN (
+           SELECT job_id FROM ds_scan_runs WHERE id IN ($2, $3)
+         ))::integer AS preserved_jobs`,
+      [inactiveReport, monitoredReport, certifiedReport],
+    );
+    expect(remaining.rows[0]).toEqual({ inactive_runs: 0, preserved_runs: 2, preserved_jobs: 2 });
+  });
+
   async function queueAndClaim(
     profileVersion: string = TEST_PROFILE,
   ): Promise<ClaimedScanJob> {

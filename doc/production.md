@@ -17,7 +17,7 @@ Para el Caddy existente del VPS, añade el contenido de [`docker/Caddyfile.devel
 
 ## Arranque
 
-Provisiona en `.secrets/` los archivos requeridos por la sección `secrets` del Compose: credenciales de administrador, migrador, API, worker y retención, certificados TLS de base y API, y CA interna. `ds_worker` solo recibe funciones de cola y finalización; `ds_retention` solo recibe `ds_purge_expired_reports`, que impide borrar informes con menos de 90 días. El worker ejecuta cada trabajo mediante un executor sin red y un broker restringido a su perfil de transporte. Mantén los archivos fuera de Git y con permisos restrictivos.
+Provisiona en `.secrets/` los archivos requeridos por la sección `secrets` del Compose: credenciales de administrador, migrador, API, worker y retención, certificados TLS de base y API, y CA interna. `ds_worker` solo recibe funciones de cola y finalización; `ds_retention` solo recibe `ds_purge_expired_reports` y `ds_purge_inactive_public_reports`, que impiden usar cortes menores de 90 y 30 días respectivamente. La segunda función elimina únicamente informes públicos `on_demand` sin certificación activa y conserva dominios monitorizados e informes certificados. El worker ejecuta cada trabajo mediante un executor sin red y un broker restringido a su perfil de transporte. Mantén los archivos fuera de Git y con permisos restrictivos.
 
 Antes de desplegar el análisis, prepara la interfaz `br-ds-egress` y comprueba sus filtros exclusivos. Los scripts modifican solo `development-security-egress` y reglas `iptables`/`ip6tables` asociadas a esa interfaz; no configuran UFW ni cambian reglas de otras redes:
 

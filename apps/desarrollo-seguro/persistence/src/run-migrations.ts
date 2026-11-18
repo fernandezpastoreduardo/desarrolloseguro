@@ -71,6 +71,10 @@ const MIGRATIONS = [
     version: "023_beta_certification_lifecycle",
     file: "023_beta_certification_lifecycle.sql",
   },
+  {
+    version: "024_public_report_inactivity_retention",
+    file: "024_public_report_inactivity_retention.sql",
+  },
 ] as const;
 
 const MIGRATION_LOCK_ID = 728194032;

@@ -193,7 +193,7 @@ describePostgres.sequential(
       const migrationCount = await targetAdminPool?.query(
         "SELECT count(*)::integer AS count FROM public.ds_schema_migrations",
       );
-      expect(migrationCount?.rows[0]?.count).toBe(23);
+      expect(migrationCount?.rows[0]?.count).toBe(24);
     });
 
     it("applies column-scoped runtime grants and does not grant schema ownership to the API", async () => {
@@ -320,6 +320,7 @@ describePostgres.sequential(
     it("grants the retention role only the bounded report purge function", async () => {
       const access = await retentionPool?.query<{
         can_purge_reports: boolean;
+        can_purge_inactive_public_reports: boolean;
         can_execute_worker_functions: boolean;
         can_read_reports: boolean;
         can_write_reports: boolean;
@@ -327,6 +328,7 @@ describePostgres.sequential(
       }>(
         `SELECT
          has_function_privilege(current_user, 'public.ds_purge_expired_reports(timestamptz)', 'EXECUTE') AS can_purge_reports,
+         has_function_privilege(current_user, 'public.ds_purge_inactive_public_reports(timestamptz)', 'EXECUTE') AS can_purge_inactive_public_reports,
          (has_function_privilege(current_user, 'public.ds_claim_next_scan(integer)', 'EXECUTE')
            OR has_function_privilege(current_user, 'public.ds_renew_scan_lease(uuid,uuid,integer)', 'EXECUTE')
            OR has_function_privilege(current_user, 'public.ds_recover_expired_scan_leases(integer)', 'EXECUTE')
@@ -341,6 +343,7 @@ describePostgres.sequential(
       );
       expect(access?.rows[0]).toEqual({
         can_purge_reports: true,
+        can_purge_inactive_public_reports: true,
         can_execute_worker_functions: false,
         can_read_reports: false,
         can_write_reports: false,
@@ -374,7 +377,7 @@ describePostgres.sequential(
       const migrationCount = await targetAdminPool?.query(
         "SELECT count(*)::integer AS count FROM public.ds_schema_migrations",
       );
-      expect(migrationCount?.rows[0]?.count).toBe(23);
+      expect(migrationCount?.rows[0]?.count).toBe(24);
     });
   },
 );

@@ -7,7 +7,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   RETENTION_INTERVAL_MS,
   RETENTION_WINDOW_MS,
+  PUBLIC_INACTIVITY_WINDOW_MS,
   resolveRetentionPoolConfig,
+  runInactivePublicReportCleanup,
   runRetentionCycle,
   runRetentionScheduler,
 } from "./retention-scheduler.js";
@@ -35,6 +37,17 @@ describe("report retention scheduler", () => {
     );
   });
 
+  it("purges inactive public reports using the separate 30-day policy", async () => {
+    const now = new Date("2026-11-10T12:00:00.000Z");
+    const query = vi.fn().mockResolvedValue({ rows: [{ deleted_rows: 3 }] });
+
+    await expect(runInactivePublicReportCleanup({ query }, () => now)).resolves.toBe(3);
+    expect(query).toHaveBeenCalledWith(
+      "SELECT public.ds_purge_inactive_public_reports($1) AS deleted_rows",
+      [new Date(now.getTime() - PUBLIC_INACTIVITY_WINDOW_MS)],
+    );
+  });
+
   it("rejects an invalid deletion count instead of masking database errors", async () => {
     const query = vi.fn().mockResolvedValue({ rows: [{ deleted_rows: "many" }] });
 
@@ -53,13 +66,13 @@ describe("report retention scheduler", () => {
       onError: vi.fn(),
     });
 
-    await vi.waitFor(() => expect(query).toHaveBeenCalledTimes(1));
-    await vi.advanceTimersByTimeAsync(RETENTION_INTERVAL_MS);
     await vi.waitFor(() => expect(query).toHaveBeenCalledTimes(2));
+    await vi.advanceTimersByTimeAsync(RETENTION_INTERVAL_MS);
+    await vi.waitFor(() => expect(query).toHaveBeenCalledTimes(4));
 
     controller.abort();
     await scheduler;
-    expect(query).toHaveBeenCalledTimes(2);
+    expect(query).toHaveBeenCalledTimes(4);
   });
 
   it("keeps running after a safe failure report and exits promptly on abort", async () => {
@@ -67,6 +80,7 @@ describe("report retention scheduler", () => {
     const query = vi
       .fn()
       .mockRejectedValueOnce(new Error("sensitive database detail"))
+      .mockResolvedValueOnce({ rows: [{ deleted_rows: 0 }] })
       .mockResolvedValue({ rows: [{ deleted_rows: 0 }] });
     const onError = vi.fn();
     const controller = new AbortController();
@@ -78,7 +92,7 @@ describe("report retention scheduler", () => {
     await vi.waitFor(() => expect(onError).toHaveBeenCalledTimes(1));
     expect(onError).toHaveBeenCalledWith("retention_cycle_failed");
     await vi.advanceTimersByTimeAsync(RETENTION_INTERVAL_MS);
-    await vi.waitFor(() => expect(query).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(query).toHaveBeenCalledTimes(4));
 
     controller.abort();
     await scheduler;

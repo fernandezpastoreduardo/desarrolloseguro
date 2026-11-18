@@ -5,6 +5,7 @@ import { pathToFileURL } from "node:url";
 import { Pool, type PoolConfig } from "pg";
 
 export const RETENTION_WINDOW_MS = 90 * 24 * 60 * 60 * 1_000;
+export const PUBLIC_INACTIVITY_WINDOW_MS = 30 * 24 * 60 * 60 * 1_000;
 export const RETENTION_INTERVAL_MS = 24 * 60 * 60 * 1_000;
 const RETENTION_FAILURE = "retention_cycle_failed";
 const RETENTION_RESULT_INVALID = "report_retention_result_invalid";
@@ -83,6 +84,26 @@ export async function runRetentionCycle(
   return deletedRows;
 }
 
+export async function runInactivePublicReportCleanup(
+  pool: Pick<Pool, "query">,
+  now: () => Date = () => new Date(),
+): Promise<number> {
+  const cutoff = new Date(now().getTime() - PUBLIC_INACTIVITY_WINDOW_MS);
+  const result = await pool.query<{ deleted_rows: unknown }>(
+    "SELECT public.ds_purge_inactive_public_reports($1) AS deleted_rows",
+    [cutoff],
+  );
+  const deletedRows = result.rows[0]?.deleted_rows;
+  if (
+    typeof deletedRows !== "number" ||
+    !Number.isSafeInteger(deletedRows) ||
+    deletedRows < 0
+  ) {
+    throw new Error(RETENTION_RESULT_INVALID);
+  }
+  return deletedRows;
+}
+
 export async function runRetentionScheduler(
   pool: Pick<Pool, "query">,
   options: {
@@ -98,9 +119,18 @@ export async function runRetentionScheduler(
   }
 
   while (!options.signal.aborted) {
+    let failed = false;
     try {
       await runRetentionCycle(pool, options.now);
     } catch {
+      failed = true;
+    }
+    try {
+      await runInactivePublicReportCleanup(pool, options.now);
+    } catch {
+      failed = true;
+    }
+    if (failed) {
       options.onError?.(RETENTION_FAILURE);
     }
     if (options.signal.aborted) return;

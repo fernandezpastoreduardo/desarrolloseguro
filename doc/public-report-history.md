@@ -17,7 +17,10 @@ informe correspondiente. La interfaz muestra que las puntuaciones solo son
 comparables cuando comparten el mismo perfil de controles; no mezcla perfiles
 históricos de forma silenciosa.
 
-Este incremento no activa todavía la caché de una hora ni la eliminación por
-inactividad de 30 días descritas para la etapa B completa. Esas políticas se
-incorporarán junto con la coordinación de auditorías públicas y tendrán sus
-propios tests de persistencia y operación.
+La conservación pública ya aplica una ventana de inactividad de 30 días para
+informes `on_demand` sin certificación activa. El scheduler diario ejecuta una
+función `SECURITY DEFINER` con el rol aislado `ds_retention`; elimina únicamente
+los informes públicos y sus trabajos terminados, conserva los informes
+certificados y los dominios monitorizados, y rechaza cortes más recientes de
+la ventana. La caché de una hora y la coordinación de auditorías/progreso
+siguen pendientes de la etapa B completa.
