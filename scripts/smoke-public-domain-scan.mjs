@@ -53,12 +53,17 @@ export function validateCompletedReport(status, previousReportId) {
   const assessment = report.ethicsAssessment;
   const tlsMatrix = report.checks.find(({ controlId }) => controlId === "DS-TLS-02")?.evidence;
   const transportCriterion = assessment?.criteria.find(({ id }) => id === "transport-security");
-  const tlsVersions = ["tls10", "tls11", "tls12", "tls13"];
-  const completeTlsMatrix = tlsMatrix && tlsVersions.every((version) => {
-    const accepted = tlsMatrix[`${version}Accepted`];
-    const probeError = tlsMatrix[`${version}ProbeError`];
-    return typeof accepted === "boolean" ||
-      (typeof probeError === "string" && /^[a-z0-9_]+$/u.test(probeError));
+  const tlsMatrixFields = [
+    { accepted: "tls10Accepted", probeError: "tls10ProbeError" },
+    { accepted: "tls11Accepted", probeError: "tls11ProbeError" },
+    { accepted: "tls12Accepted", probeError: "tls12ProbeError" },
+    { accepted: "tls13Accepted", probeError: "tls13ProbeError" },
+  ];
+  const completeTlsMatrix = tlsMatrix && tlsMatrixFields.every(({ accepted, probeError }) => {
+    const acceptedValue = tlsMatrix[accepted];
+    const probeErrorValue = tlsMatrix[probeError];
+    return typeof acceptedValue === "boolean" ||
+      (typeof probeErrorValue === "string" && /^[a-z0-9_]+$/u.test(probeErrorValue));
   });
   const transportDiagnosticIsBounded = transportCriterion?.status !== "unknown" ||
     Boolean(completeTlsMatrix);
