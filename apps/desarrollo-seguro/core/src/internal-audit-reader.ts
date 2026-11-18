@@ -21,6 +21,7 @@ export type InternalAuditFetcher = (
 ) => Promise<{
   ok: boolean;
   status: number;
+  headers: { get(name: string): string | null };
   json: () => Promise<unknown>;
 }>;
 
@@ -64,6 +65,10 @@ async function fetchResource(
   }
   if (!response.ok || response.status < 200 || response.status >= 300) {
     throw new Error("internal_audit_resource_unavailable");
+  }
+  const contentType = response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
+  if (contentType !== "application/json") {
+    throw new Error("internal_audit_resource_invalid");
   }
   return response;
 }

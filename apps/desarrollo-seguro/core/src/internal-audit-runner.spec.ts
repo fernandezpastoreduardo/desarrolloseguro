@@ -21,6 +21,7 @@ describe("internal audit runner", () => {
     const fetcher = vi.fn(async (url: string) => ({
       ok: true,
       status: 200,
+      headers: { get: () => "application/json" },
       json: async () => url.endsWith("/deployment")
         ? {
           observedAt,
@@ -68,6 +69,7 @@ describe("internal audit runner", () => {
     const fetcher = vi.fn(async () => ({
       ok: false,
       status: 503,
+      headers: { get: () => "application/json" },
       json: async () => ({}),
     }));
 
@@ -117,6 +119,7 @@ describe("internal audit runner", () => {
     const fetcher = vi.fn(async () => ({
       ok: true,
       status: 200,
+      headers: { get: () => "application/json" },
       json: async () => ({
         area: "transparency",
         status: "pass",
@@ -132,7 +135,7 @@ describe("internal audit runner", () => {
       request: { ...request, scopes: ["privacy"] },
       auditRef,
       observedAt,
-      operations: [operation("privacy_observation", "/internal/audit/privacy")],
+      operations: [operation("privacy_observation", "/audit/privacy")],
       fetcher,
     })).resolves.toEqual({
       status: "failed",
@@ -168,7 +171,12 @@ describe("internal audit runner", () => {
       const error = new Error("aborted");
       error.name = "AbortError";
       if (init.signal?.aborted) throw error;
-      return { ok: true, status: 200, json: async () => ({}) };
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => "application/json" },
+        json: async () => ({}),
+      };
     });
 
     await expect(runInternalAudit({

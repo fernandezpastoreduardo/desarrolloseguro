@@ -11,11 +11,14 @@ const request: InternalAuditRequest = {
   evidenceRetentionDays: 30,
 };
 
+const jsonHeaders = { get: () => "application/json" };
+
 describe("internal production audit reader", () => {
   it("reads an allowlisted resource through a fixed Grumphya origin", async () => {
     const fetcher = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
+      headers: jsonHeaders,
       json: async () => ({
         observedAt: "2026-11-18T18:45:00.000Z",
         snapshotHash: "a".repeat(64),
@@ -51,6 +54,7 @@ describe("internal production audit reader", () => {
     const fetcher = vi.fn().mockResolvedValue({
       ok: false,
       status: 403,
+      headers: jsonHeaders,
       json: async () => ({ secret: "never-read" }),
     });
     await expect(readInternalAuditResource(request, {
@@ -67,6 +71,7 @@ describe("internal production audit reader", () => {
     const fetcher = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
+      headers: jsonHeaders,
       json: async () => ({
         observedAt: "2026-11-18T19:00:00.000Z",
         inventoryDigest: `sha256:${"c".repeat(64)}`,
@@ -88,6 +93,7 @@ describe("internal production audit reader", () => {
     const fetcher = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
+      headers: jsonHeaders,
       json: async () => ({ html: "<private>" }),
     });
     await expect(readInternalAuditResource(request, {
@@ -95,6 +101,21 @@ describe("internal production audit reader", () => {
       method: "GET",
       hostname: "grumphya.com",
       path: "/audit/privacy",
+    }, fetcher)).rejects.toThrow("internal_audit_resource_invalid");
+  });
+
+  it("rejects a successful response that is not JSON", async () => {
+    const fetcher = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: () => "text/html; charset=utf-8" },
+      json: async () => ({}),
+    });
+    await expect(readInternalAuditResource(request, {
+      resource: "infrastructure_snapshot",
+      method: "GET",
+      hostname: "grumphya.com",
+      path: "/audit/infrastructure",
     }, fetcher)).rejects.toThrow("internal_audit_resource_invalid");
   });
 });
