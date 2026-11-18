@@ -36,7 +36,7 @@ openssl pkey -in "$PRIVATE_TEMP" -pubout -out "$PUBLIC_TEMP"
 
 chown root:root "$PRIVATE_TEMP" "$PUBLIC_TEMP"
 chmod 0400 "$PRIVATE_TEMP"
-chmod 0444 "$PUBLIC_TEMP"
+chmod 0400 "$PUBLIC_TEMP"
 mv "$PRIVATE_TEMP" "$PRIVATE_KEY"
 mv "$PUBLIC_TEMP" "$PUBLIC_KEY"
 trap - EXIT

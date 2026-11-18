@@ -34,7 +34,7 @@ Cuando Grumphya confirme que puede recibir la identidad técnica, un operador
 con acceso root puede ejecutar `pnpm audit:identity:provision` en el VPS. El
 comando crea una clave Ed25519 privada en
 `/opt/desarrollo-seguro/secrets/audit_jwt_private.pem` (`0400`, solo `root`) y
-su clave pública en `audit_jwt_public.pem` (`0444`). Es idempotente por
+su clave pública en `audit_jwt_public.pem` (`0400`). Es idempotente por
 diseño: si cualquiera de los dos ficheros ya existe, falla y no sobrescribe
 una identidad que pueda seguir activa. La salida solo contiene el `kid`, la
 ruta pública, su huella SHA-256 y `enabled=false`; nunca muestra la privada ni
