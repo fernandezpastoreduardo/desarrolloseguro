@@ -92,6 +92,23 @@ La evaluación separa cuatro niveles que no son equivalentes:
   funciones fuera de su contrato.
 - Conservar la evidencia de transición sin secretos ni datos de usuario.
 
+### Comprobación de estado del VPS (18 de noviembre de 2026)
+
+La comprobación de solo lectura confirmó que el Compose aislado mantiene el
+API, el worker, el coordinador y los dos schedulers de Desarrollo Seguro
+arrancados; los servicios de Grumphya permanecieron separados y no se
+reiniciaron. Los schedulers dejaron señales categóricas de
+`certification_audit_cycle_completed` y `retention_cycle_completed` durante su
+ciclo de arranque y recuperación.
+
+El estado público de `grumphya.com` quedó en `stale`, con `activeJobId: null`,
+`certification.state: pending` y `certifiedReportId: null`. Al no existir una
+certificación activa vencida, el scheduler no tiene una auditoría periódica
+que pueda actualizar informe, sello y estado. Esta comprobación aporta
+evidencia operativa del arranque y la recuperación, pero no cierra la
+transición de C; para cerrarla hace falta disponer de un dominio certificado
+activo y observar su siguiente auditoría en producción.
+
 ### Mejoras no bloqueantes
 
 - SSE o streaming de progreso.
