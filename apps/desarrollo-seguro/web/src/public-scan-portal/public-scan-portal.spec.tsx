@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PublicScanPortal } from "../index.js";
@@ -154,7 +154,7 @@ describe("PublicScanPortal", () => {
     );
     await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
     await user.click(
-      await screen.findByRole("checkbox", {
+      screen.getByRole("checkbox", {
         name: /tengo autorización para solicitar este análisis/i,
       }),
     );
@@ -708,5 +708,90 @@ describe("PublicScanPortal", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Escribe un dominio válido",
     );
+  });
+
+  it("associates an invalid domain with its input and returns focus to it", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+
+    render(<PublicScanPortal />);
+    const input = screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME });
+    await user.type(input, "https://example.com/ruta");
+    await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
+
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(input).toHaveAttribute(
+      "aria-errormessage",
+      "ds-portal-domain-error",
+    );
+    expect(screen.getByText("Escribe un dominio válido, por ejemplo ejemplo.es.")).toHaveAttribute(
+      "id",
+      "ds-portal-domain-error",
+    );
+    expect(input).toHaveFocus();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("announces each analysis phase once while polling keeps the same phase", async () => {
+    vi.useFakeTimers();
+    const queuedStatus = {
+      hostname: "example.com",
+      enrollment: "on_demand",
+      state: "not_scanned",
+      failureCode: null,
+      activeJobId: null,
+      lastReport: null,
+      checkedAt: "2026-11-03T08:00:00.000Z",
+    };
+    const updatingStatus = {
+      ...queuedStatus,
+      state: "updating",
+      activeJobId: "123e4567-e89b-42d3-a456-426614174123",
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(Response.json(queuedStatus))
+      .mockResolvedValueOnce(
+        Response.json({ hostname: "example.com", state: "queued" }, { status: 202 }),
+      )
+      .mockImplementation(() => Promise.resolve(Response.json(updatingStatus)));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<PublicScanPortal />);
+    const input = screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME });
+    const form = input.closest("form");
+    if (!form) throw new Error("search_form_missing");
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "example.com" } });
+      fireEvent.submit(form);
+      await Promise.resolve();
+    });
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("checkbox", {
+          name: /tengo autorización para solicitar este análisis/i,
+        }),
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Solicitar análisis" }));
+      await Promise.resolve();
+    });
+
+    const announcement = screen.getByText(
+      "Análisis en cola. Se avisará cuando comience.",
+      { exact: true },
+    );
+    expect(announcement).toHaveAttribute("aria-live", "polite");
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000);
+    });
+    expect(announcement).toHaveTextContent("Análisis en curso");
+    const firstRunningAnnouncement = announcement.textContent;
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000);
+    });
+    expect(announcement.textContent).toBe(firstRunningAnnouncement);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 });

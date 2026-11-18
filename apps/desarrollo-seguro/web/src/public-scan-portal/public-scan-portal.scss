@@ -759,6 +759,17 @@ $ds-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   opacity: 0.68;
 }
 
+.ds-portal__scan-announcement {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
 @keyframes ds-scan-progress-travel {
   from {
     transform: translateX(-100%);

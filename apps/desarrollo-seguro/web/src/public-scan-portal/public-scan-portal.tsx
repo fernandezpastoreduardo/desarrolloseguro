@@ -3,6 +3,7 @@ import "./public-scan-portal.scss";
 
 const API_ROOT = "/api/desarrollo-seguro/v1";
 const DOMAIN_INPUT_ID = "public-scan-domain";
+const DOMAIN_ERROR_ID = "ds-portal-domain-error";
 const SEARCH_BUTTON_TEXT = "Consultar informe";
 const EMPTY_REPORT_TITLE = "Aún no hay un informe";
 const GENERIC_ERROR =
@@ -244,6 +245,7 @@ export function PublicScanPortal() {
   const [report, setReport] = useState<PublicReport | null>(null);
   const [history, setHistory] = useState<PublicReportHistoryEntry[]>([]);
   const [message, setMessage] = useState("");
+  const [domainInputInvalid, setDomainInputInvalid] = useState(false);
   const [darkTheme, setDarkTheme] = useState(false);
   const [authorizationConfirmed, setAuthorizationConfirmed] = useState(false);
   const [analysisRequestState, setAnalysisRequestState] =
@@ -251,6 +253,18 @@ export function PublicScanPortal() {
   const analysisStatusPollCount = useRef(0);
   const reportBeforeAnalysisId = useRef<string | null>(null);
   const analysisRequestInFlight = useRef(false);
+  const domainInputRef = useRef<HTMLInputElement>(null);
+  const scanAnnouncement = useRef<"queued" | "running" | "complete" | "failed" | null>(null);
+  const [scanAnnouncementText, setScanAnnouncementText] = useState("");
+
+  function announceScanPhase(
+    phase: "queued" | "running" | "complete" | "failed",
+    text: string,
+  ): void {
+    if (scanAnnouncement.current === phase) return;
+    scanAnnouncement.current = phase;
+    setScanAnnouncementText(text);
+  }
 
   useEffect(() => {
     if (reportId) void loadReport(reportId);
@@ -291,17 +305,35 @@ export function PublicScanPortal() {
           payload.lastReport &&
           payload.lastReport.id !== reportBeforeAnalysisId.current
         ) {
+          announceScanPhase(
+            "complete",
+            "El análisis ha terminado y el informe está disponible.",
+          );
           void loadHistory(payload.hostname);
           setAnalysisRequestState(null);
           return;
         }
         if (payload.state === "unavailable") {
+          announceScanPhase(
+            "failed",
+            "El dominio no está disponible para este análisis.",
+          );
           setAnalysisRequestState("unavailable");
           return;
         }
         if (payload.state === "failed") {
+          announceScanPhase(
+            "failed",
+            "El análisis ha terminado sin generar un informe.",
+          );
           setAnalysisRequestState("failed");
           return;
+        }
+        if (payload.state === "updating") {
+          announceScanPhase(
+            "running",
+            "Análisis en curso. Se avisará cuando el informe esté disponible.",
+          );
         }
         if (
           payload.activeJobId === null &&
@@ -320,7 +352,13 @@ export function PublicScanPortal() {
           ANALYSIS_STATUS_POLL_INTERVAL_MS,
         );
       } catch {
-        if (!controller.signal.aborted) setAnalysisRequestState("poll_error");
+        if (!controller.signal.aborted) {
+          announceScanPhase(
+            "failed",
+            "No se pudo actualizar el estado del análisis.",
+          );
+          setAnalysisRequestState("poll_error");
+        }
       }
     };
 
@@ -338,6 +376,9 @@ export function PublicScanPortal() {
   async function loadReport(id: string) {
     setState("loading");
     setMessage("");
+    setDomainInputInvalid(false);
+    setScanAnnouncementText("");
+    scanAnnouncement.current = null;
     setStatus(null);
     setHistory([]);
     let publicError = GENERIC_ERROR;
@@ -379,16 +420,21 @@ export function PublicScanPortal() {
     if (hostname === null) {
       setState("error");
       setMessage(INVALID_DOMAIN_MESSAGE);
+      setDomainInputInvalid(true);
       setStatus(null);
       setReport(null);
+      domainInputRef.current?.focus();
       return;
     }
 
     setDomain(hostname);
+    setDomainInputInvalid(false);
     setAuthorizationConfirmed(false);
     setAnalysisRequestState(null);
     setState("loading");
     setMessage("");
+    setScanAnnouncementText("");
+    scanAnnouncement.current = null;
     setReport(null);
     setHistory([]);
     let publicError = GENERIC_ERROR;
@@ -448,6 +494,8 @@ export function PublicScanPortal() {
       analysisRequestInFlight.current
     ) return;
     analysisStatusPollCount.current = 0;
+    setScanAnnouncementText("");
+    scanAnnouncement.current = null;
     reportBeforeAnalysisId.current = status.lastReport?.id ?? null;
     analysisRequestInFlight.current = true;
     setAnalysisRequestState("loading");
@@ -473,8 +521,16 @@ export function PublicScanPortal() {
       ) {
         throw new Error("invalid_analysis_request_response");
       }
+      announceScanPhase(
+        "queued",
+        "Análisis en cola. Se avisará cuando comience.",
+      );
       setAnalysisRequestState(payload.state);
     } catch {
+      announceScanPhase(
+        "failed",
+        "No se pudo registrar la solicitud de análisis.",
+      );
       setAnalysisRequestState("error");
     } finally {
       analysisRequestInFlight.current = false;
@@ -529,6 +585,7 @@ export function PublicScanPortal() {
           <div className="ds-portal__search-row">
             <input
               id={DOMAIN_INPUT_ID}
+              ref={domainInputRef}
               type="text"
               inputMode="url"
               autoComplete="url"
@@ -536,6 +593,8 @@ export function PublicScanPortal() {
               value={domain}
               onChange={(event) => setDomain(event.currentTarget.value)}
               aria-describedby="ds-portal-help"
+              aria-errormessage={domainInputInvalid ? DOMAIN_ERROR_ID : undefined}
+              aria-invalid={domainInputInvalid}
             />
             <button type="submit" disabled={state === "loading"}>
               {state === "loading" ? "Consultando…" : SEARCH_BUTTON_TEXT}
@@ -555,7 +614,7 @@ export function PublicScanPortal() {
       {state === "error" && (
         <div className="ds-portal__notice" role="alert">
           <strong>La consulta no está disponible</strong>
-          <p>{message}</p>
+          <p id={domainInputInvalid ? DOMAIN_ERROR_ID : undefined}>{message}</p>
         </div>
       )}
       {state === "ready" && status && (
@@ -576,6 +635,15 @@ export function PublicScanPortal() {
         <ScanProgress
           phase={getScanProgressPhase(status, analysisRequestState)}
         />
+      )}
+      {scanAnnouncementText && (
+        <p
+          className="ds-portal__scan-announcement"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          {scanAnnouncementText}
+        </p>
       )}
       {state === "ready" && status?.state === "not_scanned" && (
         <section
