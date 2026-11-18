@@ -40,7 +40,7 @@ const DEFAULT_SCOPES = [
 
 export type InternalAuditRuntime = {
   request: InternalAuditRequest;
-  operations: typeof OPERATIONS;
+  operations: readonly (typeof OPERATIONS)[number][];
   run(signal?: AbortSignal): Promise<InternalAuditRunResult>;
 };
 
@@ -62,6 +62,7 @@ export function createInternalAuditRuntime(
   const attestationKey = readEd25519PublicKey(environment[AUDIT_ATTESTATION_KEY_FILE]);
   const technicalKid = readKid(environment[AUDIT_KID]);
   const scopes = parseScopes(environment[AUDIT_SCOPES]);
+  const operations = OPERATIONS.filter(({ resource }) => scopesForOperation(resource).some((scope) => scopes.includes(scope)));
   const request: InternalAuditRequest = {
     policyVersion: "beta-d-0.1",
     hostname: "grumphya.com",
@@ -85,12 +86,12 @@ export function createInternalAuditRuntime(
   const fetcher = dependencies.fetcher ?? createAuditFetcher();
   return {
     request,
-    operations: OPERATIONS,
+    operations,
     run: (signal) => runInternalAudit({
       request,
       auditRef: createAuditRef(),
       observedAt: (dependencies.clock ?? (() => new Date()))().toISOString(),
-      operations: OPERATIONS,
+      operations,
       fetcher,
       auth: {
         technicalJwt,
@@ -173,7 +174,21 @@ function parseScopes(value: string | undefined): InternalAuditRequest["scopes"] 
   if (values.some((scope) => !allowed.has(scope as (typeof DEFAULT_SCOPES)[number]))) {
     throw new Error("internal_audit_scopes_invalid");
   }
+  if (values.includes("ethics") && !values.includes("privacy")) {
+    throw new Error("internal_audit_scopes_invalid");
+  }
   return values as InternalAuditRequest["scopes"];
+}
+
+function scopesForOperation(
+  resource: (typeof OPERATIONS)[number]["resource"],
+): readonly InternalAuditRequest["scopes"][number][] {
+  if (resource === "infrastructure_snapshot") return ["infrastructure"];
+  if (resource === "deployment_attestation" || resource === "dependency_inventory") return ["application"];
+  if (resource === "synthetic_browser_flow") return ["authentication"];
+  if (resource === "performance_observation") return ["quality"];
+  if (resource === "privacy_observation") return ["privacy"];
+  return ["ai"];
 }
 
 function createAuditRef(): string {

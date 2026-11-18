@@ -128,6 +128,8 @@ emite un resumen JSONL privado con la puntuación interna, su estado, categoría
 y cobertura. El resumen fija `externalScore=null` y no incluye evidencias,
 razones detalladas ni datos de terceros. La ruta de privacidad no puede
 transportar la señal de divulgación de IA: el runner la rechaza si no llega por
-`/audit/ai`. No se ejecuta ni se activa mientras Grumphya no entregue el
-contrato de producción.
+`/audit/ai`. Si `AUDIT_SCOPES` limita el alcance, el runtime solo construye las
+operaciones correspondientes; `ethics` requiere también `privacy`, porque esa
+es la ruta de transporte de la transparencia ética. No se ejecuta ni se activa
+mientras Grumphya no entregue el contrato de producción.
 

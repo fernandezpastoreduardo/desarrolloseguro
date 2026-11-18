@@ -47,6 +47,50 @@ describe("internal audit runtime configuration", () => {
     rmSync(directory, { recursive: true, force: true });
   });
 
+  it("filters operations to the explicitly authorized scopes", () => {
+    const directory = mkdtempSync(join(tmpdir(), "ds-internal-audit-runtime-"));
+    const jwt = generateKeyPairSync("ed25519");
+    const attestation = generateKeyPairSync("ed25519");
+    const privatePath = join(directory, "jwt.pem");
+    const publicPath = join(directory, "attestation.pem");
+    writeFileSync(privatePath, jwt.privateKey.export({ type: "pkcs8", format: "pem" }), { mode: 0o400 });
+    writeFileSync(publicPath, attestation.publicKey.export({ type: "spki", format: "pem" }), { mode: 0o400 });
+
+    const runtime = createInternalAuditRuntime({
+      AUDIT_ENABLED: "true",
+      AUDIT_SCOPES: "privacy,ethics",
+      AUDIT_JWT_PRIVATE_KEY_FILE: privatePath,
+      AUDIT_TECHNICAL_AUTH_KID: "ds-auditor-2026",
+      AUDIT_RELEASE_ATTESTATION_PUBLIC_KEY_FILE: publicPath,
+      AUDIT_RELEASE_ATTESTATION_KID: "grumphya-release-2026",
+    });
+
+    expect(runtime.operations.map(({ resource, path }) => ({ resource, path }))).toEqual([
+      { resource: "privacy_observation", path: "/audit/privacy" },
+    ]);
+    rmSync(directory, { recursive: true, force: true });
+  });
+
+  it("rejects an ethics-only scope because the privacy route is its transport", () => {
+    const directory = mkdtempSync(join(tmpdir(), "ds-internal-audit-runtime-"));
+    const jwt = generateKeyPairSync("ed25519");
+    const attestation = generateKeyPairSync("ed25519");
+    const privatePath = join(directory, "jwt.pem");
+    const publicPath = join(directory, "attestation.pem");
+    writeFileSync(privatePath, jwt.privateKey.export({ type: "pkcs8", format: "pem" }), { mode: 0o400 });
+    writeFileSync(publicPath, attestation.publicKey.export({ type: "spki", format: "pem" }), { mode: 0o400 });
+
+    expect(() => createInternalAuditRuntime({
+      AUDIT_ENABLED: "true",
+      AUDIT_SCOPES: "ethics",
+      AUDIT_JWT_PRIVATE_KEY_FILE: privatePath,
+      AUDIT_TECHNICAL_AUTH_KID: "ds-auditor-2026",
+      AUDIT_RELEASE_ATTESTATION_PUBLIC_KEY_FILE: publicPath,
+      AUDIT_RELEASE_ATTESTATION_KID: "grumphya-release-2026",
+    })).toThrow("internal_audit_scopes_invalid");
+    rmSync(directory, { recursive: true, force: true });
+  });
+
   it("rejects a private attestation key", () => {
     const directory = mkdtempSync(join(tmpdir(), "ds-internal-audit-runtime-"));
     const jwt = generateKeyPairSync("ed25519");
