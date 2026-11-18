@@ -53,6 +53,12 @@ cabeceras fallan. Esta evidencia confirma que el informe ya contiene datos
 observables; no se usa para elevar el estado ni para fabricar una puntuación
 interna de D.
 
+La misma comprobación confirmó que las migraciones 025–027 están aplicadas,
+pero las dos certificaciones almacenadas siguen en `pending` y el historial
+agregado solo registra dos eventos iniciales `NULL → pending`. No existe aún
+una transición operativa a `active` sobre la que el scheduler pueda ejecutar
+una renovación.
+
 ## Contratos de seguridad y privacidad
 
 - El scanner público solo observa el perfil y las rutas declaradas, sin

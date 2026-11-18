@@ -116,6 +116,13 @@ evidencia operativa del informe inicial y del arranque/recuperación, pero no ci
 transición de C; para cerrarla hace falta disponer de un dominio certificado
 activo y observar su siguiente auditoría en producción.
 
+La consulta agregada de solo lectura sobre `desarrollo_seguro` confirmó además
+que las migraciones `025`, `026` y `027` están aplicadas, existen dos filas de
+certificación y ambas están en `pending`. El historial de transiciones solo
+contiene dos eventos iniciales `NULL → pending`; no hay ninguna transición a
+`active`, `suspended` ni reactivación. Esto explica por qué el scheduler puede
+completar su ciclo sin encolar una auditoría periódica.
+
 ### Mejoras no bloqueantes
 
 - SSE o streaming de progreso.
