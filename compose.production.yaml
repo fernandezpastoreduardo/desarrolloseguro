@@ -289,6 +289,11 @@ services:
       - /run/development-security-secrets:rw,noexec,nosuid,size=16m
     environment:
       NODE_ENV: production
+    healthcheck:
+      test: [CMD, /bin/sh, -ec, kill -0 1]
+      interval: 10s
+      timeout: 3s
+      retries: 12
     secrets:
       - development_security_retention_database_url
       - internal_tls_ca.crt
@@ -328,6 +333,11 @@ services:
       - /run/development-security-secrets:rw,noexec,nosuid,size=16m
     environment:
       NODE_ENV: production
+    healthcheck:
+      test: [CMD, /bin/sh, -ec, kill -0 1]
+      interval: 10s
+      timeout: 3s
+      retries: 12
     secrets:
       - development_security_retention_database_url
       - internal_tls_ca.crt
