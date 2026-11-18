@@ -49,7 +49,9 @@ una ejecución anterior. Además, comprueba el scope efectivo de la evidencia
 después de validarla: una señal de divulgación de IA requiere `ai` y una señal
 de transparencia ética requiere `ethics`, aunque ambas lleguen por el recurso
 agregado de privacidad. El informe también rechaza evidencias con timestamp
-posterior al instante de la auditoría.
+posterior al instante de la auditoría. La ejecución acepta un `AbortSignal`;
+si se cancela antes o durante una lectura, no construye informe parcial y
+devuelve únicamente `internal_audit_cancelled`.
 
 El adaptador de acceso D-01 autoriza únicamente operaciones `GET` contra
 recursos allowlisted y rutas sin query, fragmento, salto de directorio ni

@@ -27,6 +27,7 @@ export type InternalAuditRunInput = {
   observedAt: string;
   operations: readonly unknown[];
   fetcher: InternalAuditFetcher;
+  signal?: AbortSignal;
 };
 
 export type InternalAuditRunResult =
@@ -38,12 +39,14 @@ export type InternalAuditRunResult =
       | "internal_audit_resource_unavailable"
       | "internal_audit_resource_invalid"
       | "internal_audit_operation_not_authorized"
+      | "internal_audit_cancelled"
       | "internal_audit_run_failed";
   };
 type InternalAuditFailureReason =
   | "internal_audit_resource_unavailable"
   | "internal_audit_resource_invalid"
   | "internal_audit_operation_not_authorized"
+  | "internal_audit_cancelled"
   | "internal_audit_run_failed";
 
 export async function runInternalAudit(input: InternalAuditRunInput): Promise<InternalAuditRunResult> {
@@ -52,8 +55,11 @@ export async function runInternalAudit(input: InternalAuditRunInput): Promise<In
 
   const observations: Array<{ kind: EnvelopeKind; observation: InternalAuditResource }> = [];
   for (const [index, operation] of input.operations.entries()) {
+    if (input.signal?.aborted) {
+      return { status: "failed", completedOperations: index, reasonCode: "internal_audit_cancelled" };
+    }
     try {
-      const resource = await readInternalAuditResource(request, operation, input.fetcher);
+      const resource = await readInternalAuditResource(request, operation, input.fetcher, input.signal);
       if (!requiredScopes(operationResource(operation), resource).every((scope) => request.scopes.includes(scope))) {
         return {
           status: "failed",
@@ -156,6 +162,9 @@ function toFailureReason(error: unknown): InternalAuditFailureReason {
   }
   if (error instanceof Error && error.message === "internal_audit_operation_not_authorized") {
     return "internal_audit_operation_not_authorized";
+  }
+  if (error instanceof Error && error.message === "internal_audit_cancelled") {
+    return "internal_audit_cancelled";
   }
   return "internal_audit_run_failed";
 }

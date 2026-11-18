@@ -78,6 +78,8 @@ fixtures o análisis del repositorio.
 
 El informe interno rechaza evidencias posteriores al instante de la auditoría
 y el runner comprueba scopes finos para las señales de ética e IA antes de
-proyectarlas. Esto evita mezclar observaciones de ejecuciones distintas o
-conceder cobertura por una autorización más amplia de la necesaria.
+proyectarlas. También admite cancelación cooperativa antes o durante una
+lectura sin crear un informe parcial. Esto evita mezclar observaciones de
+ejecuciones distintas o conceder cobertura por una autorización más amplia de
+la necesaria.
 

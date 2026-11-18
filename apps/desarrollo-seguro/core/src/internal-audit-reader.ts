@@ -17,7 +17,7 @@ export type InternalAuditResource =
 
 export type InternalAuditFetcher = (
   url: string,
-  init: { method: "GET"; redirect: "error"; cache: "no-store" },
+  init: { method: "GET"; redirect: "error"; cache: "no-store"; signal?: AbortSignal },
 ) => Promise<{
   ok: boolean;
   status: number;
@@ -28,14 +28,16 @@ export async function readInternalAuditResource(
   request: InternalAuditRequest,
   operationInput: unknown,
   fetcher: InternalAuditFetcher,
+  signal?: AbortSignal,
 ): Promise<InternalAuditResource> {
   const operation = authorizeInternalAuditOperation(request, operationInput);
-  const response = await fetchResource(operation, fetcher);
+  const response = await fetchResource(operation, fetcher, signal);
   let payload: unknown;
   try {
     payload = await response.json();
-  } catch {
-    throw new Error("internal_audit_resource_invalid");
+  } catch (error) {
+    if (isAbortError(error)) throw new Error("internal_audit_cancelled", { cause: error });
+    throw new Error("internal_audit_resource_invalid", { cause: error });
   }
   try {
     return parseResource(operation.resource, payload);
@@ -47,15 +49,27 @@ export async function readInternalAuditResource(
 async function fetchResource(
   operation: AuthorizedInternalAuditOperation,
   fetcher: InternalAuditFetcher,
+  signal?: AbortSignal,
 ): Promise<Awaited<ReturnType<InternalAuditFetcher>>> {
-  const response = await fetcher(
-    `https://${operation.hostname}${operation.path}`,
-    { method: "GET", redirect: "error", cache: "no-store" },
-  );
+  if (signal?.aborted) throw new Error("internal_audit_cancelled");
+  let response: Awaited<ReturnType<InternalAuditFetcher>>;
+  try {
+    response = await fetcher(
+      `https://${operation.hostname}${operation.path}`,
+      { method: "GET", redirect: "error", cache: "no-store", ...(signal ? { signal } : {}) },
+    );
+  } catch (error) {
+    if (isAbortError(error)) throw new Error("internal_audit_cancelled", { cause: error });
+    throw new Error("internal_audit_resource_unavailable", { cause: error });
+  }
   if (!response.ok || response.status < 200 || response.status >= 300) {
     throw new Error("internal_audit_resource_unavailable");
   }
   return response;
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === "AbortError";
 }
 
 function parseResource(

@@ -140,4 +140,49 @@ describe("internal audit runner", () => {
       reasonCode: "internal_audit_operation_not_authorized",
     });
   });
+
+  it("stops before reading when the audit is already cancelled", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const fetcher = vi.fn();
+
+    await expect(runInternalAudit({
+      request,
+      auditRef,
+      observedAt,
+      operations: [operation("performance_observation", "/internal/audit/performance")],
+      fetcher,
+      signal: controller.signal,
+    })).resolves.toEqual({
+      status: "failed",
+      completedOperations: 0,
+      reasonCode: "internal_audit_cancelled",
+    });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("propagates cancellation to an in-flight resource read", async () => {
+    const controller = new AbortController();
+    const fetcher = vi.fn(async (_url: string, init: { signal?: AbortSignal }) => {
+      controller.abort();
+      const error = new Error("aborted");
+      error.name = "AbortError";
+      if (init.signal?.aborted) throw error;
+      return { ok: true, status: 200, json: async () => ({}) };
+    });
+
+    await expect(runInternalAudit({
+      request,
+      auditRef,
+      observedAt,
+      operations: [operation("performance_observation", "/internal/audit/performance")],
+      fetcher,
+      signal: controller.signal,
+    })).resolves.toEqual({
+      status: "failed",
+      completedOperations: 0,
+      reasonCode: "internal_audit_cancelled",
+    });
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
 });
