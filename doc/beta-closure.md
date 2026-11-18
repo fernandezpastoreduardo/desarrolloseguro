@@ -9,7 +9,7 @@ operativa del VPS.
 
 | Etapa | Implementación | Validación automatizada | Validación operativa | Aceptación |
 | --- | --- | --- | --- | --- |
-| A · lectura y evaluación pública | Presente en código | Tests, PostgreSQL aislado, CI y smoke contractual | No hay un informe real válido producido por el runtime actual de VPS; el deploy anterior pasó salud pero falló el smoke | Pendiente de validación operativa |
+| A · lectura y evaluación pública | Presente en código | Tests, PostgreSQL aislado, CI y smoke contractual | El VPS ya expone un informe real de `grumphya.com` con evidencias de DNS, HTTP, TLS, cabeceras, cookies y rendimiento; sigue siendo una lectura acotada y no una certificación | Pendiente de validación operativa completa |
 | B · historial y comparabilidad | Presente en código | Tests de historial, UUID, perfiles comparables, retención y Playwright | No hay evidencia de un recorrido real sobre producción en la versión actual | Pendiente de validación operativa |
 | C · auditoría periódica | Presente en Compose y despliegue aislado | Migraciones 026/027, tests del scheduler y PostgreSQL aislado | El deploy `44352363402` demostró ciclo inicial, reinicio controlado, recuperación saludable y señales JSONL; falta una transición real de certificación vencida a informe/sello actualizado | **Pendiente de evidencia de transición en producción** |
 | D · auditoría privada de Grumphya | Contrato, lectores allowlisted, proyección, puntuación separada, informe y runner D-08 presentes localmente | Tests unitarios y puertas de tipado/lint/build; no se usan fixtures como evidencia de producción | Pendiente de autorización de recursos, datos sintéticos y ejecución acotada en producción | Pendiente de validación operativa y contrato externo |
@@ -43,6 +43,15 @@ La política de admisión se conserva en migraciones append-only: la caché de 6
 minutos y la ventana de 24 horas se reactivan en 025; 026 añade las auditorías
 periódicas y 027 permite reintentar después de un fallo terminal sin saltarse la
 ventana para trabajos completados.
+
+La comprobación de solo lectura del VPS del 18 de noviembre de 2026 devuelve
+para `grumphya.com` un informe `domain-v3` con puntuación ética externa 69/100
+(6 de 8 criterios evaluados) y una evaluación beta de certificación 50/100
+(2 de 3 categorías evaluadas). El estado de certificación continúa en
+`pending`, con `certifiedReportId: null`, porque TLS no es concluyente y las
+cabeceras fallan. Esta evidencia confirma que el informe ya contiene datos
+observables; no se usa para elevar el estado ni para fabricar una puntuación
+interna de D.
 
 ## Contratos de seguridad y privacidad
 
