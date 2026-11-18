@@ -106,3 +106,11 @@ en el repositorio de Grumphya las rutas, el formato JSON acotado, la identidad
 de solo lectura y las cuentas sintéticas de autenticación. Hasta entonces no
 se ejecuta una auditoría interna ni se presenta una puntuación interna.
 
+La puerta reproducible `pnpm audit:resources:preflight` repite esta
+comprobación sin enviar JWT, cookies ni cuerpos: exige que cada ruta exista,
+devuelva una respuesta JSON y rechace la petición anónima con `401` o `403`.
+Cuando un recurso falta, emite una línea categórica con su nombre y no
+conserva la respuesta. En el estado actual la puerta falla con
+`internal_audit_resource_unavailable` porque Grumphya aún publica `404` en el
+catálogo provisional; no se interpreta como evidencia de producción.
+

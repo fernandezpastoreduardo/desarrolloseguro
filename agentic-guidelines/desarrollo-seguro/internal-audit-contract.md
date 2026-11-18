@@ -75,3 +75,9 @@ y no convierte fixtures en evidencias de producción. El evaluador interno conse
 calcula una puntuación interna cuando hay cobertura completa; `unknown` deja
 la evaluación incompleta y un fallo crítico la bloquea. D-02 a D-08 requieren
 después autorización, recursos y pruebas operativas acotadas.
+
+La puerta `pnpm audit:resources:preflight` comprueba antes del lector
+autenticado que el catálogo de producción está publicado: no envía identidad,
+cookies ni cuerpos, exige `401`/`403` en JSON para peticiones anónimas y emite
+un código por recurso cuando recibe `404`, HTML o una respuesta sin rechazo.
+No interpreta una respuesta de la puerta como evidencia de auditoría.
