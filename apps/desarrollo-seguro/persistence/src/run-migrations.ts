@@ -79,6 +79,10 @@ const MIGRATIONS = [
     version: "025_enable_public_scan_admission_policies",
     file: "025_enable_public_scan_admission_policies.sql",
   },
+  {
+    version: "026_certification_audit_scheduler",
+    file: "026_certification_audit_scheduler.sql",
+  },
 ] as const;
 
 const MIGRATION_LOCK_ID = 728194032;

@@ -498,7 +498,8 @@ async function applyRuntimeGrants(pool: Pool): Promise<void> {
       public.ds_complete_scan(uuid, uuid, timestamptz, text, timestamptz,
         text, jsonb, jsonb, jsonb) TO ${WORKER_ROLE};
     GRANT EXECUTE ON FUNCTION public.ds_purge_expired_reports(timestamptz),
-      public.ds_purge_inactive_public_reports(timestamptz)
+      public.ds_purge_inactive_public_reports(timestamptz),
+      public.ds_enqueue_due_certification_scans(timestamptz)
       TO ${RETENTION_ROLE};
     GRANT EXECUTE ON FUNCTION public.ds_ensure_fresh_scan(text, text, text)
       TO ${API_ROLE};

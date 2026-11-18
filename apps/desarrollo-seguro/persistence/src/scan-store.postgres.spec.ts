@@ -187,6 +187,42 @@ describePostgres.sequential("PostgresScanStore", () => {
     await expect(store.issueReportBadge({ hostname, reportId: reactivatedReportId, tokenHash: "e".repeat(64), expiresAt })).resolves.toBe(true);
   });
 
+  it("queues due certified audits and gives manual requests priority", async () => {
+    const hostname = "scheduled-certification.example.net";
+    const completedAt = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    await store.ensureDomain(hostname, "on_demand", "domain-v3");
+    await store.ensureFreshScan({ hostname, profileVersion: "domain-v3", trigger: "requested" });
+    const certificationJob = await store.claimNextScan(new Date(), TEST_LEASE_MS);
+    if (!certificationJob) throw new Error("expected_claimed_certification_scan");
+    await store.completeScan({
+      jobId: certificationJob.id,
+      leaseToken: certificationJob.leaseToken,
+      hostname,
+      profileVersion: "domain-v3",
+      scannerVersion: TEST_SCANNER,
+      startedAt: new Date(completedAt.getTime() - 1_000),
+      completedAt,
+      verdict: "pass",
+      scope: ["/"],
+      checks: makeEligibleDomainV3Checks(),
+      metrics: { requestsCount: 0, bytesCount: 0, durationMs: 1, pagesCount: 0 },
+    });
+    await expect(
+      pool.query("SELECT state FROM ds_beta_certifications WHERE hostname = $1", [hostname]),
+    ).resolves.toMatchObject({ rows: [{ state: "active" }] });
+
+    const audit = await pool.query<{ ds_enqueue_due_certification_scans: number }>(
+      "SELECT public.ds_enqueue_due_certification_scans($1)",
+      [new Date(completedAt.getTime() + 2 * 60 * 60 * 1000)],
+    );
+    expect(audit.rows[0].ds_enqueue_due_certification_scans).toBe(1);
+
+    const manual = await store.requestOnDemandScan("manual-priority.example.net");
+    expect(manual.kind).toBe("queued");
+    const claimed = await store.claimNextScan(new Date(), TEST_LEASE_MS);
+    expect(claimed?.trigger).toBe("requested");
+  });
+
   it("shares one active job across concurrent requests", async () => {
     const requests = Array.from({ length: 10 }, () =>
       store.ensureFreshScan({
