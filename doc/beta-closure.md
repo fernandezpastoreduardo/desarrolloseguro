@@ -12,7 +12,7 @@ operativa del VPS.
 | A · lectura y evaluación pública | Presente en código | Tests, PostgreSQL aislado, CI y smoke contractual | No hay un informe real válido producido por el runtime actual de VPS; el deploy anterior pasó salud pero falló el smoke | Pendiente de validación operativa |
 | B · historial y comparabilidad | Presente en código | Tests de historial, UUID, perfiles comparables, retención y Playwright | No hay evidencia de un recorrido real sobre producción en la versión actual | Pendiente de validación operativa |
 | C · auditoría periódica | Presente en Compose y despliegue aislado | Migraciones 026/027, tests del scheduler y PostgreSQL aislado | El deploy `44352363402` demostró ciclo inicial, reinicio controlado, recuperación saludable y señales JSONL; falta una transición real de certificación vencida a informe/sello actualizado | **Pendiente de evidencia de transición en producción** |
-| D · auditoría privada de Grumphya | No implementada por diseño | No aplica | No aplica | Posterior a C |
+| D · auditoría privada de Grumphya | Contrato, lectores allowlisted, proyección, puntuación separada, informe y runner D-08 presentes localmente | Tests unitarios y puertas de tipado/lint/build; no se usan fixtures como evidencia de producción | Pendiente de autorización de recursos, datos sintéticos y ejecución acotada en producción | Pendiente de validación operativa y contrato externo |
 
 Las etapas son independientes: A no requiere B, C ni D; B no requiere C ni D;
 C no requiere D. La puntuación interna pertenece a D. La puntuación global
@@ -66,7 +66,9 @@ están demostrados en `44352363402`. La comprobación de solo lectura del VPS
 del 18 de noviembre de 2026 confirmó además ambos schedulers arrancados y
 señales de ciclo completado, pero `grumphya.com` no tiene una certificación
 activa (`certifiedReportId: null`), así que lo restante es una validación
-operativa específica, no una nueva funcionalidad.
+operativa específica, no una nueva funcionalidad. En D, el runner local ya
+coordina la lectura secuencial y el fallo seguro; la aceptación queda detenida
+hasta que existan los recursos y datos sintéticos autorizados de Grumphya.
 
 El cierre global de Beta es posterior a A, B, C y D. Solo entonces se validará
 la operación integral, la puntuación externa e interna, la puntuación global
