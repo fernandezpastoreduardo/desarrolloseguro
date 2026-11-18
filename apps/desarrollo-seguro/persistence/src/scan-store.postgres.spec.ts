@@ -534,7 +534,7 @@ describePostgres.sequential("PostgresScanStore", () => {
     expect(report?.checks.find(({ controlId }) => controlId === "DS-TLS-02"))
       .toMatchObject({
         status: "unknown",
-        summary: "Comprobación DS-TLS-02: unknown.",
+        summary: "No se pudieron completar todas las pruebas de TLS. TLS 1.2: no se pudo completar la conexión. TLS 1.3: se agotó el tiempo de espera.",
         evidence: { tls12ProbeError: "connection_failed", tls13ProbeError: "request_timeout" },
       });
   });

@@ -395,7 +395,7 @@ describePostgres.sequential(
       const result = await targetAdminPool?.query(
         "SELECT count(*)::integer AS migration_count FROM public.ds_schema_migrations",
       );
-      expect(result?.rows[0].migration_count).toBe(21);
+      expect(result?.rows[0].migration_count).toBe(22);
 
       const client = await targetAdminPool!.connect();
       try {
@@ -980,7 +980,10 @@ describePostgres.sequential(
         observedAt: new Date(),
         targetPath,
         method: method ?? methodByControl[controlId] ?? "GET",
-        summary: `Comprobación ${controlId}: ${status}.`,
+        summary:
+          controlId === "DS-TLS-02" && status === "unknown"
+            ? "No se pudieron determinar todas las versiones de TLS; faltan resultados de una o más pruebas."
+            : `Comprobación ${controlId}: ${status}.`,
         limitation: `Resultado limitado a las rutas públicas declaradas del perfil ${profileVersion}.`,
         evidence: status === "pass" ? passingEvidence(controlId) : {},
       };

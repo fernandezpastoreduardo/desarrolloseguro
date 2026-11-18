@@ -103,9 +103,18 @@ BEGIN
     END;$new$
   );
 
+  -- Diagnostic branches append separators between version details. Trim the
+  -- final separator before the database compares the worker supplied text.
+  updated_definition := replace(
+    updated_definition,
+    $old$    OR NEW.summary <> expected_summary$old$,
+    $new$    OR NEW.summary <> rtrim(expected_summary)$new$
+  );
+
   IF updated_definition = function_definition
     OR position('tls10ProbeError' IN updated_definition) = 0
-    OR position('No se pudieron completar todas las pruebas de TLS.' IN updated_definition) = 0 THEN
+    OR position('No se pudieron completar todas las pruebas de TLS.' IN updated_definition) = 0
+    OR position('rtrim(expected_summary)' IN updated_definition) = 0 THEN
     RAISE EXCEPTION 'tls_probe_summary_contract_extension_failed';
   END IF;
   EXECUTE updated_definition;
