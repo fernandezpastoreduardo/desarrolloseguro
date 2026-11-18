@@ -462,6 +462,30 @@ describe("ScanJobProcessor", () => {
     expect(store.completeScan).not.toHaveBeenCalled();
   });
 
+  it("emits a safe category when persistence rejects a completed result", async () => {
+    const store = makeStore(JOB);
+    vi.mocked(store.completeScan).mockRejectedValue(
+      new Error("scan_profile_controls_incomplete"),
+    );
+    const telemetry = vi.fn();
+    const processor = new ScanJobProcessor(
+      store,
+      { execute: vi.fn().mockResolvedValue(RESULT) },
+      () => new Date(),
+      undefined,
+      telemetry,
+    );
+
+    await expect(processor.processNext()).rejects.toThrow(
+      "scan_profile_controls_incomplete",
+    );
+    expect(telemetry).toHaveBeenCalledWith(expect.objectContaining({
+      type: "scan_job_error",
+      code: "scan_profile_controls_incomplete",
+    }));
+    expect(JSON.stringify(telemetry.mock.calls)).not.toContain("private");
+  });
+
   it("drops results from a worker whose lease has been replaced", async () => {
     const store = makeStore(JOB);
     vi.mocked(store.completeScan).mockRejectedValue(new ScanLeaseLostError());

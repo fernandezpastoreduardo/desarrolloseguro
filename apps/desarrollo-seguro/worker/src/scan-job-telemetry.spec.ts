@@ -40,6 +40,21 @@ describe("createJsonLineScanJobTelemetry", () => {
     expect(write.mock.calls[0]?.[0]).not.toContain("private-job-id");
   });
 
+  it("writes a safe processing error category without private context", () => {
+    const write = vi.fn();
+    const telemetry = createJsonLineScanJobTelemetry(write);
+
+    telemetry({
+      type: "scan_job_error",
+      code: "scan_verdict_does_not_match_checks",
+      durationMs: 23,
+    });
+
+    expect(write).toHaveBeenCalledExactlyOnceWith(
+      '{"type":"scan_job_error","code":"scan_verdict_does_not_match_checks","durationMs":23}\n',
+    );
+  });
+
   it.each([
     ["unexpected event type", { type: "scan_job_private", outcome: "completed", durationMs: 3 }],
     ["unknown outcome", { outcome: "other", durationMs: 3 }],
@@ -47,14 +62,12 @@ describe("createJsonLineScanJobTelemetry", () => {
     ["fractional duration", { outcome: "completed", durationMs: 1.5 }],
     ["unsafe duration", { outcome: "completed", durationMs: Number.MAX_SAFE_INTEGER + 1 }],
     ["non-finite duration", { outcome: "completed", durationMs: Number.NaN }],
+    ["unknown error code", { code: "private_error" }],
   ])("drops events with %s", (_label, event) => {
     const write = vi.fn();
     const telemetry = createJsonLineScanJobTelemetry(write);
 
-    telemetry({
-      type: "scan_job_outcome",
-      ...event,
-    } as ScanJobTelemetryEvent);
+    telemetry({ type: "scan_job_outcome", ...event } as ScanJobTelemetryEvent);
 
     expect(write).not.toHaveBeenCalled();
   });

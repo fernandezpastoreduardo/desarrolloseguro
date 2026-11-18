@@ -32,10 +32,28 @@ export type ScanJobOutcome =
   | "failed";
 
 export type ScanJobTelemetryEvent = {
-  type: "scan_job_outcome";
-  outcome: ScanJobOutcome;
+  type: "scan_job_outcome" | "scan_job_error";
+  outcome?: ScanJobOutcome;
+  code?: ScanJobErrorCode;
   durationMs: number;
 };
+
+export type ScanJobErrorCode =
+  | "invalid_hostname"
+  | "scan_check_coverage_incomplete"
+  | "scan_check_duplicate"
+  | "scan_check_invalid"
+  | "scan_control_not_allowlisted"
+  | "scan_evidence_invalid"
+  | "scan_lease_lost"
+  | "scan_profile_controls_incomplete"
+  | "scan_profile_not_catalogued"
+  | "scan_scope_not_allowlisted"
+  | "scan_verdict_does_not_match_checks"
+  | "invalid_scan_checks"
+  | "invalid_scan_report"
+  | "scan_run_insert_failed"
+  | "worker_processing_failed";
 
 export type ScanJobTelemetry = (event: ScanJobTelemetryEvent) => void;
 
@@ -64,6 +82,7 @@ export class ScanJobProcessor {
       this.emitOutcome(outcome, startedAt);
       return outcome;
     } catch (error) {
+      this.emitError(error, startedAt);
       this.emitOutcome("failed", startedAt);
       throw error;
     }
@@ -209,6 +228,47 @@ export class ScanJobProcessor {
       // Telemetry must never change scan processing or expose private errors.
     }
   }
+
+  private emitError(error: unknown, startedAt: number): void {
+    if (!this.telemetry) return;
+    const durationMs = Math.max(0, Math.round(performance.now() - startedAt));
+    try {
+      this.telemetry({
+        type: "scan_job_error",
+        code: getProcessingErrorCode(error),
+        durationMs,
+      });
+    } catch {
+      // Telemetry must never change scan processing or expose private errors.
+    }
+  }
+}
+
+const PROCESSING_ERROR_CODES: readonly ScanJobErrorCode[] = [
+  "invalid_hostname",
+  "scan_check_coverage_incomplete",
+  "scan_check_duplicate",
+  "scan_check_invalid",
+  "scan_control_not_allowlisted",
+  "scan_evidence_invalid",
+  "scan_lease_lost",
+  "scan_profile_controls_incomplete",
+  "scan_profile_not_catalogued",
+  "scan_scope_not_allowlisted",
+  "scan_verdict_does_not_match_checks",
+  "invalid_scan_checks",
+  "invalid_scan_report",
+  "scan_run_insert_failed",
+];
+
+function getProcessingErrorCode(error: unknown): ScanJobErrorCode {
+  if (
+    error instanceof Error &&
+    PROCESSING_ERROR_CODES.includes(error.message as ScanJobErrorCode)
+  ) {
+    return error.message as ScanJobErrorCode;
+  }
+  return "worker_processing_failed";
 }
 
 function getFailureCode(error: unknown): ScanFailureCode {
