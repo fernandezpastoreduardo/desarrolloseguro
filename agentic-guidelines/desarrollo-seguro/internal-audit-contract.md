@@ -40,6 +40,13 @@ GET sin credenciales y valida cada JSON con el parser del recurso. El inventario
 de dependencias solo conserva contadores de riesgo y un digest; no conserva
 nombres de paquetes ni un SBOM.
 
+El runner D-08 ejecuta las lecturas allowlisted una a una y compone el informe
+interno solo cuando todos los recursos solicitados se han podido validar. Si
+una lectura falla o una respuesta es inválida, devuelve una categoría de fallo
+y ningún informe parcial; el reintento debe iniciar una nueva ejecución con un
+`auditRef` nuevo. No se reintenta en paralelo ni se reutilizan respuestas de
+una ejecución anterior.
+
 El adaptador de acceso D-01 autoriza únicamente operaciones `GET` contra
 recursos allowlisted y rutas sin query, fragmento, salto de directorio ni
 credenciales. No abre conexiones por sí mismo, no concede permisos a Grumphya

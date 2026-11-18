@@ -1,0 +1,102 @@
+import { describe, expect, it, vi } from "vitest";
+import { runInternalAudit } from "./internal-audit-runner.js";
+
+const request = {
+  hostname: "grumphya.com",
+  environment: "production",
+  auditor: "desarrollo-seguro",
+  scopes: ["infrastructure", "application", "quality"],
+  evidenceRetentionDays: 7,
+} as const;
+
+const auditRef = `sha256:${"a".repeat(64)}`;
+const observedAt = "2026-11-18T18:00:00.000Z";
+
+function operation(resource: string, path: string) {
+  return { resource, method: "GET", hostname: "grumphya.com", path };
+}
+
+describe("internal audit runner", () => {
+  it("reads only the requested resources and builds a separated report", async () => {
+    const fetcher = vi.fn(async (url: string) => ({
+      ok: true,
+      status: 200,
+      json: async () => url.endsWith("/deployment")
+        ? {
+          observedAt,
+          environment: "production",
+          artifactDigest: `sha256:${"b".repeat(64)}`,
+          dependencyDigest: `sha256:${"c".repeat(64)}`,
+          checks: ["secrets_not_in_image"],
+        }
+        : {
+          kind: "performance_sample",
+          status: "pass",
+          metricCode: "response_time",
+          value: 180,
+          unit: "milliseconds",
+          sampleRef: `sha256:${"d".repeat(64)}`,
+          observedAt,
+        },
+    }));
+
+    const result = await runInternalAudit({
+      request,
+      auditRef,
+      observedAt,
+      operations: [
+        operation("deployment_attestation", "/internal/audit/deployment"),
+        operation("performance_observation", "/internal/audit/performance"),
+      ],
+      fetcher,
+    });
+
+    expect(result.status).toBe("completed");
+    if (result.status !== "completed") return;
+    expect(result.report.hostname).toBe("grumphya.com");
+    expect(result.report.assessment.externalScore).toBeNull();
+    expect(result.report.assessment.assessedCriteria).toBe(2);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher).toHaveBeenNthCalledWith(
+      1,
+      "https://grumphya.com/internal/audit/deployment",
+      { method: "GET", redirect: "error", cache: "no-store" },
+    );
+  });
+
+  it("returns a safe failure without producing an incomplete report when a resource is unavailable", async () => {
+    const fetcher = vi.fn(async () => ({
+      ok: false,
+      status: 503,
+      json: async () => ({}),
+    }));
+
+    await expect(runInternalAudit({
+      request,
+      auditRef,
+      observedAt,
+      operations: [operation("performance_observation", "/internal/audit/performance")],
+      fetcher,
+    })).resolves.toEqual({
+      status: "failed",
+      completedOperations: 0,
+      reasonCode: "internal_audit_resource_unavailable",
+    });
+  });
+
+  it("rejects duplicate resource operations before making requests", async () => {
+    const fetcher = vi.fn();
+
+    await expect(runInternalAudit({
+      request,
+      auditRef,
+      observedAt,
+      operations: [
+        operation("performance_observation", "/internal/audit/performance-a"),
+        operation("performance_observation", "/internal/audit/performance-b"),
+      ],
+      fetcher,
+    })).rejects.toThrow("internal_audit_run_invalid");
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+});

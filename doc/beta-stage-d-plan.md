@@ -37,7 +37,10 @@ rechaza duplicados antes de puntuar y mantiene `externalScore` en `null`.
 El ensamblador D-08 produce un informe interno redacted para
 `grumphya.com`/`production`, con referencia hash, evidencia proyectada y
 estado incompleto o bloqueado cuando faltan controles; nunca eleva una
-certificación por sí solo. El proyector solo convierte en criterios los
+certificación por sí solo. El runner D-08 coordina lecturas allowlisted de
+forma secuencial y devuelve un fallo categórico sin fabricar un informe si
+un recurso no está disponible o es inválido; las operaciones duplicadas se
+rechazan antes de abrir conexiones. El proyector solo convierte en criterios los
 checks D-03 explícitos de dependencias auditadas, secretos fuera de la imagen
 y superficie API allowlisted; el snapshot D-02 solo proyecta TLS cuando hay
 transporte verificado y mantiene la cobertura incompleta para red, privilegios
@@ -57,7 +60,7 @@ riesgo y un digest, sin nombres de paquetes ni SBOM.
 | D-05 · calidad y experiencia | Medir flujos E2E, rendimiento acotado, accesibilidad, compatibilidad y responsive | Runner de navegador y proyección de métricas; depende de D-03 y D-04 | Primero: escenarios de bajo impacto, límites de carga y comprobaciones de accesibilidad. Aceptar cuando las medidas procedan de producción y sean reproducibles | Riesgo de carga. Evidencia: muestras acotadas con timestamp y versión. Excluye stress tests, fuzzing y controles ya cubiertos externamente |
 | D-06 · privacidad y ética | Verificar almacenamiento local, terceros, coherencia de privacidad, tratamiento de datos, transparencia de IA y controles éticos de IA | Observador de navegador y reglas éticas; depende de D-03 y D-04 | Primero: interceptación de terceros, revisión de declaraciones y estados de consentimiento. Aceptar si la conducta observada coincide con la declaración | Riesgo de inferir prácticas no observables. Evidencia: señales observables y limitaciones explícitas. Excluye conclusiones legales o ventas de datos no verificables |
 | D-07 · puntuación interna | Integrar hallazgos internos con categorías y puntuaciones separadas de la evaluación externa | Motor de evaluación y modelo de informe; depende de D-02 a D-06 | Primero: pesos, redondeo, `unknown`, `not_applicable`, críticos y no duplicación. Aceptar solo con evidencias internas completas | Riesgo de mezclar auditorías o penalizar dos veces. Evidencia: desglose por criterio y origen. Excluye global absoluta hasta cobertura suficiente |
-| D-08 · integración y certificación | Ejecutar auditoría privada completa sobre Grumphya y actualizar estados de certificación sin falsear pendientes | Orquestador, persistencia, informe privado y enlace con sello; depende de D-07 y del contrato operativo | Primero: recorrido integral con datos sintéticos, fallo seguro y reanudación. Aceptar con resultados reales de producción y trazabilidad | Riesgo de conceder certificación incompleta. Evidencia: informe privado acotado y transición registrada. Excluye modificar el repositorio de Grumphya |
+| D-08 · integración y certificación | Coordinar una auditoría privada acotada sobre Grumphya y preparar la actualización de estados sin falsear pendientes | `internal-audit-runner`, lector allowlisted, informe privado y futura persistencia; depende de D-07 y del contrato operativo | TDD local cubre lectura secuencial, separación de puntuación, rechazo de duplicados y fallo seguro sin informe. Aceptar producción solo tras disponer de recursos y datos sintéticos autorizados | Riesgo de conceder certificación incompleta. Evidencia: informe privado acotado y transición registrada. Excluye modificar el repositorio de Grumphya |
 
 ## Intervenciones necesarias en Grumphya
 
