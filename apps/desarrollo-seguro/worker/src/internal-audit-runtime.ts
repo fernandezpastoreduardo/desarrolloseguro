@@ -1,5 +1,6 @@
 import { createHash, createPrivateKey, createPublicKey, randomUUID } from "node:crypto";
 import { readFileSync, statSync } from "node:fs";
+import { isIP } from "node:net";
 import {
   createTechnicalJwtProvider,
   runInternalAudit,
@@ -61,6 +62,8 @@ export function createInternalAuditRuntime(
   const attestationKid = readKid(environment[ATTESTATION_KID]);
   const attestationKey = readEd25519PublicKey(environment[AUDIT_ATTESTATION_KEY_FILE]);
   const technicalKid = readKid(environment[AUDIT_KID]);
+  validateAllowedKids(environment.AUDIT_TECHNICAL_AUTH_ALLOWED_KIDS, technicalKid);
+  validateAllowedNetworks(environment.AUDIT_ALLOWED_NETWORKS);
   const scopes = parseScopes(environment[AUDIT_SCOPES]);
   const operations = OPERATIONS.filter(({ resource }) => scopesForOperation(resource).some((scope) => scopes.includes(scope)));
   const request: InternalAuditRequest = {
@@ -161,6 +164,25 @@ function readKid(value: string | undefined): string {
     throw new Error("internal_audit_kid_invalid");
   }
   return value;
+}
+
+function validateAllowedKids(value: string | undefined, activeKid: string): void {
+  const kids = (value ?? "").split(",").map((item) => item.trim()).filter(Boolean);
+  if (kids.length === 0 || new Set(kids).size !== kids.length || !kids.includes(activeKid) || kids.some((kid) => !/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u.test(kid))) {
+    throw new Error("internal_audit_kids_invalid");
+  }
+}
+
+function validateAllowedNetworks(value: string | undefined): void {
+  const networks = (value ?? "").split(",").map((item) => item.trim()).filter(Boolean);
+  if (networks.length === 0 || networks.some((network) => {
+    const [address, prefix] = network.split("/");
+    const family = isIP(address);
+    const prefixLength = Number(prefix);
+    return network === "0.0.0.0/0" || network === "::/0" || family === 0 || !Number.isInteger(prefixLength) || prefixLength < 1 || prefixLength > (family === 4 ? 32 : 128);
+  })) {
+    throw new Error("internal_audit_networks_invalid");
+  }
 }
 
 function parseScopes(value: string | undefined): InternalAuditRequest["scopes"] {

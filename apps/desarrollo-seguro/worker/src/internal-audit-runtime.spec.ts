@@ -23,6 +23,8 @@ describe("internal audit runtime configuration", () => {
       AUDIT_ENABLED: "true",
       AUDIT_JWT_PRIVATE_KEY_FILE: privatePath,
       AUDIT_TECHNICAL_AUTH_KID: "ds-auditor-2026",
+      AUDIT_TECHNICAL_AUTH_ALLOWED_KIDS: "ds-auditor-2026",
+      AUDIT_ALLOWED_NETWORKS: "31.70.130.181/32",
       AUDIT_RELEASE_ATTESTATION_PUBLIC_KEY_FILE: publicPath,
       AUDIT_RELEASE_ATTESTATION_KID: "grumphya-release-2026",
     });
@@ -61,6 +63,8 @@ describe("internal audit runtime configuration", () => {
       AUDIT_SCOPES: "privacy,ethics",
       AUDIT_JWT_PRIVATE_KEY_FILE: privatePath,
       AUDIT_TECHNICAL_AUTH_KID: "ds-auditor-2026",
+      AUDIT_TECHNICAL_AUTH_ALLOWED_KIDS: "ds-auditor-2026",
+      AUDIT_ALLOWED_NETWORKS: "31.70.130.181/32",
       AUDIT_RELEASE_ATTESTATION_PUBLIC_KEY_FILE: publicPath,
       AUDIT_RELEASE_ATTESTATION_KID: "grumphya-release-2026",
     });
@@ -85,6 +89,8 @@ describe("internal audit runtime configuration", () => {
       AUDIT_SCOPES: "ethics",
       AUDIT_JWT_PRIVATE_KEY_FILE: privatePath,
       AUDIT_TECHNICAL_AUTH_KID: "ds-auditor-2026",
+      AUDIT_TECHNICAL_AUTH_ALLOWED_KIDS: "ds-auditor-2026",
+      AUDIT_ALLOWED_NETWORKS: "31.70.130.181/32",
       AUDIT_RELEASE_ATTESTATION_PUBLIC_KEY_FILE: publicPath,
       AUDIT_RELEASE_ATTESTATION_KID: "grumphya-release-2026",
     })).toThrow("internal_audit_scopes_invalid");
@@ -103,9 +109,39 @@ describe("internal audit runtime configuration", () => {
       AUDIT_ENABLED: "true",
       AUDIT_JWT_PRIVATE_KEY_FILE: privatePath,
       AUDIT_TECHNICAL_AUTH_KID: "ds-auditor-2026",
+      AUDIT_TECHNICAL_AUTH_ALLOWED_KIDS: "ds-auditor-2026",
+      AUDIT_ALLOWED_NETWORKS: "31.70.130.181/32",
       AUDIT_RELEASE_ATTESTATION_PUBLIC_KEY_FILE: attestationPath,
       AUDIT_RELEASE_ATTESTATION_KID: "grumphya-release-2026",
     })).toThrow("internal_audit_attestation_key_invalid");
+    rmSync(directory, { recursive: true, force: true });
+  });
+
+  it("rejects a kid outside rotation and an open network", () => {
+    const directory = mkdtempSync(join(tmpdir(), "ds-internal-audit-runtime-"));
+    const jwt = generateKeyPairSync("ed25519");
+    const attestation = generateKeyPairSync("ed25519");
+    const privatePath = join(directory, "jwt.pem");
+    const publicPath = join(directory, "attestation.pem");
+    writeFileSync(privatePath, jwt.privateKey.export({ type: "pkcs8", format: "pem" }), { mode: 0o400 });
+    writeFileSync(publicPath, attestation.publicKey.export({ type: "spki", format: "pem" }), { mode: 0o400 });
+    const base = {
+      AUDIT_ENABLED: "true",
+      AUDIT_JWT_PRIVATE_KEY_FILE: privatePath,
+      AUDIT_TECHNICAL_AUTH_KID: "ds-auditor-2026",
+      AUDIT_RELEASE_ATTESTATION_PUBLIC_KEY_FILE: publicPath,
+      AUDIT_RELEASE_ATTESTATION_KID: "grumphya-release-2026",
+    };
+    expect(() => createInternalAuditRuntime({
+      ...base,
+      AUDIT_TECHNICAL_AUTH_ALLOWED_KIDS: "next-key",
+      AUDIT_ALLOWED_NETWORKS: "31.70.130.181/32",
+    })).toThrow("internal_audit_kids_invalid");
+    expect(() => createInternalAuditRuntime({
+      ...base,
+      AUDIT_TECHNICAL_AUTH_ALLOWED_KIDS: "ds-auditor-2026",
+      AUDIT_ALLOWED_NETWORKS: "0.0.0.0/0",
+    })).toThrow("internal_audit_networks_invalid");
     rmSync(directory, { recursive: true, force: true });
   });
 
@@ -122,6 +158,8 @@ describe("internal audit runtime configuration", () => {
       AUDIT_ENABLED: "true",
       AUDIT_JWT_PRIVATE_KEY_FILE: privatePath,
       AUDIT_TECHNICAL_AUTH_KID: "ds-auditor-2026",
+      AUDIT_TECHNICAL_AUTH_ALLOWED_KIDS: "ds-auditor-2026",
+      AUDIT_ALLOWED_NETWORKS: "31.70.130.181/32",
       AUDIT_RELEASE_ATTESTATION_PUBLIC_KEY_FILE: publicPath,
       AUDIT_RELEASE_ATTESTATION_KID: "grumphya-release-2026",
     }, {

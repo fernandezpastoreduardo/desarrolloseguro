@@ -259,6 +259,52 @@ services:
     networks:
       - development-security-backend
 
+  # The private external audit is an explicit, one-shot operation. It is not
+  # part of the default stack and has no database access; enable the profile
+  # only after the external contract and all key/ACL checks are complete.
+  development-security-internal-audit:
+    profiles: [internal-audit]
+    image: ${DEVELOPMENT_SECURITY_WORKER_IMAGE:-desarrolloseguro-worker:local}
+    restart: "no"
+    user: "0:0"
+    privileged: false
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 64
+    mem_limit: 256m
+    cpus: 0.25
+    read_only: true
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        if [ "$${AUDIT_ENABLED}" != "true" ]; then
+          printf 'internal_audit_disabled\n'
+          exit 0
+        fi
+        install -d -o node -g node -m 0700 /run/development-security-audit
+        install -o node -g node -m 0400 /run/audit-input/audit_jwt_private.pem /run/development-security-audit/jwt.pem
+        install -o node -g node -m 0400 /run/audit-input/release_attestation_public.pem /run/development-security-audit/attestation.pem
+        export AUDIT_JWT_PRIVATE_KEY_FILE=/run/development-security-audit/jwt.pem
+        export AUDIT_RELEASE_ATTESTATION_PUBLIC_KEY_FILE=/run/development-security-audit/attestation.pem
+        exec su -p node -s /bin/sh -c 'exec node apps/desarrollo-seguro/worker/dist/internal-audit-entrypoint.js'
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+      - /run/development-security-audit:rw,noexec,nosuid,size=8m
+    environment:
+      NODE_ENV: production
+      AUDIT_ENABLED: ${DEVELOPMENT_SECURITY_AUDIT_ENABLED:-false}
+      AUDIT_JWT_ISSUER: ${AUDIT_JWT_ISSUER:-desarrolloseguro-audit}
+      AUDIT_JWT_AUDIENCE: ${AUDIT_JWT_AUDIENCE:-grumphya-audit}
+      AUDIT_TECHNICAL_AUTH_KID: ${AUDIT_TECHNICAL_AUTH_KID:-ds-auditor-2026}
+      AUDIT_TECHNICAL_AUTH_ALLOWED_KIDS: ${AUDIT_TECHNICAL_AUTH_ALLOWED_KIDS:-ds-auditor-2026}
+      AUDIT_ALLOWED_NETWORKS: ${AUDIT_ALLOWED_NETWORKS:-}
+      AUDIT_RELEASE_ATTESTATION_KID: ${AUDIT_RELEASE_ATTESTATION_KID:-grumphya-release-2026}
+      AUDIT_SCOPES: ${AUDIT_SCOPES:-}
+    volumes:
+      - ${DEVELOPMENT_SECURITY_AUDIT_SECRETS_DIR:-./.audit-secrets}:/run/audit-input:ro
+    networks:
+      - development-security-analysis-egress
+
   development-security-retention-scheduler:
     image: ${DEVELOPMENT_SECURITY_IMAGE:-desarrolloseguro-api:local}
     build:

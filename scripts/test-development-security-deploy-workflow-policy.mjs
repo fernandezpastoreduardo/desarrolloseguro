@@ -147,6 +147,10 @@ assert.doesNotMatch(archiveGateway, /grumphya|caddy reload|compose down/iu);
 assert.match(compose, /^  development-security-(api|runtime-coordinator|worker|web):/mu);
 assert.match(compose, /development_security_badge_issuer_token/u);
 assert.match(compose, /DS_BADGE_ISSUER_TOKEN/u);
-assert.doesNotMatch(compose, /grumphya|caddy/iu);
+const composeWithoutInternalAudit = compose.replace(
+  /^  development-security-internal-audit:\n([\s\S]*?)(?=^  [a-z][a-z0-9-]*:|^networks:)/mu,
+  "",
+);
+assert.doesNotMatch(composeWithoutInternalAudit, /grumphya|caddy/iu);
 
 process.stdout.write("Development Security deploy workflow policy passed.\n");

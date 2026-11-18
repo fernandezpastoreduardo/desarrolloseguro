@@ -97,3 +97,10 @@ huella pública y termina con `enabled=false`. Si ya existe cualquiera de las
 claves, falla sin sobrescribirla. El operador entrega a Grumphya únicamente el
 PEM público y la huella; no se inventa `AUDIT_ALLOWED_NETWORKS` hasta conocer
 la IP/CIDR que observe allí el proxy real.
+
+La ejecución queda aislada en el servicio Compose `development-security-internal-audit`,
+disponible solo con el perfil `internal-audit`. El servicio no monta la base
+de datos ni comparte la red interna; usa únicamente la red de egress y termina
+sin leer claves cuando `AUDIT_ENABLED` no es exactamente `true`. La activación
+requiere además que el runtime valide la lista de `kid` activa y una ACL sin
+redes abiertas.

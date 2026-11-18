@@ -11,6 +11,7 @@ coverage/
 .env
 .env.*
 .secrets/
+.audit-secrets/
 example.env
 *.local
 !.env.sonar.local.example

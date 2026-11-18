@@ -141,3 +141,12 @@ ACL de red. El operador comparte solo el PEM público y la huella con
 Grumphya; el `kid` y `AUDIT_ALLOWED_NETWORKS` se coordinan antes de cualquier
 activación.
 
+El Compose incorpora `development-security-internal-audit` bajo el perfil
+`internal-audit`. No se inicia con el stack normal, no monta PostgreSQL y solo
+puede salir por la red de egress de Desarrollo Seguro. Antes de lanzarlo, el
+operador debe montar en `DEVELOPMENT_SECURITY_AUDIT_SECRETS_DIR` la privada JWT
+de DS y la pública de atestación del despliegue externo, y proporcionar la ACL y los
+`kid` activos mediante variables de entorno. Con `AUDIT_ENABLED` ausente o a
+`false` el contenedor termina con `internal_audit_disabled`; las claves no se
+copian ni se leen en ese caso.
+

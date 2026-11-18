@@ -48,3 +48,10 @@ Grumphya. `AUDIT_ALLOWED_NETWORKS` no se inventa en este paso: debe recoger la
 IP/CIDR que observe el proxy de Grumphya en la petición real. La auditoría
 permanece desactivada hasta que Grumphya confirme claves, ACL, rutas JSON,
 atestación, TLS y roles PostgreSQL.
+
+Cuando el contrato esté aceptado, la ejecución opt-in usa el perfil Compose
+`internal-audit` y `DEVELOPMENT_SECURITY_AUDIT_SECRETS_DIR`. Ese directorio
+debe contener `audit_jwt_private.pem` y
+`release_attestation_public.pem`, ambos gestionados fuera de Git.
+El servicio no tiene acceso a la base de datos y solo se conecta a la red de
+egress. El stack ordinario no lo arranca.
