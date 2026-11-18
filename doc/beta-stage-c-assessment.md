@@ -47,6 +47,9 @@ La evaluación separa cuatro niveles que no son equivalentes:
 - La suite local documentada reúne 713 pruebas.
 - PostgreSQL aislado pasó 95/95 pruebas, incluidas las de ciclo de
   certificación, prioridad, admisión, scheduler y resultados fuera de orden.
+- La batería del worker en PostgreSQL aislado pasó 1/1 prueba, y la suite
+  completa de paquetes pasó sin fallos fuera del sandbox (los cuatro tests de
+  integración HTTP requieren permiso para abrir `127.0.0.1`).
 - El CI del commit `1ef0814` pasó Playwright, auditoría de dependencias,
   quality gates, PostgreSQL e imágenes/Trivy en el run
   `44343419747`.

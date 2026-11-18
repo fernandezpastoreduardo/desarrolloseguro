@@ -83,3 +83,21 @@ lectura sin crear un informe parcial. Esto evita mezclar observaciones de
 ejecuciones distintas o conceder cobertura por una autorización más amplia de
 la necesaria.
 
+## Preflight de recursos de producción (18 de noviembre de 2026)
+
+Se comprobó mediante `GET` sin credenciales y sin seguir redirecciones el
+catálogo provisional de recursos (`/audit/infrastructure`, `/audit/deployment`,
+`/audit/dependencies`, `/audit/auth`, `/audit/quality`, `/audit/privacy` y
+`/audit/ai`). Todos respondieron `200 text/html` con la página pública de
+Grumphya, no con un contrato JSON de auditoría. El lector de D los clasifica
+como evidencia inválida y el runner devuelve un fallo seguro sin crear un
+informe parcial. Esta comprobación no conserva el cuerpo ni lo usa como
+evidencia.
+
+Por tanto, D dispone del contrato, el lector, la proyección, la puntuación
+separada y el runner probados localmente, pero no tiene todavía recursos de
+producción autorizados. Para activar la validación operativa hay que acordar
+en el repositorio de Grumphya las rutas, el formato JSON acotado, la identidad
+de solo lectura y las cuentas sintéticas de autenticación. Hasta entonces no
+se ejecuta una auditoría interna ni se presenta una puntuación interna.
+
