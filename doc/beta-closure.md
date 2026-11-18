@@ -32,7 +32,7 @@ En el árbol `main` se han ejecutado correctamente:
   vulnerabilidades altas o críticas. Queda registrada una alerta alta de
   desarrollo sin parche upstream, según la política documentada.
 
-La suite ejecutada reúne 713 pruebas de los paquetes core, web, persistence,
+La suite ejecutada reúne 802 pruebas superadas de los paquetes core, web, persistence,
 API y worker. Además, el 18 de noviembre de 2026 se levantó una base PostgreSQL
 efímera con la misma imagen de CI y `pnpm test:postgres` pasó 95/95 pruebas de
 persistence y 1/1 de worker, incluido el ciclo de certificación y sus políticas

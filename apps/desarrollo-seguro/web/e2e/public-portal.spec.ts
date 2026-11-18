@@ -32,6 +32,14 @@ test("renders the public portal and allows changing its theme", async ({
   const portal = page.locator("main.ds-portal");
   await page.getByRole("button", { name: "Tema oscuro" }).click();
   await expect(portal).toHaveAttribute("data-theme", "dark");
+  await expect(page.locator(".ds-portal__search label")).toHaveCSS(
+    "color",
+    "rgb(244, 241, 235)",
+  );
+  await expect(page.getByRole("button", { name: "Consultar informe" })).toHaveCSS(
+    "background-color",
+    "rgb(142, 216, 205)",
+  );
   await page.getByRole("button", { name: "Tema claro" }).click();
   await expect(portal).toHaveAttribute("data-theme", "light");
   expect(externalRequests).toEqual([]);

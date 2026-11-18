@@ -132,6 +132,10 @@ $ds-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   color: var(--ds-paper);
 }
 
+.ds-portal[data-theme="dark"] .ds-portal__topbar {
+  background: #111f33e8;
+}
+
 .ds-portal__nav {
   display: flex;
   align-items: center;
@@ -365,6 +369,10 @@ $ds-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   text-transform: uppercase;
 }
 
+.ds-portal[data-theme="dark"] .ds-portal__search label {
+  color: var(--ds-ink);
+}
+
 .ds-portal__search-row {
   display: flex;
   flex-direction: column;
@@ -410,6 +418,20 @@ $ds-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 .ds-portal__analysis-request button:not(:disabled):hover {
   border-color: var(--ds-accent-strong);
   background: var(--ds-accent-strong);
+}
+
+.ds-portal[data-theme="dark"] .ds-portal__search button,
+.ds-portal[data-theme="dark"] .ds-portal__analysis-request button {
+  border-color: var(--ds-accent-soft);
+  color: #141414;
+  background: var(--ds-accent-soft);
+}
+
+.ds-portal[data-theme="dark"] .ds-portal__search button:hover,
+.ds-portal[data-theme="dark"] .ds-portal__analysis-request button:not(:disabled):hover {
+  border-color: var(--ds-accent);
+  color: var(--ds-paper);
+  background: var(--ds-accent);
 }
 
 .ds-portal__search button:disabled {

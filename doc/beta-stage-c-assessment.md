@@ -44,7 +44,8 @@ La evaluación separa cuatro niveles que no son equivalentes:
 
 ### Validación automatizada
 
-- La suite local documentada reúne 713 pruebas.
+- La suite local documentada reúne 802 pruebas superadas (91 adicionales
+  quedan omitidas porque requieren PostgreSQL aislado o recursos de runtime).
 - PostgreSQL aislado pasó 95/95 pruebas, incluidas las de ciclo de
   certificación, prioridad, admisión, scheduler y resultados fuera de orden.
 - La batería del worker en PostgreSQL aislado pasó 1/1 prueba, y la suite
