@@ -32,6 +32,8 @@ HTML, capturas, trazas, URLs ni datos de usuario. D-06 añade señales
 agregadas de almacenamiento, terceros, consentimiento, transparencia y
 minimización: conserva códigos y contadores booleanos, sin nombres de cookies,
 dominios, textos, scripts ni conclusiones sobre venta de datos.
+El proyector D-07 traduce observaciones tipadas a un único criterio interno,
+rechaza duplicados antes de puntuar y mantiene `externalScore` en `null`.
 
 ## Orden propuesto
 

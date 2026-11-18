@@ -23,6 +23,9 @@ Las observaciones D-06 solo conservan señales agregadas allowlisted de
 almacenamiento, terceros, consentimiento, transparencia y minimización; no
 conservan nombres de cookies, dominios, textos, scripts ni permiten inferir
 venta de datos.
+El proyector D-07 transforma cada observación tipada en un criterio interno,
+rechaza criterios duplicados antes del cálculo y conserva `externalScore` en
+`null`.
 
 El adaptador de acceso D-01 autoriza únicamente operaciones `GET` contra
 recursos allowlisted y rutas sin query, fragmento, salto de directorio ni
