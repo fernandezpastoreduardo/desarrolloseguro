@@ -54,3 +54,18 @@ docker compose --project-name "$PROJECT_NAME" --file "$COMPOSE_FILE" \
   logs --no-color --tail=20 \
   development-security-retention-scheduler \
   development-security-certification-scheduler
+
+# A controlled restart proves both loops recover without touching the database,
+# API, worker, web or any other application on the VPS.
+docker compose --project-name "$PROJECT_NAME" --file "$COMPOSE_FILE" \
+  restart --no-deps \
+  development-security-retention-scheduler \
+  development-security-certification-scheduler
+docker compose --project-name "$PROJECT_NAME" --file "$COMPOSE_FILE" \
+  up --detach --no-deps --wait \
+  development-security-retention-scheduler \
+  development-security-certification-scheduler
+docker compose --project-name "$PROJECT_NAME" --file "$COMPOSE_FILE" \
+  logs --no-color --tail=20 \
+  development-security-retention-scheduler \
+  development-security-certification-scheduler

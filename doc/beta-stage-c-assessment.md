@@ -36,6 +36,9 @@ La evaluación separa cuatro niveles que no son equivalentes:
   despliegue del proyecto.
 - Los fallos de ambos procesos tienen un canal local autorizado: JSONL
   allowlisted en los logs del contenedor, limitado a categoría y timestamp.
+- El despliegue controlado reinicia ambos schedulers y vuelve a esperar su
+  estado saludable; el segundo bloque de logs demuestra que cada uno completa
+  de nuevo su ciclo inicial sin reiniciar la base, la API, el worker o la web.
 
 ### Validación automatizada
 

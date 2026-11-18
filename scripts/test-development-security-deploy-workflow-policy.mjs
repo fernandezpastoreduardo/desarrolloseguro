@@ -131,6 +131,11 @@ assert.match(
   /logs --no-color --tail=20\s+development-security-retention-scheduler\s+development-security-certification-scheduler/u,
   "deployment must expose only bounded scheduler evidence",
 );
+assert.match(
+  normalizedDeployScript,
+  /restart --no-deps\s+development-security-retention-scheduler\s+development-security-certification-scheduler[\s\S]*up --detach --no-deps --wait\s+development-security-retention-scheduler\s+development-security-certification-scheduler/u,
+  "deployment must verify scheduler recovery after a controlled restart",
+);
 assert.doesNotMatch(deployScript, /grumphya|caddy reload|compose down/iu);
 assert.match(archiveGateway, /SSH_ORIGINAL_COMMAND/u);
 assert.match(archiveGateway, /MAX_ARCHIVE_BYTES=50000000/u);
