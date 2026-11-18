@@ -290,7 +290,7 @@ services:
     environment:
       NODE_ENV: production
     healthcheck:
-      test: [CMD, /bin/sh, -ec, kill -0 1]
+      test: [CMD-SHELL, test -s /proc/1/cmdline]
       interval: 10s
       timeout: 3s
       retries: 12
@@ -334,7 +334,7 @@ services:
     environment:
       NODE_ENV: production
     healthcheck:
-      test: [CMD, /bin/sh, -ec, kill -0 1]
+      test: [CMD-SHELL, test -s /proc/1/cmdline]
       interval: 10s
       timeout: 3s
       retries: 12
