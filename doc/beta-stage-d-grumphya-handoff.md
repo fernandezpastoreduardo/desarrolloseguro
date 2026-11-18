@@ -57,6 +57,22 @@ El `iss` debe ser exactamente `desarrolloseguro-audit`, `aud` exactamente
 `grumphya-audit`, `domain` exactamente `grumphya.com` y cada valor de `scope`
 usa el formato `audit:<recurso>`.
 
+## Persistencia, retención y red
+
+La API de Grumphya no debe recibir permisos de escritura de evidencias por
+defecto. La opción recomendada es un rol de mantenimiento independiente para
+la retención, con `DELETE` limitado a las tablas de evidencias y atestaciones;
+la API conserva solo `SELECT`. Si el despliegue mantiene la retención dentro
+de la API, el permiso adicional debe quedar limitado a esos dos `DELETE` y
+probarse explícitamente antes de activar la auditoría. En ambos casos la base
+de datos sigue siendo exclusiva de Grumphya y todas las conexiones usan TLS.
+
+El escritor de evidencias debe exponerse mediante un canal autenticado y
+allowlisted con TLS. Las rutas de lectura actuales no son un canal de
+escritura y no se deben reutilizar para insertar evidencias. La ACL de red se
+configura con la IP o CIDR que observe el proxy de Grumphya en la petición
+real; nunca con una red Docker compartida ni con una red abierta.
+
 ## Cuentas y datos sintéticos
 
 Si `auth` requiere sesión, Grumphya debe proporcionar una cuenta sintética
@@ -83,6 +99,10 @@ pruebas destructivas.
    con la externa.
 6. Se conserva una evidencia categórica de revocación y de expiración de la
    retención.
+7. La matriz de permisos confirma el rol de lectura de la API, el rol de
+   mantenimiento o escritor y el canal TLS de ingesta; una API con solo
+   `SELECT` no se considera suficiente si la retención sigue ejecutándose con
+   esa misma conexión.
 
 Hasta que se cumplan estos puntos, el runner local de Desarrollo Seguro debe
 seguir devolviendo `internal_audit_unavailable`/`invalid_evidence` y no crear

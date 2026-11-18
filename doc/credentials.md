@@ -15,6 +15,9 @@ los valores, si una red es abierta o si un `kid` no está en la lista activa.
 El contrato externo fija `AUDIT_JWT_ISSUER=desarrolloseguro-audit` y
 `AUDIT_JWT_AUDIENCE=grumphya-audit`; el token añade `domain=grumphya.com` y
 scopes con el formato `audit:<recurso>`.
+La activación también depende de que Grumphya haya probado el canal TLS de
+escritura y la separación de roles de lectura y retención; esas garantías no
+se pueden inferir desde el contenedor de Desarrollo Seguro.
 
 Usa valores únicos y aleatorios para cada entorno, limita permisos de lectura y conserva la clave privada de la CA fuera del servidor de aplicación. No guardes secretos en Git, logs, imágenes Docker ni documentación. `.gitignore` excluye `.secrets/`. El worker y los schedulers de retención y certificación usan sus URL en ficheros separados y exigen una CA verificada en producción. El rol de retención solo ejecuta los purgados protegidos de 90 días, de inactividad pública de 30 días y el encolado horario de certificaciones activas; ambos schedulers operan en Compose sin egress ni puertos y sus procesos se reinician de forma aislada durante la verificación de deploy.
 
