@@ -26,6 +26,11 @@ Configura en `/opt/grumphya/.secrets/grumphya_env`, sin registrar valores:
 - `AUDIT_RELEASE_MANIFEST_PUBLIC_KEY` (PEM pública de la atestación de
   releases).
 
+La primera identidad preparada por Desarrollo Seguro usa `kid`
+`ds-auditor-2026`. Verifica la PEM recibida mediante un canal seguro y
+confirma su huella antes de escribirla; no pegues claves privadas en issues,
+commits ni logs.
+
 ## Recursos y escritura
 
 Publica las rutas JSON versionadas allowlisted bajo `/audit/` con la envolvente
