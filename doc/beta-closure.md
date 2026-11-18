@@ -9,7 +9,7 @@ MVP. No autoriza despliegues ni sustituye la validación operativa del VPS.
 | --- | --- | --- | --- |
 | A · lectura y evaluación pública | Implementada en código | Perfiles `domain-v1`/`domain-v2`/`domain-v3`, proyección pública allowlisted, resumen ético, sello verificable y UUID de informe | Ejecutar el runtime aislado en VPS con egress y un informe real de Grumphya |
 | B · historial y comparabilidad | Implementada | `GET /history`, UUIDs, perfiles comparables, purga pública a 30 días, caché a 60 minutos y ventana de admisión a 24 horas | La interfaz usa estado consultable; no se añade SSE hasta tener una necesidad de producto y una prueba de contrato |
-| C · auditoría periódica | Implementada localmente | Migración 026, scheduler horario, prioridad `requested` sobre `scheduled`, un slot global, recuperación de leases y eventos de transición | Operar el scheduler en VPS, medir recuperación y conectar un canal de notificación autorizado |
+| C · auditoría periódica | Implementada localmente | Migraciones 026/027, scheduler horario, prioridad `requested` sobre `scheduled`, un slot global, recuperación de leases, reintento tras fallo y eventos de transición | Operar el scheduler en VPS, medir recuperación y conectar un canal de notificación autorizado |
 | D · auditoría privada de Grumphya | Preparada como dependencia | El sello público solo apunta al informe público certificado; no se añaden credenciales ni cambios al repositorio de Grumphya | Requiere autorización y contrato de lectura privada, alcance, retención y adaptador aislado antes de implementar controles privados |
 
 ## Puertas ejecutadas
@@ -27,6 +27,11 @@ API y worker. Las pruebas PostgreSQL opt-in se omiten cuando no existe una base
 aislada configurada; deben ejecutarse en CI o con `DS_TEST_POSTGRES_ISOLATED=1`
 y una base local dedicada. Los diagnósticos Docker esperables de los dobles de
 worker no se consideran fallos de la suite.
+
+La política de admisión se conserva en migraciones append-only: la caché de 60
+minutos y la ventana de 24 horas se reactivan en 025; 026 añade las auditorías
+periódicas y 027 permite reintentar después de un fallo terminal sin saltarse la
+ventana para trabajos completados.
 
 ## Contratos de seguridad y privacidad
 

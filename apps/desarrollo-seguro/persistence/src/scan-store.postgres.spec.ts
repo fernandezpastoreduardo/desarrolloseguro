@@ -144,7 +144,7 @@ describePostgres.sequential("PostgresScanStore", () => {
       await store.ensureFreshScan({ hostname, profileVersion: "domain-v3", trigger: "requested" });
       const job = await store.claimNextScan(new Date(), TEST_LEASE_MS);
       if (!job) throw new Error("expected_claimed_lifecycle_scan");
-      return store.completeScan({
+      const reportId = await store.completeScan({
         jobId: job.id,
         leaseToken: job.leaseToken,
         hostname,
@@ -157,6 +157,13 @@ describePostgres.sequential("PostgresScanStore", () => {
         checks,
         metrics: { requestsCount: 0, bytesCount: 0, durationMs: 1, pagesCount: 0 },
       });
+      // The Beta admission window is measured from admission, so lifecycle
+      // assertions must model the next audit after that window has elapsed.
+      await pool.query(
+        "UPDATE ds_scan_jobs SET queued_at = clock_timestamp() - interval '25 hours' WHERE id = $1",
+        [job.id],
+      );
+      return reportId;
     };
 
     const eligibleReportId = await completeLifecycleScan(makeEligibleDomainV3Checks(), "pass");
@@ -274,7 +281,7 @@ describePostgres.sequential("PostgresScanStore", () => {
     expect(queuedCount.rows[0]?.count).toBe(10);
   });
 
-  it("admits a repeat scan immediately after a prior report", async () => {
+  it("returns the cached report immediately after a recent report", async () => {
     const job = await queueAndClaim();
     await complete(job);
 
@@ -284,7 +291,7 @@ describePostgres.sequential("PostgresScanStore", () => {
       trigger: "requested",
     });
 
-    expect(repeatedScan.kind).toBe("queued");
+    expect(repeatedScan.kind).toBe("cached");
   });
 
   it("retains only a safe terminal failure category and prioritizes a fresh retry", async () => {
@@ -527,6 +534,10 @@ describePostgres.sequential("PostgresScanStore", () => {
   it("does not reuse a fresh report when the profile version changes", async () => {
     const job = await queueAndClaim();
     const reportId = await complete(job);
+    await pool.query(
+      "UPDATE ds_scan_jobs SET queued_at = clock_timestamp() - interval '25 hours' WHERE id = $1",
+      [job.id],
+    );
     const changedProfile = await store.ensureFreshScan({
       hostname: TEST_HOSTNAME,
       profileVersion: "controls-v2",
@@ -1113,14 +1124,14 @@ describePostgres.sequential("PostgresScanStore", () => {
       "on_demand",
       "domain-v1",
       makeDomainV1Checks(),
-      "pass",
+      "inconclusive",
     );
     const monitoredReport = await completeOldReport(
       "monitored-public.example.net",
       "monitored",
       "domain-v1",
       makeDomainV1Checks(),
-      "pass",
+      "inconclusive",
     );
     const certifiedReport = await completeOldReport(
       "certified-public.example.net",

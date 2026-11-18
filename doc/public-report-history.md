@@ -23,6 +23,8 @@ función `SECURITY DEFINER` con el rol aislado `ds_retention`; elimina únicamen
 los informes públicos y sus trabajos terminados, conserva los informes
 certificados y los dominios monitorizados, y rechaza cortes más recientes de
 la ventana. La migración beta 025 reactiva la caché de una hora y el intervalo
-de 24 horas entre admisiones cuando la caché ha caducado. La coordinación de
+de 24 horas entre admisiones cuando la caché ha caducado. La migración 027 permite
+reintentar tras un fallo terminal, porque la ventana solo se aplica a trabajos
+completados. La coordinación de
 auditorías/progreso sigue usando el estado consultable; un canal SSE queda
 pendiente de la etapa B completa.

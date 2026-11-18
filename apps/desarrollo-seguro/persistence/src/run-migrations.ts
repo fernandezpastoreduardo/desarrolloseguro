@@ -83,6 +83,10 @@ const MIGRATIONS = [
     version: "026_certification_audit_scheduler",
     file: "026_certification_audit_scheduler.sql",
   },
+  {
+    version: "027_retry_after_failed_scan",
+    file: "027_retry_after_failed_scan.sql",
+  },
 ] as const;
 
 const MIGRATION_LOCK_ID = 728194032;
