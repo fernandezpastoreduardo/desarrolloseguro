@@ -4,6 +4,8 @@ La auditoría privada de la etapa D solo puede dirigirse a `grumphya.com` en
 `production` y mediante el auditor `desarrollo-seguro`. El contrato compartido
 en `core` valida los scopes de infraestructura, aplicación, autenticación,
 calidad, privacidad, ética e IA y limita la retención de evidencias a 30 días.
+La solicitud debe incluir exactamente `policyVersion=beta-d-0.1`; el parser no
+acepta una versión omitida o distinta.
 
 Una evidencia interna contiene únicamente `criterionId`, `scope`, `status`,
 `source`, `observedAt` y `reasonCode`. Los criterios y códigos están

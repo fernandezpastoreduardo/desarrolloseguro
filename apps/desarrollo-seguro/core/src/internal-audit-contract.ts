@@ -63,6 +63,7 @@ export type InternalAuditEvidence = {
 
 export function parseInternalAuditRequest(input: unknown): InternalAuditRequest {
   if (!isRecord(input) || !hasExactKeys(input, [
+    "policyVersion",
     "hostname",
     "environment",
     "auditor",
@@ -74,6 +75,7 @@ export function parseInternalAuditRequest(input: unknown): InternalAuditRequest 
   try {
     const evidenceRetentionDays = input.evidenceRetentionDays;
     if (
+      input.policyVersion !== INTERNAL_AUDIT_POLICY_VERSION ||
       normalizeHostname(input.hostname) !== APPROVED_HOSTNAME ||
       input.environment !== APPROVED_ENVIRONMENT ||
       input.auditor !== APPROVED_AUDITOR ||

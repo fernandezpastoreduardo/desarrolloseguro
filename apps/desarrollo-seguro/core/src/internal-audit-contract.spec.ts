@@ -7,12 +7,14 @@ import {
 describe("internal production audit contract", () => {
   it("accepts only the approved Grumphya production target and scopes", () => {
     expect(parseInternalAuditRequest({
+      policyVersion: "beta-d-0.1",
       hostname: "grumphya.com",
       environment: "production",
       auditor: "desarrollo-seguro",
       scopes: ["infrastructure", "privacy", "quality"],
       evidenceRetentionDays: 30,
     })).toMatchObject({
+      policyVersion: "beta-d-0.1",
       hostname: "grumphya.com",
       environment: "production",
       auditor: "desarrollo-seguro",
@@ -27,6 +29,7 @@ describe("internal production audit contract", () => {
     { evidenceRetentionDays: 31 },
   ])("rejects an out-of-contract request: %o", (override) => {
     expect(() => parseInternalAuditRequest({
+      policyVersion: "beta-d-0.1",
       hostname: "grumphya.com",
       environment: "production",
       auditor: "desarrollo-seguro",

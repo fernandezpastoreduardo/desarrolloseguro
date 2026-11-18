@@ -3,6 +3,7 @@ import { runInternalAudit } from "./internal-audit-runner.js";
 import { signedAuditEvidence, TEST_AUDIT_AUTH } from "./internal-audit-test-support.js";
 
 const request = {
+  policyVersion: "beta-d-0.1",
   hostname: "grumphya.com",
   environment: "production",
   auditor: "desarrollo-seguro",

@@ -114,3 +114,10 @@ conserva la respuesta. En el estado actual la puerta falla con
 `internal_audit_resource_unavailable` porque Grumphya aún publica `404` en el
 catálogo provisional; no se interpreta como evidencia de producción.
 
+El worker incluye una entrada opt-in `pnpm --filter
+@desarrolloseguro/worker audit:run`. Solo construye el JWT técnico y ejecuta
+las operaciones allowlisted cuando `AUDIT_ENABLED=true` y todas las claves
+restringidas están disponibles; no forma parte del arranque normal, no acepta
+dominios o rutas por argumentos y solo emite un resumen categórico. No se
+ejecuta ni se activa mientras Grumphya no entregue el contrato de producción.
+
