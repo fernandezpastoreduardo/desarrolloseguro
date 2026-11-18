@@ -10,7 +10,10 @@ externas ya cubiertas por A y B.
 
 La implementación de D comienza con el contrato local D-01. Cada entrega
 deberá seguir TDD, mantener TypeScript estricto y aportar evidencia de
-producción antes de considerarse aceptada. El contrato actual solo permite
+producción antes de considerarse aceptada. El contrato y el evaluador interno
+separado ya están implementados como D-01/D-07 localmente: el evaluador
+devuelve categorías, cobertura y un score interno nullable, sin mezclarlo con
+el score externo. El contrato actual solo permite
 solicitudes explícitas para `grumphya.com` en `production`, con el auditor
 `desarrollo-seguro`, scopes allowlisted y retención máxima de 30 días. Las
 evidencias se aceptan como estados, códigos y timestamps; se rechazan HTML,

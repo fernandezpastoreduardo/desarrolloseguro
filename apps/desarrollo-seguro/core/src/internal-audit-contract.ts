@@ -21,7 +21,7 @@ const AUDIT_SOURCES = [
   "deployment_attestation",
   "synthetic_check",
 ] as const;
-const AUDIT_CRITERIA = {
+export const INTERNAL_AUDIT_CRITERIA = {
   "infrastructure.tls": "infrastructure",
   "infrastructure.headers": "infrastructure",
   "infrastructure.network": "infrastructure",
@@ -41,7 +41,7 @@ const AUDIT_CRITERIA = {
 type AuditScope = (typeof AUDIT_SCOPES)[number];
 type AuditStatus = (typeof AUDIT_STATUSES)[number];
 type AuditSource = (typeof AUDIT_SOURCES)[number];
-type AuditCriterion = keyof typeof AUDIT_CRITERIA;
+export type InternalAuditCriterion = keyof typeof INTERNAL_AUDIT_CRITERIA;
 
 export type InternalAuditRequest = {
   policyVersion: typeof INTERNAL_AUDIT_POLICY_VERSION;
@@ -53,7 +53,7 @@ export type InternalAuditRequest = {
 };
 
 export type InternalAuditEvidence = {
-  criterionId: AuditCriterion;
+  criterionId: InternalAuditCriterion;
   scope: AuditScope;
   status: AuditStatus;
   source: AuditSource;
@@ -115,10 +115,10 @@ export function parseInternalAuditEvidence(input: unknown): InternalAuditEvidenc
   const reasonCode = input.reasonCode;
   if (
     typeof criterionId !== "string" ||
-    !(criterionId in AUDIT_CRITERIA) ||
+    !(criterionId in INTERNAL_AUDIT_CRITERIA) ||
     typeof scope !== "string" ||
     !isAuditScope(scope) ||
-    AUDIT_CRITERIA[criterionId as AuditCriterion] !== scope ||
+    INTERNAL_AUDIT_CRITERIA[criterionId as InternalAuditCriterion] !== scope ||
     !isOneOf(AUDIT_STATUSES, input.status) ||
     !isOneOf(AUDIT_SOURCES, input.source) ||
     typeof observedAt !== "string" ||
@@ -130,7 +130,7 @@ export function parseInternalAuditEvidence(input: unknown): InternalAuditEvidenc
     throw new Error("internal_audit_evidence_invalid");
   }
   return {
-    criterionId: criterionId as AuditCriterion,
+    criterionId: criterionId as InternalAuditCriterion,
     scope,
     status: input.status as AuditStatus,
     source: input.source as AuditSource,

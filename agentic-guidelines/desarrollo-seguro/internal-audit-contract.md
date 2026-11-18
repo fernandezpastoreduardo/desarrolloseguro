@@ -12,5 +12,7 @@ identificadores de usuario, texto libre ni destinos alternativos.
 
 Este contrato prepara el adaptador de solo lectura; no abre conexiones, no
 concede permisos a Grumphya y no convierte fixtures en evidencias de
-producción. D-02 a D-08 requieren después autorización, recursos y pruebas
-operativas acotadas.
+producción. El evaluador interno conserva el score externo en `null` y solo
+calcula una puntuación interna cuando hay cobertura completa; `unknown` deja
+la evaluación incompleta y un fallo crítico la bloquea. D-02 a D-08 requieren
+después autorización, recursos y pruebas operativas acotadas.
