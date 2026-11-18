@@ -58,11 +58,12 @@ ventana para trabajos completados.
 
 ## Criterio para cerrar esta revisión
 
-La etapa C no se declara completada mientras no existan una ejecución controlada
-del scheduler horario en el entorno donde opera el servicio, evidencia de la
-actualización de la certificación/sello, prueba de recuperación ante fallo y un
-canal de notificación autorizado. Estas son validaciones operativas pendientes,
-no nuevas funcionalidades.
+La etapa C no se declara completada mientras no exista evidencia de una
+auditoría certificada vencida que actualice informe, ficha, sello y estado en el
+entorno donde opera el servicio, junto con la comprobación de recuperación ante
+un lease expirado. El scheduler, su canal JSONL y su reinicio controlado ya
+están demostrados en `44352363402`; lo restante es una validación operativa
+específica, no una nueva funcionalidad.
 
 El cierre global de Beta es posterior a A, B, C y D. Solo entonces se validará
 la operación integral, la puntuación externa e interna, la puntuación global
