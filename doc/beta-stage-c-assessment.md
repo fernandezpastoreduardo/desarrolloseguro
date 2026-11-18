@@ -81,18 +81,16 @@ La evaluación separa cuatro niveles que no son equivalentes:
 
 ### Bloqueantes para aceptar C
 
-- Arrancar y observar el scheduler en el entorno de producción.
 - Demostrar un ciclo horario que actualice informe, evaluación, ficha y sello.
-- Demostrar recuperación ante fallo, lease expirado y continuación del ciclo.
-- Definir y probar un canal de notificación autorizado.
+- Demostrar recuperación ante un lease expirado y continuación del ciclo en una
+  auditoría certificada real.
 
 ### Validaciones operativas pendientes
 
-- Medir duración, lote, impacto y recuperación en el VPS.
+- Medir duración, lote e impacto de una auditoría certificada en el VPS.
 - Verificar que el rol `ds_retention` no puede leer datos privados ni ejecutar
   funciones fuera de su contrato.
-- Obtener logs categóricos y evidencia de la ejecución sin secretos ni datos de
-  usuario.
+- Conservar la evidencia de transición sin secretos ni datos de usuario.
 
 ### Mejoras no bloqueantes
 
@@ -103,7 +101,7 @@ La evaluación separa cuatro niveles que no son equivalentes:
 ### Fases posteriores
 
 - Auditoría privada de producción de Grumphya.
-- Puntuación interna y puntuación global absoluta.
+- Integración operativa de la puntuación interna y puntuación global absoluta.
 - Certificación definitiva y transición automática al MVP.
 
 ## Conclusión
