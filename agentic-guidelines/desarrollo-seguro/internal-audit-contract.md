@@ -48,7 +48,8 @@ y ningún informe parcial; el reintento debe iniciar una nueva ejecución con un
 una ejecución anterior. Además, comprueba el scope efectivo de la evidencia
 después de validarla: una señal de divulgación de IA requiere `ai` y una señal
 de transparencia ética requiere `ethics`, aunque ambas lleguen por el recurso
-agregado de privacidad.
+agregado de privacidad. El informe también rechaza evidencias con timestamp
+posterior al instante de la auditoría.
 
 El adaptador de acceso D-01 autoriza únicamente operaciones `GET` contra
 recursos allowlisted y rutas sin query, fragmento, salto de directorio ni

@@ -34,6 +34,9 @@ export function buildInternalAuditReport(input: unknown): InternalAuditReport {
   }
   try {
     const evidence = projectInternalAuditEvidence(input.observations);
+    if (evidence.some((item) => Date.parse(item.observedAt) > Date.parse(observedAt))) {
+      throw new Error("internal_audit_report_future_evidence");
+    }
     const assessment = assessInternalAudit(evidence);
     return {
       policyVersion: "beta-d-0.1",

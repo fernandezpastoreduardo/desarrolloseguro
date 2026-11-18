@@ -57,4 +57,23 @@ describe("internal audit report", () => {
       observations: [{ html: "<body>" }],
     })).toThrow("internal_audit_report_invalid");
   });
+
+  it("rejects evidence observed after the report timestamp", () => {
+    expect(() => buildInternalAuditReport({
+      auditRef,
+      observedAt,
+      observations: [{
+        kind: "quality",
+        observation: {
+          kind: "performance_sample",
+          status: "pass",
+          metricCode: "response_time",
+          value: 200,
+          unit: "milliseconds",
+          sampleRef,
+          observedAt: "2026-11-18T18:30:01.000Z",
+        },
+      }],
+    })).toThrow("internal_audit_report_invalid");
+  });
 });
