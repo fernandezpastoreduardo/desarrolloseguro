@@ -86,6 +86,16 @@ export function validateCompletedReport(status, previousReportId) {
   return report;
 }
 
+export function validateReusableAdmission(admission, status) {
+  if (
+    admission?.hostname !== VALIDATION_HOSTNAME ||
+    !["cached", "rate_limited"].includes(admission.state)
+  ) {
+    throw new Error("public_scan_admission_invalid");
+  }
+  return validateCompletedReport(status, null);
+}
+
 export function validateWwwRedirect(responseStatus, location) {
   if (![301, 302, 307, 308].includes(responseStatus) || typeof location !== "string") {
     throw new Error("development_security_www_redirect_missing");
@@ -211,6 +221,14 @@ async function runSmoke() {
     `domains/${VALIDATION_HOSTNAME}/analysis-requests`,
     { method: "POST", body: JSON.stringify({ authorized: true }) },
   );
+  if (["cached", "rate_limited"].includes(admission.state)) {
+    const status = await fetchJson(`domains/${VALIDATION_HOSTNAME}/status`);
+    const report = validateReusableAdmission(admission, status);
+    process.stdout.write(
+      `Live domain scan reused existing report (${admission.state}): ${report.checks.filter(({ status: value }) => value !== "unknown").length}/9 checks conclusive; score ${report.ethicsAssessment.score}/100.\n`,
+    );
+    return;
+  }
   if (
     admission.hostname !== VALIDATION_HOSTNAME ||
     !["queued", "running"].includes(admission.state)

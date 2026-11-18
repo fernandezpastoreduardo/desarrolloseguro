@@ -4,6 +4,7 @@ import {
   SCAN_TIMEOUT_MS,
   validateWwwRedirect,
   validateCompletedReport,
+  validateReusableAdmission,
   validateTerminalFailure,
   describeTerminalFailure,
   waitForPublicScanReport,
@@ -61,6 +62,28 @@ test("accepts a refreshed domain-v3 report with TLS matrix, tracking and perform
   );
   assert.equal(report.ethicsAssessment.score, 75);
   assert.equal(report.checks.length, 9);
+});
+
+test("accepts a cached or rate-limited admission when the existing report is valid", () => {
+  const status = completedStatus();
+  assert.equal(
+    validateReusableAdmission({ hostname: "grumphya.com", state: "cached" }, status).id,
+    status.lastReport.id,
+  );
+  assert.equal(
+    validateReusableAdmission({ hostname: "grumphya.com", state: "rate_limited" }, status).id,
+    status.lastReport.id,
+  );
+});
+
+test("rejects a reusable admission without a valid existing report", () => {
+  assert.throws(
+    () => validateReusableAdmission(
+      { hostname: "grumphya.com", state: "rate_limited" },
+      { hostname: "grumphya.com", lastReport: null },
+    ),
+    { message: "public_scan_report_missing" },
+  );
 });
 
 test("accepts a diagnostic TLS matrix when a legacy version cannot negotiate", () => {
