@@ -85,4 +85,4 @@ El resumen se calcula en la API desde los controles del mismo informe y agrupa c
 
 ## Límites operativos
 
-La solicitud pública ya está conectada a la primitiva compartida, pero worker, supervisor y executor siguen fuera de Compose y el runner local usa `network none`. La ruta solo encola; no se ha habilitado tráfico hacia dominios. Antes de activar el worker deben cerrarse las pruebas de egress con servicios señuelo, revisar límites de carga/privacidad y probar backup/restauración según [scanner-safety.md](scanner-safety.md).
+La solicitud pública ya está conectada a la primitiva compartida. Worker y coordinador operan en Compose; el executor y el broker se crean efímeramente por trabajo y el runner local usa `network none`. La ruta solo encola; el tráfico hacia dominios se limita a la red de egress autorizada. Antes de ampliar controles deben mantenerse las pruebas de egress con servicios señuelo, revisar límites de carga/privacidad y probar backup/restauración según [scanner-safety.md](scanner-safety.md).

@@ -69,13 +69,13 @@ La evaluación separa cuatro niveles que no son equivalentes:
 
 | Criterio | Estado | Evidencia o carencia |
 | --- | --- | --- |
-| Planificación horaria | Implementado localmente; no demostrado en producción | Falta un scheduler operativo en VPS |
+| Planificación horaria | Implementada y arrancada en producción | El scheduler certificador completa el ciclo inicial en el deploy `44352363402`; queda observar una auditoría vencida |
 | Ejecución manual y prioridad | Cubierto por tests | Falta una ejecución controlada en el entorno real |
 | Concurrencia y único slot | Cubierto por PostgreSQL aislado | Falta evidencia operativa bajo el runtime real |
-| Recuperación y cancelación segura | Cubierto parcialmente por tests de worker/runtime | Falta prueba operativa de caída y recuperación |
+| Recuperación y cancelación segura | Cubierto por tests y reinicio controlado | El mismo deploy reinició ambos schedulers y volvió a observar ciclos completados sin tocar otros servicios |
 | Actualización de informe, puntuación, ficha y sello | Implementada en código | Falta observar una transición real producida por C |
 | Estados de certificación | Implementados y probados localmente | Falta ciclo operativo `active`/`suspended`/reactivación |
-| Notificaciones ante incidencias | Implementado como JSONL allowlisted en logs del scheduler; falta observarlo en VPS | Bloqueante para aceptar C hasta validación operativa |
+| Notificaciones ante incidencias | Implementado como JSONL allowlisted en logs del scheduler | El deploy expone solo categoría y timestamp; faltan incidencias reales para probar la ruta de error |
 
 ## Clasificación
 
@@ -108,6 +108,8 @@ La evaluación separa cuatro niveles que no son equivalentes:
 
 ## Conclusión
 
-C está implementada y validada automáticamente en local/CI, pero **no está
-aceptada**. Su estado correcto es **pendiente de validación operativa**, sin
-ampliar retroactivamente sus criterios para exigir D.
+C está implementada, validada automáticamente y desplegada con operación base
+demostrada. Su estado correcto sigue siendo **pendiente de evidencia de
+transición de certificación en producción**: aún no se ha observado una
+auditoría programada que actualice un informe, sello y estado de certificación.
+No se amplían retroactivamente los criterios para exigir D.

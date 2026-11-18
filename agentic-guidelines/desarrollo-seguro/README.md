@@ -16,7 +16,7 @@ Desarrollo Seguro es una aplicación independiente en desarrollo para observar c
 - La persistencia PostgreSQL, las migraciones, los permisos de roles y la proyección pública están implementados. El stack de Compose crea una base y un volumen propios.
 - El paquete worker contiene el proceso arrancable con rol `ds_worker`, recuperación periódica de leases, telemetría filtrada y cliente por socket Unix. Compose incorpora el worker y un coordinador aislado sin red que es el único proceso con socket Docker. Los trabajos usan un executor con `network none` y un broker en la red exclusiva de egress. El flujo manual de GitHub Actions despliega solo Desarrollo Seguro y, después, exige un informe real de `grumphya.com` con evidencia `domain-v3`; la operación en VPS aún requiere completar y revisar ese flujo.
 
-El stack Compose conecta el portal a la red de entrada dedicada; API y PostgreSQL no exponen puertos al host. Usa redes, servicios, secretos y volumen propios. Los schedulers de retención y certificación permanecen fuera de Compose hasta validar su operación.
+El stack Compose conecta el portal a la red de entrada dedicada; API y PostgreSQL no exponen puertos al host. Usa redes, servicios, secretos y volumen propios. Los schedulers de retención y certificación operan en Compose con el rol dedicado, sin puertos ni egress; el deploy deja evidencia acotada de su ciclo y recuperación.
 
 ## Límites de las afirmaciones
 

@@ -11,7 +11,7 @@ operativa del VPS.
 | --- | --- | --- | --- | --- |
 | A · lectura y evaluación pública | Presente en código | Tests, PostgreSQL aislado, CI y smoke contractual | No hay un informe real válido producido por el runtime actual de VPS; el deploy anterior pasó salud pero falló el smoke | Pendiente de validación operativa |
 | B · historial y comparabilidad | Presente en código | Tests de historial, UUID, perfiles comparables, retención y Playwright | No hay evidencia de un recorrido real sobre producción en la versión actual | Pendiente de validación operativa |
-| C · auditoría periódica | Presente localmente | Migraciones 026/027, tests del scheduler y PostgreSQL aislado | Los schedulers no están en Compose ni hay ejecución horaria, recuperación o notificación demostrada en VPS | **No aceptada; pendiente de validación operativa** |
+| C · auditoría periódica | Presente en Compose y despliegue aislado | Migraciones 026/027, tests del scheduler y PostgreSQL aislado | El deploy `44352363402` demostró ciclo inicial, reinicio controlado, recuperación saludable y señales JSONL; falta una transición real de certificación vencida a informe/sello actualizado | **Pendiente de evidencia de transición en producción** |
 | D · auditoría privada de Grumphya | No implementada por diseño | No aplica | No aplica | Posterior a C |
 
 Las etapas son independientes: A no requiere B, C ni D; B no requiere C ni D;
