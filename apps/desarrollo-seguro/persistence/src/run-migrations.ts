@@ -95,6 +95,10 @@ const MIGRATIONS = [
     version: "029_temporarily_disable_scan_admission_window",
     file: "029_temporarily_disable_scan_admission_window.sql",
   },
+  {
+    version: "030_temporarily_disable_report_cache",
+    file: "030_temporarily_disable_report_cache.sql",
+  },
 ] as const;
 
 const MIGRATION_LOCK_ID = 728194032;

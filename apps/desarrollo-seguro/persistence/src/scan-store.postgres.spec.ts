@@ -158,8 +158,8 @@ describePostgres.sequential("PostgresScanStore", () => {
         checks,
         metrics: { requestsCount: 0, bytesCount: 0, durationMs: 1, pagesCount: 0 },
       });
-      // The report cache is measured from completion, so lifecycle assertions
-      // model the next audit after that cache has elapsed.
+      // Beta scan admission has no report cache, so lifecycle assertions can
+      // request the next audit immediately after completion.
       await pool.query(
         "UPDATE ds_scan_jobs SET queued_at = clock_timestamp() - interval '25 hours' WHERE id = $1",
         [job.id],
@@ -417,7 +417,7 @@ describePostgres.sequential("PostgresScanStore", () => {
     expect(queuedCount.rows[0]?.count).toBe(10);
   });
 
-  it("returns the cached report immediately after a recent report", async () => {
+  it("queues a new scan immediately after a recent report during beta", async () => {
     const job = await queueAndClaim();
     await complete(job);
 
@@ -427,7 +427,7 @@ describePostgres.sequential("PostgresScanStore", () => {
       trigger: "requested",
     });
 
-    expect(repeatedScan.kind).toBe("cached");
+    expect(repeatedScan.kind).toBe("queued");
   });
 
   it("retains only a safe terminal failure category and prioritizes a fresh retry", async () => {
@@ -575,41 +575,6 @@ describePostgres.sequential("PostgresScanStore", () => {
       "SELECT count(*)::integer AS count FROM ds_scan_jobs WHERE state = 'running'",
     );
     expect(running.rows[0].count).toBe(1);
-  });
-
-  it("returns the recent report instead of queueing a duplicate scan", async () => {
-    const first = await queueAndClaim();
-    const reportId = await complete(first);
-
-    const fresh = await store.ensureFreshScan({
-      hostname: TEST_HOSTNAME,
-      profileVersion: TEST_PROFILE,
-      trigger: "requested",
-    });
-
-    expect(fresh).toEqual({ kind: "cached", reportId });
-  });
-
-  it("queues a new requested scan after the report cache expires during beta", async () => {
-    const job = await queueAndClaim();
-    const staleCompletedAt = new Date(Date.now() - 61 * 60 * 1000);
-    await complete(
-      job,
-      [CHECK],
-      new Date(staleCompletedAt.getTime() - 60_000),
-      staleCompletedAt,
-    );
-    await pool.query(
-      "UPDATE ds_scan_jobs SET queued_at = clock_timestamp() - interval '2 hours' WHERE id = $1",
-      [job.id],
-    );
-
-    const nextScan = await store.ensureFreshScan({
-      hostname: TEST_HOSTNAME,
-      profileVersion: TEST_PROFILE,
-      trigger: "requested",
-    });
-    expect(nextScan.kind).toBe("queued");
   });
 
   it("reads public reports with only persisted allowlisted evidence", async () => {
