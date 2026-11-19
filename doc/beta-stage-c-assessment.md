@@ -180,3 +180,18 @@ redirección a otro hostname con `redirect_origin_not_allowlisted` y dejó el
 resultado en `inconclusive`, que es el comportamiento fail-closed esperado.
 Esta comprobación no altera el estado de Grumphya ni demuestra todavía la
 transición periódica que falta para cerrar C.
+
+### Certificación activa disponible para la renovación programada (19 de noviembre de 2026)
+
+Después del despliegue de Grumphya #288, Desarrollo Seguro solicitó un análisis
+fresco de `grumphya.com`. El informe `7d9ad93f-cd1a-4af2-9176-d9cfb69d1e0b`
+terminó con veredicto `pass`, evaluación Beta `100/100` y certificación
+`active`; `certifiedReportId` coincide con el identificador del informe. La
+comprobación `DS-HDR-01` observó `csp: true` y las demás categorías de la
+evaluación Beta también quedaron en `pass`.
+
+La puerta reproducible `pnpm certification:preflight` pasó con `score 100/100`.
+Esto elimina el bloqueo que impedía que el scheduler tuviera una certificación
+activa que renovar. C sigue pendiente únicamente de observar el siguiente
+ciclo programado después del vencimiento, con un `reportId` nuevo y la
+actualización coherente del sello.

@@ -111,6 +111,23 @@ las notificaciones y las evidencias de producción. La definición del MVP queda
 fuera de este cierre. No se presenta una puntuación absoluta ficticia ni se
 modifica el repositorio de Grumphya para suplir evidencias.
 
+### Informe público posterior al despliegue de Grumphya (19 de noviembre de 2026,
+21:33 UTC)
+
+Tras el despliegue de Grumphya #288, el análisis solicitado desde Desarrollo
+Seguro produjo el informe `7d9ad93f-cd1a-4af2-9176-d9cfb69d1e0b` con el perfil
+`domain-v3`. El informe es fresco y verificable: `DS-HDR-01` quedó en `pass`
+con `csp: true`, junto con DNS, TLS, HTTP, cookies, rastreadores y rendimiento.
+El veredicto es `pass`, la puntuación ética externa es `100/100` (7 de 8
+criterios evaluados) y la evaluación Beta es `100/100`, con las tres
+categorías concluyentes en `pass`. La certificación quedó `active` y su
+`certifiedReportId` coincide con ese informe.
+
+Esta evidencia cierra la comprobación pública de CSP y deja disponible una
+certificación activa para la siguiente validación de C. No demuestra todavía
+que el scheduler haya renovado la certificación tras su vencimiento; esa
+transición programada continúa siendo la comprobación operativa pendiente.
+
 Los informes detallados de esta revisión están en
 [`beta-stage-c-assessment.md`](beta-stage-c-assessment.md), el plan de D en
 [`beta-stage-d-plan.md`](beta-stage-d-plan.md) y el plan de cierre global en
