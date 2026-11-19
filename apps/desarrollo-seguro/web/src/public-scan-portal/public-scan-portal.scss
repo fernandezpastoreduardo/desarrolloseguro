@@ -707,6 +707,10 @@ $ds-space-block: 40px;
   letter-spacing: -0.02em;
 }
 
+.ds-portal__category-heading > div {
+  min-width: 0;
+}
+
 .ds-portal__category-heading strong {
   max-width: 60%;
   color: var(--ds-accent-strong);
@@ -715,6 +719,67 @@ $ds-space-block: 40px;
   line-height: 1.35;
   text-align: right;
   text-transform: uppercase;
+}
+
+.ds-portal__category-score-ring {
+  --ds-category-score-color: var(--ds-accent);
+  display: grid;
+  flex: 0 0 84px;
+  width: 84px;
+  border: 1px solid color-mix(in srgb, var(--ds-category-score-color) 46%, var(--ds-line));
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ds-paper) 84%, var(--ds-category-score-color));
+  opacity: 0;
+  transform: scale(0.84) rotate(5deg);
+  transition: opacity 500ms ease, transform 700ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.ds-portal__category-score-ring[data-visible="true"] {
+  opacity: 1;
+  transform: scale(1) rotate(0);
+}
+
+.ds-portal__category-score-ring[data-score-state="unknown"] {
+  --ds-category-score-color: var(--ds-muted);
+}
+
+.ds-portal__category-score-ring-svg {
+  display: block;
+  width: 100%;
+  overflow: visible;
+}
+
+.ds-portal__category-score-ring-track,
+.ds-portal__category-score-ring-progress {
+  fill: none;
+  stroke-width: 7;
+}
+
+.ds-portal__category-score-ring-track {
+  stroke: color-mix(in srgb, var(--ds-line) 72%, transparent);
+}
+
+.ds-portal__category-score-ring-progress {
+  stroke: var(--ds-category-score-color);
+  stroke-linecap: round;
+  transform: rotate(-90deg);
+  transform-origin: 50% 50%;
+  transition: stroke-dashoffset 800ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.ds-portal__category-score-ring-value {
+  fill: var(--ds-ink);
+  font-family: var(--ds-mono);
+  font-size: 0.9rem;
+  font-weight: 900;
+  letter-spacing: -0.06em;
+}
+
+.ds-portal__category-score-ring-unit {
+  fill: var(--ds-category-score-color);
+  font-family: var(--ds-mono);
+  font-size: 0.42rem;
+  font-weight: 800;
 }
 
 .ds-portal__report-category > p {
@@ -881,7 +946,9 @@ $ds-space-block: 40px;
 
 @media (prefers-reduced-motion: reduce) {
   .ds-portal__beta-chart,
-  .ds-portal__beta-chart-progress {
+  .ds-portal__beta-chart-progress,
+  .ds-portal__category-score-ring,
+  .ds-portal__category-score-ring-progress {
     transition: none;
   }
 }

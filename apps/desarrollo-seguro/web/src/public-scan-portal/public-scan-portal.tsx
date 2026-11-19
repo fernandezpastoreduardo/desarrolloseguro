@@ -943,8 +943,11 @@ function ReportSummary({
             return (
               <section className="ds-portal__report-category" key={category.id}>
                 <div className="ds-portal__category-heading">
-                  <h4>{category.label}</h4>
-                  <strong>{getCategoryScoreLabel(criteria)}</strong>
+                  <div>
+                    <h4>{category.label}</h4>
+                    <strong>{getCategoryScoreLabel(criteria)}</strong>
+                  </div>
+                  <CategoryScoreRing label={category.label} criteria={criteria} />
                 </div>
                 <p>{category.description}</p>
                 <p className="ds-portal__category-summary">{getCategorySummary(criteria)}</p>
@@ -1071,6 +1074,12 @@ function ReportHistory({
 }
 
 type PublicEthicsCriterion = PublicReport["ethicsAssessment"]["criteria"][number];
+
+type CategoryScore = {
+  score: number | null;
+  assessedCriteria: number;
+  totalCriteria: number;
+};
 
 function useRevealOnView<T extends HTMLElement>() {
   const ref = useRef<T | null>(null);
@@ -1241,6 +1250,57 @@ function BetaEvaluationChart({
         <p>{detail}</p>
       </div>
     </article>
+  );
+}
+
+function CategoryScoreRing({
+  label,
+  criteria,
+}: {
+  label: string;
+  criteria: PublicEthicsCriterion[];
+}) {
+  const { ref, isVisible } = useRevealOnView<HTMLDivElement>();
+  const categoryScore = getCategoryScore(criteria);
+  const value = categoryScore.score ?? 0;
+  const radius = 30;
+  const circumference = 2 * Math.PI * radius;
+  const accessibleLabel = categoryScore.score === null
+    ? `${label}: sin puntuación; ${categoryScore.assessedCriteria} de ${categoryScore.totalCriteria} aspectos evaluados`
+    : `${label}: ${categoryScore.score} de 100 puntos; ${categoryScore.assessedCriteria} de ${categoryScore.totalCriteria} aspectos evaluados`;
+
+  return (
+    <div
+      ref={ref}
+      className="ds-portal__category-score-ring"
+      data-visible={isVisible}
+      data-score-state={categoryScore.score === null ? "unknown" : "scored"}
+      aria-label={accessibleLabel}
+    >
+      <svg
+        className="ds-portal__category-score-ring-svg"
+        viewBox="0 0 84 84"
+        role="img"
+        aria-label={accessibleLabel}
+        focusable="false"
+      >
+        <circle className="ds-portal__category-score-ring-track" cx="42" cy="42" r={radius} />
+        <circle
+          className="ds-portal__category-score-ring-progress"
+          cx="42"
+          cy="42"
+          r={radius}
+          strokeDasharray={circumference}
+          strokeDashoffset={isVisible ? circumference * (1 - value / 100) : circumference}
+        />
+        <text className="ds-portal__category-score-ring-value" x="42" y="40" textAnchor="middle">
+          {categoryScore.score === null ? "—" : categoryScore.score}
+        </text>
+        <text className="ds-portal__category-score-ring-unit" x="42" y="53" textAnchor="middle">
+          /100
+        </text>
+      </svg>
+    </div>
   );
 }
 
@@ -1542,17 +1602,30 @@ function getCheckStatusLabel(status: string): string {
   return "Sin datos";
 }
 
-function getCategoryScoreLabel(criteria: Array<{ status: string; weight: number }>): string {
+function getCategoryScore(criteria: Array<{ status: string; weight: number }>): CategoryScore {
   const assessed = criteria.filter((criterion) => criterion.status !== "unknown");
-  if (assessed.length === 0) return "Sin datos suficientes";
+  if (assessed.length === 0) {
+    return { score: null, assessedCriteria: 0, totalCriteria: criteria.length };
+  }
   const totalWeight = assessed.reduce((sum, criterion) => sum + criterion.weight, 0);
   const passedWeight = assessed
     .filter((criterion) => criterion.status === "pass")
     .reduce((sum, criterion) => sum + criterion.weight, 0);
-  const score = Math.round((passedWeight / totalWeight) * 100);
-  const coverage = `${assessed.length} de ${criteria.length} aspectos evaluados`;
-  if (assessed.length < criteria.length) return `${score}/100 provisional · ${coverage}`;
-  return `${score}/100 · ${coverage}`;
+  return {
+    score: totalWeight === 0 ? null : Math.round((passedWeight / totalWeight) * 100),
+    assessedCriteria: assessed.length,
+    totalCriteria: criteria.length,
+  };
+}
+
+function getCategoryScoreLabel(criteria: Array<{ status: string; weight: number }>): string {
+  const categoryScore = getCategoryScore(criteria);
+  if (categoryScore.score === null) return "Sin datos suficientes";
+  const coverage = `${categoryScore.assessedCriteria} de ${categoryScore.totalCriteria} aspectos evaluados`;
+  if (categoryScore.assessedCriteria < categoryScore.totalCriteria) {
+    return `${categoryScore.score}/100 provisional · ${coverage}`;
+  }
+  return `${categoryScore.score}/100 · ${coverage}`;
 }
 
 function getCategorySummary(criteria: Array<{ status: string }>): string {

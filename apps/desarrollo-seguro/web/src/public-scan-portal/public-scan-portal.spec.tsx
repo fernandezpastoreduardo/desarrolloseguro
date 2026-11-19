@@ -228,6 +228,10 @@ describe("PublicScanPortal", () => {
     expect(screen.getByRole("heading", { name: "Rendimiento" })).toBeVisible();
     expect(screen.getByRole("region", { name: "Niveles de evaluación" })).toBeVisible();
     expect(screen.getByRole("img", { name: "Puntuación global: 100 de 100 puntos" })).toBeVisible();
+    expect(screen.getByRole("img", { name: "Ética: sin puntuación; 0 de 2 aspectos evaluados" })).toBeVisible();
+    expect(screen.getByRole("img", { name: "Privacidad: sin puntuación; 0 de 1 aspectos evaluados" })).toBeVisible();
+    expect(screen.getByRole("img", { name: "Seguridad: 100 de 100 puntos; 1 de 4 aspectos evaluados" })).toBeVisible();
+    expect(screen.getByRole("img", { name: "Rendimiento: sin puntuación; 0 de 1 aspectos evaluados" })).toBeVisible();
     expect(screen.getByRole("img", { name: "Observado: 1 de 8 criterios (13%)" })).toBeVisible();
     expect(screen.getByRole("img", { name: "No observado: 0 de 8 criterios (0%)" })).toBeVisible();
     expect(screen.getByRole("img", { name: "Sin conclusión: 7 de 8 criterios (88%)" })).toBeVisible();
