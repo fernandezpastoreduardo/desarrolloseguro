@@ -913,11 +913,18 @@ $ds-space-block: 40px;
 }
 
 .ds-portal__report-category .ds-portal__category-heading strong,
-.ds-portal__report-category .ds-portal__category-score-ring-unit,
 .ds-portal__report-category .ds-portal__ethics-criteria li > span,
 .ds-portal__report-category .ds-portal__checks li div span,
 .ds-portal__report-category .ds-portal__technical-details summary {
-  color: var(--ds-accent-soft);
+  color: #d4d9e1;
+}
+
+.ds-portal__report-category .ds-portal__category-score-ring-value {
+  fill: #f5ede1;
+}
+
+.ds-portal__report-category .ds-portal__category-score-ring-unit {
+  fill: var(--ds-category-score-color);
 }
 
 .ds-portal__report-category .ds-portal__category-score-ring {

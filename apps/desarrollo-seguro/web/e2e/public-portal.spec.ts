@@ -240,6 +240,14 @@ test("shows the report when an authorized analysis finishes", async ({ page }) =
   await expect(page.locator(".ds-portal__score-ring")).toHaveAttribute("data-score-band", "low");
   await expect(page.locator('.ds-portal__category-score-ring[data-score-band="low"]')).toHaveCount(1);
   await expect(page.locator('.ds-portal__category-score-ring[data-score-band="excellent"]')).toHaveCount(2);
+  await expect(page.locator(".ds-portal__category-score-ring-value").first()).toHaveCSS(
+    "fill",
+    "rgb(245, 237, 225)",
+  );
+  await expect(page.locator(".ds-portal__category-heading strong").first()).toHaveCSS(
+    "color",
+    "rgb(212, 217, 225)",
+  );
   const technicalEvidenceSections = page.locator(".ds-portal__technical-details summary");
   await expect(technicalEvidenceSections).toHaveCount(3);
   for (let index = 0; index < 3; index += 1) {
