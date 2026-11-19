@@ -91,6 +91,11 @@ const REPORT_CATEGORIES = [
   { id: "security", label: "Seguridad", description: "Revisa que el dominio responda, use una conexión cifrada y envíe protecciones básicas al navegador.", criteria: ["dns-integrity", "transport-security", "http-availability", "security-headers"], controls: ["DS-DNS-01", "DS-TLS-01", "DS-TLS-02", "DS-HTTP-01", "DS-HDR-01"] },
   { id: "performance", label: "Rendimiento", description: "Mide cuánto tarda y cuánto pesa la respuesta de portada. No representa toda la experiencia desde otros dispositivos o páginas.", criteria: ["performance"], controls: ["DS-QUAL-02"] },
 ] as const;
+const BETA_EVALUATION_LEVELS = [
+  { id: "observed", label: "Observado", statuses: ["pass"] },
+  { id: "not-observed", label: "No observado", statuses: ["fail"] },
+  { id: "inconclusive", label: "Sin conclusión", statuses: ["unknown", "not_applicable"] },
+] as const;
 const CRITERION_EXPLANATIONS: Record<string, string> = {
   "dns-integrity": "Comprueba que el nombre del dominio lleva a una dirección pública. No confirma quién es su titular.",
   "transport-security": "Comprueba el certificado y qué versiones de TLS acepta la conexión para proteger los datos en tránsito.",
@@ -921,6 +926,7 @@ function ReportSummary({
         </p>
         <p className="ds-portal__report-takeaway">{getReportTakeaway(report.ethicsAssessment.criteria)}</p>
         <p>{report.ethicsAssessment.interpretation}</p>
+        <BetaEvaluationCharts criteria={report.ethicsAssessment.criteria} />
         <div className="ds-portal__report-categories">
           {REPORT_CATEGORIES.map((category) => {
             const criteria = report.ethicsAssessment.criteria.filter((criterion) =>
@@ -1056,6 +1062,77 @@ function ReportHistory({
         ))}
       </ol>
     </section>
+  );
+}
+
+type PublicEthicsCriterion = PublicReport["ethicsAssessment"]["criteria"][number];
+
+function BetaEvaluationCharts({ criteria }: { criteria: PublicEthicsCriterion[] }) {
+  return (
+    <section className="ds-portal__beta-evaluation" aria-labelledby="beta-evaluation-heading">
+      <div className="ds-portal__beta-evaluation-heading">
+        <div>
+          <p className="ds-portal__eyebrow">Lectura beta</p>
+          <h3 id="beta-evaluation-heading">Niveles de evaluación</h3>
+        </div>
+        <p>La lectura separa lo observado, lo que no se observó y lo que todavía no tiene evidencia suficiente.</p>
+      </div>
+      <div className="ds-portal__beta-charts">
+        {BETA_EVALUATION_LEVELS.map((level) => {
+          const count = criteria.filter((criterion) =>
+            (level.statuses as readonly string[]).includes(criterion.status),
+          ).length;
+          return <BetaEvaluationChart key={level.id} id={level.id} label={level.label} count={count} total={criteria.length} />;
+        })}
+      </div>
+    </section>
+  );
+}
+
+function BetaEvaluationChart({
+  id,
+  label,
+  count,
+  total,
+}: {
+  id: string;
+  label: string;
+  count: number;
+  total: number;
+}) {
+  const progress = total === 0 ? 0 : Math.round((count / total) * 100);
+  const radius = 44;
+  const circumference = 2 * Math.PI * radius;
+  const valueLabel = `${progress}%`;
+  const accessibleLabel = `${label}: ${count} de ${total} criterios (${progress}%)`;
+
+  return (
+    <article className="ds-portal__beta-chart" data-level={id}>
+      <svg
+        className="ds-portal__beta-chart-svg"
+        viewBox="0 0 120 120"
+        role="img"
+        aria-label={accessibleLabel}
+        focusable="false"
+      >
+        <circle className="ds-portal__beta-chart-track" cx="60" cy="60" r={radius} />
+        <circle
+          className="ds-portal__beta-chart-progress"
+          cx="60"
+          cy="60"
+          r={radius}
+          strokeDasharray={`${(circumference * progress) / 100} ${circumference}`}
+          strokeDashoffset={circumference / 4}
+        />
+        <text className="ds-portal__beta-chart-value" x="60" y="63" textAnchor="middle">
+          {valueLabel}
+        </text>
+      </svg>
+      <div>
+        <h4>{label}</h4>
+        <p>{count} de {total} criterios</p>
+      </div>
+    </article>
   );
 }
 
