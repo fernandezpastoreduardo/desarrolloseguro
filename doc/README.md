@@ -16,6 +16,7 @@ Esta carpeta reúne documentación técnica del proyecto independiente Desarroll
 - [Cierre de Beta](beta-closure.md): estado por etapa, puertas ejecutadas y dependencias operativas.
 - [Evaluación de C](beta-stage-c-assessment.md): niveles de validación, criterios satisfechos y bloqueantes.
 - [Plan de D](beta-stage-d-plan.md): incrementos de auditoría privada y tareas separadas por repositorio.
+- [Evaluación operativa de D](beta-stage-d-assessment.md): primera ejecución privada autorizada y límites de cobertura.
 - [Cierre global](beta-global-closure-plan.md): validación integral, certificación definitiva y parada antes del MVP.
 - [Calidad](quality-baseline.md): criterios de calidad.
 - [Alcance del producto](desarrollo-seguro.md): propósito, estado y límites del prototipo.

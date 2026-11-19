@@ -150,16 +150,31 @@ de DS y la pública de atestación del despliegue externo, y proporcionar la ACL
 `false` el contenedor termina con `internal_audit_disabled`; las claves no se
 copian ni se leen en ese caso.
 
-La comprobación operativa del 19 de noviembre de 2026 mantiene el preflight D
-en estado pendiente: las siete rutas públicas de Grumphya (`infrastructure`,
-`deployment`, `dependencies`, `auth`, `quality`, `privacy` y `ai`) responden
-`404 application/json`, y el VPS todavía no contiene la clave pública de
-atestación. No se envía el JWT ni se crea un informe privado mientras falte
-alguno de esos recursos.
+La comprobación inicial del 19 de noviembre de 2026 dejó el preflight D en
+estado pendiente: las siete rutas públicas de Grumphya (`infrastructure`,
+`deployment`, `dependencies`, `auth`, `quality`, `privacy` y `ai`) respondían
+`404 application/json`, y aún no estaba instalada la clave pública de
+atestación. Ese estado histórico fue resuelto posteriormente; la ejecución
+autorizada y sus límites se registran en el addendum operativo al final de este
+documento.
 
 En la misma fecha se comprobó desde el VPS la ruta de salida IPv4 del cliente
 de Desarrollo Seguro: `src=31.70.130.181` (IP pública observada por el host).
 Ese valor queda como candidato `31.70.130.181/32` para
 `AUDIT_ALLOWED_NETWORKS`; no se activa ni se considera válido hasta que el
 proxy de Grumphya confirme la IP que recibe realmente.
+
+## Addendum operativo — 19 de noviembre de 2026
+
+El contrato externo quedó provisionado y el proxy de Grumphya confirmó la ACL
+real de hairpin (`172.30.0.1/32`). También están instaladas las claves públicas
+JWT y de atestación, los `kid` allowlisted y los roles PostgreSQL separados.
+Con `AUDIT_ENABLED=true` en Grumphya, la auditoría privada completó las siete
+lecturas autenticadas y produjo un informe `incomplete` con `6/14` criterios.
+
+Este resultado sustituye el estado de preflight pendiente descrito arriba solo
+para la validación de transporte y contrato: no convierte los criterios sin
+evidencia en resultados, no emite certificación y no habilita un sello. La
+evidencia resumida y sus límites están en
+[`beta-stage-d-assessment.md`](beta-stage-d-assessment.md).
 

@@ -12,7 +12,7 @@ operativa del VPS.
 | A · lectura y evaluación pública | Presente en código | Tests, PostgreSQL aislado, CI y smoke contractual | El VPS ya expone un informe real de `grumphya.com` con evidencias de DNS, HTTP, TLS, cabeceras, cookies y rendimiento; sigue siendo una lectura acotada y no una certificación | Pendiente de validación operativa completa |
 | B · historial y comparabilidad | Presente en código | Tests de historial, UUID, perfiles comparables, retención y Playwright | No hay evidencia de un recorrido real sobre producción en la versión actual | Pendiente de validación operativa |
 | C · auditoría periódica | Presente en Compose y despliegue aislado | Migraciones 026/027, tests del scheduler y PostgreSQL aislado | El deploy `44352363402` demostró ciclo inicial, reinicio controlado, recuperación saludable y señales JSONL; falta una transición real de certificación vencida a informe/sello actualizado | **Pendiente de evidencia de transición en producción** |
-| D · auditoría privada de Grumphya | Contrato, lectores allowlisted, proyección, puntuación separada, informe y runner D-08 presentes localmente | Tests unitarios y puertas de tipado/lint/build; no se usan fixtures como evidencia de producción | Pendiente de autorización de recursos, datos sintéticos y ejecución acotada en producción | Pendiente de validación operativa y contrato externo |
+| D · auditoría privada de Grumphya | Contrato, lectores allowlisted, proyección, puntuación separada, informe y runner D-08 presentes | Tests unitarios y puertas de tipado/lint/build; no se usan fixtures como evidencia de producción | Primera ejecución autorizada completada; informe privado `incomplete` con 6/14 criterios, sin certificación pública | Pendiente de ampliar cobertura y aceptar D de forma completa |
 
 Las etapas son independientes: A no requiere B, C ni D; B no requiere C ni D;
 C no requiere D. La puntuación interna pertenece a D. La puntuación global
@@ -84,8 +84,11 @@ del 18 de noviembre de 2026 confirmó además ambos schedulers arrancados y
 señales de ciclo completado, pero `grumphya.com` no tiene una certificación
 activa (`certifiedReportId: null`), así que lo restante es una validación
 operativa específica, no una nueva funcionalidad. En D, el runner local ya
-coordina la lectura secuencial y el fallo seguro; la aceptación queda detenida
-hasta que existan los recursos y datos sintéticos autorizados de Grumphya.
+coordina la lectura secuencial y el fallo seguro. La ejecución privada
+autorizada del 19 de noviembre de 2026 confirma el canal de producción, la
+verificación JWT/atestación y la proyección acotada; su resultado deliberadamente
+incompleto se documenta en [la evaluación operativa de D](beta-stage-d-assessment.md)
+y no concede un sello ni una certificación.
 
 El cierre global de Beta es posterior a A, B, C y D. Solo entonces se validará
 la operación integral, la puntuación externa e interna, la puntuación global
