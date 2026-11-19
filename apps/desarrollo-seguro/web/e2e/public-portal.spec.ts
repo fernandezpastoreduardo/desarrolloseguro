@@ -238,6 +238,12 @@ test("shows the report when an authorized analysis finishes", async ({ page }) =
   await expect(securityDialog).toBeVisible();
   expect(await securityDialog.evaluate((element) => element.closest(".ds-portal__report-category"))).toBeNull();
   expect((await securityDialog.boundingBox())?.width ?? 0).toBeGreaterThan(400);
+  await expect(
+    securityDialog.locator('.ds-portal__ethics-criteria li[data-status="pass"] > span').first(),
+  ).toHaveText("Correcto");
+  await expect(
+    securityDialog.locator('.ds-portal__ethics-criteria li[data-status="unknown"] > span').first(),
+  ).toHaveText("Sin datos");
   await expect(page.getByText("La conexión protege los datos")).toBeVisible();
   await expect(page.locator(".ds-portal__score-ring")).toHaveAttribute("data-score-band", "low");
   await expect(page.locator('.ds-portal__category-score-ring[data-score-band="low"]')).toHaveCount(1);
@@ -261,6 +267,9 @@ test("shows the report when an authorized analysis finishes", async ({ page }) =
   await page.getByRole("button", { name: "Cerrar detalle" }).click();
   await categoryButtons.nth(0).click();
   await expect(page.getByRole("dialog", { name: "Ética" })).toBeVisible();
+  await expect(
+    page.locator('.ds-portal__category-modal .ds-portal__ethics-criteria li[data-status="fail"] > span').first(),
+  ).toHaveText("Problema detectado");
   await page.locator(".ds-portal__technical-details summary").click();
   await expect(page.getByText("Referencias a rastreadores conocidos").first()).toBeVisible();
   await expect(page.getByText(/Revisa las referencias detectadas/i)).toBeVisible();

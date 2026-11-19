@@ -1399,7 +1399,10 @@ function CategoryDetailsModal({
               <summary>Ver evidencias técnicas ({checks.length} comprobación{checks.length === 1 ? "" : "es"})</summary>
               <ul className="ds-portal__checks">
                 {checks.map((check) => (
-                  <li key={`${check.controlId}-${check.targetPath}-${check.method}`}>
+                  <li
+                    key={`${check.controlId}-${check.targetPath}-${check.method}`}
+                    data-status={check.status}
+                  >
                     <div><strong>{getControlLabel(check.controlId)}</strong><span>{getCheckStatusLabel(check.status)}</span></div>
                     <p>{check.summary}</p>
                     {Object.keys(check.evidence).length > 0 && (
