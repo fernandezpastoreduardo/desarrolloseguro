@@ -73,21 +73,29 @@ docker run --detach \
   --env "POSTGRES_PASSWORD=$ADMIN_PASSWORD" \
   "$POSTGRES_IMAGE" >/dev/null
 
-database_ready=0
-for _ in $(seq 1 60); do
-  if docker exec "$DATABASE_NAME" psql \
-    -U development_security_smoke_admin \
-    -d development_security_smoke_admin \
-    -Atqc 'SELECT 1' >/dev/null 2>&1; then
-    database_ready=1
-    break
-  fi
-  sleep 1
-done
-[[ $database_ready == 1 ]] || {
+wait_for_postgres() {
+  local consecutive_successes=0
+  for _ in $(seq 1 60); do
+    if docker exec "$DATABASE_NAME" psql \
+      -U development_security_smoke_admin \
+      -d development_security_smoke_admin \
+      -Atqc 'SELECT 1' >/dev/null 2>&1; then
+      consecutive_successes=$((consecutive_successes + 1))
+      if (( consecutive_successes >= 2 )); then
+        return 0
+      fi
+    else
+      consecutive_successes=0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
+if ! wait_for_postgres; then
   printf 'Isolated PostgreSQL did not become ready.\n' >&2
   exit 1
-}
+fi
 
 docker exec "$DATABASE_NAME" psql \
   -U development_security_smoke_admin \
@@ -112,21 +120,10 @@ docker exec "$DATABASE_NAME" sh -c \
   'hba_file=$(psql -U development_security_smoke_admin -d development_security_smoke_admin -Atc "SHOW hba_file") && sed -i "1ihostnossl all all all reject" "$hba_file" && psql -U development_security_smoke_admin -d development_security_smoke_admin -c "SELECT pg_reload_conf()" >/dev/null'
 docker restart "$DATABASE_NAME" >/dev/null
 
-tls_ready=0
-for _ in $(seq 1 60); do
-  if docker exec "$DATABASE_NAME" psql \
-    -U development_security_smoke_admin \
-    -d development_security_smoke_admin \
-    -Atqc 'SELECT 1' >/dev/null 2>&1; then
-    tls_ready=1
-    break
-  fi
-  sleep 1
-done
-[[ $tls_ready == 1 ]] || {
+if ! wait_for_postgres; then
   printf 'TLS-enabled isolated PostgreSQL did not become ready.\n' >&2
   exit 1
-}
+fi
 
 docker create \
   --name "$API_NAME" \

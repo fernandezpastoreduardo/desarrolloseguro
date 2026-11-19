@@ -24,6 +24,7 @@ assert.ok(apiLaunch, "the smoke must start the supplied production API image");
 
 assert.match(smokeScript, /set -Eeuo pipefail/);
 assert.match(smokeScript, /umask 077/);
+assert.match(smokeScript, /wait_for_postgres\(\)[\s\S]*consecutive_successes[\s\S]*consecutive_successes >= 2/u);
 assert.match(
   smokeScript,
   /STACK_ID="ds-production-smoke-\$\{GITHUB_RUN_ID:-local\}-\$\{GITHUB_RUN_ATTEMPT:-1\}-\$\$"/,
