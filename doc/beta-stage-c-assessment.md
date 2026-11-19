@@ -161,3 +161,21 @@ de `grumphya.com` sigue `stale`, la certificación sigue `pending` y no hay un
 informe certificado activo que pueda activar una auditoría periódica. Esta
 observación confirma continuidad del servicio, pero no añade evidencia de la
 transición funcional que falta para aceptar C.
+
+### Despliegue posterior y comprobación de transporte (19 de noviembre de 2026)
+
+El workflow `44568309742` publicó `d113292` después de que pasaran Playwright,
+auditoría de dependencias, puertas de calidad, PostgreSQL, construcción y
+escaneo de imágenes. La respuesta pública de `https://desarrolloseguro.org/`
+incluye CSP, HSTS, `X-Content-Type-Options`, `X-Frame-Options`,
+`Permissions-Policy` y `Cache-Control: no-store`.
+
+El smoke autorizado de `grumphya.com` pasó validando el informe vigente
+(`8/9` comprobaciones concluyentes, `69/100`), pero la admisión fue
+`rate_limited`; ese informe es anterior al despliegue y no se usa como
+evidencia de una nueva auditoría. Para comprobar la versión publicada se
+encoló un único análisis de `www.desarrolloseguro.org`. El scanner rechazó la
+redirección a otro hostname con `redirect_origin_not_allowlisted` y dejó el
+resultado en `inconclusive`, que es el comportamiento fail-closed esperado.
+Esta comprobación no altera el estado de Grumphya ni demuestra todavía la
+transición periódica que falta para cerrar C.

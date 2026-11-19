@@ -61,6 +61,14 @@ agregado solo registra dos eventos iniciales `NULL → pending`. No existe aún
 una transición operativa a `active` sobre la que el scheduler pueda ejecutar
 una renovación.
 
+El despliegue `44568309742` (commit `d113292`) volvió a pasar todas las puertas
+de CI y dejó pública la política CSP. El smoke posterior reutilizó de forma
+deliberada el informe vigente de `grumphya.com` por la ventana de admisión;
+no se presenta ese resultado como una auditoría nueva. Un análisis aislado del
+subdominio propio `www.desarrolloseguro.org` confirmó además que una
+redirección fuera del hostname solicitado se conserva como `unknown` con
+diagnóstico acotado, sin convertirla en un aprobado.
+
 ## Contratos de seguridad y privacidad
 
 - El scanner público solo observa el perfil y las rutas declaradas, sin
