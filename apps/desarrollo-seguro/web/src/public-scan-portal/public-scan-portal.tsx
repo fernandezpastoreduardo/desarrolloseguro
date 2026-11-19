@@ -912,13 +912,18 @@ function ReportSummary({
     <>
       <CertificationStatus certification={report.certification} />
       <section className="ds-portal__ethics" aria-labelledby="ethics-summary-heading">
-        <p className="ds-portal__eyebrow">Resumen del dominio</p>
-        <h3 id="ethics-summary-heading">Resumen y puntuación</h3>
-        <p className="ds-portal__ethics-score">
-          {report.ethicsAssessment.score === null
-            ? `Sin puntuación: faltan controles observables · ${report.ethicsAssessment.assessedCriteria} de ${report.ethicsAssessment.totalCriteria} criterios evaluados`
-            : `${report.ethicsAssessment.score}/100${report.ethicsAssessment.assessedCriteria < report.ethicsAssessment.totalCriteria ? " · provisional" : ""} · ${report.ethicsAssessment.assessedCriteria} de ${report.ethicsAssessment.totalCriteria} criterios evaluados`}
-        </p>
+        <div className="ds-portal__score-lead">
+          <div className="ds-portal__score-copy">
+            <p className="ds-portal__eyebrow">Resumen del dominio</p>
+            <h3 id="ethics-summary-heading">Resumen y puntuación</h3>
+            <p className="ds-portal__ethics-score">
+              {report.ethicsAssessment.score === null
+                ? `Sin puntuación: faltan controles observables · ${report.ethicsAssessment.assessedCriteria} de ${report.ethicsAssessment.totalCriteria} criterios evaluados`
+                : `${report.ethicsAssessment.score}/100${report.ethicsAssessment.assessedCriteria < report.ethicsAssessment.totalCriteria ? " · provisional" : ""} · ${report.ethicsAssessment.assessedCriteria} de ${report.ethicsAssessment.totalCriteria} criterios evaluados`}
+            </p>
+          </div>
+          <GlobalScoreRing score={report.ethicsAssessment.score} />
+        </div>
         <p className="ds-portal__score-method">
           La puntuación solo se calcula con los criterios evaluados. Los que no
           tienen evidencia quedan como desconocidos y no suman ni restan; una
@@ -926,10 +931,7 @@ function ReportSummary({
         </p>
         <p className="ds-portal__report-takeaway">{getReportTakeaway(report.ethicsAssessment.criteria)}</p>
         <p>{report.ethicsAssessment.interpretation}</p>
-        <BetaEvaluationCharts
-          criteria={report.ethicsAssessment.criteria}
-          score={report.ethicsAssessment.score}
-        />
+        <BetaEvaluationCharts criteria={report.ethicsAssessment.criteria} />
         <div className="ds-portal__report-categories">
           {REPORT_CATEGORIES.map((category) => {
             const criteria = report.ethicsAssessment.criteria.filter((criterion) =>
@@ -1098,13 +1100,61 @@ function useRevealOnView<T extends HTMLElement>() {
   return { ref, isVisible };
 }
 
-function BetaEvaluationCharts({
-  criteria,
-  score,
-}: {
-  criteria: PublicEthicsCriterion[];
-  score: number | null;
-}) {
+function GlobalScoreRing({ score }: { score: number | null }) {
+  const { ref, isVisible } = useRevealOnView<HTMLElement>();
+  const value = score ?? 0;
+  const radius = 52;
+  const circumference = 2 * Math.PI * radius;
+  const progress = Math.min(100, Math.max(0, value));
+  const accessibleLabel =
+    score === null
+      ? "Puntuación global: sin puntuación"
+      : `Puntuación global: ${score} de 100 puntos`;
+
+  return (
+    <section
+      ref={ref}
+      className="ds-portal__score-ring"
+      data-visible={isVisible}
+      aria-label={accessibleLabel}
+    >
+      <svg
+        className="ds-portal__score-ring-svg"
+        viewBox="0 0 140 140"
+        role="img"
+        aria-label={accessibleLabel}
+        focusable="false"
+      >
+        <circle className="ds-portal__score-ring-track" cx="70" cy="70" r={radius} />
+        <circle
+          className="ds-portal__score-ring-halo"
+          cx="70"
+          cy="70"
+          r="60"
+        />
+        <circle
+          className="ds-portal__score-ring-progress"
+          cx="70"
+          cy="70"
+          r={radius}
+          strokeDasharray={circumference}
+          strokeDashoffset={
+            isVisible ? circumference * (1 - progress / 100) : circumference
+          }
+        />
+        <text className="ds-portal__score-ring-value" x="70" y="67" textAnchor="middle">
+          {score === null ? "—" : score}
+        </text>
+        <text className="ds-portal__score-ring-unit" x="70" y="85" textAnchor="middle">
+          /100
+        </text>
+      </svg>
+      <span className="ds-portal__score-ring-caption">Valoración global</span>
+    </section>
+  );
+}
+
+function BetaEvaluationCharts({ criteria }: { criteria: PublicEthicsCriterion[] }) {
   return (
     <section className="ds-portal__beta-evaluation" aria-labelledby="beta-evaluation-heading">
       <div className="ds-portal__beta-evaluation-heading">
@@ -1115,19 +1165,6 @@ function BetaEvaluationCharts({
         <p>La lectura separa lo observado, lo que no se observó y lo que todavía no tiene evidencia suficiente.</p>
       </div>
       <div className="ds-portal__beta-charts">
-        <BetaEvaluationChart
-          id="global-score"
-          label="Puntuación global"
-          value={score ?? 0}
-          max={100}
-          valueLabel={score === null ? "—" : `${score}`}
-          detail={score === null ? "Sin puntuación" : "de 100 puntos"}
-          accessibleLabel={
-            score === null
-              ? "Puntuación global: sin puntuación"
-              : `Puntuación global: ${score} de 100 puntos`
-          }
-        />
         {BETA_EVALUATION_LEVELS.map((level) => {
           const count = criteria.filter((criterion) =>
             (level.statuses as readonly string[]).includes(criterion.status),
