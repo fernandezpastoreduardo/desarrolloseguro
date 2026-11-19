@@ -210,6 +210,10 @@ describe("PublicScanPortal", () => {
     expect(screen.getByText("1 informe")).toBeVisible();
     expect(screen.getByText(REPORT_SUMMARY)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Resumen y puntuación" })).toBeVisible();
+    const categoryButtons = screen.getAllByRole("button", { name: "Más información" });
+    for (const categoryButton of categoryButtons) {
+      await user.click(categoryButton);
+    }
     expect(screen.getByText("100/100 · provisional · 1 de 8 criterios evaluados")).toBeVisible();
     expect(screen.getByText(/solo se calcula con los criterios evaluados/i)).toBeVisible();
     expect(screen.getByText("No se detectaron problemas en 1 aspecto evaluado. 7 aspectos aún no tienen datos."))

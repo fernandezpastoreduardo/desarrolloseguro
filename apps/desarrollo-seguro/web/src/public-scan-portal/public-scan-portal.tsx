@@ -908,6 +908,10 @@ function ReportSummary({
   history: PublicReportHistoryEntry[];
 }) {
   const isCurrent = state === "fresh";
+  const [expandedCategoryIds, setExpandedCategoryIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+
   return (
     <>
       <CertificationStatus certification={report.certification} />
@@ -924,13 +928,6 @@ function ReportSummary({
           </div>
           <GlobalScoreRing score={report.ethicsAssessment.score} />
         </div>
-        <p className="ds-portal__score-method">
-          La puntuación solo se calcula con los criterios evaluados. Los que no
-          tienen evidencia quedan como desconocidos y no suman ni restan; una
-          puntuación alta con pocos datos no significa que el sitio esté libre de problemas.
-        </p>
-        <p className="ds-portal__report-takeaway">{getReportTakeaway(report.ethicsAssessment.criteria)}</p>
-        <p>{report.ethicsAssessment.interpretation}</p>
         <BetaEvaluationCharts criteria={report.ethicsAssessment.criteria} />
         <div className="ds-portal__report-categories">
           {REPORT_CATEGORIES.map((category) => {
@@ -940,8 +937,14 @@ function ReportSummary({
             const checks = report.checks.filter((check) =>
               (category.controls as readonly string[]).includes(check.controlId),
             );
+            const isExpanded = expandedCategoryIds.has(category.id);
+            const detailsId = `report-category-details-${category.id}`;
             return (
-              <section className="ds-portal__report-category" key={category.id}>
+              <section
+                className="ds-portal__report-category"
+                key={category.id}
+                data-expanded={isExpanded}
+              >
                 <div className="ds-portal__category-heading">
                   <div>
                     <h4>{category.label}</h4>
@@ -949,45 +952,67 @@ function ReportSummary({
                   </div>
                   <CategoryScoreRing label={category.label} criteria={criteria} />
                 </div>
-                <p>{category.description}</p>
                 <p className="ds-portal__category-summary">{getCategorySummary(criteria)}</p>
-                <ul className="ds-portal__ethics-criteria">
-                  {criteria.map((criterion) => (
-                    <li key={criterion.id} data-status={criterion.status}>
-                      <div>
-                        <strong>{getCriterionDisplayLabel(criterion.id, criterion.label)}</strong>
-                        <p><b>Qué comprueba:</b> {CRITERION_EXPLANATIONS[criterion.id]}</p>
-                        <p><b>Qué significa:</b> {getCriterionOutcome(criterion.id, criterion.status)}</p>
-                        <p className="ds-portal__criterion-evidence"><b>Dato observado:</b> {getCriterionEvidenceSummary(criterion.id, checks)}</p>
-                        {criterion.status !== "pass" && (
-                          <p><b>Qué revisar:</b> {CRITERION_RECOMMENDATIONS[criterion.id]}</p>
-                        )}
-                      </div>
-                      <span>{getCheckStatusLabel(criterion.status)}</span>
-                    </li>
-                  ))}
-                </ul>
-                {checks.length > 0 && (
-                  <details className="ds-portal__technical-details">
-                    <summary>Ver evidencias técnicas ({checks.length} comprobación{checks.length === 1 ? "" : "es"})</summary>
-                    <ul className="ds-portal__checks">
-                      {checks.map((check) => (
-                        <li key={`${check.controlId}-${check.targetPath}-${check.method}`}>
-                          <div><strong>{getControlLabel(check.controlId)}</strong><span>{getCheckStatusLabel(check.status)}</span></div>
-                          <p>{check.summary}</p>
-                          {Object.keys(check.evidence).length > 0 && (
-                            <dl className="ds-portal__evidence">
-                              {Object.entries(check.evidence).map(([key, value]) => (
-                                <div key={key}><dt>{EVIDENCE_LABELS[key] ?? key}</dt><dd>{formatEvidenceValue(value, key)}</dd></div>
-                              ))}
-                            </dl>
+                <button
+                  className="ds-portal__category-more"
+                  type="button"
+                  aria-expanded={isExpanded}
+                  aria-controls={detailsId}
+                  onClick={() => {
+                    setExpandedCategoryIds((current) => {
+                      const next = new Set(current);
+                      if (next.has(category.id)) {
+                        next.delete(category.id);
+                      } else {
+                        next.add(category.id);
+                      }
+                      return next;
+                    });
+                  }}
+                >
+                  <span>{isExpanded ? "Ocultar información" : "Más información"}</span>
+                  <span aria-hidden="true">↗</span>
+                </button>
+                <div className="ds-portal__category-details" id={detailsId} hidden={!isExpanded}>
+                  <p>{category.description}</p>
+                  <ul className="ds-portal__ethics-criteria">
+                    {criteria.map((criterion) => (
+                      <li key={criterion.id} data-status={criterion.status}>
+                        <div>
+                          <strong>{getCriterionDisplayLabel(criterion.id, criterion.label)}</strong>
+                          <p><b>Qué comprueba:</b> {CRITERION_EXPLANATIONS[criterion.id]}</p>
+                          <p><b>Qué significa:</b> {getCriterionOutcome(criterion.id, criterion.status)}</p>
+                          <p className="ds-portal__criterion-evidence"><b>Dato observado:</b> {getCriterionEvidenceSummary(criterion.id, checks)}</p>
+                          {criterion.status !== "pass" && (
+                            <p><b>Qué revisar:</b> {CRITERION_RECOMMENDATIONS[criterion.id]}</p>
                           )}
-                          <small>{check.method} {check.targetPath} · {check.limitation}</small>
-                        </li>
-                      ))}
-                    </ul>
-                  </details>
-                )}
+                        </div>
+                        <span>{getCheckStatusLabel(criterion.status)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  {checks.length > 0 && (
+                    <details className="ds-portal__technical-details">
+                      <summary>Ver evidencias técnicas ({checks.length} comprobación{checks.length === 1 ? "" : "es"})</summary>
+                      <ul className="ds-portal__checks">
+                        {checks.map((check) => (
+                          <li key={`${check.controlId}-${check.targetPath}-${check.method}`}>
+                            <div><strong>{getControlLabel(check.controlId)}</strong><span>{getCheckStatusLabel(check.status)}</span></div>
+                            <p>{check.summary}</p>
+                            {Object.keys(check.evidence).length > 0 && (
+                              <dl className="ds-portal__evidence">
+                                {Object.entries(check.evidence).map(([key, value]) => (
+                                  <div key={key}><dt>{EVIDENCE_LABELS[key] ?? key}</dt><dd>{formatEvidenceValue(value, key)}</dd></div>
+                                ))}
+                              </dl>
+                            )}
+                            <small>{check.method} {check.targetPath} · {check.limitation}</small>
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
+                </div>
               </section>
             );
           })}
@@ -1033,6 +1058,17 @@ function ReportSummary({
         Un resultado vigente describe solo las rutas y señales incluidas en este
         informe. No acredita la seguridad completa del sitio.
       </p>
+      <section className="ds-portal__report-method" aria-labelledby="report-method-heading">
+        <p className="ds-portal__eyebrow">Notas de lectura</p>
+        <h3 id="report-method-heading">Cómo interpretar esta ficha</h3>
+        <p className="ds-portal__score-method">
+          La puntuación solo se calcula con los criterios evaluados. Los que no
+          tienen evidencia quedan como desconocidos y no suman ni restan; una
+          puntuación alta con pocos datos no significa que el sitio esté libre de problemas.
+        </p>
+        <p className="ds-portal__report-takeaway">{getReportTakeaway(report.ethicsAssessment.criteria)}</p>
+        <p>{report.ethicsAssessment.interpretation}</p>
+      </section>
     </>
   );
 }
