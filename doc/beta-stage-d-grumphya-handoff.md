@@ -22,6 +22,18 @@ allowlisted y conservará estados, códigos, contadores, digests y timestamps.
 - Retención: máximo 30 días para el informe privado y sus digests; revocación
   inmediata de la identidad y contacto operativo documentado.
 
+### Identidad DS preparada
+
+La identidad técnica ya está generada en el VPS de Desarrollo Seguro, pero no
+está activa para producción. El `kid` vigente es `ds-auditor-2026`. La clave
+pública Ed25519 se entrega por el canal operativo seguro; su huella SHA-256
+canónica sobre el DER SPKI es
+`b4aea1fe81f85f13370708dbb38fc22e0815b4aaf59dc5c869d74394b2d27caa`.
+La clave privada permanece en Desarrollo Seguro y nunca debe copiarse a
+Grumphya. La ruta observada de salida del VPS es `31.70.130.181`; el valor
+candidato para `AUDIT_ALLOWED_NETWORKS` es `31.70.130.181/32`, pendiente de
+confirmación por el proxy de Grumphya.
+
 ## Catálogo mínimo de recursos
 
 Grumphya debe publicar rutas estables y versionadas bajo un prefijo de
