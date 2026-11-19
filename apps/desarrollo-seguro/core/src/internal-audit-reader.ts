@@ -195,7 +195,6 @@ function auditResourceName(resource: AuthorizedInternalAuditOperation["resource"
 function mapDeploymentCheck(name: unknown): string {
   if (typeof name !== "string") return "production_configuration_checked";
   const normalized = name.toLowerCase();
-  if (normalized.includes("trivy") || normalized.includes("depend")) return "dependency_audit_passed";
   if (normalized.includes("secret")) return "secrets_not_in_image";
   if (normalized.includes("api") || normalized.includes("surface")) return "api_surface_allowlisted";
   return "production_configuration_checked";
