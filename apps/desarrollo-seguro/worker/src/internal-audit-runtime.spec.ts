@@ -184,6 +184,7 @@ describe("internal audit runtime configuration", () => {
     expect(JSON.parse(Buffer.from(payload, "base64url").toString())).toMatchObject({
       iss: "desarrolloseguro-audit",
       aud: "grumphya-audit",
+      sub: "desarrolloseguro-audit",
       domain: "grumphya.com",
       environment: "production",
       scope: "audit:infrastructure audit:application audit:authentication audit:quality audit:privacy audit:ethics audit:ai",

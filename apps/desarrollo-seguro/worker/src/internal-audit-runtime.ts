@@ -17,7 +17,7 @@ const ATTESTATION_KID = "AUDIT_RELEASE_ATTESTATION_KID";
 const AUDIT_SCOPES = "AUDIT_SCOPES";
 const EXPECTED_ISSUER = "desarrolloseguro-audit";
 const EXPECTED_AUDIENCE = "grumphya-audit";
-const SUBJECT = "desarrollo-seguro-audit";
+const SUBJECT = "desarrolloseguro-audit";
 
 const OPERATIONS = [
   { resource: "infrastructure_snapshot", method: "GET", hostname: "grumphya.com", path: "/audit/infrastructure" },
