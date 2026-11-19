@@ -74,8 +74,7 @@ if (
       network === "::/0" ||
       addressFamily === 0 ||
       !Number.isInteger(prefixLength) ||
-      prefixLength < 1 ||
-      prefixLength > (addressFamily === 4 ? 32 : 128)
+      prefixLength !== (addressFamily === 4 ? 32 : 128)
     );
   })
 ) {

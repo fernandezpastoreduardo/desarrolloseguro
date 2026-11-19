@@ -52,4 +52,32 @@ describe("signed internal audit response envelope", () => {
       now: () => now,
     })).toThrow("internal_audit_response_envelope_invalid");
   });
+
+  it("rejects a valid signature when evidence is changed after signing", () => {
+    const tampered = envelope() as Record<string, unknown>;
+    tampered.evidence = { status: "pass", extra: "not-signed" };
+    expect(() => parseInternalAuditResponseEnvelope(tampered, {
+      publicKeys: new Map([["grumphya-release-2026", publicKey]]),
+      now: () => now,
+    })).toThrow("internal_audit_attestation_invalid");
+  });
+
+  it("rejects future evidence beyond the allowed clock skew", () => {
+    const future = envelope({
+      observedAt: "2026-11-18T20:02:00.000Z",
+      validUntil: "2026-11-18T20:15:00.000Z",
+    });
+    expect(() => parseInternalAuditResponseEnvelope(future, {
+      publicKeys: new Map([["grumphya-release-2026", publicKey]]),
+      now: () => now,
+    })).toThrow("internal_audit_evidence_stale");
+  });
+
+  it("rejects unknown envelope fields before verifying a signature", () => {
+    const extraField = { ...envelope(), internalNote: "must-not-cross-boundary" };
+    expect(() => parseInternalAuditResponseEnvelope(extraField, {
+      publicKeys: new Map([["grumphya-release-2026", publicKey]]),
+      now: () => now,
+    })).toThrow("internal_audit_response_envelope_invalid");
+  });
 });

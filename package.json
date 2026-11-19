@@ -20,6 +20,7 @@
     "audit:preflight": "node scripts/check-internal-audit-config.mjs",
     "audit:identity:provision": "bash scripts/provision-internal-audit-identity.sh",
     "audit:resources:preflight": "node scripts/check-internal-audit-resources.mjs",
+    "audit:egress:probe": "bash scripts/probe-development-security-egress.sh",
     "ci:verify": "bash scripts/ci-verify.sh",
     "quality:check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "quality:sonar": "pnpm test:coverage && node scripts/run-sonarqube-local.mjs",

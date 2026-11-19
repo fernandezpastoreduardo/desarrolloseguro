@@ -25,7 +25,7 @@ const baseEnv = {
   AUDIT_TECHNICAL_AUTH_KID: "ds-auditor-2026",
   AUDIT_RELEASE_ATTESTATION_PUBLIC_KEY_FILE: publicKey,
   AUDIT_RELEASE_ATTESTATION_KID: "grumphya-release-2026",
-  AUDIT_ALLOWED_NETWORKS: "172.29.0.0/24",
+  AUDIT_ALLOWED_NETWORKS: "31.70.130.181/32",
   AUDIT_TECHNICAL_AUTH_ALLOWED_KIDS: "ds-auditor-2026",
 };
 
@@ -41,7 +41,7 @@ assert.equal(disabled.status, 0);
 assert.match(disabled.stdout, /internal_audit_disabled/u);
 
 const broadNetwork = spawnSync(process.execPath, [script], {
-  env: { ...baseEnv, AUDIT_ALLOWED_NETWORKS: "0.0.0.0/0" },
+  env: { ...baseEnv, AUDIT_ALLOWED_NETWORKS: "31.70.130.0/24" },
   encoding: "utf8",
 });
 assert.equal(broadNetwork.status, 1);

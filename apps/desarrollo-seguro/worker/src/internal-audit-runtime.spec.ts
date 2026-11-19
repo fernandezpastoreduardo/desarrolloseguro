@@ -140,7 +140,7 @@ describe("internal audit runtime configuration", () => {
     expect(() => createInternalAuditRuntime({
       ...base,
       AUDIT_TECHNICAL_AUTH_ALLOWED_KIDS: "ds-auditor-2026",
-      AUDIT_ALLOWED_NETWORKS: "0.0.0.0/0",
+      AUDIT_ALLOWED_NETWORKS: "31.70.130.0/24",
     })).toThrow("internal_audit_networks_invalid");
     rmSync(directory, { recursive: true, force: true });
   });
