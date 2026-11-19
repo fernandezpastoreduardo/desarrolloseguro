@@ -18,7 +18,112 @@ function operation(resource: string, path: string) {
   return { resource, method: "GET", hostname: "grumphya.com", path };
 }
 
+function resourceForPath(path: string): string {
+  const resources: Record<string, string> = {
+    "/audit/infrastructure": "infrastructure_snapshot",
+    "/audit/deployment": "deployment_attestation",
+    "/audit/dependencies": "dependency_inventory",
+    "/audit/auth": "synthetic_browser_flow",
+    "/audit/quality": "performance_observation",
+    "/audit/privacy": "privacy_observation",
+    "/audit/ai": "ai_observation",
+  };
+  return resources[path] ?? "";
+}
+
 describe("internal audit runner", () => {
+  it("completes the seven-route contract in order with bounded signed evidence", async () => {
+    const evidenceByPath: Record<string, unknown> = {
+      "/audit/infrastructure": {
+        observedAt,
+        snapshotHash: "a".repeat(64),
+        services: [{
+          name: "api",
+          imageDigest: `sha256:${"b".repeat(64)}`,
+          exposure: "internal",
+          privilege: "rootless",
+          transport: "internal_tls_verified",
+        }],
+      },
+      "/audit/deployment": {
+        observedAt,
+        environment: "production",
+        artifactDigest: `sha256:${"c".repeat(64)}`,
+        dependencyDigest: `sha256:${"d".repeat(64)}`,
+        checks: ["secrets_not_in_image", "api_surface_allowlisted"],
+      },
+      "/audit/dependencies": {
+        observedAt,
+        inventoryDigest: `sha256:${"e".repeat(64)}`,
+        packageCount: 20,
+        vulnerablePackageCount: 0,
+        highRiskCount: 0,
+        criticalRiskCount: 0,
+      },
+      "/audit/auth": {
+        flow: "authorization_boundary",
+        status: "pass",
+        principalClass: "synthetic_auditor",
+        subjectRef: `sha256:${"f".repeat(64)}`,
+        observedAt,
+        reasonCode: "authorization_boundary_passed",
+      },
+      "/audit/quality": {
+        kind: "e2e_flow",
+        status: "pass",
+        metricCode: "report_flow_loaded",
+        value: 180,
+        unit: "milliseconds",
+        sampleRef: `sha256:${"1".repeat(64)}`,
+        observedAt,
+      },
+      "/audit/privacy": {
+        area: "consent",
+        status: "pass",
+        signalCode: "consent_state_respected",
+        value: 1,
+        unit: "boolean",
+        sampleRef: `sha256:${"2".repeat(64)}`,
+        observedAt,
+      },
+      "/audit/ai": {
+        area: "transparency",
+        status: "pass",
+        signalCode: "ai_disclosure_present",
+        value: 1,
+        unit: "boolean",
+        sampleRef: `sha256:${"3".repeat(64)}`,
+        observedAt,
+      },
+    };
+    const paths = Object.keys(evidenceByPath);
+    const fetcher = vi.fn(async (url: string) => {
+      const path = new URL(url).pathname;
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: (name: string) => name === "content-type" ? "application/json" : null },
+        json: async () => signedAuditEvidence(evidenceByPath[path]),
+      };
+    });
+
+    const result = await runInternalAudit({
+      request: { ...request, scopes: ["infrastructure", "application", "authentication", "quality", "privacy", "ethics", "ai"] },
+      auditRef,
+      observedAt,
+      operations: paths.map((path) => operation(resourceForPath(path), path)),
+      fetcher,
+      auth: TEST_AUDIT_AUTH,
+    });
+
+    expect(result.status).toBe("completed");
+    if (result.status !== "completed") return;
+    expect(result.completedOperations).toBe(7);
+    expect(result.report.assessment.assessedCriteria).toBe(8);
+    expect(result.report.assessment.status).toBe("incomplete");
+    expect(fetcher.mock.calls.map(([url]) => new URL(url).pathname)).toEqual(paths);
+  });
+
   it("reads only the requested resources and builds a separated report", async () => {
     const fetcher = vi.fn(async (url: string) => ({
       ok: true,
