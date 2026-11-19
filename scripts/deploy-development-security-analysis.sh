@@ -16,6 +16,10 @@ export DEVELOPMENT_SECURITY_RUNTIME_IMAGE="desarrolloseguro-runtime:local"
 export DEVELOPMENT_SECURITY_WORKER_IMAGE="desarrolloseguro-worker:local"
 export DEVELOPMENT_SECURITY_WEB_IMAGE="desarrolloseguro-web:local"
 export DEVELOPMENT_SECURITY_SECRETS_DIR="/opt/desarrollo-seguro/secrets"
+# The normal production deploy never starts the private audit. Do not
+# inherit a profile or an enable flag from an operator shell or CI environment.
+export COMPOSE_PROFILES=""
+export DEVELOPMENT_SECURITY_AUDIT_ENABLED="false"
 
 install -d -o root -g root -m 0700 "$DEVELOPMENT_SECURITY_SECRETS_DIR"
 readonly BADGE_ISSUER_SECRET="$DEVELOPMENT_SECURITY_SECRETS_DIR/development_security_badge_issuer_token"

@@ -114,6 +114,8 @@ assert.doesNotMatch(
 assert.match(deployScript, /PROJECT_NAME="desarrollo-seguro"/u);
 assert.match(deployScript, /COMPOSE_FILE="compose\.production\.yaml"/u);
 assert.match(deployScript, /openssl rand -hex 32/u);
+assert.match(deployScript, /export COMPOSE_PROFILES=""/u);
+assert.match(deployScript, /export DEVELOPMENT_SECURITY_AUDIT_ENABLED="false"/u);
 assert.match(deployScript, /development_security_badge_issuer_token/u);
 assert.match(deployScript, /scripts\/configure-development-security-egress-firewall\.sh verify/u);
 assert.match(
