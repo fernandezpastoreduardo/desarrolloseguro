@@ -10,6 +10,7 @@ const SIGNALS = {
   third_party: {
     third_party_request_count: "count",
     known_tracker_request_count: "count",
+    external_ingest_enabled: "boolean",
   },
   consent: {
     consent_choice_recorded: "boolean",
