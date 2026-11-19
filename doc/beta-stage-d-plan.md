@@ -157,3 +157,9 @@ en estado pendiente: las siete rutas públicas de Grumphya (`infrastructure`,
 atestación. No se envía el JWT ni se crea un informe privado mientras falte
 alguno de esos recursos.
 
+En la misma fecha se comprobó desde el VPS la ruta de salida IPv4 del cliente
+de Desarrollo Seguro: `src=31.70.130.181` (IP pública observada por el host).
+Ese valor queda como candidato `31.70.130.181/32` para
+`AUDIT_ALLOWED_NETWORKS`; no se activa ni se considera válido hasta que el
+proxy de Grumphya confirme la IP que recibe realmente.
+

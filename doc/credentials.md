@@ -44,10 +44,13 @@ Entrega a Grumphya únicamente el PEM público y comprueba la huella por un
 canal independiente. El `kid` por defecto es `ds-auditor-2026` y puede
 cambiarse al generar una identidad nueva con
 `AUDIT_TECHNICAL_AUTH_KID`, siempre que coincida con la lista de rotación de
-Grumphya. `AUDIT_ALLOWED_NETWORKS` no se inventa en este paso: debe recoger la
-IP/CIDR que observe el proxy de Grumphya en la petición real. La auditoría
-permanece desactivada hasta que Grumphya confirme claves, ACL, rutas JSON,
-atestación, TLS y roles PostgreSQL.
+Grumphya. La observación de solo lectura del VPS del 19 de noviembre de 2026
+mostró `31.70.130.181` como IP pública de salida
+(`src=31.70.130.181`). Por tanto, el valor candidato para
+`AUDIT_ALLOWED_NETWORKS` es `31.70.130.181/32`; Grumphya debe confirmar que
+su proxy ve esa misma IP antes de escribirla en su ACL. La auditoría permanece
+desactivada hasta que Grumphya confirme claves, ACL, rutas JSON, atestación,
+TLS y roles PostgreSQL.
 
 Cuando el contrato esté aceptado, la ejecución opt-in usa el perfil Compose
 `internal-audit` y `DEVELOPMENT_SECURITY_AUDIT_SECRETS_DIR`. Ese directorio
