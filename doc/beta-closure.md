@@ -98,6 +98,12 @@ verificación JWT/atestación y la proyección acotada; su resultado deliberadam
 incompleto se documenta en [la evaluación operativa de D](beta-stage-d-assessment.md)
 y no concede un sello ni una certificación.
 
+La repetición one-shot desde el VPS del 19 de noviembre a las 20:53 (hora de
+Madrid) volvió a completar las siete lecturas autenticadas (`6/14`, estado
+`incomplete`, `internalScore: null`) con el `auditRef`
+`sha256:60db0358839fd3f00bd7db273eb61a53d000a252c7b66094d3775aacf89a96a7`.
+La ejecución no activó el servicio normal ni modificó el stack persistente.
+
 El cierre global de Beta es posterior a A, B, C y D. Solo entonces se validará
 la operación integral, la puntuación externa e interna, la puntuación global
 absoluta, los estados de certificación, los sellos, las auditorías periódicas,

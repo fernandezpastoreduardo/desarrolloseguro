@@ -26,6 +26,15 @@ un informe privado con estas propiedades:
   privacidad.
 - categoría sin evidencia concluyente: ética.
 
+La repetición controlada del 19 de noviembre a las 20:53 (hora de Madrid)
+volvió a completar las siete lecturas desde el runner one-shot del VPS. Su
+`auditRef` fue `sha256:60db0358839fd3f00bd7db273eb61a53d000a252c7b66094d3775aacf89a96a7`
+y mantuvo exactamente el mismo resultado `incomplete`, con `6/14` criterios,
+`internalScore: null` y sin modificar el stack normal. La preflight anónima
+posterior confirmó las siete rutas JSON (`internal_audit_resources_ready
+count=7`); los rechazos públicos `403 insufficient_scope` siguen siendo el
+comportamiento esperado fuera de la red y del JWT técnico.
+
 El resultado demuestra que el canal operativo funciona; el estado incompleto
 es deliberado. La ausencia de una señal no se convierte en un aprobado ni en
 una penalización inventada. El informe solo proyecta controles para los que la
