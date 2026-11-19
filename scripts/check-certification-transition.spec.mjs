@@ -16,6 +16,19 @@ function activeStatus() {
         certifiedReportId: "report-new",
         score: 92,
       },
+      betaCertification: {
+        policyVersion: "beta-0.1",
+        threshold: 90,
+        score: 92,
+        eligibility: "eligible",
+        assessedCategories: 3,
+        totalCategories: 3,
+        categories: [
+          { id: "transport-security", status: "pass" },
+          { id: "security-headers", status: "pass" },
+          { id: "privacy-cookies", status: "pass" },
+        ],
+      },
     },
   };
 }
@@ -49,6 +62,15 @@ test("rejects a certification pointing to a different report", () => {
   assert.throws(
     () => validateCertificationTransition(status),
     { message: "certification_transition_inconsistent" },
+  );
+});
+
+test("rejects an active certification whose report is not fully eligible", () => {
+  const status = activeStatus();
+  status.lastReport.betaCertification.categories[1].status = "unknown";
+  assert.throws(
+    () => validateCertificationTransition(status),
+    { message: "certification_assessment_inconsistent" },
   );
 });
 

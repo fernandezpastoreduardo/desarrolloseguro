@@ -6,6 +6,11 @@ export const CERTIFICATION_API_URL =
 
 const CERTIFICATION_STATES = new Set(["pending", "active", "suspended"]);
 const ASSESSMENT_STATUSES = new Set(["pending", "eligible", "blocked"]);
+const BETA_CATEGORY_IDS = new Set([
+  "transport-security",
+  "security-headers",
+  "privacy-cookies",
+]);
 
 export function validateCertificationTransition(status, previousReportId = null) {
   if (!status || status.hostname !== "grumphya.com") {
@@ -15,6 +20,9 @@ export function validateCertificationTransition(status, previousReportId = null)
   const certification = readRecord(report?.certification);
   if (!report || typeof report.id !== "string") {
     throw new Error("certification_report_missing");
+  }
+  if (!isEligibleBetaAssessment(report.betaCertification)) {
+    throw new Error("certification_assessment_inconsistent");
   }
   if (previousReportId !== null && report.id === previousReportId) {
     throw new Error("certification_report_not_refreshed");
@@ -32,6 +40,41 @@ export function validateCertificationTransition(status, previousReportId = null)
     throw new Error("certification_transition_inconsistent");
   }
   return { reportId: report.id, score: certification.score };
+}
+
+function isEligibleBetaAssessment(value) {
+  const assessment = readRecord(value);
+  if (
+    !assessment ||
+    assessment.policyVersion !== "beta-0.1" ||
+    assessment.threshold !== 90 ||
+    assessment.eligibility !== "eligible" ||
+    assessment.assessedCategories !== 3 ||
+    assessment.totalCategories !== 3 ||
+    !Number.isInteger(assessment.score) ||
+    assessment.score < 90 ||
+    assessment.score > 100 ||
+    !Array.isArray(assessment.categories) ||
+    assessment.categories.length !== BETA_CATEGORY_IDS.size
+  ) {
+    return false;
+  }
+
+  const categoryIds = new Set();
+  for (const category of assessment.categories) {
+    const record = readRecord(category);
+    if (
+      !record ||
+      typeof record.id !== "string" ||
+      !BETA_CATEGORY_IDS.has(record.id) ||
+      categoryIds.has(record.id) ||
+      record.status !== "pass"
+    ) {
+      return false;
+    }
+    categoryIds.add(record.id);
+  }
+  return categoryIds.size === BETA_CATEGORY_IDS.size;
 }
 
 /**
