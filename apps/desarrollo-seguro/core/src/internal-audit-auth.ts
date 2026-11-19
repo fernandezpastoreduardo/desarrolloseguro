@@ -44,6 +44,7 @@ export function createTechnicalJwt(options: TechnicalJwtOptions): string {
     iat: issuedAt,
     exp: issuedAt + ttlSeconds,
     jti: (options.idFactory ?? randomUUID)(),
+    kid: options.kid,
     domain: options.hostname,
     hostname: options.hostname,
     environment: options.environment,

@@ -27,6 +27,7 @@ describe("technical audit JWT", () => {
       iss: "desarrolloseguro-audit",
       aud: "grumphya-audit",
       sub: "desarrolloseguro-audit",
+      kid: "ds-auditor-2026",
       iat: 1795032000,
       exp: 1795032300,
       jti: "audit-jti-1",
