@@ -158,8 +158,8 @@ describePostgres.sequential("PostgresScanStore", () => {
         checks,
         metrics: { requestsCount: 0, bytesCount: 0, durationMs: 1, pagesCount: 0 },
       });
-      // The Beta admission window is measured from admission, so lifecycle
-      // assertions must model the next audit after that window has elapsed.
+      // The report cache is measured from completion, so lifecycle assertions
+      // model the next audit after that cache has elapsed.
       await pool.query(
         "UPDATE ds_scan_jobs SET queued_at = clock_timestamp() - interval '25 hours' WHERE id = $1",
         [job.id],
@@ -590,7 +590,7 @@ describePostgres.sequential("PostgresScanStore", () => {
     expect(fresh).toEqual({ kind: "cached", reportId });
   });
 
-  it("enforces the 24-hour admission window after the report cache expires", async () => {
+  it("queues a new requested scan after the report cache expires during beta", async () => {
     const job = await queueAndClaim();
     const staleCompletedAt = new Date(Date.now() - 61 * 60 * 1000);
     await complete(
@@ -604,23 +604,12 @@ describePostgres.sequential("PostgresScanStore", () => {
       [job.id],
     );
 
-    const rateLimited = await store.ensureFreshScan({
+    const nextScan = await store.ensureFreshScan({
       hostname: TEST_HOSTNAME,
       profileVersion: TEST_PROFILE,
       trigger: "requested",
     });
-    expect(rateLimited).toEqual({ kind: "rate_limited" });
-
-    await pool.query(
-      "UPDATE ds_scan_jobs SET queued_at = clock_timestamp() - interval '25 hours' WHERE id = $1",
-      [job.id],
-    );
-    const expired = await store.ensureFreshScan({
-      hostname: TEST_HOSTNAME,
-      profileVersion: TEST_PROFILE,
-      trigger: "requested",
-    });
-    expect(expired.kind).toBe("queued");
+    expect(nextScan.kind).toBe("queued");
   });
 
   it("reads public reports with only persisted allowlisted evidence", async () => {

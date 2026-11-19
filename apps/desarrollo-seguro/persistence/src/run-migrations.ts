@@ -91,6 +91,10 @@ const MIGRATIONS = [
     version: "028_guard_certification_report_order",
     file: "028_guard_certification_report_order.sql",
   },
+  {
+    version: "029_temporarily_disable_scan_admission_window",
+    file: "029_temporarily_disable_scan_admission_window.sql",
+  },
 ] as const;
 
 const MIGRATION_LOCK_ID = 728194032;
