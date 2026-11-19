@@ -229,12 +229,12 @@ test("shows the report when an authorized analysis finishes", async ({ page }) =
   await expect(page.getByRole("heading", { name: "Privacidad" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Seguridad" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Rendimiento" })).toBeVisible();
-  const categoryButtons = page.getByRole("button", { name: "Más información" });
+  const categoryButtons = page.getByRole("button", { name: "Ver detalle" });
   await expect(categoryButtons).toHaveCount(4);
   await expect(categoryButtons.first()).toHaveAttribute("aria-expanded", "false");
   await expect(page.locator("#report-category-details-ethics")).toBeHidden();
   for (let index = 0; index < 4; index += 1) {
-    await page.getByRole("button", { name: "Más información" }).first().click();
+    await page.getByRole("button", { name: "Ver detalle" }).first().click();
   }
   await expect(page.getByText("La conexión protege los datos")).toBeVisible();
   const technicalEvidenceSections = page.locator(".ds-portal__technical-details summary");

@@ -712,62 +712,6 @@ $ds-space-block: 40px;
   transform: translateY(-2px);
 }
 
-.ds-portal__report-category:first-child {
-  border-color: var(--ds-navy);
-  color: #f5ede1;
-  background: var(--ds-navy);
-  box-shadow: 0 16px 34px color-mix(in srgb, var(--ds-navy) 24%, transparent);
-}
-
-.ds-portal__report-category:first-child .ds-portal__category-heading {
-  border-bottom-color: color-mix(in srgb, #f5ede1 22%, transparent);
-}
-
-.ds-portal__report-category:first-child .ds-portal__category-heading h4,
-.ds-portal__report-category:first-child .ds-portal__category-score-ring-value,
-.ds-portal__report-category:first-child .ds-portal__ethics-criteria li > div > strong,
-.ds-portal__report-category:first-child .ds-portal__ethics-criteria li p b,
-.ds-portal__report-category:first-child .ds-portal__checks li div strong {
-  color: #f5ede1;
-}
-
-.ds-portal__report-category:first-child .ds-portal__category-heading strong,
-.ds-portal__report-category:first-child .ds-portal__category-score-ring-unit,
-.ds-portal__report-category:first-child .ds-portal__ethics-criteria li > span,
-.ds-portal__report-category:first-child .ds-portal__checks li div span {
-  color: var(--ds-accent-soft);
-}
-
-.ds-portal__report-category:first-child .ds-portal__category-score-ring {
-  --ds-category-score-color: var(--ds-accent-soft);
-  border-color: color-mix(in srgb, var(--ds-accent-soft) 58%, transparent);
-  background: color-mix(in srgb, #f5ede1 8%, transparent);
-}
-
-.ds-portal__report-category:first-child .ds-portal__category-summary {
-  color: #f5ede1;
-  background: color-mix(in srgb, #f5ede1 10%, transparent);
-}
-
-.ds-portal__report-category:first-child .ds-portal__category-details > p,
-.ds-portal__report-category:first-child .ds-portal__ethics-criteria li,
-.ds-portal__report-category:first-child .ds-portal__ethics-criteria li p,
-.ds-portal__report-category:first-child .ds-portal__checks small {
-  color: #d4d9e1;
-}
-
-.ds-portal__report-category:first-child .ds-portal__ethics-criteria li .ds-portal__criterion-evidence {
-  border-left-color: color-mix(in srgb, #f5ede1 34%, transparent);
-}
-
-.ds-portal__report-category:first-child .ds-portal__technical-details {
-  border-top-color: color-mix(in srgb, #f5ede1 22%, transparent);
-}
-
-.ds-portal__report-category:first-child .ds-portal__technical-details summary {
-  color: var(--ds-accent-soft);
-}
-
 .ds-portal__category-heading {
   display: flex;
   align-items: flex-start;
@@ -902,6 +846,18 @@ $ds-space-block: 40px;
   transform: translate(-2px, -2px);
 }
 
+.ds-portal__category-more-icon {
+  display: grid;
+  width: 1.35rem;
+  height: 1.35rem;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-family: var(--ds-sans);
+  font-size: 1rem;
+  line-height: 1;
+}
+
 .ds-portal__category-more:active {
   box-shadow: none;
   transform: translate(0, 0);
@@ -913,6 +869,68 @@ $ds-space-block: 40px;
 
 .ds-portal__category-details[hidden] {
   display: none;
+}
+
+.ds-portal__report-category {
+  border-color: var(--ds-navy);
+  color: #f5ede1;
+  background: var(--ds-navy);
+  box-shadow: 0 16px 34px color-mix(in srgb, var(--ds-navy) 24%, transparent);
+}
+
+.ds-portal__report-category:hover {
+  border-color: var(--ds-accent);
+  box-shadow: 0 20px 38px color-mix(in srgb, var(--ds-navy) 32%, transparent);
+}
+
+.ds-portal__report-category .ds-portal__category-heading {
+  border-bottom-color: color-mix(in srgb, #f5ede1 22%, transparent);
+}
+
+.ds-portal__report-category .ds-portal__category-heading h4,
+.ds-portal__report-category .ds-portal__category-score-ring-value,
+.ds-portal__report-category .ds-portal__ethics-criteria li > div > strong,
+.ds-portal__report-category .ds-portal__ethics-criteria li p b,
+.ds-portal__report-category .ds-portal__checks li div strong {
+  color: #f5ede1;
+}
+
+.ds-portal__report-category .ds-portal__category-heading strong,
+.ds-portal__report-category .ds-portal__category-score-ring-unit,
+.ds-portal__report-category .ds-portal__ethics-criteria li > span,
+.ds-portal__report-category .ds-portal__checks li div span,
+.ds-portal__report-category .ds-portal__technical-details summary {
+  color: var(--ds-accent-soft);
+}
+
+.ds-portal__report-category .ds-portal__category-score-ring {
+  --ds-category-score-color: var(--ds-accent-soft);
+  border-color: color-mix(in srgb, var(--ds-accent-soft) 58%, transparent);
+  background: color-mix(in srgb, #f5ede1 8%, transparent);
+}
+
+.ds-portal__report-category .ds-portal__category-score-ring[data-score-state="unknown"] {
+  --ds-category-score-color: #a6b0bf;
+}
+
+.ds-portal__report-category .ds-portal__category-summary {
+  color: #f5ede1;
+  background: color-mix(in srgb, #f5ede1 10%, transparent);
+}
+
+.ds-portal__report-category .ds-portal__category-details > p,
+.ds-portal__report-category .ds-portal__ethics-criteria li,
+.ds-portal__report-category .ds-portal__ethics-criteria li p,
+.ds-portal__report-category .ds-portal__checks small {
+  color: #d4d9e1;
+}
+
+.ds-portal__report-category .ds-portal__ethics-criteria li .ds-portal__criterion-evidence {
+  border-left-color: color-mix(in srgb, #f5ede1 34%, transparent);
+}
+
+.ds-portal__report-category .ds-portal__technical-details {
+  border-top-color: color-mix(in srgb, #f5ede1 22%, transparent);
 }
 
 .ds-portal__ethics-criteria {

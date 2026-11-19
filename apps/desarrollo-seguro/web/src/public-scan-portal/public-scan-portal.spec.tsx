@@ -210,7 +210,7 @@ describe("PublicScanPortal", () => {
     expect(screen.getByText("1 informe")).toBeVisible();
     expect(screen.getByText(REPORT_SUMMARY)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Resumen y puntuación" })).toBeVisible();
-    const categoryButtons = screen.getAllByRole("button", { name: "Más información" });
+    const categoryButtons = screen.getAllByRole("button", { name: "Ver detalle" });
     for (const categoryButton of categoryButtons) {
       await user.click(categoryButton);
     }

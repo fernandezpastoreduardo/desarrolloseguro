@@ -970,8 +970,10 @@ function ReportSummary({
                     });
                   }}
                 >
-                  <span>{isExpanded ? "Ocultar información" : "Más información"}</span>
-                  <span aria-hidden="true">↗</span>
+                  <span>{isExpanded ? "Ocultar detalle" : "Ver detalle"}</span>
+                  <span className="ds-portal__category-more-icon" aria-hidden="true">
+                    {isExpanded ? "−" : "+"}
+                  </span>
                 </button>
                 <div className="ds-portal__category-details" id={detailsId} hidden={!isExpanded}>
                   <p>{category.description}</p>
