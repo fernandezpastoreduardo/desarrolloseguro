@@ -900,6 +900,9 @@ $ds-space-block: 40px;
   position: fixed;
   z-index: 1000;
   inset: 0;
+  width: 100vw;
+  min-height: 100dvh;
+  box-sizing: border-box;
   display: grid;
   place-items: center;
   padding: $ds-space-block;
@@ -911,6 +914,7 @@ $ds-space-block: 40px;
 .ds-portal__category-modal {
   width: min(920px, 100%);
   max-height: min(860px, 88vh);
+  box-sizing: border-box;
   overflow: auto;
   border: 1px solid color-mix(in srgb, var(--ds-accent) 65%, #f5ede1);
   border-radius: var(--ds-radius);

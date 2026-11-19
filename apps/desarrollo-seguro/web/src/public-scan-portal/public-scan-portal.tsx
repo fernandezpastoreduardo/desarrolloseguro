@@ -932,11 +932,7 @@ function ReportSummary({
             const criteria = report.ethicsAssessment.criteria.filter((criterion) =>
               (category.criteria as readonly string[]).includes(criterion.id),
             );
-            const checks = report.checks.filter((check) =>
-              (category.controls as readonly string[]).includes(check.controlId),
-            );
             const isExpanded = activeCategoryId === category.id;
-            const detailsId = `report-category-details-${category.id}`;
             return (
               <section
                 className="ds-portal__report-category"
@@ -965,19 +961,31 @@ function ReportSummary({
                     +
                   </span>
                 </button>
-                {isExpanded && (
-                  <CategoryDetailsModal
-                    category={category}
-                    criteria={criteria}
-                    checks={checks}
-                    detailsId={detailsId}
-                    onClose={() => setActiveCategoryId(null)}
-                  />
-                )}
               </section>
             );
           })}
         </div>
+        {activeCategoryId !== null && (() => {
+          const activeCategory = REPORT_CATEGORIES.find(
+            (category) => category.id === activeCategoryId,
+          );
+          if (!activeCategory) return null;
+          const activeCriteria = report.ethicsAssessment.criteria.filter((criterion) =>
+            (activeCategory.criteria as readonly string[]).includes(criterion.id),
+          );
+          const activeChecks = report.checks.filter((check) =>
+            (activeCategory.controls as readonly string[]).includes(check.controlId),
+          );
+          return (
+            <CategoryDetailsModal
+              category={activeCategory}
+              criteria={activeCriteria}
+              checks={activeChecks}
+              detailsId={`report-category-details-${activeCategory.id}`}
+              onClose={() => setActiveCategoryId(null)}
+            />
+          );
+        })()}
         {report.ethicsAssessment.reasons.length > 0 && (
           <ul className="ds-portal__ethics-reasons">
             {report.ethicsAssessment.reasons.map((reason) => <li key={reason}>{reason}</li>)}

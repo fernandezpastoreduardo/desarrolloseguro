@@ -234,7 +234,10 @@ test("shows the report when an authorized analysis finishes", async ({ page }) =
   await expect(categoryButtons.first()).toHaveAttribute("aria-expanded", "false");
   await expect(page.locator("#report-category-details-ethics")).toHaveCount(0);
   await categoryButtons.nth(2).click();
-  await expect(page.getByRole("dialog", { name: "Seguridad" })).toBeVisible();
+  const securityDialog = page.getByRole("dialog", { name: "Seguridad" });
+  await expect(securityDialog).toBeVisible();
+  expect(await securityDialog.evaluate((element) => element.closest(".ds-portal__report-category"))).toBeNull();
+  expect((await securityDialog.boundingBox())?.width ?? 0).toBeGreaterThan(400);
   await expect(page.getByText("La conexión protege los datos")).toBeVisible();
   await expect(page.locator(".ds-portal__score-ring")).toHaveAttribute("data-score-band", "low");
   await expect(page.locator('.ds-portal__category-score-ring[data-score-band="low"]')).toHaveCount(1);
