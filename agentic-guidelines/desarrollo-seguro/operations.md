@@ -10,6 +10,7 @@
 - `development-security-database` usa PostgreSQL/pgvector con TLS obligatorio y un volumen propio.
 - `development-security-worker` consume los trabajos pendientes, con acceso solo a la red interna de base de datos y al socket Unix del coordinador.
 - `development-security-runtime-coordinator` no tiene red; es el único servicio autorizado a usar el socket Docker del VPS.
+- `development-security-internal-audit` es un proceso one-shot opt-in del perfil `internal-audit`: no monta PostgreSQL, sale solo por `development-security-egress` y conserva `cap_drop: ALL`, añadiendo únicamente las capacidades necesarias para copiar claves root-only y cambiar al usuario `node`.
 
 El portal no publica puertos del host. Un proxy de borde conectado a la red interna dedicada `development-security-ingress` puede llegar solo al servicio web; la API y la base no tienen puertos de host y la API no pertenece a la red de entrada.
 
