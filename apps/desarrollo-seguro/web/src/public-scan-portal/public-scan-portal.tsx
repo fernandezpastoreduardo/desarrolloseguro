@@ -1642,9 +1642,11 @@ function getCheckStatusLabel(status: string): string {
   return "Sin datos";
 }
 
-function getScoreBand(score: number | null): "high" | "low" | "unknown" {
+function getScoreBand(score: number | null): "excellent" | "good" | "low" | "unknown" {
   if (score === null) return "unknown";
-  return score > 90 ? "high" : "low";
+  if (score >= 90) return "excellent";
+  if (score >= 75) return "good";
+  return "low";
 }
 
 function getCategoryScore(criteria: Array<{ status: string; weight: number }>): CategoryScore {

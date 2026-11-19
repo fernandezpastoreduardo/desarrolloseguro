@@ -35,7 +35,8 @@ $ds-space-block: 40px;
   --ds-sans: #{$ds-sans};
   --ds-mono: #{$ds-mono};
   --ds-radius: #{$ds-radius};
-  --ds-score-high: #c49a26;
+  --ds-score-excellent: #36c96f;
+  --ds-score-good: #c49a26;
   --ds-score-low: #d94f45;
   --ds-score-unknown: #8b929a;
   min-height: 100vh;
@@ -580,8 +581,12 @@ $ds-space-block: 40px;
   transform: translateY(0) rotate(0) scale(1);
 }
 
-.ds-portal__score-ring[data-score-band="high"] {
-  --ds-score-color: var(--ds-score-high);
+.ds-portal__score-ring[data-score-band="excellent"] {
+  --ds-score-color: var(--ds-score-excellent);
+}
+
+.ds-portal__score-ring[data-score-band="good"] {
+  --ds-score-color: var(--ds-score-good);
 }
 
 .ds-portal__score-ring[data-score-band="low"] {
@@ -921,8 +926,12 @@ $ds-space-block: 40px;
   background: color-mix(in srgb, #f5ede1 8%, transparent);
 }
 
-.ds-portal__report-category .ds-portal__category-score-ring[data-score-band="high"] {
-  --ds-category-score-color: var(--ds-score-high);
+.ds-portal__report-category .ds-portal__category-score-ring[data-score-band="excellent"] {
+  --ds-category-score-color: var(--ds-score-excellent);
+}
+
+.ds-portal__report-category .ds-portal__category-score-ring[data-score-band="good"] {
+  --ds-category-score-color: var(--ds-score-good);
 }
 
 .ds-portal__report-category .ds-portal__category-score-ring[data-score-band="low"] {

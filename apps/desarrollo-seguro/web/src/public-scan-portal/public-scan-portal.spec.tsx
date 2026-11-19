@@ -232,8 +232,8 @@ describe("PublicScanPortal", () => {
     expect(screen.getByRole("heading", { name: "Rendimiento" })).toBeVisible();
     expect(screen.getByRole("region", { name: "Niveles de evaluación" })).toBeVisible();
     expect(screen.getByRole("img", { name: "Puntuación global: 100 de 100 puntos" })).toBeVisible();
-    expect(document.querySelector(".ds-portal__score-ring")).toHaveAttribute("data-score-band", "high");
-    expect(document.querySelectorAll('.ds-portal__category-score-ring[data-score-band="high"]')).toHaveLength(1);
+    expect(document.querySelector(".ds-portal__score-ring")).toHaveAttribute("data-score-band", "excellent");
+    expect(document.querySelectorAll('.ds-portal__category-score-ring[data-score-band="excellent"]')).toHaveLength(1);
     expect(screen.getByRole("img", { name: "Ética: sin puntuación; 0 de 2 aspectos evaluados" })).toBeVisible();
     expect(screen.getByRole("img", { name: "Privacidad: sin puntuación; 0 de 1 aspectos evaluados" })).toBeVisible();
     expect(screen.getByRole("img", { name: "Seguridad: 100 de 100 puntos; 1 de 4 aspectos evaluados" })).toBeVisible();
@@ -252,6 +252,32 @@ describe("PublicScanPortal", () => {
     expect(
       summary.compareDocumentPosition(detail) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
+  });
+
+  it.each([
+    [74, "low"],
+    [75, "good"],
+    [89, "good"],
+    [90, "excellent"],
+  ] as const)("assigns score %s to the %s visual band", async (score, band) => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        Response.json({
+          ...PUBLIC_REPORT,
+          ethicsAssessment: { ...PUBLIC_REPORT.ethicsAssessment, score },
+        }),
+      ),
+    );
+    window.history.replaceState({}, "", `/?report=${REPORT_ID}`);
+
+    render(<PublicScanPortal />);
+
+    await screen.findByRole("img", { name: `Puntuación global: ${score} de 100 puntos` });
+    expect(document.querySelector(".ds-portal__score-ring")).toHaveAttribute(
+      "data-score-band",
+      band,
+    );
   });
 
   it("lets an authorized user request a fresh analysis when a historical report exists", async () => {
