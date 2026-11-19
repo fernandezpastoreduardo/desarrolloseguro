@@ -1163,6 +1163,7 @@ function GlobalScoreRing({ score }: { score: number | null }) {
       ref={ref}
       className="ds-portal__score-ring"
       data-visible={isVisible}
+      data-score-band={getScoreBand(score)}
       aria-label={accessibleLabel}
     >
       <svg
@@ -1313,6 +1314,7 @@ function CategoryScoreRing({
       className="ds-portal__category-score-ring"
       data-visible={isVisible}
       data-score-state={categoryScore.score === null ? "unknown" : "scored"}
+      data-score-band={getScoreBand(categoryScore.score)}
       aria-label={accessibleLabel}
     >
       <svg
@@ -1638,6 +1640,11 @@ function getCheckStatusLabel(status: string): string {
   if (status === "fail") return "Problema detectado";
   if (status === "not_applicable") return "No evaluado";
   return "Sin datos";
+}
+
+function getScoreBand(score: number | null): "high" | "low" | "unknown" {
+  if (score === null) return "unknown";
+  return score > 90 ? "high" : "low";
 }
 
 function getCategoryScore(criteria: Array<{ status: string; weight: number }>): CategoryScore {

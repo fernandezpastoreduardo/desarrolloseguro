@@ -237,6 +237,9 @@ test("shows the report when an authorized analysis finishes", async ({ page }) =
     await page.getByRole("button", { name: "Ver detalle" }).first().click();
   }
   await expect(page.getByText("La conexión protege los datos")).toBeVisible();
+  await expect(page.locator(".ds-portal__score-ring")).toHaveAttribute("data-score-band", "low");
+  await expect(page.locator('.ds-portal__category-score-ring[data-score-band="low"]')).toHaveCount(1);
+  await expect(page.locator('.ds-portal__category-score-ring[data-score-band="high"]')).toHaveCount(2);
   const technicalEvidenceSections = page.locator(".ds-portal__technical-details summary");
   await expect(technicalEvidenceSections).toHaveCount(3);
   for (let index = 0; index < 3; index += 1) {

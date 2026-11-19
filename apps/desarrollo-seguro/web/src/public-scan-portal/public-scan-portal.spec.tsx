@@ -232,6 +232,8 @@ describe("PublicScanPortal", () => {
     expect(screen.getByRole("heading", { name: "Rendimiento" })).toBeVisible();
     expect(screen.getByRole("region", { name: "Niveles de evaluación" })).toBeVisible();
     expect(screen.getByRole("img", { name: "Puntuación global: 100 de 100 puntos" })).toBeVisible();
+    expect(document.querySelector(".ds-portal__score-ring")).toHaveAttribute("data-score-band", "high");
+    expect(document.querySelectorAll('.ds-portal__category-score-ring[data-score-band="high"]')).toHaveLength(1);
     expect(screen.getByRole("img", { name: "Ética: sin puntuación; 0 de 2 aspectos evaluados" })).toBeVisible();
     expect(screen.getByRole("img", { name: "Privacidad: sin puntuación; 0 de 1 aspectos evaluados" })).toBeVisible();
     expect(screen.getByRole("img", { name: "Seguridad: 100 de 100 puntos; 1 de 4 aspectos evaluados" })).toBeVisible();
