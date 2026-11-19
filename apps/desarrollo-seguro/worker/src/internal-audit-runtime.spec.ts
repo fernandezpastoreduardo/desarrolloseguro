@@ -187,7 +187,7 @@ describe("internal audit runtime configuration", () => {
       sub: "desarrolloseguro-audit",
       domain: "grumphya.com",
       environment: "production",
-      scope: "audit:infrastructure audit:application audit:authentication audit:quality audit:privacy audit:ethics audit:ai",
+      scope: "audit:infrastructure audit:deployment audit:dependencies audit:auth audit:quality audit:privacy audit:ai",
     });
     rmSync(directory, { recursive: true, force: true });
   });

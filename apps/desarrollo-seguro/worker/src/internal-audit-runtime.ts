@@ -66,6 +66,7 @@ export function createInternalAuditRuntime(
   validateAllowedNetworks(environment.AUDIT_ALLOWED_NETWORKS);
   const scopes = parseScopes(environment[AUDIT_SCOPES]);
   const operations = OPERATIONS.filter(({ resource }) => scopesForOperation(resource).some((scope) => scopes.includes(scope)));
+  const technicalScopes = [...new Set(scopes.flatMap((scope) => technicalScopesForScope(scope)))];
   const request: InternalAuditRequest = {
     policyVersion: "beta-d-0.1",
     hostname: "grumphya.com",
@@ -82,7 +83,7 @@ export function createInternalAuditRuntime(
     subject: SUBJECT,
     hostname: "grumphya.com",
     environment: "production",
-    scopes,
+    scopes: technicalScopes,
     clock: dependencies.clock,
     idFactory: dependencies.idFactory,
   });
@@ -211,6 +212,17 @@ function scopesForOperation(
   if (resource === "synthetic_browser_flow") return ["authentication"];
   if (resource === "performance_observation") return ["quality"];
   if (resource === "privacy_observation") return ["privacy"];
+  return ["ai"];
+}
+
+function technicalScopesForScope(
+  scope: InternalAuditRequest["scopes"][number],
+): readonly string[] {
+  if (scope === "infrastructure") return ["infrastructure"];
+  if (scope === "application") return ["deployment", "dependencies"];
+  if (scope === "authentication") return ["auth"];
+  if (scope === "quality") return ["quality"];
+  if (scope === "privacy" || scope === "ethics") return ["privacy"];
   return ["ai"];
 }
 
