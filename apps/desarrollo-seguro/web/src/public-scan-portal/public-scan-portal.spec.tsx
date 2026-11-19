@@ -226,11 +226,16 @@ describe("PublicScanPortal", () => {
     expect(screen.getByRole("heading", { name: "Privacidad" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Ética" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Rendimiento" })).toBeVisible();
+    expect(screen.getByRole("region", { name: "Niveles de evaluación" })).toBeVisible();
+    expect(screen.getByRole("img", { name: "Observado: 1 de 8 criterios (13%)" })).toBeVisible();
+    expect(screen.getByRole("img", { name: "No observado: 0 de 8 criterios (0%)" })).toBeVisible();
+    expect(screen.getByRole("img", { name: "Sin conclusión: 7 de 8 criterios (88%)" })).toBeVisible();
     expect(screen.getByText(/indicaciones que el sitio envía al navegador/i)).toBeVisible();
     expect(screen.getByText(/se revisaron 1 de 4 aspectos; no se detectaron problemas en el observado\. faltan datos de 3/i)).toBeVisible();
     expect(screen.getByText("Política que restringe contenido cargado (CSP)")).toBeInTheDocument();
     expect(screen.getByText(/faltaba.*política de contenido CSP/i)).toBeVisible();
     expect(screen.getByText("Ver evidencias técnicas (1 comprobación)")).toBeVisible();
+
     const summary = screen.getByRole("heading", { name: "Resumen y puntuación" });
     const detail = screen.getByRole("heading", { name: "Alcance observado" });
     expect(
@@ -427,6 +432,7 @@ describe("PublicScanPortal", () => {
     expect(await screen.findByText(/coincidencias con la tabla local Analytics\/Marketing: 1/i)).toBeInTheDocument();
     expect(screen.getByText(/no se interactuó con el banner de consentimiento/i)).toBeInTheDocument();
     expect(screen.getByText("domain-v1")).toBeVisible();
+    expect(screen.getByRole("img", { name: /No observado: 1 de 8 criterios/ })).toBeVisible();
   });
 
   it("shows domain-v2 tracker and response evidence in readable categories", async () => {
