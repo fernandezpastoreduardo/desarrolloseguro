@@ -17,6 +17,9 @@ const METRICS = {
   responsive_check: {
     responsive_breakpoint_pass: "boolean",
   },
+  release_checks: {
+    release_checks: "count",
+  },
 } as const;
 
 const MAX_DURATION_MS = 120_000;

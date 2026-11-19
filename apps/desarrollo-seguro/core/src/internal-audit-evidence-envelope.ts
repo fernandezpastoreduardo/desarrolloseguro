@@ -1,4 +1,4 @@
-import { createPublicKey, verify, type KeyLike } from "node:crypto";
+import { createHash, createPublicKey, verify, type KeyLike } from "node:crypto";
 
 export const INTERNAL_AUDIT_RESPONSE_SCHEMA_VERSION = "beta-d-0.2" as const;
 const MAX_EVIDENCE_AGE_MS = 24 * 60 * 60 * 1_000;
@@ -26,13 +26,28 @@ export type InternalAuditResponseEnvelope = {
 export type InternalAuditEnvelopeOptions = {
   publicKeys: ReadonlyMap<string, KeyLike | string>;
   now?: () => Date;
+  resource?: string;
 };
 
 export function parseInternalAuditResponseEnvelope(
   input: unknown,
   options: InternalAuditEnvelopeOptions,
 ): InternalAuditResponseEnvelope {
-  if (!isRecord(input) || !hasExactKeys(input, [
+  if (!isRecord(input)) throw new Error("internal_audit_response_envelope_invalid");
+  if (hasExactKeys(input, [
+    "hostname",
+    "environment",
+    "generatedAt",
+    "expiresAt",
+    "profile",
+    "scope",
+    "evidence",
+    "attestation",
+    "kid",
+  ])) {
+    return parseGrumphyaEnvelope(input, options);
+  }
+  if (!hasExactKeys(input, [
     "schemaVersion",
     "observedAt",
     "validUntil",
@@ -41,9 +56,7 @@ export function parseInternalAuditResponseEnvelope(
     "cardinality",
     "evidence",
     "attestation",
-  ])) {
-    throw new Error("internal_audit_response_envelope_invalid");
-  }
+  ])) throw new Error("internal_audit_response_envelope_invalid");
   const envelope = parseEnvelopeFields(input, options.now ?? (() => new Date()));
   const publicKey = options.publicKeys.get(envelope.attestation.kid);
   if (!publicKey) throw new Error("internal_audit_attestation_invalid");
@@ -65,6 +78,82 @@ export function parseInternalAuditResponseEnvelope(
   );
   if (!validSignature) throw new Error("internal_audit_attestation_invalid");
   return envelope;
+}
+
+function parseGrumphyaEnvelope(
+  input: Record<string, unknown>,
+  options: InternalAuditEnvelopeOptions,
+): InternalAuditResponseEnvelope {
+  const evidence = input.evidence;
+  const attestation = input.attestation;
+  if (
+    input.hostname !== "grumphya.com" ||
+    input.environment !== "production" ||
+    input.profile !== INTERNAL_AUDIT_RESPONSE_SCHEMA_VERSION ||
+    typeof input.scope !== "string" ||
+    !/^audit:[a-z]+$/u.test(input.scope) ||
+    (options.resource !== undefined && input.scope !== `audit:${options.resource}`) ||
+    typeof input.generatedAt !== "string" ||
+    typeof input.expiresAt !== "string" ||
+    typeof input.kid !== "string" ||
+    !isRecord(attestation) ||
+    !hasExactKeys(attestation, ["alg", "kid", "signature"]) ||
+    attestation.alg !== "EdDSA" ||
+    typeof attestation.kid !== "string" ||
+    typeof attestation.signature !== "string" ||
+    !BASE64URL_SIGNATURE.test(attestation.signature) ||
+    !Array.isArray(evidence) ||
+    evidence.length !== 1 ||
+    !isRecord(evidence[0])
+  ) {
+    throw new Error("internal_audit_response_envelope_invalid");
+  }
+  const observedAt = input.generatedAt;
+  const validUntil = input.expiresAt;
+  const now = (options.now ?? (() => new Date()))().getTime();
+  const observedTimestamp = Date.parse(observedAt);
+  const validUntilTimestamp = Date.parse(validUntil);
+  if (
+    !isIsoDate(observedAt) ||
+    !isIsoDate(validUntil) ||
+    validUntilTimestamp <= observedTimestamp ||
+    observedTimestamp > now + MAX_CLOCK_SKEW_MS ||
+    now - observedTimestamp > MAX_EVIDENCE_AGE_MS ||
+    now > validUntilTimestamp
+  ) {
+    throw new Error("internal_audit_evidence_stale");
+  }
+  const publicKey = options.publicKeys.get(attestation.kid);
+  if (!publicKey) throw new Error("internal_audit_attestation_invalid");
+  const key = typeof publicKey === "string" ? createPublicKey(publicKey) : publicKey;
+  const unsigned = { ...input };
+  delete unsigned.attestation;
+  if (!verify(
+    null,
+    Buffer.from(canonicalizeForSignature(unsigned)),
+    key,
+    Buffer.from(attestation.signature, "base64url"),
+  )) {
+    throw new Error("internal_audit_attestation_invalid");
+  }
+  const evidenceValue = evidence[0];
+  const deploymentDigest = `sha256:${createHash("sha256")
+    .update(canonicalizeForSignature(evidenceValue))
+    .digest("hex")}`;
+  return {
+    schemaVersion: INTERNAL_AUDIT_RESPONSE_SCHEMA_VERSION,
+    observedAt,
+    validUntil,
+    environment: "production",
+    deploymentDigest,
+    cardinality: 1,
+    evidence: evidenceValue,
+    attestation: {
+      alg: "EdDSA",
+      kid: attestation.kid,
+      signature: attestation.signature,
+    },
+  };
 }
 
 export function canonicalizeForSignature(value: unknown): string {

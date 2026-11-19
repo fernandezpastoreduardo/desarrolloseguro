@@ -178,7 +178,7 @@ function toEvidence(
   };
 }
 
-function qualityCriterion(kind: "e2e_flow" | "performance_sample" | "accessibility_snapshot" | "responsive_check"): InternalAuditCriterion {
+function qualityCriterion(kind: "e2e_flow" | "performance_sample" | "accessibility_snapshot" | "responsive_check" | "release_checks"): InternalAuditCriterion {
   if (kind === "accessibility_snapshot") return "quality.accessibility";
   if (kind === "performance_sample") return "performance.page_load";
   return "quality.e2e";

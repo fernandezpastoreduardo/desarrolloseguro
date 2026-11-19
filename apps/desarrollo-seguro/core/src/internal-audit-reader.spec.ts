@@ -1,7 +1,10 @@
+import { generateKeyPairSync, sign } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { readInternalAuditResource } from "./internal-audit-reader.js";
 import type { InternalAuditRequest } from "./internal-audit-contract.js";
+import { canonicalizeForSignature, INTERNAL_AUDIT_RESPONSE_SCHEMA_VERSION } from "./internal-audit-evidence-envelope.js";
 import { signedAuditEvidence, testAuditAuth } from "./internal-audit-test-support.js";
+import type { InternalInfrastructureSnapshot } from "./internal-infrastructure.js";
 
 const request: InternalAuditRequest = {
   policyVersion: "beta-d-0.1",
@@ -15,6 +18,45 @@ const request: InternalAuditRequest = {
 const jsonHeaders = { get: (name: string) => name === "content-type" ? "application/json" : null };
 
 describe("internal production audit reader", () => {
+  it("adapts the deployed Grumphya beta-d-0.2 envelope", async () => {
+    const { privateKey, publicKey } = generateKeyPairSync("ed25519");
+    const unsigned = {
+      hostname: "grumphya.com",
+      environment: "production",
+      generatedAt: "2026-11-18T19:00:00.000Z",
+      expiresAt: "2026-11-19T19:00:00.000Z",
+      profile: INTERNAL_AUDIT_RESPONSE_SCHEMA_VERSION,
+      scope: "audit:infrastructure",
+      evidence: [{ proxy: "caddy", domain: "grumphya.com", database: "postgresql", transport: "https", environment: "production" }],
+      kid: "ds-auditor-2026",
+    };
+    const payload = {
+      ...unsigned,
+      attestation: {
+        alg: "EdDSA",
+        kid: "test-release",
+        signature: sign(null, Buffer.from(canonicalizeForSignature(unsigned)), privateKey).toString("base64url"),
+      },
+    };
+    const fetcher = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: jsonHeaders,
+      json: async () => payload,
+    });
+    const result = await readInternalAuditResource(request, {
+      resource: "infrastructure_snapshot",
+      method: "GET",
+      hostname: "grumphya.com",
+      path: "/audit/infrastructure",
+    }, fetcher, {
+      ...testAuditAuth(new Date("2026-11-18T20:00:00.000Z")),
+      releaseAttestationPublicKeys: new Map([["test-release", publicKey]]),
+    });
+    expect(result.observedAt).toBe("2026-11-18T19:00:00.000Z");
+    expect((result as InternalInfrastructureSnapshot).services[0]).toMatchObject({ name: "proxy", transport: "tls_verified" });
+  });
+
   it("reads an allowlisted resource through a fixed Grumphya origin", async () => {
     const fetcher = vi.fn().mockResolvedValue({
       ok: true,
