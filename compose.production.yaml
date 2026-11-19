@@ -269,6 +269,7 @@ services:
     user: "0:0"
     privileged: false
     cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE, FOWNER]
     security_opt: [no-new-privileges:true]
     pids_limit: 64
     mem_limit: 256m

@@ -121,6 +121,7 @@ assert.match(internalAudit, /development-security-analysis-egress/u);
 assert.doesNotMatch(internalAudit, /development_security_.*database|docker\.sock|ports:/u);
 assert.match(internalAudit, /internal_audit_disabled/u);
 assert.match(internalAudit, /cap_drop:\s*\[ALL\]/u);
+assert.match(internalAudit, /cap_add:\s*\[CHOWN, SETUID, SETGID, DAC_OVERRIDE, FOWNER\]/u);
 assert.match(internalAudit, /read_only:\s*true/u);
 assert.match(runtimeCoordinator, /target:\s*development-security-runtime-coordinator/u);
 assert.match(runtimeCoordinator, /network_mode:\s*none/u);
