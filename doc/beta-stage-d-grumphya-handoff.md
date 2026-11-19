@@ -15,7 +15,7 @@ allowlisted y conservará estados, códigos, contadores, digests y timestamps.
   archivos, variables, usuarios reales ni rutas arbitrarias.
 - Transporte: HTTPS con validación de certificado; las redirecciones se
   rechazan.
-- Respuesta: `application/json` con tamaño máximo acordado y la envolvente
+- Respuesta: `application/json` de como máximo 64 KiB y con la envolvente
   `beta-d-0.2`; HTML, texto libre,
   cabeceras completas, cookies y secretos hacen fallar la auditoría de forma
   segura.
