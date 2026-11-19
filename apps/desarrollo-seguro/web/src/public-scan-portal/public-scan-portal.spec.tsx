@@ -208,12 +208,20 @@ describe("PublicScanPortal", () => {
     expect(await screen.findByText("Histórico")).toBeVisible();
     expect(screen.getByRole("heading", { name: "Historial de observaciones" })).toBeVisible();
     expect(screen.getByText("1 informe")).toBeVisible();
-    expect(screen.getByText(REPORT_SUMMARY)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Resumen y puntuación" })).toBeVisible();
     const categoryButtons = screen.getAllByRole("button", { name: "Ver detalle" });
-    for (const categoryButton of categoryButtons) {
-      await user.click(categoryButton);
-    }
+    expect(categoryButtons).toHaveLength(4);
+    await user.click(categoryButtons[2]);
+    expect(screen.getByRole("dialog", { name: "Seguridad" })).toBeVisible();
+    expect(screen.getByText(REPORT_SUMMARY)).toBeInTheDocument();
+    expect(screen.getByText(/solo se observó la portada/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Cerrar detalle" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await user.click(categoryButtons[0]);
+    expect(screen.getByRole("dialog", { name: "Ética" })).toBeVisible();
+    expect(screen.getByText(/no hay evidencia verificable sobre reutilización o venta/i)).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Cerrar detalle" }));
+    await user.click(categoryButtons[2]);
     expect(screen.getByText("100/100 · provisional · 1 de 8 criterios evaluados")).toBeVisible();
     expect(screen.getByText(/solo se calcula con los criterios evaluados/i)).toBeVisible();
     expect(screen.getByText("No se detectaron problemas en 1 aspecto evaluado. 7 aspectos aún no tienen datos."))
@@ -221,12 +229,9 @@ describe("PublicScanPortal", () => {
     expect(screen.getByText("100/100 provisional · 1 de 4 aspectos evaluados"))
       .toBeVisible();
     expect(screen.getByText(/provisional · 1 de 8 criterios evaluados/i)).toBeVisible();
-    expect(screen.getAllByText(/qué significa:/i)).toHaveLength(8);
+    expect(screen.getAllByText(/qué significa:/i)).toHaveLength(4);
     expect(screen.getAllByText("Sin datos suficientes").length).toBeGreaterThan(0);
-    expect(screen.getByText(/no hay evidencia verificable sobre reutilización o venta/i)).toBeVisible();
-    expect(screen.getByText(/solo se observó la portada/i)).toBeInTheDocument();
     expect(screen.getByText(/origen indicado en el registro/i)).toBeVisible();
-    expect(screen.getByRole("heading", { name: "Seguridad" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Privacidad" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Ética" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Rendimiento" })).toBeVisible();
@@ -418,10 +423,12 @@ describe("PublicScanPortal", () => {
       vi.fn().mockResolvedValue(Response.json(transportReport)),
     );
     window.history.replaceState({}, "", `/?report=${REPORT_ID}`);
+    const user = userEvent.setup();
 
     render(<PublicScanPortal />);
 
     expect(await screen.findByText("transport-v1")).toBeVisible();
+    await user.click(screen.getAllByRole("button", { name: "Ver detalle" })[2]);
     expect(screen.getByText("Comprobación DS-DNS-01: pass.")).toBeInTheDocument();
   });
 
@@ -463,12 +470,14 @@ describe("PublicScanPortal", () => {
       vi.fn().mockResolvedValue(Response.json(domainReport)),
     );
     window.history.replaceState({}, "", `/?report=${REPORT_ID}`);
+    const user = userEvent.setup();
 
     render(<PublicScanPortal />);
 
+    await screen.findByText("domain-v1");
+    await user.click(screen.getAllByRole("button", { name: "Ver detalle" })[1]);
     expect(await screen.findByText(/coincidencias con la tabla local Analytics\/Marketing: 1/i)).toBeInTheDocument();
     expect(screen.getByText(/no se interactuó con el banner de consentimiento/i)).toBeInTheDocument();
-    expect(screen.getByText("domain-v1")).toBeVisible();
     expect(screen.getByRole("img", { name: /No observado: 1 de 8 criterios/ })).toBeVisible();
   });
 
@@ -516,9 +525,14 @@ describe("PublicScanPortal", () => {
     render(<PublicScanPortal />);
 
     expect(await screen.findByText("domain-v2")).toBeVisible();
+    const user = userEvent.setup();
+    await user.click(screen.getAllByRole("button", { name: "Ver detalle" })[0]);
     expect(screen.getAllByText("Referencias a rastreadores conocidos").length).toBeGreaterThan(0);
+    await user.click(screen.getByRole("button", { name: "Cerrar detalle" }));
+    await user.click(screen.getAllByRole("button", { name: "Ver detalle" })[3]);
     expect(screen.getByText("Tiempo de respuesta inicial")).toBeInTheDocument();
     expect(screen.getByText("40.000 bytes")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Cerrar detalle" }));
     expect(screen.getByText("No confirma conexiones ni scripts dinámicos; el rendimiento mide una respuesta inicial.")).toBeVisible();
   });
 
@@ -536,9 +550,12 @@ describe("PublicScanPortal", () => {
       .mockResolvedValue(Response.json(reportWithUnsafeText));
     vi.stubGlobal("fetch", fetchMock);
     window.history.replaceState({}, "", `/?report=${REPORT_ID}`);
+    const user = userEvent.setup();
 
     render(<PublicScanPortal />);
 
+    const categoryButtons = await screen.findAllByRole("button", { name: "Ver detalle" });
+    await user.click(categoryButtons[2]);
     expect(await screen.findByText(unsafeSummary)).toBeInTheDocument();
     expect(document.querySelector("img[onerror]")).toBeNull();
     expect(fetchMock).toHaveBeenCalledWith(

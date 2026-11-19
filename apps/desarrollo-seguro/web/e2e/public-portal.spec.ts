@@ -232,10 +232,9 @@ test("shows the report when an authorized analysis finishes", async ({ page }) =
   const categoryButtons = page.getByRole("button", { name: "Ver detalle" });
   await expect(categoryButtons).toHaveCount(4);
   await expect(categoryButtons.first()).toHaveAttribute("aria-expanded", "false");
-  await expect(page.locator("#report-category-details-ethics")).toBeHidden();
-  for (let index = 0; index < 4; index += 1) {
-    await page.getByRole("button", { name: "Ver detalle" }).first().click();
-  }
+  await expect(page.locator("#report-category-details-ethics")).toHaveCount(0);
+  await categoryButtons.nth(2).click();
+  await expect(page.getByRole("dialog", { name: "Seguridad" })).toBeVisible();
   await expect(page.getByText("La conexión protege los datos")).toBeVisible();
   await expect(page.locator(".ds-portal__score-ring")).toHaveAttribute("data-score-band", "low");
   await expect(page.locator('.ds-portal__category-score-ring[data-score-band="low"]')).toHaveCount(1);
@@ -249,26 +248,34 @@ test("shows the report when an authorized analysis finishes", async ({ page }) =
     "rgb(212, 217, 225)",
   );
   const technicalEvidenceSections = page.locator(".ds-portal__technical-details summary");
-  await expect(technicalEvidenceSections).toHaveCount(3);
-  for (let index = 0; index < 3; index += 1) {
-    await technicalEvidenceSections.nth(index).click();
-  }
+  await expect(technicalEvidenceSections).toHaveCount(1);
+  await technicalEvidenceSections.first().click();
   await expect(page.getByText("TLS 1.0 aceptado", { exact: true })).toBeVisible();
   await expect(page.getByText("TLS 1.1 aceptado", { exact: true })).toBeVisible();
   await expect(page.getByText("TLS 1.2 aceptado", { exact: true })).toBeVisible();
   await expect(page.getByText("TLS 1.3 aceptado", { exact: true })).toBeVisible();
   await expect(page.getByText("Política que restringe contenido cargado (CSP)")).toBeVisible();
+  await page.getByRole("button", { name: "Cerrar detalle" }).click();
+  await categoryButtons.nth(0).click();
+  await expect(page.getByRole("dialog", { name: "Ética" })).toBeVisible();
+  await page.locator(".ds-portal__technical-details summary").click();
   await expect(page.getByText("Referencias a rastreadores conocidos").first()).toBeVisible();
+  await expect(page.getByText(/Revisa las referencias detectadas/i)).toBeVisible();
+  await expect(page.getByText(/qué revisar:/i).first()).toBeVisible();
+  await expect(page.getByText(/HTML inicial contiene referencias a herramientas de seguimiento conocidas/i))
+    .toBeVisible();
+  await page.getByRole("button", { name: "Cerrar detalle" }).click();
+  await categoryButtons.nth(3).click();
+  await expect(page.getByRole("dialog", { name: "Rendimiento" })).toBeVisible();
+  await page.locator(".ds-portal__technical-details summary").click();
   await expect(page.getByText("Tiempo de respuesta inicial")).toBeVisible();
   await expect(page.getByText("45.000 bytes")).toBeVisible();
   await expect(page.getByText(/qué comprueba:/i).first()).toBeVisible();
   await expect(page.getByText(/qué significa:/i).first()).toBeVisible();
-  await expect(page.getByText(/qué revisar:/i).first()).toBeVisible();
   await expect(page.locator(".ds-portal__report-takeaway")).toBeVisible();
-  await expect(page.getByText(/HTML inicial contiene referencias a herramientas de seguimiento conocidas/i))
-    .toBeVisible();
-  await expect(page.getByText(/Revisa las referencias detectadas/i)).toBeVisible();
   await expect(page.getByText("Hay controles observados que no se cumplen")).toBeVisible();
+  await page.getByRole("button", { name: "Cerrar detalle" }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
 });
 
 test("stops polling and reports an admission mismatch when no scan job appears", async ({

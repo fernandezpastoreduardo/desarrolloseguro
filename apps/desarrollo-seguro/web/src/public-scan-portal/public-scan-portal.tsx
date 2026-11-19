@@ -908,9 +908,7 @@ function ReportSummary({
   history: PublicReportHistoryEntry[];
 }) {
   const isCurrent = state === "fresh";
-  const [expandedCategoryIds, setExpandedCategoryIds] = useState<Set<string>>(
-    () => new Set(),
-  );
+  const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
 
   return (
     <>
@@ -937,13 +935,14 @@ function ReportSummary({
             const checks = report.checks.filter((check) =>
               (category.controls as readonly string[]).includes(check.controlId),
             );
-            const isExpanded = expandedCategoryIds.has(category.id);
+            const isExpanded = activeCategoryId === category.id;
             const detailsId = `report-category-details-${category.id}`;
             return (
               <section
                 className="ds-portal__report-category"
                 key={category.id}
                 data-expanded={isExpanded}
+                data-dialog-open={isExpanded}
               >
                 <div className="ds-portal__category-heading">
                   <div>
@@ -957,64 +956,24 @@ function ReportSummary({
                   className="ds-portal__category-more"
                   type="button"
                   aria-expanded={isExpanded}
-                  aria-controls={detailsId}
-                  onClick={() => {
-                    setExpandedCategoryIds((current) => {
-                      const next = new Set(current);
-                      if (next.has(category.id)) {
-                        next.delete(category.id);
-                      } else {
-                        next.add(category.id);
-                      }
-                      return next;
-                    });
-                  }}
+                  aria-haspopup="dialog"
+                  data-category-id={category.id}
+                  onClick={() => setActiveCategoryId(category.id)}
                 >
-                  <span>{isExpanded ? "Ocultar detalle" : "Ver detalle"}</span>
+                  <span>Ver detalle</span>
                   <span className="ds-portal__category-more-icon" aria-hidden="true">
-                    {isExpanded ? "−" : "+"}
+                    +
                   </span>
                 </button>
-                <div className="ds-portal__category-details" id={detailsId} hidden={!isExpanded}>
-                  <p>{category.description}</p>
-                  <ul className="ds-portal__ethics-criteria">
-                    {criteria.map((criterion) => (
-                      <li key={criterion.id} data-status={criterion.status}>
-                        <div>
-                          <strong>{getCriterionDisplayLabel(criterion.id, criterion.label)}</strong>
-                          <p><b>Qué comprueba:</b> {CRITERION_EXPLANATIONS[criterion.id]}</p>
-                          <p><b>Qué significa:</b> {getCriterionOutcome(criterion.id, criterion.status)}</p>
-                          <p className="ds-portal__criterion-evidence"><b>Dato observado:</b> {getCriterionEvidenceSummary(criterion.id, checks)}</p>
-                          {criterion.status !== "pass" && (
-                            <p><b>Qué revisar:</b> {CRITERION_RECOMMENDATIONS[criterion.id]}</p>
-                          )}
-                        </div>
-                        <span>{getCheckStatusLabel(criterion.status)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  {checks.length > 0 && (
-                    <details className="ds-portal__technical-details">
-                      <summary>Ver evidencias técnicas ({checks.length} comprobación{checks.length === 1 ? "" : "es"})</summary>
-                      <ul className="ds-portal__checks">
-                        {checks.map((check) => (
-                          <li key={`${check.controlId}-${check.targetPath}-${check.method}`}>
-                            <div><strong>{getControlLabel(check.controlId)}</strong><span>{getCheckStatusLabel(check.status)}</span></div>
-                            <p>{check.summary}</p>
-                            {Object.keys(check.evidence).length > 0 && (
-                              <dl className="ds-portal__evidence">
-                                {Object.entries(check.evidence).map(([key, value]) => (
-                                  <div key={key}><dt>{EVIDENCE_LABELS[key] ?? key}</dt><dd>{formatEvidenceValue(value, key)}</dd></div>
-                                ))}
-                              </dl>
-                            )}
-                            <small>{check.method} {check.targetPath} · {check.limitation}</small>
-                          </li>
-                        ))}
-                      </ul>
-                    </details>
-                  )}
-                </div>
+                {isExpanded && (
+                  <CategoryDetailsModal
+                    category={category}
+                    criteria={criteria}
+                    checks={checks}
+                    detailsId={detailsId}
+                    onClose={() => setActiveCategoryId(null)}
+                  />
+                )}
               </section>
             );
           })}
@@ -1118,6 +1077,8 @@ type CategoryScore = {
   assessedCriteria: number;
   totalCriteria: number;
 };
+
+type ReportCategory = (typeof REPORT_CATEGORIES)[number];
 
 function useRevealOnView<T extends HTMLElement>() {
   const ref = useRef<T | null>(null);
@@ -1340,6 +1301,114 @@ function CategoryScoreRing({
           /100
         </text>
       </svg>
+    </div>
+  );
+}
+
+function CategoryDetailsModal({
+  category,
+  criteria,
+  checks,
+  detailsId,
+  onClose,
+}: {
+  category: ReportCategory;
+  criteria: PublicEthicsCriterion[];
+  checks: PublicReport["checks"];
+  detailsId: string;
+  onClose: () => void;
+}) {
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const previousFocus = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", handleKeyDown);
+    closeButtonRef.current?.focus();
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleKeyDown);
+      previousFocus?.focus();
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      className="ds-portal__category-modal-backdrop"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="ds-portal__category-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={`${detailsId}-heading`}
+      >
+        <header className="ds-portal__category-modal-heading">
+          <div>
+            <p className="ds-portal__eyebrow">Detalle de la evaluación</p>
+            <h3 id={`${detailsId}-heading`}>{category.label}</h3>
+          </div>
+          <button
+            ref={closeButtonRef}
+            className="ds-portal__category-modal-close"
+            type="button"
+            onClick={onClose}
+          >
+            <span>Cerrar detalle</span>
+            <span aria-hidden="true">×</span>
+          </button>
+        </header>
+        <div className="ds-portal__category-details" id={detailsId}>
+          <p>{category.description}</p>
+          <ul className="ds-portal__ethics-criteria">
+            {criteria.map((criterion) => (
+              <li key={criterion.id} data-status={criterion.status}>
+                <div>
+                  <strong>{getCriterionDisplayLabel(criterion.id, criterion.label)}</strong>
+                  <p><b>Qué comprueba:</b> {CRITERION_EXPLANATIONS[criterion.id]}</p>
+                  <p><b>Qué significa:</b> {getCriterionOutcome(criterion.id, criterion.status)}</p>
+                  <p className="ds-portal__criterion-evidence"><b>Dato observado:</b> {getCriterionEvidenceSummary(criterion.id, checks)}</p>
+                  {criterion.status !== "pass" && (
+                    <p><b>Qué revisar:</b> {CRITERION_RECOMMENDATIONS[criterion.id]}</p>
+                  )}
+                </div>
+                <span>{getCheckStatusLabel(criterion.status)}</span>
+              </li>
+            ))}
+          </ul>
+          {checks.length > 0 && (
+            <details className="ds-portal__technical-details">
+              <summary>Ver evidencias técnicas ({checks.length} comprobación{checks.length === 1 ? "" : "es"})</summary>
+              <ul className="ds-portal__checks">
+                {checks.map((check) => (
+                  <li key={`${check.controlId}-${check.targetPath}-${check.method}`}>
+                    <div><strong>{getControlLabel(check.controlId)}</strong><span>{getCheckStatusLabel(check.status)}</span></div>
+                    <p>{check.summary}</p>
+                    {Object.keys(check.evidence).length > 0 && (
+                      <dl className="ds-portal__evidence">
+                        {Object.entries(check.evidence).map(([key, value]) => (
+                          <div key={key}><dt>{EVIDENCE_LABELS[key] ?? key}</dt><dd>{formatEvidenceValue(value, key)}</dd></div>
+                        ))}
+                      </dl>
+                    )}
+                    <small>{check.method} {check.targetPath} · {check.limitation}</small>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
