@@ -74,7 +74,7 @@ export function safeTransportErrorCode(
       return "connection_failed";
     }
     if (code && CERTIFICATE_ERROR_CODES.has(code)) return "tls_certificate_invalid";
-    if (code?.startsWith("ERR_SSL_") || code?.startsWith("ERR_TLS_")) {
+    if (code === "EPROTO" || code?.startsWith("ERR_SSL_") || code?.startsWith("ERR_TLS_")) {
       return "tls_handshake_failed";
     }
   }

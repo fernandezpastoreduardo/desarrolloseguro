@@ -22,6 +22,16 @@ describe("safeTransportErrorCode", () => {
     );
   });
 
+  it("classifies Node's EPROTO TLS alert as a handshake failure", () => {
+    const error = Object.assign(new Error("write EPROTO private OpenSSL details"), {
+      code: "EPROTO",
+    });
+
+    expect(safeTransportErrorCode(error, "https_request_failed")).toBe(
+      "tls_handshake_failed",
+    );
+  });
+
   it("uses the fallback for unclassified runtime errors", () => {
     expect(
       safeTransportErrorCode(new Error("private socket details"), "https_request_failed"),

@@ -230,6 +230,40 @@ describe("createTransportV1NetworkObserver", () => {
     expect(JSON.stringify(result)).not.toContain("private socket detail");
   });
 
+  it("records a rejected legacy TLS version as an explicit negative", async () => {
+    const requestFactory: HttpsRequestFactory = vi.fn((options, callback) => {
+      const request = new EventEmitter();
+      Object.assign(request, {
+        end() {
+          if (options.maxVersion === "TLSv1" || options.maxVersion === "TLSv1.1") {
+            request.emit("error", Object.assign(new Error("private protocol details"), { code: "EPROTO" }));
+          } else {
+            callback(responseWith(200, {}, "", String(options.maxVersion ?? "TLSv1.3")));
+          }
+          return this;
+        },
+        destroy() {
+          return this;
+        },
+      });
+      return request as unknown as ClientRequest;
+    });
+    const observer = createTransportV1NetworkObserver({
+      lookupFactory: () => vi.fn(),
+      httpsRequestFactory: requestFactory,
+      probeTlsVersions: true,
+    });
+
+    await expect(observer.observeTls(HOSTNAME, new AbortController().signal)).resolves.toMatchObject({
+      evidence: {
+        tls10Accepted: false,
+        tls11Accepted: false,
+        tls12Accepted: true,
+        tls13Accepted: true,
+      },
+    });
+  });
+
   it("runs the version matrix sequentially to stay within the network concurrency budget", async () => {
     let activeRequests = 0;
     let peakActiveRequests = 0;

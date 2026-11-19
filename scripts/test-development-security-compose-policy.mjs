@@ -161,6 +161,7 @@ assert.match(
 );
 assert.match(caddyFragment, /^desarrolloseguro\.org \{/mu);
 assert.match(caddyFragment, /reverse_proxy development-security-web:8080/u);
+assert.match(caddyFragment, /Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'"/u);
 assert.match(caddyFragment, /www\.desarrolloseguro\.org \{/u);
 assert.doesNotMatch(caddyFragment, /api:3001|database|grumphya/iu);
 assert.match(compose, /name: development-security-postgres/u);

@@ -23,6 +23,12 @@ El worker incluye `createEgressDestinationAuthorizer`, que autoriza solo el host
 
 El contrato de controles y evidencia está descrito en [controls-and-evidence.md](controls-and-evidence.md). Valida estructura y coherencia, pero no autentica observaciones. El executor no puede considerarse una fuente confiable hasta que el diseño pruebe cómo obtiene evidencia de conexiones reales y cómo impide que un worker aislado escriba valores inventados.
 
+Las sondas de versiones TLS conservan una matriz explícita. Un rechazo de
+negociación `EPROTO` de Node se reduce a la categoría allowlisted
+`tls_handshake_failed` y se proyecta como `accepted=false` para esa versión;
+fallos de conexión, timeout o DNS siguen siendo `unknown`. Así no se confunde
+el rechazo verificable de TLS antiguo con una caída de red.
+
 ## Límites de red
 
 El diseño futuro debe aislar el proceso que navega páginas: sin credenciales de base, secretos, Docker socket, montajes del host ni privilegios. La salida debe pasar por un conector controlado que resuelva y valide A/AAAA, fije la IP usada por cada conexión y redirección, y preserve Host/SNI y validación TLS. Bloquear loopback, redes privadas, link-local, metadatos, ULA IPv6, redes Docker y servicios del host. Si no puede aplicarse una política equivalente para IPv6, deshabilitarlo en el executor.
