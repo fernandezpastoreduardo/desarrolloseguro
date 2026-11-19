@@ -227,6 +227,7 @@ describe("PublicScanPortal", () => {
     expect(screen.getByRole("heading", { name: "Ética" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Rendimiento" })).toBeVisible();
     expect(screen.getByRole("region", { name: "Niveles de evaluación" })).toBeVisible();
+    expect(screen.getByRole("img", { name: "Puntuación global: 100 de 100 puntos" })).toBeVisible();
     expect(screen.getByRole("img", { name: "Observado: 1 de 8 criterios (13%)" })).toBeVisible();
     expect(screen.getByRole("img", { name: "No observado: 0 de 8 criterios (0%)" })).toBeVisible();
     expect(screen.getByRole("img", { name: "Sin conclusión: 7 de 8 criterios (88%)" })).toBeVisible();

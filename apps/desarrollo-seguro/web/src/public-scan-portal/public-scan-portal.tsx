@@ -926,7 +926,10 @@ function ReportSummary({
         </p>
         <p className="ds-portal__report-takeaway">{getReportTakeaway(report.ethicsAssessment.criteria)}</p>
         <p>{report.ethicsAssessment.interpretation}</p>
-        <BetaEvaluationCharts criteria={report.ethicsAssessment.criteria} />
+        <BetaEvaluationCharts
+          criteria={report.ethicsAssessment.criteria}
+          score={report.ethicsAssessment.score}
+        />
         <div className="ds-portal__report-categories">
           {REPORT_CATEGORIES.map((category) => {
             const criteria = report.ethicsAssessment.criteria.filter((criterion) =>
@@ -1067,7 +1070,41 @@ function ReportHistory({
 
 type PublicEthicsCriterion = PublicReport["ethicsAssessment"]["criteria"][number];
 
-function BetaEvaluationCharts({ criteria }: { criteria: PublicEthicsCriterion[] }) {
+function useRevealOnView<T extends HTMLElement>() {
+  const ref = useRef<T | null>(null);
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+
+    if (typeof IntersectionObserver === "undefined") {
+      setIsVisible(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry?.isIntersecting) return;
+        setIsVisible(true);
+        observer.disconnect();
+      },
+      { threshold: 0.25 },
+    );
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  return { ref, isVisible };
+}
+
+function BetaEvaluationCharts({
+  criteria,
+  score,
+}: {
+  criteria: PublicEthicsCriterion[];
+  score: number | null;
+}) {
   return (
     <section className="ds-portal__beta-evaluation" aria-labelledby="beta-evaluation-heading">
       <div className="ds-portal__beta-evaluation-heading">
@@ -1078,11 +1115,35 @@ function BetaEvaluationCharts({ criteria }: { criteria: PublicEthicsCriterion[] 
         <p>La lectura separa lo observado, lo que no se observó y lo que todavía no tiene evidencia suficiente.</p>
       </div>
       <div className="ds-portal__beta-charts">
+        <BetaEvaluationChart
+          id="global-score"
+          label="Puntuación global"
+          value={score ?? 0}
+          max={100}
+          valueLabel={score === null ? "—" : `${score}`}
+          detail={score === null ? "Sin puntuación" : "de 100 puntos"}
+          accessibleLabel={
+            score === null
+              ? "Puntuación global: sin puntuación"
+              : `Puntuación global: ${score} de 100 puntos`
+          }
+        />
         {BETA_EVALUATION_LEVELS.map((level) => {
           const count = criteria.filter((criterion) =>
             (level.statuses as readonly string[]).includes(criterion.status),
           ).length;
-          return <BetaEvaluationChart key={level.id} id={level.id} label={level.label} count={count} total={criteria.length} />;
+          return (
+            <BetaEvaluationChart
+              key={level.id}
+              id={level.id}
+              label={level.label}
+              value={count}
+              max={criteria.length}
+              valueLabel={`${criteria.length === 0 ? 0 : Math.round((count / criteria.length) * 100)}%`}
+              detail={`${count} de ${criteria.length} criterios`}
+              accessibleLabel={`${level.label}: ${count} de ${criteria.length} criterios (${criteria.length === 0 ? 0 : Math.round((count / criteria.length) * 100)}%)`}
+            />
+          );
         })}
       </div>
     </section>
@@ -1092,22 +1153,32 @@ function BetaEvaluationCharts({ criteria }: { criteria: PublicEthicsCriterion[] 
 function BetaEvaluationChart({
   id,
   label,
-  count,
-  total,
+  value,
+  max,
+  valueLabel,
+  detail,
+  accessibleLabel,
 }: {
   id: string;
   label: string;
-  count: number;
-  total: number;
+  value: number;
+  max: number;
+  valueLabel: string;
+  detail: string;
+  accessibleLabel: string;
 }) {
-  const progress = total === 0 ? 0 : Math.round((count / total) * 100);
+  const { ref, isVisible } = useRevealOnView<HTMLElement>();
+  const progress = max === 0 ? 0 : Math.min(100, Math.max(0, Math.round((value / max) * 100)));
   const radius = 44;
   const circumference = 2 * Math.PI * radius;
-  const valueLabel = `${progress}%`;
-  const accessibleLabel = `${label}: ${count} de ${total} criterios (${progress}%)`;
 
   return (
-    <article className="ds-portal__beta-chart" data-level={id}>
+    <article
+      ref={ref}
+      className="ds-portal__beta-chart"
+      data-level={id}
+      data-visible={isVisible}
+    >
       <svg
         className="ds-portal__beta-chart-svg"
         viewBox="0 0 120 120"
@@ -1121,8 +1192,8 @@ function BetaEvaluationChart({
           cx="60"
           cy="60"
           r={radius}
-          strokeDasharray={`${(circumference * progress) / 100} ${circumference}`}
-          strokeDashoffset={circumference / 4}
+          strokeDasharray={circumference}
+          strokeDashoffset={isVisible ? circumference * (1 - progress / 100) : circumference}
         />
         <text className="ds-portal__beta-chart-value" x="60" y="63" textAnchor="middle">
           {valueLabel}
@@ -1130,7 +1201,7 @@ function BetaEvaluationChart({
       </svg>
       <div>
         <h4>{label}</h4>
-        <p>{count} de {total} criterios</p>
+        <p>{detail}</p>
       </div>
     </article>
   );

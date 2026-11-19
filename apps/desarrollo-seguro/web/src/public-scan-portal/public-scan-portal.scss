@@ -11,6 +11,7 @@ $ds-serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia,
   serif;
 $ds-sans: "Avenir Next", "Trebuchet MS", "Segoe UI", sans-serif;
 $ds-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+$ds-radius: 20px;
 
 .ds-portal {
   --ds-ink: #{$ds-ink};
@@ -28,6 +29,7 @@ $ds-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   --ds-serif: #{$ds-serif};
   --ds-sans: #{$ds-sans};
   --ds-mono: #{$ds-mono};
+  --ds-radius: #{$ds-radius};
   min-height: 100vh;
   border-left: 4px solid var(--ds-accent);
   background: var(--ds-canvas);
@@ -63,6 +65,30 @@ $ds-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
     outline: 3px solid var(--ds-accent);
     outline-offset: 4px;
   }
+}
+
+.ds-portal__skip-link,
+.ds-portal__topbar,
+.ds-portal__theme,
+.ds-portal__search,
+.ds-portal__search input,
+.ds-portal__search button,
+.ds-portal__result,
+.ds-portal__empty,
+.ds-portal__notice,
+.ds-portal__verdict,
+.ds-portal__ethics,
+.ds-portal__report-category,
+.ds-portal__report-takeaway,
+.ds-portal__category-summary,
+.ds-portal__beta-evaluation,
+.ds-portal__beta-chart,
+.ds-portal__history,
+.ds-portal__history-list li,
+.ds-portal__analysis-request button,
+.ds-portal__failure,
+.ds-portal__scan-progress-track {
+  border-radius: var(--ds-radius);
 }
 
 .ds-portal__skip-link {
@@ -556,7 +582,7 @@ $ds-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   position: relative;
   min-width: 0;
   border: 1px solid var(--ds-line);
-  border-radius: 2px;
+  border-radius: var(--ds-radius);
   padding: 20px;
   background: var(--ds-canvas);
   box-shadow: 0 8px 20px color-mix(in srgb, var(--ds-ink) 6%, transparent);
@@ -661,7 +687,7 @@ $ds-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 
 .ds-portal__beta-charts {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -672,8 +698,30 @@ $ds-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   align-items: center;
   gap: 14px;
   border: 1px solid var(--ds-line);
+  opacity: 0;
   padding: 13px;
   background: var(--ds-canvas);
+  transform: translateY(18px) scale(0.98);
+  transition:
+    opacity 500ms ease,
+    transform 600ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.ds-portal__beta-chart[data-visible="true"] {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.ds-portal__beta-chart:nth-child(2) { transition-delay: 70ms; }
+.ds-portal__beta-chart:nth-child(3) { transition-delay: 140ms; }
+.ds-portal__beta-chart:nth-child(4) { transition-delay: 210ms; }
+
+.ds-portal__beta-chart[data-level="global-score"] {
+  --ds-chart-color: var(--ds-accent-strong);
+  border-color: color-mix(in srgb, var(--ds-accent) 50%, var(--ds-line));
+  background: color-mix(in srgb, var(--ds-paper) 88%, var(--ds-accent));
 }
 
 .ds-portal__beta-chart[data-level="no-observado"] { --ds-chart-color: #c65c49; }
@@ -692,12 +740,16 @@ $ds-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   stroke-width: 10;
 }
 
+.ds-portal__verdict span { border-radius: var(--ds-radius); }
+
 .ds-portal__beta-chart-track { stroke: color-mix(in srgb, var(--ds-line) 76%, transparent); }
 
 .ds-portal__beta-chart-progress {
   stroke: var(--ds-chart-color);
   stroke-linecap: square;
-  transition: stroke-dasharray 360ms ease;
+  transform: rotate(-90deg);
+  transform-origin: 50% 50%;
+  transition: stroke-dashoffset 900ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .ds-portal__beta-chart-value {
@@ -723,6 +775,19 @@ $ds-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   letter-spacing: 0.04em;
   line-height: 1.35;
   text-transform: uppercase;
+}
+
+@media (max-width: 1100px) {
+  .ds-portal__beta-charts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-portal__beta-chart,
+  .ds-portal__beta-chart-progress {
+    transition: none;
+  }
 }
 .ds-portal__ethics-criteria li > div { min-width: 0; }
 .ds-portal__ethics-criteria li > div > strong { color: var(--ds-ink); font-size: 0.9rem; }
@@ -964,7 +1029,7 @@ $ds-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   display: block;
   height: 7px;
   overflow: hidden;
-  border-radius: 999px;
+  border-radius: var(--ds-radius);
   background: var(--ds-canvas-deep);
 }
 
