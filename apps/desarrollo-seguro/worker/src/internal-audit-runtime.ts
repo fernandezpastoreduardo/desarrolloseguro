@@ -113,6 +113,7 @@ function createAuditFetcher(): InternalAuditFetcher {
       status: response.status,
       headers: { get: (name) => response.headers.get(name) },
       json: () => response.json(),
+      text: () => response.text(),
     };
   };
 }

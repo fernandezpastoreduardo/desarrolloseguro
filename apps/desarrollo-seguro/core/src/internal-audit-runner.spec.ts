@@ -23,7 +23,7 @@ describe("internal audit runner", () => {
     const fetcher = vi.fn(async (url: string) => ({
       ok: true,
       status: 200,
-      headers: { get: () => "application/json" },
+      headers: { get: (name: string) => name === "content-type" ? "application/json" : null },
       json: async () => signedAuditEvidence(url.endsWith("/deployment")
         ? {
           observedAt,
@@ -77,7 +77,7 @@ describe("internal audit runner", () => {
     const fetcher = vi.fn(async () => ({
       ok: false,
       status: 503,
-      headers: { get: () => "application/json" },
+      headers: { get: (name: string) => name === "content-type" ? "application/json" : null },
       json: async () => ({}),
     }));
 
@@ -130,7 +130,7 @@ describe("internal audit runner", () => {
     const fetcher = vi.fn(async () => ({
       ok: true,
       status: 200,
-      headers: { get: () => "application/json" },
+      headers: { get: (name: string) => name === "content-type" ? "application/json" : null },
       json: async () => signedAuditEvidence({
         area: "transparency",
         status: "pass",
@@ -160,7 +160,7 @@ describe("internal audit runner", () => {
     const fetcher = vi.fn(async () => ({
       ok: true,
       status: 200,
-      headers: { get: () => "application/json" },
+      headers: { get: (name: string) => name === "content-type" ? "application/json" : null },
       json: async () => signedAuditEvidence({
         area: "transparency",
         status: "pass",
@@ -189,7 +189,7 @@ describe("internal audit runner", () => {
     const fetcher = vi.fn(async () => ({
       ok: true,
       status: 200,
-      headers: { get: () => "application/json" },
+      headers: { get: (name: string) => name === "content-type" ? "application/json" : null },
       json: async () => signedAuditEvidence({
         area: "transparency",
         status: "pass",
@@ -246,7 +246,7 @@ describe("internal audit runner", () => {
       return {
         ok: true,
         status: 200,
-        headers: { get: () => "application/json" },
+        headers: { get: (name: string) => name === "content-type" ? "application/json" : null },
         json: async () => ({}),
       };
     });

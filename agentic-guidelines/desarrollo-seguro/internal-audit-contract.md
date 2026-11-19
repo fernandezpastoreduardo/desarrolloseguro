@@ -65,8 +65,8 @@ devuelve únicamente `internal_audit_cancelled`.
 Las respuestas de producción usan la envolvente `beta-d-0.2` con las claves
 exactas `schemaVersion`, `observedAt`, `validUntil`, `environment`,
 `deploymentDigest`, `cardinality`, `evidence` y `attestation`. `cardinality` es
-exactamente `1` en esta versión; el lector rechaza arrays, respuestas fuera de
-la ventana de 24 horas, timestamps futuros, HTML, firmas inválidas y `kid`s no
+exactamente `1` en esta versión; el lector rechaza respuestas mayores de 64 KiB,
+arrays, respuestas fuera de la ventana de 24 horas, timestamps futuros, HTML, firmas inválidas y `kid`s no
 allowlisted. La atestación EdDSA firma la serialización canónica de todos los
 campos salvo `attestation`; la clave pública se fija en Desarrollo Seguro y se
 rota con solapamiento de `kid`s.

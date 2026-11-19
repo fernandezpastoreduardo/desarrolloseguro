@@ -12,7 +12,7 @@ const request: InternalAuditRequest = {
   evidenceRetentionDays: 30,
 };
 
-const jsonHeaders = { get: () => "application/json" };
+const jsonHeaders = { get: (name: string) => name === "content-type" ? "application/json" : null };
 
 describe("internal production audit reader", () => {
   it("reads an allowlisted resource through a fixed Grumphya origin", async () => {
@@ -116,6 +116,58 @@ describe("internal production audit reader", () => {
       ok: true,
       status: 200,
       headers: { get: () => "text/html; charset=utf-8" },
+      json: async () => ({}),
+    });
+    await expect(readInternalAuditResource(request, {
+      resource: "infrastructure_snapshot",
+      method: "GET",
+      hostname: "grumphya.com",
+      path: "/audit/infrastructure",
+    }, fetcher, testAuditAuth(new Date("2026-11-18T20:00:00.000Z")))).rejects.toThrow("internal_audit_resource_invalid");
+  });
+
+  it("rejects an oversized response before parsing its body", async () => {
+    const json = vi.fn();
+    const fetcher = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: (name: string) => name === "content-type" ? "application/json" : "70000" },
+      json,
+    });
+    await expect(readInternalAuditResource(request, {
+      resource: "infrastructure_snapshot",
+      method: "GET",
+      hostname: "grumphya.com",
+      path: "/audit/infrastructure",
+    }, fetcher, testAuditAuth(new Date("2026-11-18T20:00:00.000Z")))).rejects.toThrow("internal_audit_resource_invalid");
+    expect(json).not.toHaveBeenCalled();
+  });
+
+  it("bounds a chunked response body when content length is absent", async () => {
+    const text = vi.fn().mockResolvedValue(`${"x".repeat(70_000)}`);
+    const json = vi.fn();
+    const fetcher = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: (name: string) => name === "content-type" ? "application/json" : null },
+      text,
+      json,
+    });
+    await expect(readInternalAuditResource(request, {
+      resource: "infrastructure_snapshot",
+      method: "GET",
+      hostname: "grumphya.com",
+      path: "/audit/infrastructure",
+    }, fetcher, testAuditAuth(new Date("2026-11-18T20:00:00.000Z")))).rejects.toThrow("internal_audit_resource_invalid");
+    expect(text).toHaveBeenCalledOnce();
+    expect(json).not.toHaveBeenCalled();
+  });
+
+  it("rejects a malformed content length instead of trusting an unbounded response", async () => {
+    const fetcher = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: (name: string) => name === "content-type" ? "application/json" : "unknown" },
       json: async () => ({}),
     });
     await expect(readInternalAuditResource(request, {

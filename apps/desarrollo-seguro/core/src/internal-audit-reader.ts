@@ -10,6 +10,8 @@ import { parseInternalPrivacyObservation, type InternalPrivacyObservation } from
 import { parseInternalQualityObservation, type InternalQualityObservation } from "./internal-quality-observation.js";
 import { parseSyntheticAuthObservation, type SyntheticAuthObservation } from "./internal-synthetic-auth.js";
 
+export const INTERNAL_AUDIT_MAX_RESPONSE_BYTES = 64 * 1024;
+
 export type InternalAuditResource =
   | InternalInfrastructureSnapshot
   | InternalDeploymentAttestation
@@ -32,6 +34,7 @@ export type InternalAuditFetcher = (
   status: number;
   headers: { get(name: string): string | null };
   json: () => Promise<unknown>;
+  text?: () => Promise<string>;
 }>;
 
 export type InternalAuditReaderOptions = {
@@ -51,7 +54,7 @@ export async function readInternalAuditResource(
   const response = await fetchResource(operation, fetcher, options);
   let payload: unknown;
   try {
-    payload = await response.json();
+    payload = await readBoundedJson(response);
   } catch (error) {
     if (isAbortError(error)) throw new Error("internal_audit_cancelled", { cause: error });
     throw new Error("internal_audit_resource_invalid", { cause: error });
@@ -75,6 +78,23 @@ export async function readInternalAuditResource(
     }
     throw new Error("internal_audit_resource_invalid", { cause: error });
   }
+}
+
+async function readBoundedJson(
+  response: Awaited<ReturnType<InternalAuditFetcher>>,
+): Promise<unknown> {
+  if (response.text) {
+    const body = await response.text();
+    if (Buffer.byteLength(body, "utf8") > INTERNAL_AUDIT_MAX_RESPONSE_BYTES) {
+      throw new Error("internal_audit_resource_invalid");
+    }
+    return JSON.parse(body) as unknown;
+  }
+  const payload = await response.json();
+  if (Buffer.byteLength(JSON.stringify(payload), "utf8") > INTERNAL_AUDIT_MAX_RESPONSE_BYTES) {
+    throw new Error("internal_audit_resource_invalid");
+  }
+  return payload;
 }
 
 async function fetchResource(
@@ -116,7 +136,17 @@ async function fetchResource(
   if (contentType !== "application/json") {
     throw new Error("internal_audit_resource_invalid");
   }
+  const contentLength = response.headers.get("content-length");
+  if (contentLength !== null && !isBoundedContentLength(contentLength)) {
+    throw new Error("internal_audit_resource_invalid");
+  }
   return response;
+}
+
+function isBoundedContentLength(value: string): boolean {
+  if (!/^\d+$/u.test(value)) return false;
+  const length = Number(value);
+  return Number.isSafeInteger(length) && length <= INTERNAL_AUDIT_MAX_RESPONSE_BYTES;
 }
 
 function isAbortError(error: unknown): boolean {
