@@ -7,9 +7,10 @@ calidad, privacidad, ética e IA y limita la retención de evidencias a 30 días
 La solicitud debe incluir exactamente `policyVersion=beta-d-0.1`; el parser no
 acepta una versión omitida o distinta.
 
-Una evidencia interna contiene únicamente `criterionId`, `scope`, `status`,
-`source`, `observedAt` y `reasonCode`. Los criterios y códigos están
-allowlisted. No se aceptan HTML, cabeceras completas, cookies crudas, secretos,
+Una evidencia interna contiene `criterionId`, `scope`, `status`, `source`,
+`observedAt` y `reasonCode`; las métricas allowlisted pueden añadir `value`,
+`unit` y `limit` acotados. Los criterios y códigos están allowlisted. No se
+aceptan HTML, cabeceras completas, cookies crudas, secretos,
 identificadores de usuario, texto libre ni destinos alternativos. El snapshot
 de infraestructura D-02 solo conserva nombres seguros, digests SHA-256,
 exposición, privilegios y estado de transporte; nunca comandos, rutas,
@@ -25,6 +26,12 @@ Las observaciones D-06 solo conservan señales agregadas allowlisted de
 almacenamiento, terceros, consentimiento, transparencia y minimización; no
 conservan nombres de cookies, dominios, textos, scripts ni permiten inferir
 venta de datos.
+Cuando una respuesta reúne varias señales de un mismo recurso usa la envoltura
+allowlisted `{observedAt, sampleRef, signals}`. Cada señal identifica un único
+criterio, código y estado; `boolean` usa `0/1`, `count` exige un `limit` y no
+supera `1000`, y `milliseconds` exige un `limit` y no supera `120000`. El
+parser rechaza criterios de otra ruta, duplicados, texto libre y valores fuera
+de esos límites; una señal ausente se mantiene como `unknown` en el informe.
 El proyector D-07 transforma cada observación tipada en un criterio interno,
 rechaza criterios duplicados antes del cálculo y conserva `externalScore` en
 `null`.

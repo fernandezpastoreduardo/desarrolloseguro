@@ -57,6 +57,69 @@ describe("internal audit evidence projection", () => {
     ]);
   });
 
+  it("projects multiple allowlisted signals without adding a new route", () => {
+    const evidence = projectInternalAuditEvidence([
+      {
+        kind: "infrastructure_snapshot",
+        observation: {
+          observedAt,
+          sampleRef,
+          signals: [
+            {
+              criterionId: "infrastructure.headers",
+              status: "pass",
+              reasonCode: "security_headers_verified",
+              value: 1,
+              unit: "boolean",
+            },
+            {
+              criterionId: "infrastructure.network",
+              status: "pass",
+              reasonCode: "network_surface_allowlisted",
+              value: 1,
+              unit: "boolean",
+            },
+          ],
+        },
+      },
+      {
+        kind: "quality",
+        observation: {
+          observedAt,
+          sampleRef,
+          signals: [
+            {
+              criterionId: "quality.accessibility",
+              status: "pass",
+              reasonCode: "accessibility_critical_violations",
+              value: 0,
+              unit: "count",
+              limit: 100,
+            },
+            {
+              criterionId: "performance.page_load",
+              status: "pass",
+              reasonCode: "response_time",
+              value: 420,
+              unit: "milliseconds",
+              limit: 2_000,
+            },
+          ],
+        },
+      },
+    ]);
+
+    expect(evidence.map(({ criterionId, status }) => ({ criterionId, status }))).toEqual([
+      { criterionId: "infrastructure.headers", status: "pass" },
+      { criterionId: "infrastructure.network", status: "pass" },
+      { criterionId: "quality.accessibility", status: "pass" },
+      { criterionId: "performance.page_load", status: "pass" },
+    ]);
+    expect(evidence).toEqual(expect.arrayContaining([
+      expect.objectContaining({ criterionId: "performance.page_load", value: 420, unit: "milliseconds", limit: 2_000 }),
+    ]));
+  });
+
   it("rejects duplicate criteria before scoring can double count them", () => {
     const observation = {
       kind: "quality",

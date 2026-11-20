@@ -93,7 +93,8 @@ Desarrollo Seguro haya incorporado y probado el mismo esquema.
       "status": "pass",
       "reasonCode": "security_headers_verified",
       "value": 1,
-      "unit": "boolean"
+      "unit": "boolean",
+      "limit": 1
     }
   ]
 }
@@ -101,7 +102,10 @@ Desarrollo Seguro haya incorporado y probado el mismo esquema.
 
 `status` solo puede ser `pass`, `fail`, `unknown` o `not_applicable`.
 `unit` solo puede ser `boolean`, `count` o `milliseconds`; los booleanos usan
-`0/1`, los contadores no superan `1000` y las duraciones no superan `120000`.
+`0/1` y pueden omitir `limit`; los contadores no superan `1000` y las
+duraciones no superan `120000`, y ambos deben incluir un `limit` con la misma
+unidad y dentro del mismo rango. `limit` es opcional para booleanos y, si se
+incluye, debe valer `0/1`.
 Los hashes usan `sha256:` seguido de 64 dígitos hexadecimales. Los códigos de
 señal son allowlisted y deben seguir `^[a-z0-9]+(?:_[a-z0-9]+)*$`; no se
 acepta texto libre. Desarrollo Seguro completa como `unknown` cualquier

@@ -1,4 +1,5 @@
 import {
+  INTERNAL_AUDIT_CRITERIA,
   parseInternalAuditEvidence,
   type InternalAuditCriterion,
   type InternalAuditEvidence,
@@ -9,11 +10,17 @@ import { parseInternalInfrastructureSnapshot } from "./internal-infrastructure.j
 import { parseInternalPrivacyObservation } from "./internal-privacy-observation.js";
 import { parseInternalQualityObservation } from "./internal-quality-observation.js";
 import { parseSyntheticAuthObservation } from "./internal-synthetic-auth.js";
+import {
+  parseInternalAuditSignalEnvelope,
+  signalCriteriaForResource,
+  type InternalAuditSignalEnvelope,
+} from "./internal-audit-signal-envelope.js";
 
 const ENVELOPE_KINDS = [
   "synthetic_auth",
   "quality",
   "privacy",
+  "ai",
   "deployment_attestation",
   "infrastructure_snapshot",
   "dependency_inventory",
@@ -27,6 +34,9 @@ type ProjectedEvidence = {
   source: "production_observation" | "synthetic_check" | "deployment_attestation";
   observedAt: string;
   reasonCode: string;
+  value?: number;
+  unit?: "boolean" | "count" | "milliseconds";
+  limit?: number;
 };
 
 export function projectInternalAuditEvidence(input: unknown): readonly InternalAuditEvidence[] {
@@ -56,6 +66,9 @@ function projectEnvelope(input: unknown): readonly ProjectedEvidence[] {
     throw new Error("internal_audit_projection_invalid");
   }
   if (input.kind === "synthetic_auth") {
+    if (isSignalEnvelope(input.observation)) {
+      return projectSignals(input.observation, "synthetic_browser_flow", "synthetic_check");
+    }
     const observation = parseSyntheticAuthObservation(input.observation);
     return [{
       criterionId: "authentication.authorization",
@@ -67,6 +80,9 @@ function projectEnvelope(input: unknown): readonly ProjectedEvidence[] {
     }];
   }
   if (input.kind === "quality") {
+    if (isSignalEnvelope(input.observation)) {
+      return projectSignals(input.observation, "performance_observation", "production_observation");
+    }
     const observation = parseInternalQualityObservation(input.observation);
     return [{
       criterionId: qualityCriterion(observation.kind),
@@ -78,6 +94,9 @@ function projectEnvelope(input: unknown): readonly ProjectedEvidence[] {
     }];
   }
   if (input.kind === "deployment_attestation") {
+    if (isSignalEnvelope(input.observation)) {
+      return projectSignals(input.observation, "deployment_attestation", "deployment_attestation");
+    }
     const observation = parseInternalDeploymentAttestation(input.observation);
     return observation.checks.flatMap((check): ProjectedEvidence[] => {
       if (check === "dependency_audit_passed") {
@@ -93,6 +112,9 @@ function projectEnvelope(input: unknown): readonly ProjectedEvidence[] {
     });
   }
   if (input.kind === "infrastructure_snapshot") {
+    if (isSignalEnvelope(input.observation)) {
+      return projectSignals(input.observation, "infrastructure_snapshot", "production_observation");
+    }
     const observation = parseInternalInfrastructureSnapshot(input.observation);
     const transports = observation.services.map((service) => service.transport);
     const hasUnknownTransport = transports.includes("unknown");
@@ -113,6 +135,9 @@ function projectEnvelope(input: unknown): readonly ProjectedEvidence[] {
     }];
   }
   if (input.kind === "dependency_inventory") {
+    if (isSignalEnvelope(input.observation)) {
+      return projectSignals(input.observation, "dependency_inventory", "production_observation");
+    }
     const observation = parseInternalDependencyInventory(input.observation);
     const assessment = assessDependencyInventory(observation.criticalRiskCount, observation.highRiskCount);
     return [{
@@ -124,6 +149,26 @@ function projectEnvelope(input: unknown): readonly ProjectedEvidence[] {
       reasonCode: assessment.reasonCode,
     }];
   }
+  if (input.kind === "ai") {
+    if (isSignalEnvelope(input.observation)) {
+      return projectSignals(input.observation, "ai_observation", "production_observation");
+    }
+    const observation = parseInternalPrivacyObservation(input.observation);
+    if (observation.area !== "transparency" || observation.signalCode !== "ai_disclosure_present") {
+      throw new Error("internal_audit_projection_invalid");
+    }
+    return [{
+      criterionId: "ai.disclosure",
+      scope: "ai",
+      status: observation.status,
+      source: "production_observation",
+      observedAt: observation.observedAt,
+      reasonCode: observation.signalCode,
+    }];
+  }
+  if (isSignalEnvelope(input.observation)) {
+    return projectSignals(input.observation, "privacy_observation", "production_observation");
+  }
   const observation = parseInternalPrivacyObservation(input.observation);
   const criterionId = privacyCriterion(observation.area, observation.signalCode);
   return [{
@@ -134,6 +179,29 @@ function projectEnvelope(input: unknown): readonly ProjectedEvidence[] {
     observedAt: observation.observedAt,
     reasonCode: observation.signalCode,
   }];
+}
+
+function projectSignals(
+  input: unknown,
+  resource: string,
+  source: ProjectedEvidence["source"],
+): readonly ProjectedEvidence[] {
+  const envelope = parseInternalAuditSignalEnvelope(input, signalCriteriaForResource(resource));
+  return envelope.signals.map((signal) => ({
+    criterionId: signal.criterionId,
+    scope: INTERNAL_AUDIT_CRITERIA[signal.criterionId],
+    status: signal.status,
+    source,
+    observedAt: envelope.observedAt,
+    reasonCode: signal.reasonCode,
+    value: signal.value,
+    unit: signal.unit,
+    ...(signal.limit === undefined ? {} : { limit: signal.limit }),
+  }));
+}
+
+function isSignalEnvelope(value: unknown): value is InternalAuditSignalEnvelope {
+  return isRecord(value) && Object.hasOwn(value, "signals");
 }
 
 function assessInfrastructureTransport(
