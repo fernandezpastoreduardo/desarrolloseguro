@@ -60,6 +60,83 @@ la envolvente. Desarrollo Seguro rechaza timestamps futuros, evidencia de más
 de 24 horas, ventanas mayores de 24 horas, firmas inválidas y cardinalidades
 distintas de una.
 
+## Matriz aclaratoria para completar la cobertura D
+
+La cobertura se reparte entre los siete recursos existentes. No se crean rutas
+`application` ni `ethics`, y una lectura no puede proyectar dos veces el mismo
+criterio. La siguiente es la matriz autoritativa para la ampliación; si una
+señal no está disponible debe quedar `unknown` en Desarrollo Seguro.
+
+| Recurso existente | Criterios que puede aportar | Fuente y observación permitida |
+| --- | --- | --- |
+| `infrastructure` | `infrastructure.tls`, `infrastructure.headers`, `infrastructure.network` | Snapshot del despliegue y señales agregadas de transporte, cabeceras efectivas y superficie de red; nunca nombres de cabeceras, IP internas, topología ni configuración completa |
+| `deployment` | `application.secrets` | Atestación del artefacto desplegado y comprobación `secrets_not_in_image`; el digest debe corresponder al release servido |
+| `dependencies` | `application.dependencies` | Contadores agregados por severidad y digest de inventario; no se repite desde `deployment` |
+| `auth` | `authentication.authorization` | Flujos sintéticos de autorización; solo hash de referencia y resultado categórico |
+| `quality` | `quality.e2e`, `quality.accessibility`, `performance.page_load` | Métricas allowlisted con valor, unidad, límite, hash de muestra y timestamp |
+| `privacy` | `privacy.cookies`, `privacy.third_parties`, `privacy.consent`, `ethics.transparency` | Señales agregadas de almacenamiento, terceros, consentimiento y presencia de aviso; no nombres, dominios, scripts ni texto |
+| `ai` | `ai.disclosure` | Estado booleano de divulgación y revisión de IA; sin prompt, modelo, proveedor ni contenido de usuario |
+
+La envoltura conserva `beta-d-0.2` y `cardinality=1`. Para transportar más de
+una señal dentro de una ruta, `evidence` puede usar esta forma allowlisted y
+determinista (la lista no puede contener criterios fuera de la fila del recurso).
+Es una ampliación coordinada del parser: Grumphya no debe publicarla hasta que
+Desarrollo Seguro haya incorporado y probado el mismo esquema.
+
+```json
+{
+  "observedAt": "2026-11-20T08:00:00.000Z",
+  "sampleRef": "sha256:<64 hex>",
+  "signals": [
+    {
+      "criterionId": "infrastructure.headers",
+      "status": "pass",
+      "reasonCode": "security_headers_verified",
+      "value": 1,
+      "unit": "boolean"
+    }
+  ]
+}
+```
+
+`status` solo puede ser `pass`, `fail`, `unknown` o `not_applicable`.
+`unit` solo puede ser `boolean`, `count` o `milliseconds`; los booleanos usan
+`0/1`, los contadores no superan `1000` y las duraciones no superan `120000`.
+Los hashes usan `sha256:` seguido de 64 dígitos hexadecimales. Los códigos de
+señal son allowlisted y deben seguir `^[a-z0-9]+(?:_[a-z0-9]+)*$`; no se
+acepta texto libre. Desarrollo Seguro completa como `unknown` cualquier
+criterio de la matriz que no llegue en la respuesta.
+
+Los códigos mínimos para las señales nuevas son:
+
+- `infrastructure.headers`: `security_headers_verified`,
+  `security_headers_missing`, `security_headers_unobserved`.
+- `infrastructure.network`: `network_surface_allowlisted`,
+  `network_surface_restricted`, `network_surface_unobserved`.
+- `ethics.transparency`: `privacy_notice_present`,
+  `privacy_notice_missing`, `privacy_notice_unobserved`.
+- `ai.disclosure`: `ai_disclosure_present`, `ai_disclosure_missing`,
+  `ai_disclosure_unobserved`.
+
+Los criterios ya cubiertos mantienen sus códigos actuales de los parsers D:
+`dependency_risk_not_observed`, `high_dependency_risk_observed`,
+`critical_dependency_risk_observed`, las métricas de calidad allowlisted y las
+señales de privacidad de almacenamiento, terceros y consentimiento. Una
+atestación de `deployment` no debe volver a emitir
+`application.dependencies` si el recurso `dependencies` ya lo aporta.
+
+Las comprobaciones posteriores al despliegue se generan en el flujo interno de
+Grumphya, se firman con `AUDIT_RELEASE_SIGNING_KEY`, se asocian al mismo
+`deploymentDigest` servido y se persisten mediante el escritor interno ya
+autorizado. No se introduce ingesta externa ni se comparte la clave privada.
+Si esa medición no puede firmarse y vincularse al digest, el criterio queda
+`unknown`; no se reutiliza una fixture ni se fabrica un `pass`.
+
+El valor autoritativo de `AUDIT_ENABLED` es la configuración viva del VPS y el
+entorno del contenedor en ejecución, no un documento del repositorio. Esta
+ampliación no cambia ese valor, no toca la certificación pública y no modifica
+`certifiedReportId`.
+
 El JWT técnico lo emite Desarrollo Seguro con `iss`, `sub`, `aud`, `iat`,
 `exp`, `jti`, `kid`, `domain`, `hostname`, `environment` y `scope`. Grumphya debe validar
 firma, issuer, audience, `kid`, entorno, dominio, scopes, expiración y
