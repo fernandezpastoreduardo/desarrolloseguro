@@ -21,12 +21,13 @@ Estas normas definen el proceso vigente para todos los agentes y prevalecen sobr
 15. **Calidad estática y de laboratorio desde el inicio.** El trabajo debe partir de una instalación local de SonarQube Community. Si no existe, su preparación se incluye entre las primeras tareas acordadas. Añade pruebas de Lighthouse ejecutadas en laboratorio y compatibles con privacidad, seguridad y ausencia de seguimiento externo.
 16. **Umbral obligatorio de Lighthouse.** Cada categoría evaluada (Rendimiento, Accesibilidad, Buenas prácticas y SEO) debe obtener al menos 96 tanto en escritorio como en móvil. Un resultado inferior en cualquier categoría o dispositivo bloquea el push. No reduzcas el umbral ni excluyas una categoría sin instrucción explícita del desarrollador.
 17. **Tareas de tamaño excesivo.** Si una petición resulta demasiado amplia para ejecutarla y revisarla con seguridad en una sola tarea, recházala como unidad de implementación, explica brevemente el motivo y propón un plan ordenado en tareas pequeñas. No empieces una de ellas hasta que el usuario indique cuál abordar, salvo que ya haya autorizado expresamente esa secuencia.
+18. **Contratos entre repositorios primero.** Cuando una capacidad dependa de otro repositorio, presenta primero en la conversación un prompt autónomo con rutas, payloads, estados, scopes, firmas, límites, permisos, criterios de aceptación y pruebas. El repositorio contraparte debe poder trabajar con ese prompt sin esperar a que este checkout implemente su parte. Solo después de exponerlo se copia el contrato validado a `agentic-guidelines/` o `doc/`; nunca se usa un archivo local para ocultar el prompt al desarrollador.
 
 ## Proceso para cada cambio
 
 1. Contrasta la petición con el plan vigente y aclara cualquier hueco de concepto.
 2. Define o actualiza primero la feature en `agentic-guidelines/`, con alcance, reglas y criterios de aceptación revisables.
-3. Divide el trabajo en cambios pequeños y aprobables. Cada cambio debe respetar SOLID, privacidad, seguridad y las reglas de dependencias.
+3. Si hay una dependencia entre repositorios, entrega antes el prompt contractual en la conversación y registra después su versión validada en la documentación correspondiente. Divide el trabajo en cambios pequeños y aprobables. Cada cambio debe respetar SOLID, privacidad, seguridad y las reglas de dependencias.
 4. Implementa y verifica solo el alcance acordado. Cuando el goal incluya CI/CD, ejecuta GitHub Actions y el deploy autorizado de Desarrollo Seguro después de que las puertas locales pasen; monitoriza el workflow y documenta el resultado.
 5. Al terminar, actualiza `doc/` para el público humano y limpia `wanna-bes.md` de aquello que ya se haya implementado.
 
