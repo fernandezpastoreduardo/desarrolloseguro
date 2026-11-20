@@ -243,3 +243,18 @@ Esta evidencia cierra la validación reproducible del contrato de recuperación
 sin tocar producción. La aceptación operativa de C todavía conserva la
 observación de un lease expirado en el VPS y una notificación generada por una
 incidencia real del scheduler como comprobaciones separadas.
+
+### Notificación del proceso scheduler en entorno efímero (20 de noviembre de 2026, 06:52 UTC)
+
+Se arrancó el binario compilado de `certification-scheduler` con un secreto
+temporal que apunta al nombre de servicio PostgreSQL reservado, sin montar
+redes ni secretos de producción. La conexión falló de forma controlada y el
+proceso emitió exactamente una línea JSONL allowlisted:
+
+```text
+{"event":"ds_scheduler_notification","category":"certification_audit_cycle_failed","observedAt":"2026-11-20T06:52:19.318Z"}
+```
+
+La sonda confirmó que el runtime publica la categoría y la fecha sin detalles
+de conexión. No es una incidencia del VPS: la observación de una notificación
+real en producción sigue pendiente y no se simula como cerrada.

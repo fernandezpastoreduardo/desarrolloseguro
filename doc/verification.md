@@ -13,3 +13,8 @@ PostgreSQL efímero aislado en loopback: 93 pruebas de persistence y 1 de worker
 pasaron, incluidas recuperación de leases expirados y rechazo de leases
 obsoletos. El gate `pnpm ci:verify postgres` exige el opt-in y la URL de
 loopback antes de permitir esta suite.
+
+Ese mismo día, un proceso efímero del scheduler contra un nombre de servicio
+sin PostgreSQL disponible emitió una única notificación JSONL categórica
+`certification_audit_cycle_failed`, sin datos de conexión. La prueba verifica
+el canal de runtime; no sustituye una incidencia observada en el VPS.
