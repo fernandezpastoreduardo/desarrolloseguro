@@ -229,3 +229,17 @@ Esta comprobación confirma que el cambio de CSP de Grumphya está reflejado en
 un informe fresco y que el flujo de solicitud manual conserva el sello
 verificable. No se lanzó ningún workflow de GitHub Actions desde Desarrollo
 Seguro para realizar esta comprobación.
+
+### Recuperación de leases en PostgreSQL aislado (20 de noviembre de 2026, 07:50 UTC)
+
+Se levantó un contenedor PostgreSQL efímero en `127.0.0.1:55432` con la misma
+imagen de integración de CI y se ejecutó `pnpm test:postgres` con el opt-in de
+aislamiento. Pasaron 93 pruebas de persistence y 1 de worker. La batería
+incluye recuperación de leases expirados, límite de reintentos, rechazo de
+leases obsoletos y finalización atómica del informe. El contenedor se eliminó
+automáticamente al terminar.
+
+Esta evidencia cierra la validación reproducible del contrato de recuperación
+sin tocar producción. La aceptación operativa de C todavía conserva la
+observación de un lease expirado en el VPS y una notificación generada por una
+incidencia real del scheduler como comprobaciones separadas.
