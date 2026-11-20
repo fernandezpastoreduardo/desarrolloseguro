@@ -1,4 +1,8 @@
-import { parseInternalAuditRequest, type InternalAuditRequest } from "./internal-audit-contract.js";
+import {
+  INTERNAL_AUDIT_CRITERIA,
+  parseInternalAuditRequest,
+  type InternalAuditRequest,
+} from "./internal-audit-contract.js";
 import { buildInternalAuditReport, type InternalAuditReport } from "./internal-audit-report.js";
 import {
   readInternalAuditResource,
@@ -7,6 +11,10 @@ import {
   type InternalAuditResource,
 } from "./internal-audit-reader.js";
 import type { InternalPrivacyObservation } from "./internal-privacy-observation.js";
+import {
+  signalCriteriaForResource,
+  type InternalAuditSignalEnvelope,
+} from "./internal-audit-signal-envelope.js";
 
 const SHA256 = /^sha256:[a-f0-9]{64}$/u;
 const RESOURCE_NAMES = [
@@ -115,6 +123,7 @@ type EnvelopeKind =
   | "synthetic_auth"
   | "quality"
   | "privacy"
+  | "ai"
   | "deployment_attestation"
   | "infrastructure_snapshot"
   | "dependency_inventory";
@@ -149,7 +158,8 @@ function operationResource(input: unknown): ResourceName {
 function envelopeKind(resource: ResourceName): EnvelopeKind {
   if (resource === "synthetic_browser_flow") return "synthetic_auth";
   if (resource === "performance_observation") return "quality";
-  if (resource === "privacy_observation" || resource === "ai_observation") return "privacy";
+  if (resource === "privacy_observation") return "privacy";
+  if (resource === "ai_observation") return "ai";
   return resource;
 }
 
@@ -167,6 +177,15 @@ function requiredScopes(
   resource: InternalAuditResource,
 ): readonly InternalAuditRequest["scopes"][number][] {
   if (resourceName === "ai_observation") return ["ai"];
+  if (isSignalEnvelope(resource)) {
+    const scopes = new Set<InternalAuditRequest["scopes"][number]>();
+    for (const signal of resource.signals) {
+      const scope = INTERNAL_AUDIT_CRITERIA[signal.criterionId];
+      if (scope === "ethics") scopes.add("privacy");
+      scopes.add(scope);
+    }
+    return [...scopes];
+  }
   if (resourceName !== "privacy_observation") return [resourceScope(resourceName)];
   const observation = resource as InternalPrivacyObservation;
   if (observation.area !== "transparency") return ["privacy"];
@@ -174,12 +193,29 @@ function requiredScopes(
 }
 
 function validateResourceContract(resourceName: ResourceName, resource: InternalAuditResource): void {
+  if (isSignalEnvelope(resource)) {
+    const allowed = new Set(signalCriteriaForResource(resourceName));
+    if (resource.signals.some((signal) => !allowed.has(signal.criterionId))) {
+      throw new Error("internal_audit_resource_invalid");
+    }
+    if (resourceName === "ai_observation" && resource.signals.some((signal) => signal.criterionId !== "ai.disclosure")) {
+      throw new Error("internal_audit_resource_invalid");
+    }
+    if (resourceName === "privacy_observation" && resource.signals.some((signal) => signal.criterionId === "ai.disclosure")) {
+      throw new Error("internal_audit_resource_invalid");
+    }
+    return;
+  }
   if (resourceName !== "privacy_observation" && resourceName !== "ai_observation") return;
   const observation = resource as InternalPrivacyObservation;
   const isAiDisclosure = observation.area === "transparency" && observation.signalCode === "ai_disclosure_present";
   if (resourceName === "ai_observation" ? !isAiDisclosure : isAiDisclosure) {
     throw new Error("internal_audit_resource_invalid");
   }
+}
+
+function isSignalEnvelope(resource: InternalAuditResource): resource is InternalAuditSignalEnvelope {
+  return "signals" in resource;
 }
 
 function toFailureReason(error: unknown): InternalAuditFailureReason {

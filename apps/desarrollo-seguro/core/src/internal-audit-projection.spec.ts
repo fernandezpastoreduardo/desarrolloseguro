@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { projectInternalAuditEvidence } from "./internal-audit-projection.js";
+import { createInternalAuditSampleRef } from "./internal-audit-signal-envelope.js";
 
 const sampleRef = `sha256:${"a".repeat(64)}`;
 const observedAt = "2026-11-18T18:00:00.000Z";
@@ -55,6 +56,71 @@ describe("internal audit evidence projection", () => {
       expect.objectContaining({ criterionId: "quality.accessibility", scope: "quality" }),
       expect.objectContaining({ criterionId: "ai.disclosure", scope: "ai" }),
     ]);
+  });
+
+  it("projects multiple allowlisted signals without adding a new route", () => {
+    const infrastructureSignals = [
+      {
+        criterionId: "infrastructure.headers",
+        status: "pass",
+        reasonCode: "security_headers_verified",
+        value: 1,
+        unit: "boolean",
+      },
+      {
+        criterionId: "infrastructure.network",
+        status: "pass",
+        reasonCode: "network_surface_allowlisted",
+        value: 1,
+        unit: "boolean",
+      },
+    ] as const;
+    const qualitySignals = [
+      {
+        criterionId: "quality.accessibility",
+        status: "pass",
+        reasonCode: "accessibility_critical_violations",
+        value: 0,
+        unit: "count",
+        limit: 0,
+      },
+      {
+        criterionId: "performance.page_load",
+        status: "pass",
+        reasonCode: "response_time",
+        value: 420,
+        unit: "milliseconds",
+        limit: 2_500,
+      },
+    ] as const;
+    const evidence = projectInternalAuditEvidence([
+      {
+        kind: "infrastructure_snapshot",
+        observation: {
+          observedAt,
+          sampleRef: createInternalAuditSampleRef(infrastructureSignals),
+          signals: infrastructureSignals,
+        },
+      },
+      {
+        kind: "quality",
+        observation: {
+          observedAt,
+          sampleRef: createInternalAuditSampleRef(qualitySignals),
+          signals: qualitySignals,
+        },
+      },
+    ]);
+
+    expect(evidence.map(({ criterionId, status }) => ({ criterionId, status }))).toEqual([
+      { criterionId: "infrastructure.headers", status: "pass" },
+      { criterionId: "infrastructure.network", status: "pass" },
+      { criterionId: "quality.accessibility", status: "pass" },
+      { criterionId: "performance.page_load", status: "pass" },
+    ]);
+    expect(evidence).toEqual(expect.arrayContaining([
+      expect.objectContaining({ criterionId: "performance.page_load", value: 420, unit: "milliseconds", limit: 2_500 }),
+    ]));
   });
 
   it("rejects duplicate criteria before scoring can double count them", () => {

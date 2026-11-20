@@ -27,6 +27,7 @@ describe("internal production audit contract", () => {
     { auditor: "unknown-client" },
     { scopes: ["shell"] },
     { evidenceRetentionDays: 31 },
+    { unexpected: true },
   ])("rejects an out-of-contract request: %o", (override) => {
     expect(() => parseInternalAuditRequest({
       policyVersion: "beta-d-0.1",

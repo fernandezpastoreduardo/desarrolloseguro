@@ -7,9 +7,10 @@ calidad, privacidad, ética e IA y limita la retención de evidencias a 30 días
 La solicitud debe incluir exactamente `policyVersion=beta-d-0.1`; el parser no
 acepta una versión omitida o distinta.
 
-Una evidencia interna contiene únicamente `criterionId`, `scope`, `status`,
-`source`, `observedAt` y `reasonCode`. Los criterios y códigos están
-allowlisted. No se aceptan HTML, cabeceras completas, cookies crudas, secretos,
+Una evidencia interna contiene `criterionId`, `scope`, `status`, `source`,
+`observedAt` y `reasonCode`; las métricas allowlisted pueden añadir `value`,
+`unit` y `limit` acotados. Los criterios y códigos están allowlisted. No se
+aceptan HTML, cabeceras completas, cookies crudas, secretos,
 identificadores de usuario, texto libre ni destinos alternativos. El snapshot
 de infraestructura D-02 solo conserva nombres seguros, digests SHA-256,
 exposición, privilegios y estado de transporte; nunca comandos, rutas,
@@ -25,6 +26,18 @@ Las observaciones D-06 solo conservan señales agregadas allowlisted de
 almacenamiento, terceros, consentimiento, transparencia y minimización; no
 conservan nombres de cookies, dominios, textos, scripts ni permiten inferir
 venta de datos.
+Cuando una respuesta reúne varias señales de un mismo recurso usa la envoltura
+allowlisted `{observedAt, sampleRef, signals}`. Cada señal identifica un único
+criterio, código y estado; `boolean` usa `0/1`, `count` exige un `limit` y no
+supera `1000`, y `milliseconds` exige un `limit` y no supera `120000`. Para
+`unknown` y `not_applicable`, `value` es `null` y `unit` sigue siendo
+obligatoria; no se usa cero como sustituto de ausencia. `sampleRef` es el
+SHA-256 de la lista `signals` serializada con la canonicalización de la firma
+(claves de objetos ordenadas, arrays en su orden original, UTF-8, sin espacios).
+Los límites provisionales de aceptación son `0` violaciones críticas de
+accesibilidad, `2500ms` de respuesta, `1800ms` de FCP y `200ms` de INP. El
+parser rechaza criterios de otra ruta, duplicados, texto libre y valores fuera
+de esos límites; una señal ausente se mantiene como `unknown` en el informe.
 El proyector D-07 transforma cada observación tipada en un criterio interno,
 rechaza criterios duplicados antes del cálculo y conserva `externalScore` en
 `null`.
@@ -41,8 +54,10 @@ cabeceras. El lector de producción fija el origen `https://grumphya.com`, usa
 GET con una identidad técnica JWT EdDSA de corta duración y valida cada JSON
 con el parser del recurso. El JWT incluye `iss`, `sub`, `aud`, `iat`, `exp`,
 `jti`, `kid`, `domain`, `hostname`, `environment` y `scope`; `iss` es
-`desarrolloseguro-audit`, `aud` es `grumphya-audit`, `domain` es
-`grumphya.com` y cada scope usa el formato `audit:<recurso>`. No se envía ninguna cookie
+`desarrolloseguro-audit`, `sub` es `desarrolloseguro-audit`, `aud` es
+`grumphya-audit`, `domain` y `hostname` son `grumphya.com` y cada scope usa el
+formato `audit:<recurso>`. La transparencia ética viaja por `audit:privacy`;
+no existe `audit:ethics`. No se envía ninguna cookie
 ni credencial de usuario. El inventario
 de dependencias solo conserva contadores de riesgo y un digest; no conserva
 nombres de paquetes ni un SBOM.
@@ -56,7 +71,9 @@ una ejecución anterior. Además, comprueba el scope efectivo y la ruta de la
 evidencia después de validarla: `/audit/privacy` solo puede entregar señales
 de privacidad o transparencia ética; `/audit/ai` solo puede entregar
 `ai_disclosure_present` y requiere el scope `ai`. Una señal de divulgación de
-IA requiere `ai` y una señal de transparencia ética requiere `ethics`. El
+IA requiere `ai` y una señal de transparencia ética se clasifica internamente
+como `ethics` aunque se transporta por el único scope externo `audit:privacy`.
+El
 informe también rechaza evidencias con timestamp
 posterior al instante de la auditoría. La ejecución acepta un `AbortSignal`;
 si se cancela antes o durante una lectura, no construye informe parcial y

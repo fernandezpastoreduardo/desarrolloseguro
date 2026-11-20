@@ -45,8 +45,9 @@ anónimo y obtuvo `internal_audit_resources_ready count=7`. La configuración de
 servicio normal continúa en `internal_audit_disabled`, como exige el diseño
 opt-in; disponer de las siete rutas protegidas no activa por sí solo una nueva
 auditoría ni cambia el informe privado existente. Las suites específicas de
-contrato, lector, atestación, puntuación, runner y runtime pasan 34/34 pruebas
-locales.
+contrato, lector, atestación, puntuación, runner y runtime pasan 41/41 pruebas
+locales; la suite completa de core queda en 296 pruebas y la de worker en 289
+(una omitida por depender del runtime).
 
 La ejecución privada efímera del 20 de noviembre de 2026 volvió a leer las
 siete rutas desde el perfil `internal-audit` del VPS, sin montar PostgreSQL ni
@@ -90,8 +91,9 @@ en aprobados.
 
 ## Puertas ejecutadas
 
-- Suites de core y worker: 284 pruebas superadas, incluido el parser de la
-  envolvente real, la firma EdDSA, scopes, duplicados y cancelación.
+- Suites de core y worker: 296 pruebas de core y 289 de worker superadas,
+  incluido el parser de la envolvente real, la firma EdDSA, scopes, duplicados
+  y cancelación.
 - TypeScript estricto de core y worker: correcto.
 - Workflows de integración y deploy: correctos hasta el despliegue
   `74dff8b` (`44562895405`).

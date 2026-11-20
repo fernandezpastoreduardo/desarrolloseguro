@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { readInternalAuditResource } from "./internal-audit-reader.js";
 import type { InternalAuditRequest } from "./internal-audit-contract.js";
 import { canonicalizeForSignature, INTERNAL_AUDIT_RESPONSE_SCHEMA_VERSION } from "./internal-audit-evidence-envelope.js";
+import { createInternalAuditSampleRef } from "./internal-audit-signal-envelope.js";
 import { signedAuditEvidence, testAuditAuth } from "./internal-audit-test-support.js";
 import type { InternalInfrastructureSnapshot } from "./internal-infrastructure.js";
 
@@ -18,6 +19,75 @@ const request: InternalAuditRequest = {
 const jsonHeaders = { get: (name: string) => name === "content-type" ? "application/json" : null };
 
 describe("internal production audit reader", () => {
+  it("reads a beta-d-0.2 composite signal response and preserves its metric", async () => {
+    const observedAt = "2026-11-18T19:00:00.000Z";
+    const signals = [{
+      criterionId: "performance.page_load",
+      status: "pass",
+      reasonCode: "response_time",
+      value: 420,
+      unit: "milliseconds",
+      limit: 2_500,
+    }] as const;
+    const fetcher = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: jsonHeaders,
+      json: async () => signedAuditEvidence({
+        observedAt,
+        sampleRef: createInternalAuditSampleRef(signals),
+        signals,
+      }, observedAt),
+    });
+
+    const result = await readInternalAuditResource(request, {
+      resource: "performance_observation",
+      method: "GET",
+      hostname: "grumphya.com",
+      path: "/audit/quality",
+    }, fetcher, testAuditAuth(new Date("2026-11-18T19:15:00.000Z")));
+
+    expect(result).toMatchObject({
+      observedAt,
+      signals: [{
+        criterionId: "performance.page_load",
+        value: 420,
+        unit: "milliseconds",
+        limit: 2_500,
+      }],
+    });
+  });
+
+  it("rejects a signed composite response whose sample reference is not reproducible", async () => {
+    const observedAt = "2026-11-18T19:00:00.000Z";
+    const signals = [{
+      criterionId: "infrastructure.headers",
+      status: "pass",
+      reasonCode: "security_headers_verified",
+      value: 1,
+      unit: "boolean",
+    }] as const;
+    const fetcher = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: jsonHeaders,
+      json: async () => signedAuditEvidence({
+        observedAt,
+        sampleRef: `sha256:${"0".repeat(64)}`,
+        signals,
+      }, observedAt),
+    });
+
+    await expect(readInternalAuditResource(request, {
+      resource: "infrastructure_snapshot",
+      method: "GET",
+      hostname: "grumphya.com",
+      path: "/audit/infrastructure",
+    }, fetcher, testAuditAuth(new Date("2026-11-18T19:15:00.000Z")))).rejects.toThrow(
+      "internal_audit_resource_invalid",
+    );
+  });
+
   it("adapts the deployed Grumphya beta-d-0.2 envelope", async () => {
     const { privateKey, publicKey } = generateKeyPairSync("ed25519");
     const unsigned = {
