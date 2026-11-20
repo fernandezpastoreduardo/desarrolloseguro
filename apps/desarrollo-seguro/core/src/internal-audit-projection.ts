@@ -34,7 +34,7 @@ type ProjectedEvidence = {
   source: "production_observation" | "synthetic_check" | "deployment_attestation";
   observedAt: string;
   reasonCode: string;
-  value?: number;
+  value?: number | null;
   unit?: "boolean" | "count" | "milliseconds";
   limit?: number;
 };

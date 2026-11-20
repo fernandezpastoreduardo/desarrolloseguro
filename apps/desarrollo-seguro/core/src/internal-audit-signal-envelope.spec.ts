@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  createInternalAuditSampleRef,
   parseInternalAuditSignalEnvelope,
   signalCriteriaForResource,
 } from "./internal-audit-signal-envelope.js";
@@ -10,25 +11,26 @@ const sampleRef = `sha256:${"a".repeat(64)}`;
 
 describe("internal audit signal envelope", () => {
   it("accepts bounded signals owned by an existing resource", () => {
+    const signals = [
+      {
+        criterionId: "infrastructure.headers",
+        status: "pass",
+        reasonCode: "security_headers_verified",
+        value: 1,
+        unit: "boolean",
+      },
+      {
+        criterionId: "infrastructure.network",
+        status: "unknown",
+        reasonCode: "network_surface_unobserved",
+        value: null,
+        unit: "boolean",
+      },
+    ] as const;
     const result = parseInternalAuditSignalEnvelope({
       observedAt,
-      sampleRef,
-      signals: [
-        {
-          criterionId: "infrastructure.headers",
-          status: "pass",
-          reasonCode: "security_headers_verified",
-          value: 1,
-          unit: "boolean",
-        },
-        {
-          criterionId: "infrastructure.network",
-          status: "unknown",
-          reasonCode: "network_surface_unobserved",
-          value: 0,
-          unit: "boolean",
-        },
-      ],
+      sampleRef: createInternalAuditSampleRef(signals),
+      signals,
     }, signalCriteriaForResource("infrastructure_snapshot"));
 
     expect(result.signals).toHaveLength(2);
@@ -57,11 +59,11 @@ describe("internal audit signal envelope", () => {
       reasonCode: "accessibility_critical_violations",
       value: 0,
       unit: "count",
-      limit: 100,
-    };
+      limit: 0,
+    } as const;
     expect(() => parseInternalAuditSignalEnvelope({
       observedAt,
-      sampleRef,
+      sampleRef: createInternalAuditSampleRef([signal, signal]),
       signals: [signal, signal],
     }, signalCriteriaForResource("performance_observation"))).toThrow(
       "internal_audit_signal_duplicate",
@@ -94,7 +96,7 @@ describe("internal audit signal envelope", () => {
       const signal = signalForCriterion(criterionId);
       expect(parseInternalAuditSignalEnvelope({
         observedAt,
-        sampleRef,
+        sampleRef: createInternalAuditSampleRef([signal]),
         signals: [signal],
       }, [criterionId]).signals[0]).toMatchObject({ criterionId });
     }
@@ -119,14 +121,49 @@ describe("internal audit signal envelope", () => {
       signals: [{ ...base, limit: 2_000, extra: "nope" }],
     }, ["performance.page_load"])).toThrow("internal_audit_signal_invalid");
   });
+
+  it("uses null for an unknown metric and enforces provisional acceptance limits", () => {
+    const signal = {
+      criterionId: "performance.page_load",
+      status: "unknown",
+      reasonCode: "first_contentful_paint",
+      value: null,
+      unit: "milliseconds",
+      limit: 1_800,
+    } as const;
+    expect(parseInternalAuditSignalEnvelope({
+      observedAt,
+      sampleRef: createInternalAuditSampleRef([signal]),
+      signals: [signal],
+    }, ["performance.page_load"]).signals[0]).toMatchObject({ value: null, limit: 1_800 });
+    expect(() => parseInternalAuditSignalEnvelope({
+      observedAt,
+      sampleRef: createInternalAuditSampleRef([{ ...signal, status: "pass" }]),
+      signals: [{ ...signal, status: "pass" }],
+    }, ["performance.page_load"])).toThrow("internal_audit_signal_invalid");
+    expect(() => parseInternalAuditSignalEnvelope({
+      observedAt,
+      sampleRef: createInternalAuditSampleRef([{ ...signal, limit: 2_000 }]),
+      signals: [{ ...signal, limit: 2_000 }],
+    }, ["performance.page_load"])).toThrow("internal_audit_signal_invalid");
+  });
+
+  it("rejects a sample reference that is not derived from the signal list", () => {
+    const signal = signalForCriterion("infrastructure.headers");
+    expect(() => parseInternalAuditSignalEnvelope({
+      observedAt,
+      sampleRef,
+      signals: [signal],
+    }, ["infrastructure.headers"])).toThrow("internal_audit_sample_ref_mismatch");
+  });
 });
 
 function signalForCriterion(criterionId: InternalAuditCriterion) {
   if (criterionId === "quality.accessibility") {
-    return { criterionId, status: "unknown", reasonCode: "accessibility_critical_violations", value: 0, unit: "count", limit: 100 } as const;
+    return { criterionId, status: "unknown", reasonCode: "accessibility_critical_violations", value: null, unit: "count", limit: 0 } as const;
   }
   if (criterionId === "performance.page_load") {
-    return { criterionId, status: "unknown", reasonCode: "response_time", value: 420, unit: "milliseconds", limit: 2_000 } as const;
+    return { criterionId, status: "unknown", reasonCode: "response_time", value: null, unit: "milliseconds", limit: 2_500 } as const;
   }
   if (criterionId === "privacy.third_parties") {
     return { criterionId, status: "unknown", reasonCode: "third_party_request_count", value: 0, unit: "count", limit: 100 } as const;

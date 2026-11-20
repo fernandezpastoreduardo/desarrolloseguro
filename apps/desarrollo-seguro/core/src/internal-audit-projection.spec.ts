@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { projectInternalAuditEvidence } from "./internal-audit-projection.js";
+import { createInternalAuditSampleRef } from "./internal-audit-signal-envelope.js";
 
 const sampleRef = `sha256:${"a".repeat(64)}`;
 const observedAt = "2026-11-18T18:00:00.000Z";
@@ -58,53 +59,55 @@ describe("internal audit evidence projection", () => {
   });
 
   it("projects multiple allowlisted signals without adding a new route", () => {
+    const infrastructureSignals = [
+      {
+        criterionId: "infrastructure.headers",
+        status: "pass",
+        reasonCode: "security_headers_verified",
+        value: 1,
+        unit: "boolean",
+      },
+      {
+        criterionId: "infrastructure.network",
+        status: "pass",
+        reasonCode: "network_surface_allowlisted",
+        value: 1,
+        unit: "boolean",
+      },
+    ] as const;
+    const qualitySignals = [
+      {
+        criterionId: "quality.accessibility",
+        status: "pass",
+        reasonCode: "accessibility_critical_violations",
+        value: 0,
+        unit: "count",
+        limit: 0,
+      },
+      {
+        criterionId: "performance.page_load",
+        status: "pass",
+        reasonCode: "response_time",
+        value: 420,
+        unit: "milliseconds",
+        limit: 2_500,
+      },
+    ] as const;
     const evidence = projectInternalAuditEvidence([
       {
         kind: "infrastructure_snapshot",
         observation: {
           observedAt,
-          sampleRef,
-          signals: [
-            {
-              criterionId: "infrastructure.headers",
-              status: "pass",
-              reasonCode: "security_headers_verified",
-              value: 1,
-              unit: "boolean",
-            },
-            {
-              criterionId: "infrastructure.network",
-              status: "pass",
-              reasonCode: "network_surface_allowlisted",
-              value: 1,
-              unit: "boolean",
-            },
-          ],
+          sampleRef: createInternalAuditSampleRef(infrastructureSignals),
+          signals: infrastructureSignals,
         },
       },
       {
         kind: "quality",
         observation: {
           observedAt,
-          sampleRef,
-          signals: [
-            {
-              criterionId: "quality.accessibility",
-              status: "pass",
-              reasonCode: "accessibility_critical_violations",
-              value: 0,
-              unit: "count",
-              limit: 100,
-            },
-            {
-              criterionId: "performance.page_load",
-              status: "pass",
-              reasonCode: "response_time",
-              value: 420,
-              unit: "milliseconds",
-              limit: 2_000,
-            },
-          ],
+          sampleRef: createInternalAuditSampleRef(qualitySignals),
+          signals: qualitySignals,
         },
       },
     ]);
@@ -116,7 +119,7 @@ describe("internal audit evidence projection", () => {
       { criterionId: "performance.page_load", status: "pass" },
     ]);
     expect(evidence).toEqual(expect.arrayContaining([
-      expect.objectContaining({ criterionId: "performance.page_load", value: 420, unit: "milliseconds", limit: 2_000 }),
+      expect.objectContaining({ criterionId: "performance.page_load", value: 420, unit: "milliseconds", limit: 2_500 }),
     ]));
   });
 
