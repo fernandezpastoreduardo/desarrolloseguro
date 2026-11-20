@@ -83,10 +83,13 @@ const REASON_CODES: Readonly<Record<InternalAuditCriterion, readonly string[]>> 
     "third_party_request_count",
     "known_tracker_request_count",
     "external_ingest_enabled",
+    "third_party_origin_count",
+    "third_party_origins_allowlisted",
   ],
   "privacy.consent": [
     "consent_choice_recorded",
     "consent_state_respected",
+    "consent_choice_selected",
   ],
   "ethics.transparency": [
     "privacy_notice_present",

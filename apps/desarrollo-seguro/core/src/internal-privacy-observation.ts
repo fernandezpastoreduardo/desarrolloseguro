@@ -11,10 +11,13 @@ const SIGNALS = {
     third_party_request_count: "count",
     known_tracker_request_count: "count",
     external_ingest_enabled: "boolean",
+    third_party_origin_count: "count",
+    third_party_origins_allowlisted: "boolean",
   },
   consent: {
     consent_choice_recorded: "boolean",
     consent_state_respected: "boolean",
+    consent_choice_selected: "boolean",
   },
   transparency: {
     privacy_notice_present: "boolean",

@@ -125,7 +125,11 @@ Los códigos mínimos para las señales nuevas son:
 Los criterios ya cubiertos mantienen sus códigos actuales de los parsers D:
 `dependency_risk_not_observed`, `high_dependency_risk_observed`,
 `critical_dependency_risk_observed`, las métricas de calidad allowlisted y las
-señales de privacidad de almacenamiento, terceros y consentimiento. Una
+señales de privacidad de almacenamiento, terceros y consentimiento. Para la
+observación desplegada de privacidad se admiten también
+`third_party_origin_count`, `third_party_origins_allowlisted` y
+`consent_choice_selected`, que mantienen la misma semántica agregada y no
+exponen nombres ni dominios. Una
 atestación de `deployment` no debe volver a emitir
 `application.dependencies` si el recurso `dependencies` ya lo aporta.
 

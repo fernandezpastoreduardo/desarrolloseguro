@@ -52,6 +52,41 @@ describe("internal audit signal envelope", () => {
     );
   });
 
+  it("accepts the privacy signal codes emitted by the deployed audit contract", () => {
+    const signals = [
+      {
+        criterionId: "privacy.third_parties",
+        status: "pass",
+        reasonCode: "third_party_origin_count",
+        value: 1,
+        unit: "count",
+        limit: 1,
+      },
+      {
+        criterionId: "privacy.third_parties",
+        status: "pass",
+        reasonCode: "third_party_origins_allowlisted",
+        value: 1,
+        unit: "boolean",
+      },
+      {
+        criterionId: "privacy.consent",
+        status: "pass",
+        reasonCode: "consent_choice_selected",
+        value: 1,
+        unit: "boolean",
+      },
+    ] as const;
+
+    const result = parseInternalAuditSignalEnvelope({
+      observedAt,
+      sampleRef: createInternalAuditSampleRef(signals),
+      signals,
+    }, signalCriteriaForResource("privacy_observation"));
+
+    expect(result.signals).toHaveLength(3);
+  });
+
   it("allows distinct metrics for one criterion and rejects duplicate signal keys", () => {
     const signal = {
       criterionId: "quality.accessibility",

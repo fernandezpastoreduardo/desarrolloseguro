@@ -111,8 +111,8 @@ semántica; no se convierten automáticamente en aprobación ética.
 | `quality.accessibility` | `accessibility_critical_violations` |
 | `performance.page_load` | `response_time`, `first_contentful_paint`, `interaction_to_next_paint` |
 | `privacy.cookies` | `nonessential_storage_before_consent`, `essential_storage_only_before_consent`, `raw_identifier_storage_observed` |
-| `privacy.third_parties` | `third_party_request_count`, `known_tracker_request_count`, `external_ingest_enabled` |
-| `privacy.consent` | `consent_choice_recorded`, `consent_state_respected` |
+| `privacy.third_parties` | `third_party_request_count`, `known_tracker_request_count`, `external_ingest_enabled`, `third_party_origin_count`, `third_party_origins_allowlisted` |
+| `privacy.consent` | `consent_choice_recorded`, `consent_state_respected`, `consent_choice_selected` |
 | `ethics.transparency` | `privacy_notice_present`, `privacy_notice_missing`, `privacy_notice_unobserved` |
 | `ai.disclosure` | `ai_disclosure_present`, `ai_disclosure_missing`, `ai_disclosure_unobserved` |
 
