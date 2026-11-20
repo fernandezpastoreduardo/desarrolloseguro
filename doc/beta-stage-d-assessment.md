@@ -45,8 +45,8 @@ anónimo y obtuvo `internal_audit_resources_ready count=7`. La configuración de
 servicio normal continúa en `internal_audit_disabled`, como exige el diseño
 opt-in; disponer de las siete rutas protegidas no activa por sí solo una nueva
 auditoría ni cambia el informe privado existente. Las suites específicas de
-contrato, lector, atestación, puntuación, runner y runtime pasan 39/39 pruebas
-locales; la suite completa de core queda en 294 pruebas y la de worker en 289
+contrato, lector, atestación, puntuación, runner y runtime pasan 41/41 pruebas
+locales; la suite completa de core queda en 296 pruebas y la de worker en 289
 (una omitida por depender del runtime).
 
 La ejecución privada efímera del 20 de noviembre de 2026 volvió a leer las
@@ -91,7 +91,7 @@ en aprobados.
 
 ## Puertas ejecutadas
 
-- Suites de core y worker: 294 pruebas de core y 289 de worker superadas,
+- Suites de core y worker: 296 pruebas de core y 289 de worker superadas,
   incluido el parser de la envolvente real, la firma EdDSA, scopes, duplicados
   y cancelación.
 - TypeScript estricto de core y worker: correcto.
