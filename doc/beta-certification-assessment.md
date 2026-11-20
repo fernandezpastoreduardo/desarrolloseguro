@@ -34,3 +34,22 @@ rellenan criterios pendientes para alcanzar el umbral. La certificación
 definitiva solo se puede conceder en el cierre global cuando exista cobertura
 externa e interna suficiente, la puntuación global redondeada sea al menos
 90/100 y no haya incumplimientos críticos.
+
+## Contadores de cobertura que muestra cada capa
+
+Los contadores de la ficha pública no representan todas las señales de la
+auditoría privada:
+
+- **Ética pública:** ocho criterios observables del perfil `domain-v3`. El
+  contador `7/8`, por ejemplo, significa que siete tienen una conclusión y uno
+  permanece como `unknown`.
+- **Certificación Beta pública:** tres categorías ponderadas (TLS, cabeceras y
+  cookies/privacidad). El contador de esta capa suele ser `3/3`, aunque una
+  categoría pueda estar en `fail`; evaluada no significa aprobada.
+- **Auditoría privada Beta D:** catorce señales técnicas distribuidas en las
+  siete rutas autenticadas. Su `internalScore` y su cobertura no se exponen en
+  la ficha pública ni se suman a la puntuación externa.
+
+Esta separación evita presentar como una sola cifra controles con distinto
+alcance, evidencia y autorización. El cierre global solo compara las capas en
+un informe interno explícito y mantiene sus puntuaciones separadas.
