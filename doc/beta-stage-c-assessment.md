@@ -214,3 +214,18 @@ Esto elimina el bloqueo que impedía que el scheduler tuviera una certificación
 activa que renovar. C sigue pendiente únicamente de observar el siguiente
 ciclo programado después del vencimiento, con un `reportId` nuevo y la
 actualización coherente del sello.
+
+### Reescaneo posterior al despliegue #288 (20 de noviembre de 2026, 06:41 UTC)
+
+Se solicitó un análisis nuevo después de comprobar el despliegue #288 de
+Grumphya. El informe `47a4d966-5346-4260-ae0e-43902425b496` terminó con
+`trigger: requested` y `verdict: pass`. `DS-HDR-01` quedó en `pass` con
+`evidence.csp: true`; la puntuación ética y la evaluación Beta fueron ambas
+`100/100`. La certificación permanece `active`, `latestAssessmentStatus` es
+`eligible` y `certifiedReportId` coincide con el informe nuevo. El informe
+queda vigente hasta `2026-11-20T07:41:41.300Z`.
+
+Esta comprobación confirma que el cambio de CSP de Grumphya está reflejado en
+un informe fresco y que el flujo de solicitud manual conserva el sello
+verificable. No se lanzó ningún workflow de GitHub Actions desde Desarrollo
+Seguro para realizar esta comprobación.
