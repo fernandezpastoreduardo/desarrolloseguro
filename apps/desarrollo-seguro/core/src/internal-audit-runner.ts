@@ -181,15 +181,14 @@ function requiredScopes(
     const scopes = new Set<InternalAuditRequest["scopes"][number]>();
     for (const signal of resource.signals) {
       const scope = INTERNAL_AUDIT_CRITERIA[signal.criterionId];
-      if (scope === "ethics") scopes.add("privacy");
-      scopes.add(scope);
+      scopes.add(scope === "ethics" ? "privacy" : scope);
     }
     return [...scopes];
   }
   if (resourceName !== "privacy_observation") return [resourceScope(resourceName)];
   const observation = resource as InternalPrivacyObservation;
   if (observation.area !== "transparency") return ["privacy"];
-  return observation.signalCode === "ai_disclosure_present" ? ["ai"] : ["ethics"];
+  return observation.signalCode === "ai_disclosure_present" ? ["ai"] : ["privacy"];
 }
 
 function validateResourceContract(resourceName: ResourceName, resource: InternalAuditResource): void {

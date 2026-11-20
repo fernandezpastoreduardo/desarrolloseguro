@@ -72,7 +72,8 @@ evidencia después de validarla: `/audit/privacy` solo puede entregar señales
 de privacidad o transparencia ética; `/audit/ai` solo puede entregar
 `ai_disclosure_present` y requiere el scope `ai`. Una señal de divulgación de
 IA requiere `ai` y una señal de transparencia ética se clasifica internamente
-como `ethics` aunque se transporta por el único scope externo `audit:privacy`.
+como `ethics`, pero se autoriza y transporta únicamente por el scope externo
+`audit:privacy`; el runner no exige ni emite `audit:ethics`.
 El
 informe también rechaza evidencias con timestamp
 posterior al instante de la auditoría. La ejecución acepta un `AbortSignal`;

@@ -186,7 +186,7 @@ describe("internal audit runner", () => {
     });
   });
 
-  it("requires both privacy and ethics scopes for composite privacy signals", async () => {
+  it("uses only privacy as the external scope for ethical transparency", async () => {
     const signals = [
       {
         criterionId: "privacy.consent",
@@ -217,7 +217,7 @@ describe("internal audit runner", () => {
     const result = await runInternalAudit({
       request: {
         ...request,
-        scopes: ["privacy", "ethics"],
+        scopes: ["privacy"],
       },
       auditRef,
       observedAt,
