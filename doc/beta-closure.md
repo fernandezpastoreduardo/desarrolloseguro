@@ -46,6 +46,12 @@ minutos y la ventana de 24 horas se reactivan en 025; 026 añade las auditorías
 periódicas y 027 permite reintentar después de un fallo terminal sin saltarse la
 ventana para trabajos completados.
 
+### Evidencia histórica anterior al cierre global
+
+Las comprobaciones de esta sección son históricas y sirven para explicar la
+secuencia de transición. El estado vigente y las condiciones de salida están
+en [`beta-global-closure-assessment.md`](beta-global-closure-assessment.md).
+
 La comprobación de solo lectura del VPS del 18 de noviembre de 2026 devuelve
 para `grumphya.com` un informe `domain-v3` con puntuación ética externa 69/100
 (6 de 8 criterios evaluados) y una evaluación beta de certificación 50/100
