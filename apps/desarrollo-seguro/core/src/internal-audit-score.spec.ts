@@ -90,10 +90,17 @@ describe("internal audit score", () => {
     expect(result.reasons).toContain("internal_audit_critical_failure");
   });
 
-  it("rejects duplicate criteria instead of double-counting evidence", () => {
-    expect(() => assessInternalAudit([
+  it("aggregates distinct signals for one criterion without double counting its weight", () => {
+    const result = assessInternalAudit([
       evidence("pass", "infrastructure.tls", "infrastructure"),
       evidence("fail", "infrastructure.tls", "infrastructure"),
-    ])).toThrow("internal_audit_evidence_duplicate");
+    ]);
+
+    expect(result).toMatchObject({
+      status: "blocked",
+      score: null,
+      assessedCriteria: 1,
+    });
+    expect(result.reasons).toContain("internal_audit_critical_failure");
   });
 });

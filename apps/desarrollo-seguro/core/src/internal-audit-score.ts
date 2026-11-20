@@ -50,25 +50,24 @@ export function assessInternalAudit(input: unknown): InternalAuditAssessment {
     throw new Error("internal_audit_evidence_invalid");
   }
   const evidence = input.map((item) => parseInternalAuditEvidence(item));
-  const byCriterion = new Map<InternalAuditCriterion, InternalAuditEvidence>();
+  const byCriterion = new Map<InternalAuditCriterion, InternalAuditEvidence[]>();
   for (const item of evidence) {
-    if (byCriterion.has(item.criterionId)) {
-      throw new Error("internal_audit_evidence_duplicate");
-    }
-    byCriterion.set(item.criterionId, item);
+    const items = byCriterion.get(item.criterionId) ?? [];
+    items.push(item);
+    byCriterion.set(item.criterionId, items);
   }
 
   const criteria = Object.keys(INTERNAL_AUDIT_CRITERIA) as InternalAuditCriterion[];
   const assessed = criteria.filter((criterion) => {
-    const status = byCriterion.get(criterion)?.status;
+    const status = aggregateCriterionStatus(byCriterion.get(criterion));
     return status === "pass" || status === "fail";
   });
   const incomplete = criteria.some((criterion) => {
-    const status = byCriterion.get(criterion)?.status;
+    const status = aggregateCriterionStatus(byCriterion.get(criterion));
     return status === undefined || status === "unknown";
   });
   const criticalFailure = criteria.some((criterion) =>
-    CRITICAL_CRITERIA.has(criterion) && byCriterion.get(criterion)?.status === "fail",
+    CRITICAL_CRITERIA.has(criterion) && aggregateCriterionStatus(byCriterion.get(criterion)) === "fail",
   );
   const assessedWeight = assessed.reduce(
     (total, criterion) => total + CRITERION_WEIGHTS[criterion],
@@ -76,7 +75,7 @@ export function assessInternalAudit(input: unknown): InternalAuditAssessment {
   );
   const passedWeight = assessed.reduce(
     (total, criterion) =>
-      total + (byCriterion.get(criterion)?.status === "pass" ? CRITERION_WEIGHTS[criterion] : 0),
+      total + (aggregateCriterionStatus(byCriterion.get(criterion)) === "pass" ? CRITERION_WEIGHTS[criterion] : 0),
     0,
   );
   const score = !incomplete && assessedWeight > 0
@@ -101,22 +100,22 @@ export function assessInternalAudit(input: unknown): InternalAuditAssessment {
 
 function buildCategoryResults(
   criteria: readonly InternalAuditCriterion[],
-  evidence: ReadonlyMap<InternalAuditCriterion, InternalAuditEvidence>,
+  evidence: ReadonlyMap<InternalAuditCriterion, readonly InternalAuditEvidence[]>,
 ): readonly InternalAuditCategoryResult[] {
   const scopes = [...new Set(criteria.map((criterion) => INTERNAL_AUDIT_CRITERIA[criterion]))];
   return scopes.map((scope) => {
     const scopeCriteria = criteria.filter((criterion) => INTERNAL_AUDIT_CRITERIA[criterion] === scope);
     const assessed = scopeCriteria.filter((criterion) => {
-      const status = evidence.get(criterion)?.status;
+      const status = aggregateCriterionStatus(evidence.get(criterion));
       return status === "pass" || status === "fail";
     });
     const incomplete = scopeCriteria.some((criterion) => {
-      const status = evidence.get(criterion)?.status;
+      const status = aggregateCriterionStatus(evidence.get(criterion));
       return status === undefined || status === "unknown";
     });
     const assessedWeight = assessed.reduce((total, criterion) => total + CRITERION_WEIGHTS[criterion], 0);
     const passedWeight = assessed.reduce(
-      (total, criterion) => total + (evidence.get(criterion)?.status === "pass" ? CRITERION_WEIGHTS[criterion] : 0),
+      (total, criterion) => total + (aggregateCriterionStatus(evidence.get(criterion)) === "pass" ? CRITERION_WEIGHTS[criterion] : 0),
       0,
     );
     return {
@@ -126,4 +125,14 @@ function buildCategoryResults(
       totalCriteria: scopeCriteria.length,
     };
   });
+}
+
+function aggregateCriterionStatus(
+  evidence: readonly InternalAuditEvidence[] | undefined,
+): InternalAuditEvidence["status"] | undefined {
+  if (!evidence || evidence.length === 0) return undefined;
+  if (evidence.some((item) => item.status === "fail")) return "fail";
+  if (evidence.some((item) => item.status === "unknown")) return "unknown";
+  if (evidence.some((item) => item.status === "pass")) return "pass";
+  return "not_applicable";
 }

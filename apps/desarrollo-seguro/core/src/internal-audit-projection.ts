@@ -50,8 +50,8 @@ export function projectInternalAuditEvidence(input: unknown): readonly InternalA
       throw new Error("internal_audit_projection_invalid");
     }
   });
-  const criterionIds = projected.map((item) => item.criterionId);
-  if (new Set(criterionIds).size !== criterionIds.length) {
+  const signalKeys = projected.map((item) => `${item.criterionId}:${item.reasonCode}`);
+  if (new Set(signalKeys).size !== signalKeys.length) {
     throw new Error("internal_audit_projection_duplicate");
   }
   try {

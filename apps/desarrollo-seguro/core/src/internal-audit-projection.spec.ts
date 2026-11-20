@@ -123,7 +123,7 @@ describe("internal audit evidence projection", () => {
     ]));
   });
 
-  it("rejects duplicate criteria before scoring can double count them", () => {
+  it("rejects duplicate criterion and reason pairs", () => {
     const observation = {
       kind: "quality",
       observation: {
@@ -138,6 +138,42 @@ describe("internal audit evidence projection", () => {
     };
     expect(() => projectInternalAuditEvidence([observation, observation]))
       .toThrow("internal_audit_projection_duplicate");
+  });
+
+  it("keeps distinct metrics for one criterion", () => {
+    const signals = [
+      {
+        criterionId: "performance.page_load",
+        status: "pass",
+        reasonCode: "response_time",
+        value: 420,
+        unit: "milliseconds",
+        limit: 2_500,
+      },
+      {
+        criterionId: "performance.page_load",
+        status: "fail",
+        reasonCode: "first_contentful_paint",
+        value: 2_100,
+        unit: "milliseconds",
+        limit: 1_800,
+      },
+    ] as const;
+
+    const evidence = projectInternalAuditEvidence([{
+      kind: "quality",
+      observation: {
+        observedAt,
+        sampleRef: createInternalAuditSampleRef(signals),
+        signals,
+      },
+    }]);
+
+    expect(evidence).toHaveLength(2);
+    expect(evidence.map(({ reasonCode }) => reasonCode)).toEqual([
+      "response_time",
+      "first_contentful_paint",
+    ]);
   });
 
   it("projects only explicit deployment attestation checks", () => {
