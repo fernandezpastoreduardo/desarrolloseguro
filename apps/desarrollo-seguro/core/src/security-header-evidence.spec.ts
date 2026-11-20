@@ -136,6 +136,21 @@ describe("assessSecurityHeaders", () => {
     },
   );
 
+  it("rejects an external script origin even when nonce and strict-dynamic are present", () => {
+    const headers = {
+      ...VALID_HEADERS,
+      "Content-Security-Policy": SECURE_CSP.replace(
+        /script-src [^;]+/u,
+        "script-src 'nonce-012345678901234567890123' 'strict-dynamic' https://desarrolloseguro.org",
+      ),
+    };
+
+    expect(assessSecurityHeaders(headers, HTTPS_SCHEME)).toEqual({
+      status: "fail",
+      evidence: { ...PASS_EVIDENCE, csp: false },
+    });
+  });
+
   it("keeps X-Frame-Options evidence independent of an unsafe CSP", () => {
     const headers = {
       ...VALID_HEADERS,
