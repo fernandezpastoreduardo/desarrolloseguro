@@ -16,11 +16,13 @@ case "$MODE" in
     node --test scripts/check-internal-audit-resources.spec.mjs
     node scripts/test-internal-audit-route-policy.mjs
     node --test scripts/check-certification-transition.spec.mjs
+    node --test scripts/require-postgres-test-env.spec.mjs
     bash scripts/ci-preflight.sh
     pnpm quality:check
     pnpm sandbox:check
     ;;
   postgres)
+    node scripts/require-postgres-test-env.mjs
     pnpm test:postgres
     ;;
   audit)

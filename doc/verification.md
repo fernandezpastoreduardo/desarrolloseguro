@@ -1,6 +1,6 @@
 # Verificación y límites
 
-Las comprobaciones principales son `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build` y `pnpm test:postgres`. CI ejecuta estas puertas y un smoke de la imagen dentro de un entorno efímero.
+Las comprobaciones principales son `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build` y `pnpm test:postgres`. La puerta `pnpm ci:verify postgres` exige además el opt-in explícito `DS_TEST_POSTGRES_ISOLATED=1`, una URL PostgreSQL de loopback y un nombre de base de datos de pruebas; evita que una ejecución sin el contenedor aislado pase silenciosamente con los tests PostgreSQL omitidos. CI ejecuta estas puertas y un smoke de la imagen dentro de un entorno efímero.
 
 Los tests PostgreSQL validan el esquema y operaciones contra un cluster aislado; no son una prueba de despliegue. Las políticas de Compose y TLS validan configuración y material sintético, no certificados de producción, conectividad pública, firewall, carga ni recuperación de copias.
 
