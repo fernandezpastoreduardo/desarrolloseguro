@@ -10,6 +10,11 @@ import { parseInternalInfrastructureSnapshot, type InternalInfrastructureSnapsho
 import { parseInternalPrivacyObservation, type InternalPrivacyObservation } from "./internal-privacy-observation.js";
 import { parseInternalQualityObservation, type InternalQualityObservation } from "./internal-quality-observation.js";
 import { parseSyntheticAuthObservation, type SyntheticAuthObservation } from "./internal-synthetic-auth.js";
+import {
+  parseInternalAuditSignalEnvelope,
+  signalCriteriaForResource,
+  type InternalAuditSignalEnvelope,
+} from "./internal-audit-signal-envelope.js";
 
 export const INTERNAL_AUDIT_MAX_RESPONSE_BYTES = 64 * 1024;
 
@@ -19,7 +24,8 @@ export type InternalAuditResource =
   | InternalDependencyInventory
   | SyntheticAuthObservation
   | InternalPrivacyObservation
-  | InternalQualityObservation;
+  | InternalQualityObservation
+  | InternalAuditSignalEnvelope;
 
 export type InternalAuditFetcher = (
   url: string,
@@ -294,6 +300,9 @@ function parseResource(
   resource: AuthorizedInternalAuditOperation["resource"],
   payload: unknown,
 ): InternalAuditResource {
+  if (isRecord(payload) && Object.hasOwn(payload, "signals")) {
+    return parseInternalAuditSignalEnvelope(payload, signalCriteriaForResource(resource));
+  }
   switch (resource) {
     case "infrastructure_snapshot":
       return parseInternalInfrastructureSnapshot(payload);

@@ -20,4 +20,5 @@ export * from "./internal-audit-reader.js";
 export * from "./internal-audit-runner.js";
 export * from "./internal-audit-auth.js";
 export * from "./internal-audit-evidence-envelope.js";
+export * from "./internal-audit-signal-envelope.js";
 export * from "./internal-dependency-inventory.js";

@@ -185,6 +185,51 @@ describe("internal audit runner", () => {
     });
   });
 
+  it("requires both privacy and ethics scopes for composite privacy signals", async () => {
+    const fetcher = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      headers: { get: (name: string) => name === "content-type" ? "application/json" : null },
+      json: async () => signedAuditEvidence({
+        observedAt,
+        sampleRef: `sha256:${"8".repeat(64)}`,
+        signals: [
+          {
+            criterionId: "privacy.consent",
+            status: "pass",
+            reasonCode: "consent_state_respected",
+            value: 1,
+            unit: "boolean",
+          },
+          {
+            criterionId: "ethics.transparency",
+            status: "pass",
+            reasonCode: "privacy_notice_present",
+            value: 1,
+            unit: "boolean",
+          },
+        ],
+      }),
+    }));
+
+    const result = await runInternalAudit({
+      request: {
+        ...request,
+        scopes: ["privacy", "ethics"],
+      },
+      auditRef,
+      observedAt,
+      operations: [operation("privacy_observation", "/audit/privacy")],
+      fetcher,
+      auth: TEST_AUDIT_AUTH,
+    });
+    expect(result).toMatchObject({
+      status: "completed",
+      completedOperations: 1,
+      report: { assessment: { assessedCriteria: 2 } },
+    });
+  });
+
   it("rejects an AI disclosure delivered through the privacy route", async () => {
     const fetcher = vi.fn(async () => ({
       ok: true,

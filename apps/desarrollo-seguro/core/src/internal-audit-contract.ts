@@ -21,6 +21,7 @@ const AUDIT_SOURCES = [
   "deployment_attestation",
   "synthetic_check",
 ] as const;
+const AUDIT_EVIDENCE_UNITS = ["boolean", "count", "milliseconds"] as const;
 export const INTERNAL_AUDIT_CRITERIA = {
   "infrastructure.tls": "infrastructure",
   "infrastructure.headers": "infrastructure",
@@ -41,6 +42,7 @@ export const INTERNAL_AUDIT_CRITERIA = {
 type AuditScope = (typeof AUDIT_SCOPES)[number];
 type AuditStatus = (typeof AUDIT_STATUSES)[number];
 type AuditSource = (typeof AUDIT_SOURCES)[number];
+type AuditEvidenceUnit = (typeof AUDIT_EVIDENCE_UNITS)[number];
 export type InternalAuditCriterion = keyof typeof INTERNAL_AUDIT_CRITERIA;
 
 export type InternalAuditRequest = {
@@ -59,6 +61,9 @@ export type InternalAuditEvidence = {
   source: AuditSource;
   observedAt: string;
   reasonCode: string;
+  value?: number;
+  unit?: AuditEvidenceUnit;
+  limit?: number;
 };
 
 export function parseInternalAuditRequest(input: unknown): InternalAuditRequest {
@@ -101,20 +106,24 @@ export function parseInternalAuditRequest(input: unknown): InternalAuditRequest 
 }
 
 export function parseInternalAuditEvidence(input: unknown): InternalAuditEvidence {
-  if (!isRecord(input) || !hasExactKeys(input, [
+  if (!isRecord(input) || !hasKeys(input, [
     "criterionId",
     "scope",
     "status",
     "source",
     "observedAt",
     "reasonCode",
-  ])) {
+  ], ["value", "unit", "limit"])) {
     throw new Error("internal_audit_evidence_invalid");
   }
   const criterionId = input.criterionId;
   const scope = input.scope;
   const observedAt = input.observedAt;
   const reasonCode = input.reasonCode;
+  const value = input.value;
+  const unit = input.unit;
+  const limit = input.limit;
+  const hasValue = value !== undefined || unit !== undefined;
   if (
     typeof criterionId !== "string" ||
     !(criterionId in INTERNAL_AUDIT_CRITERIA) ||
@@ -127,7 +136,10 @@ export function parseInternalAuditEvidence(input: unknown): InternalAuditEvidenc
     !isIsoDate(observedAt) ||
     typeof reasonCode !== "string" ||
     !/^[a-z0-9]+(?:_[a-z0-9]+)*$/u.test(reasonCode) ||
-    reasonCode.length > 64
+    reasonCode.length > 64 ||
+    (hasValue && (typeof value !== "number" || !Number.isFinite(value) || !isEvidenceUnit(unit) || !isEvidenceValueBounded(value, unit))) ||
+    (isEvidenceUnit(unit) && unit !== "boolean" && limit === undefined) ||
+    (limit !== undefined && (typeof limit !== "number" || !Number.isFinite(limit) || !isEvidenceUnit(unit) || !isEvidenceValueBounded(limit, unit)))
   ) {
     throw new Error("internal_audit_evidence_invalid");
   }
@@ -138,6 +150,8 @@ export function parseInternalAuditEvidence(input: unknown): InternalAuditEvidenc
     source: input.source as AuditSource,
     observedAt,
     reasonCode,
+    ...(hasValue ? { value: value as number, unit: unit as AuditEvidenceUnit } : {}),
+    ...(limit === undefined ? {} : { limit }),
   };
 }
 
@@ -175,4 +189,24 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function hasExactKeys(value: Record<string, unknown>, required: readonly string[]): boolean {
   const keys = Object.keys(value).sort();
   return keys.length === required.length && required.every((key) => keys.includes(key));
+}
+
+function hasKeys(
+  value: Record<string, unknown>,
+  required: readonly string[],
+  optional: readonly string[],
+): boolean {
+  const keys = Object.keys(value);
+  return required.every((key) => keys.includes(key)) &&
+    keys.every((key) => required.includes(key) || optional.includes(key));
+}
+
+function isEvidenceUnit(value: unknown): value is AuditEvidenceUnit {
+  return typeof value === "string" && AUDIT_EVIDENCE_UNITS.includes(value as AuditEvidenceUnit);
+}
+
+function isEvidenceValueBounded(value: number, unit: AuditEvidenceUnit): boolean {
+  if (unit === "boolean") return value === 0 || value === 1;
+  if (unit === "count") return Number.isInteger(value) && value >= 0 && value <= 1_000;
+  return Number.isInteger(value) && value >= 0 && value <= 120_000;
 }
