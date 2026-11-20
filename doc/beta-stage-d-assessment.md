@@ -102,3 +102,28 @@ en aprobados.
 Los valores operativos de claves, ACL y secretos permanecen fuera del
 repositorio. Esta evidencia es suficiente para considerar operativo el canal
 D-08 en modo acotado, pero no para emitir un sello ni una certificación.
+
+## Actualización operativa posterior al despliegue `6981d16` (20 de noviembre de 2026)
+
+El smoke autenticado se repitió desde el egress autorizado después del
+despliegue de `main`, usando el perfil efímero `internal-audit` y las mismas
+claves allowlisted. La ejecución leyó las siete rutas de producción, validó la
+envoltura `beta-d-0.2`, la firma EdDSA y la atestación de release, y terminó
+con:
+
+- `auditRef`: `sha256:33bb07f7dd0ff5d3f2e66f91fec24170a680fcca036d2abe76984d9583e8dbdd`;
+- `observedAt`: `2026-11-20T17:21:04.234Z`;
+- `status`: `complete`;
+- `assessedCriteria`: `14/14`;
+- `internalScore`: `100`;
+- `externalScore`: `null`;
+- categorías `infrastructure`, `application`, `authentication`, `quality`,
+  `privacy`, `ethics` e `ia`: `100/100` dentro de su alcance completo.
+
+El resultado procede de respuestas firmadas de producción, no de fixtures. El
+runner fue un contenedor efímero: no montó PostgreSQL, no activó el servicio
+normal de auditoría y no cambió el estado público ni el sello de Grumphya.
+La puntuación interna sigue separada de la externa y no concede certificación
+por sí sola. Con esta ejecución quedan satisfechos D-01 a D-08 para el alcance
+`beta-d-0.2`; cualquier ampliación posterior del catálogo debe abrir una nueva
+versión contractual.
