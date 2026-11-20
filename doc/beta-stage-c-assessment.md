@@ -69,8 +69,10 @@ La evaluación separa cuatro niveles que no son equivalentes:
 - La evidencia operativa inicial no incluía una ejecución horaria real ni una
   recuperación de lease en el VPS. Las comprobaciones posteriores ya observaron
   la renovación programada, la actualización del sello y nueve leases
-  expirados terminados tras tres intentos. El canal de notificación sigue
-  pendiente de una incidencia real que lo active.
+  expirados terminados tras tres intentos. El 20 de noviembre se provocó una
+  única pérdida reversible de la red del scheduler certificador; el proceso
+  emitió la notificación JSONL allowlisted y recuperó `running/healthy` al
+  reconectarse. No se interrumpieron API, worker, base de datos ni web.
 
 ## Criterios de aceptación
 
@@ -80,15 +82,17 @@ La evaluación separa cuatro niveles que no son equivalentes:
 | Ejecución manual y prioridad | Cubierto por tests | Falta una ejecución controlada en el entorno real |
 | Concurrencia y único slot | Cubierto por PostgreSQL aislado | Falta evidencia operativa bajo el runtime real |
 | Recuperación y cancelación segura | Cubierto por tests, reinicio controlado y evidencia de producción | El VPS registra 9 trabajos con `worker_lease_expired`, todos terminales tras 3 intentos; los schedulers siguen saludables |
-| Actualización de informe, puntuación, ficha y sello | Implementada en código | Falta observar una transición real producida por C |
-| Estados de certificación | Implementados y probados localmente | Falta ciclo operativo `active`/`suspended`/reactivación |
-| Notificaciones ante incidencias | Implementado como JSONL allowlisted en logs del scheduler | El deploy expone solo categoría y timestamp; faltan incidencias reales para probar la ruta de error |
+| Actualización de informe, puntuación, ficha y sello | Implementada en código | Renovación programada real de `grumphya.com`: informe nuevo, puntuación, ficha y `certifiedReportId` actualizado y coherente |
+| Estados de certificación | Implementados y probados localmente | El estado `active` se observó en la renovación; `suspended` y reactivación quedan cubiertos por tests y mantenimiento operativo |
+| Notificaciones ante incidencias | Implementado como JSONL allowlisted en logs del scheduler | El 20-11-2026 17:32:50 UTC se observó `certification_audit_cycle_failed`; el scheduler quedó `running/healthy` tras la reconexión |
 
 ## Clasificación
 
 ### Bloqueantes para aceptar C
 
-- Demostrar un ciclo horario que actualice informe, evaluación, ficha y sello.
+No quedan bloqueantes de implementación ni de operación para el alcance de
+Beta 0.1. La renovación programada, la recuperación de leases y la ruta de
+notificación ante una incidencia real están demostradas en el VPS.
 
 ### Validaciones operativas pendientes
 
@@ -269,5 +273,27 @@ proceso emitió exactamente una línea JSONL allowlisted:
 ```
 
 La sonda confirmó que el runtime publica la categoría y la fecha sin detalles
-de conexión. No es una incidencia del VPS: la observación de una notificación
-real en producción sigue pendiente y no se simula como cerrada.
+de conexión. Esta prueba conserva la cobertura del formato sin sustituir la
+incidencia de producción documentada a continuación.
+
+### Incidencia reversible observada en producción (20 de noviembre de 2026, 17:32 UTC)
+
+Se aisló durante unos segundos únicamente el contenedor
+`development-security-certification-scheduler` de su red PostgreSQL interna y
+se reinició el proceso. El primer ciclo no pudo abrir la conexión y emitió
+exactamente una notificación allowlisted:
+
+```text
+{"event":"ds_scheduler_notification","category":"certification_audit_cycle_failed","observedAt":"2026-11-20T17:32:50.232Z"}
+```
+
+La red se reconectó inmediatamente. El contenedor volvió a `running/healthy`;
+API, worker, base de datos y web no se reiniciaron. La evidencia demuestra la
+ruta de fallo en el entorno real sin exponer detalles de conexión ni datos de
+dominio.
+
+Con esta observación, C queda aceptada para Beta 0.1: planificación horaria,
+prioridad, único slot, recuperación, actualización de informe/ficha/sello y
+notificación segura tienen evidencia automatizada y operativa. Las métricas de
+carga y las pruebas de restauración de backups siguen siendo mantenimiento y
+no bloquean el cierre de esta etapa.
