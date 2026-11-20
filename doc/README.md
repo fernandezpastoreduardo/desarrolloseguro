@@ -18,6 +18,7 @@ Esta carpeta reúne documentación técnica del proyecto independiente Desarroll
 - [Plan de D](beta-stage-d-plan.md): incrementos de auditoría privada y tareas separadas por repositorio.
 - [Evaluación operativa de D](beta-stage-d-assessment.md): primera ejecución privada autorizada y límites de cobertura.
 - [Cierre global](beta-global-closure-plan.md): validación integral, certificación definitiva y parada antes del MVP.
+- [Evaluación del cierre global](beta-global-closure-assessment.md): evidencia observada, discrepancias y condición de salida.
 - [Calidad](quality-baseline.md): criterios de calidad.
 - [Alcance del producto](desarrollo-seguro.md): propósito, estado y límites del prototipo.
 
