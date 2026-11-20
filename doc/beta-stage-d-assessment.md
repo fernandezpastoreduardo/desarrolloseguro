@@ -64,9 +64,10 @@ consentimiento real, cookies dinámicas, rendimiento de navegador ni controles
 acordar nuevos datos allowlisted con Grumphya y repetir la validación, sin usar
 fixtures como evidencia de producción.
 
-La etapa C continúa separada: falta observar una certificación pública activa
-que venza y sea renovada por el scheduler, incluyendo la actualización del
-informe y del sello. Esta carencia no invalida la ejecución privada D.
+La etapa C continúa separada: ya se observó una certificación pública activa
+renovada por el scheduler, con informe y puntero de sello nuevos. Esta
+evidencia no amplía la cobertura privada D ni convierte sus criterios ausentes
+en aprobados.
 
 ## Puertas ejecutadas
 
