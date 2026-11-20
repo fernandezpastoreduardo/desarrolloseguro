@@ -74,8 +74,11 @@ Cada señal tiene exactamente `criterionId`, `status`, `reasonCode`, `value` y
 }
 ```
 
-Estados permitidos: `pass`, `fail`, `unknown`, `not_applicable`. Unidades:
-`boolean`, `count`, `milliseconds`. `value` es numérico cuando hay medición y
+Estados permitidos: `pass`, `fail`, `unknown`, `not_applicable`. La unicidad
+se comprueba por el par `(criterionId, reasonCode)`, porque
+`performance.page_load` puede aportar FCP, INP y tiempo de respuesta en la
+misma respuesta. Unidades: `boolean`, `count`, `milliseconds`. `value` es
+numérico cuando hay medición y
 es exactamente `null` para `unknown` o `not_applicable`; nunca uses `0` para
 simular un dato ausente. La unidad sigue siendo obligatoria incluso con
 `null`. Los booleanos medidos valen `0` o `1` y pueden omitir `limit`; los
@@ -140,8 +143,12 @@ debe exigir ni inventar un endpoint o scope de ética.
 Valida el JWT técnico antes de leer: `iss=desarrolloseguro-audit`,
 `sub=desarrolloseguro-audit`, `aud=grumphya-audit`, `domain=grumphya.com`, `hostname=grumphya.com`,
 `environment=production`, `kid` allowlisted, scopes `audit:<recurso>`,
-expiración máxima de 5 minutos, tolerancia de reloj máxima de 60 segundos y
-revocación. La clave privada de Desarrollo Seguro nunca se copia a Grumphya.
+`exp - iat <= 300` segundos, tolerancia de reloj máxima de 60 segundos y
+revocación. Valida además `validUntil - observedAt <= 24 h` y la frescura
+respecto al reloj actual; ambas comprobaciones son obligatorias. Antes del
+despliegue productivo las señales deben permanecer `unknown`; solo un smoke
+posterior puede emitir `pass` ligado al digest servido. La clave privada de
+Desarrollo Seguro nunca se copia a Grumphya.
 
 Mantén la base de Grumphya separada. La API de lectura usa solo `SELECT`; la
 retención usa un rol independiente con `DELETE` limitado a evidencias y

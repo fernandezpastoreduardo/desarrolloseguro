@@ -18,12 +18,18 @@ repositorio.
   `deploymentDigest` y la atestación EdDSA. La respuesta debe usar exactamente
   las claves especificadas en el contrato.
 - `sampleRef` es el SHA-256 de la lista canónica UTF-8 de `signals` y debe
-  verificarse antes de aceptar la evidencia. `unknown` y `not_applicable` usan
-  `value: null` con `unit` obligatoria.
+  verificarse antes de aceptar la evidencia. La unicidad se valida por el par
+  `(criterionId, reasonCode)`, porque `performance.page_load` puede incluir
+  FCP, INP y tiempo de respuesta en la misma respuesta. `unknown` y
+  `not_applicable` usan `value: null` con `unit` obligatoria.
 - El JWT exige `iss=desarrolloseguro-audit`, `sub=desarrolloseguro-audit`,
   `aud=grumphya-audit`, `domain=grumphya.com`, `hostname=grumphya.com`,
   `environment=production`, `kid` allowlisted y scopes `audit:<recurso>`.
-  TTL máximo: cinco minutos; tolerancia de reloj: 60 segundos.
+  `exp - iat <= 300` segundos; tolerancia de reloj: 60 segundos. Valida
+  también `validUntil - observedAt <= 24 h` y la frescura respecto al reloj
+  actual; ambas comprobaciones son obligatorias. Antes del despliegue
+  productivo las señales deben ser `unknown`; solo el smoke posterior puede
+  emitir `pass` ligado al digest servido.
 - Mantén `AUDIT_ENABLED` como esté en la configuración viva. No lo actives ni
   lo desactives por este cambio.
 

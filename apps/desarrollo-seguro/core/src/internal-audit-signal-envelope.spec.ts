@@ -52,7 +52,7 @@ describe("internal audit signal envelope", () => {
     );
   });
 
-  it("rejects duplicate criteria and unbounded values", () => {
+  it("allows distinct metrics for one criterion and rejects duplicate signal keys", () => {
     const signal = {
       criterionId: "quality.accessibility",
       status: "pass",
@@ -68,6 +68,29 @@ describe("internal audit signal envelope", () => {
     }, signalCriteriaForResource("performance_observation"))).toThrow(
       "internal_audit_signal_duplicate",
     );
+    const performanceSignals = [
+      {
+        criterionId: "performance.page_load",
+        status: "pass",
+        reasonCode: "first_contentful_paint",
+        value: 1_200,
+        unit: "milliseconds",
+        limit: 1_800,
+      },
+      {
+        criterionId: "performance.page_load",
+        status: "pass",
+        reasonCode: "interaction_to_next_paint",
+        value: 140,
+        unit: "milliseconds",
+        limit: 200,
+      },
+    ] as const;
+    expect(parseInternalAuditSignalEnvelope({
+      observedAt,
+      sampleRef: createInternalAuditSampleRef(performanceSignals),
+      signals: performanceSignals,
+    }, ["performance.page_load"]).signals).toHaveLength(2);
     expect(() => parseInternalAuditSignalEnvelope({
       observedAt,
       sampleRef,

@@ -123,7 +123,10 @@ export function parseInternalAuditSignalEnvelope(
   }
   const allowed = new Set(allowedCriteria);
   const parsedSignals = signals.map((signal) => parseSignal(signal, allowed));
-  if (new Set(parsedSignals.map((signal) => signal.criterionId)).size !== parsedSignals.length) {
+  const signalKeys = parsedSignals.map(
+    (signal) => `${signal.criterionId}:${signal.reasonCode}`,
+  );
+  if (new Set(signalKeys).size !== signalKeys.length) {
     throw new Error("internal_audit_signal_duplicate");
   }
   if (sampleRef !== createInternalAuditSampleRef(parsedSignals)) {
