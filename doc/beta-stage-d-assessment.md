@@ -48,6 +48,17 @@ auditoría ni cambia el informe privado existente. Las suites específicas de
 contrato, lector, atestación, puntuación, runner y runtime pasan 33/33 pruebas
 locales.
 
+La ejecución privada efímera del 20 de noviembre de 2026 volvió a leer las
+siete rutas desde el perfil `internal-audit` del VPS, sin montar PostgreSQL ni
+iniciar el stack normal. Produjo `auditRef`
+`sha256:a6a4406c8a252e98a4644f462fea9b2c9d8d9200bb488707c7e6bb899ea72ef5`,
+`observedAt=2026-11-20T07:55:58.785Z`, estado `incomplete` y cobertura `6/14`.
+`internalScore` y `externalScore` permanecieron en `null`; autenticación e IA
+alcanzaron `100/100` dentro de su alcance observado, mientras infraestructura,
+aplicación, calidad y privacidad conservaron cobertura parcial y ética no tuvo
+evidencia. El contenedor terminó tras la lectura y no modificó Grumphya ni la
+configuración del servicio normal.
+
 ## Controles demostrados
 
 1. El JWT usa `iss=desarrolloseguro-audit`, `aud=grumphya-audit`,

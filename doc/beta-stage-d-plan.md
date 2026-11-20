@@ -178,3 +178,16 @@ evidencia en resultados, no emite certificación y no habilita un sello. La
 evidencia resumida y sus límites están en
 [`beta-stage-d-assessment.md`](beta-stage-d-assessment.md).
 
+## Addendum operativo — 20 de noviembre de 2026
+
+Se repitió la auditoría privada en un contenedor efímero del VPS con el perfil
+`internal-audit`, sin montar la base de datos ni alterar el stack normal. La
+ejecución completó las siete lecturas autenticadas y produjo el
+`auditRef` `sha256:a6a4406c8a252e98a4644f462fea9b2c9d8d9200bb488707c7e6bb899ea72ef5`
+(`observedAt=2026-11-20T07:55:58.785Z`). El resultado fue `incomplete`, con
+`6/14` criterios, `internalScore=null` y `externalScore=null`: autenticación e
+IA quedaron en `100/100` en el alcance observado; infraestructura, aplicación,
+calidad y privacidad siguen parciales y ética sin evidencia. El perfil se
+apagó al terminar y no se activó ninguna certificación ni se modificó
+Grumphya.
+
