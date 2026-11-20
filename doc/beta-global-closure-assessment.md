@@ -28,6 +28,20 @@ de referencia segura. Esto indica una discrepancia temporal o de ruta entre la
 respuesta que produjo el informe y la respuesta actual; no se convierte en un
 `pass` hasta obtener un informe nuevo del scanner.
 
+### Diagnóstico reproducible de CSP
+
+Una lectura efímera desde la red `development-security-egress` reprodujo la
+cabecera actual. Su `script-src` contiene un nonce, `'strict-dynamic'` y
+`https://desarrolloseguro.org`. El rubricado `security-headers-v1` considera
+válida una política estricta únicamente cuando `script-src` contiene nonce o
+hash junto con `'strict-dynamic'`, sin orígenes de script externos. Por eso la
+cabecera existe, pero el scanner la clasifica correctamente como `csp=false`.
+
+El contrato queda protegido por un test TDD que rechaza explícitamente un
+origen de script externo aunque haya nonce y `'strict-dynamic'`. El sello debe
+cargarse como enlace, imagen o iframe autorizado, o mediante código nonceado
+servido por el propio dominio, sin añadir Desarrollo Seguro a `script-src`.
+
 ## Condición de salida
 
 El cierre global permanece **pendiente** hasta que un informe fresco posterior
