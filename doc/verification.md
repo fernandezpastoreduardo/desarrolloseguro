@@ -6,7 +6,21 @@ Los tests PostgreSQL validan el esquema y operaciones contra un cluster aislado;
 
 La interfaz y la API permiten solicitar y poner en cola un análisis autorizado. Tras encolarlo, el portal consulta el estado de forma limitada y muestra el informe cuando queda guardado. La certificación beta se persiste junto al informe y el sello público solo se verifica si el estado es `active` y el informe coincide con el certificado vigente. El worker, el coordinador y los schedulers están definidos en Compose; los despliegues controlados confirmaron salud, ciclo inicial y recuperación aislada. El 20 de noviembre de 2026 se observó además una renovación programada real de `grumphya.com`: el scheduler generó un `reportId` nuevo, actualizó el puntero certificado y la ficha pública respondió correctamente. Las pruebas de fixture en PostgreSQL aislado no usan red externa. Ningún resultado debe interpretarse como auditoría independiente ni garantía de seguridad de un sitio.
 
-Tras el despliegue #288 de Grumphya se solicitó otro análisis manual. El informe `47a4d966-5346-4260-ae0e-43902425b496` devolvió `pass`, observó `DS-HDR-01` con `csp: true`, obtuvo `100/100` en la evaluación Beta y dejó `certifiedReportId` coincidente. La comprobación se realizó contra el endpoint público sin lanzar Actions desde este repositorio.
+### Evidencia histórica de certificación
+
+Tras el despliegue #288 de Grumphya se solicitó otro análisis manual. El informe
+`47a4d966-5346-4260-ae0e-43902425b496` devolvió `pass`, observó `DS-HDR-01`
+con `csp: true`, obtuvo `100/100` en la evaluación Beta y dejó
+`certifiedReportId` coincidente. La comprobación se realizó contra el endpoint
+público sin lanzar Actions desde este repositorio. Esta observación es
+histórica: el estado vigente y las condiciones de salida se mantienen en
+[`beta-global-closure-assessment.md`](beta-global-closure-assessment.md), que
+debe prevalecer si ambos documentos difieren.
+
+En la revisión actual, el informe fresco
+`ed8e8b27-ac46-4ad0-91b2-a3e803eb9ab9` observa `csp: false`, deja la evaluación
+Beta en `70/100` y mantiene la certificación suspendida. No se considera
+certificación activa hasta repetir el análisis después de corregir la CSP.
 
 El 20 de noviembre de 2026 se ejecutó además `pnpm test:postgres` contra un
 PostgreSQL efímero aislado en loopback: 93 pruebas de persistence y 1 de worker
