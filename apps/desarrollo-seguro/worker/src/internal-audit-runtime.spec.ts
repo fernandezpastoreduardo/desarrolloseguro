@@ -97,6 +97,47 @@ describe("internal audit runtime configuration", () => {
     rmSync(directory, { recursive: true, force: true });
   });
 
+  it("never emits an audit:ethics JWT scope", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "ds-internal-audit-runtime-"));
+    const jwt = generateKeyPairSync("ed25519");
+    const attestation = generateKeyPairSync("ed25519");
+    const privatePath = join(directory, "jwt.pem");
+    const publicPath = join(directory, "attestation.pem");
+    writeFileSync(privatePath, jwt.privateKey.export({ type: "pkcs8", format: "pem" }), { mode: 0o400 });
+    writeFileSync(publicPath, attestation.publicKey.export({ type: "spki", format: "pem" }), { mode: 0o400 });
+    const calls: Array<{ init: { headers: Readonly<Record<string, string>> } }> = [];
+    const runtime = createInternalAuditRuntime({
+      AUDIT_ENABLED: "true",
+      AUDIT_SCOPES: "privacy,ethics",
+      AUDIT_JWT_PRIVATE_KEY_FILE: privatePath,
+      AUDIT_TECHNICAL_AUTH_KID: "ds-auditor-2026",
+      AUDIT_TECHNICAL_AUTH_ALLOWED_KIDS: "ds-auditor-2026",
+      AUDIT_ALLOWED_NETWORKS: "31.70.130.181/32",
+      AUDIT_RELEASE_ATTESTATION_PUBLIC_KEY_FILE: publicPath,
+      AUDIT_RELEASE_ATTESTATION_KID: "grumphya-release-2026",
+    }, {
+      clock: () => new Date("2026-11-18T20:00:00.000Z"),
+      idFactory: () => "audit-jti-privacy-1",
+      fetcher: async (_url, init) => {
+        calls.push({ init });
+        return { ok: false, status: 503, headers: { get: () => "application/json" }, json: async () => ({}) };
+      },
+    });
+
+    await expect(runtime.run()).resolves.toMatchObject({
+      status: "failed",
+      completedOperations: 0,
+      reasonCode: "internal_audit_resource_unavailable",
+    });
+    expect(calls).toHaveLength(1);
+    const [, payload] = calls[0].init.headers.Authorization.slice("Bearer ".length).split(".");
+    expect(JSON.parse(Buffer.from(payload, "base64url").toString())).toMatchObject({
+      scope: "audit:privacy",
+    });
+    expect(calls[0].init.headers.Authorization).not.toContain("audit:ethics");
+    rmSync(directory, { recursive: true, force: true });
+  });
+
   it("rejects a private attestation key", () => {
     const directory = mkdtempSync(join(tmpdir(), "ds-internal-audit-runtime-"));
     const jwt = generateKeyPairSync("ed25519");
