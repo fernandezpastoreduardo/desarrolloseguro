@@ -148,10 +148,11 @@ del informe ni valores arbitrarios de la respuesta.
 ## Conclusión
 
 C está implementada, validada automáticamente y desplegada con operación base
-demostrada. Su estado correcto sigue siendo **pendiente de evidencia de
-transición de certificación en producción**: aún no se ha observado una
-auditoría programada que actualice un informe, sello y estado de certificación.
-No se amplían retroactivamente los criterios para exigir D.
+demostrada. La transición de certificación en producción ya está observada:
+el scheduler generó un informe nuevo, actualizó la ficha y dejó el puntero de
+sello coincidente. La aceptación operativa final conserva dos comprobaciones
+separadas: recuperación ante un lease expirado y una notificación producida por
+una incidencia real. No se amplían retroactivamente los criterios para exigir D.
 
 ### Comprobación de estado del VPS (19 de noviembre de 2026)
 
@@ -196,8 +197,8 @@ evidencia de una nueva auditoría. Para comprobar la versión publicada se
 encoló un único análisis de `www.desarrolloseguro.org`. El scanner rechazó la
 redirección a otro hostname con `redirect_origin_not_allowlisted` y dejó el
 resultado en `inconclusive`, que es el comportamiento fail-closed esperado.
-Esta comprobación no altera el estado de Grumphya ni demuestra todavía la
-transición periódica que falta para cerrar C.
+Esta comprobación no altera el estado de Grumphya ni sustituye la evidencia
+posterior de la renovación programada.
 
 ### Certificación activa disponible para la renovación programada (19 de noviembre de 2026)
 
