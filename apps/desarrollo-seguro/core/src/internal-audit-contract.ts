@@ -39,6 +39,17 @@ export const INTERNAL_AUDIT_CRITERIA = {
   "ai.disclosure": "ai",
 } as const;
 
+/**
+ * Provisional acceptance limits for metrics that can affect the private score.
+ * They are part of beta-d-0.2 and must be versioned when the rubric changes.
+ */
+export const INTERNAL_AUDIT_METRIC_LIMITS = {
+  "quality.accessibility:accessibility_critical_violations": { unit: "count", limit: 0 },
+  "performance.page_load:response_time": { unit: "milliseconds", limit: 2_500 },
+  "performance.page_load:first_contentful_paint": { unit: "milliseconds", limit: 1_800 },
+  "performance.page_load:interaction_to_next_paint": { unit: "milliseconds", limit: 200 },
+} as const;
+
 type AuditScope = (typeof AUDIT_SCOPES)[number];
 type AuditStatus = (typeof AUDIT_STATUSES)[number];
 type AuditSource = (typeof AUDIT_SOURCES)[number];
@@ -61,7 +72,7 @@ export type InternalAuditEvidence = {
   source: AuditSource;
   observedAt: string;
   reasonCode: string;
-  value?: number;
+  value?: number | null;
   unit?: AuditEvidenceUnit;
   limit?: number;
 };
@@ -124,6 +135,10 @@ export function parseInternalAuditEvidence(input: unknown): InternalAuditEvidenc
   const unit = input.unit;
   const limit = input.limit;
   const hasValue = value !== undefined || unit !== undefined;
+  const hasNullValue = value === null;
+  const expectedLimit = typeof criterionId === "string" && typeof reasonCode === "string"
+    ? expectedInternalAuditMetricLimit(criterionId, reasonCode)
+    : undefined;
   if (
     typeof criterionId !== "string" ||
     !(criterionId in INTERNAL_AUDIT_CRITERIA) ||
@@ -137,9 +152,12 @@ export function parseInternalAuditEvidence(input: unknown): InternalAuditEvidenc
     typeof reasonCode !== "string" ||
     !/^[a-z0-9]+(?:_[a-z0-9]+)*$/u.test(reasonCode) ||
     reasonCode.length > 64 ||
-    (hasValue && (typeof value !== "number" || !Number.isFinite(value) || !isEvidenceUnit(unit) || !isEvidenceValueBounded(value, unit))) ||
+    (hasValue && (!isEvidenceUnit(unit) || (hasNullValue
+      ? !isUnknownStatus(input.status)
+      : typeof value !== "number" || !Number.isFinite(value) || !isEvidenceValueBounded(value, unit)))) ||
     (isEvidenceUnit(unit) && unit !== "boolean" && limit === undefined) ||
-    (limit !== undefined && (typeof limit !== "number" || !Number.isFinite(limit) || !isEvidenceUnit(unit) || !isEvidenceValueBounded(limit, unit)))
+    (limit !== undefined && (typeof limit !== "number" || !Number.isFinite(limit) || !isEvidenceUnit(unit) || !isEvidenceValueBounded(limit, unit))) ||
+    (expectedLimit !== undefined && hasValue && (unit !== expectedLimit.unit || limit !== expectedLimit.limit))
   ) {
     throw new Error("internal_audit_evidence_invalid");
   }
@@ -153,6 +171,16 @@ export function parseInternalAuditEvidence(input: unknown): InternalAuditEvidenc
     ...(hasValue ? { value: value as number, unit: unit as AuditEvidenceUnit } : {}),
     ...(limit === undefined ? {} : { limit }),
   };
+}
+
+export function expectedInternalAuditMetricLimit(
+  criterionId: string,
+  reasonCode: string,
+): { unit: "count" | "milliseconds"; limit: number } | undefined {
+  const expected = INTERNAL_AUDIT_METRIC_LIMITS[
+    `${criterionId}:${reasonCode}` as keyof typeof INTERNAL_AUDIT_METRIC_LIMITS
+  ];
+  return expected;
 }
 
 function parseScopes(value: unknown): readonly AuditScope[] {
@@ -209,4 +237,8 @@ function isEvidenceValueBounded(value: number, unit: AuditEvidenceUnit): boolean
   if (unit === "boolean") return value === 0 || value === 1;
   if (unit === "count") return Number.isInteger(value) && value >= 0 && value <= 1_000;
   return Number.isInteger(value) && value >= 0 && value <= 120_000;
+}
+
+function isUnknownStatus(value: unknown): boolean {
+  return value === "unknown" || value === "not_applicable";
 }

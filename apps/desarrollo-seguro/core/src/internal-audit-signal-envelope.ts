@@ -1,7 +1,10 @@
+import { createHash } from "node:crypto";
 import {
   INTERNAL_AUDIT_CRITERIA,
+  expectedInternalAuditMetricLimit,
   type InternalAuditCriterion,
 } from "./internal-audit-contract.js";
+import { canonicalizeForSignature } from "./internal-audit-evidence-envelope.js";
 
 const STATUSES = ["pass", "fail", "unknown", "not_applicable"] as const;
 const UNITS = ["boolean", "count", "milliseconds"] as const;
@@ -18,7 +21,7 @@ export type InternalAuditSignal = {
   criterionId: InternalAuditCriterion;
   status: InternalAuditSignalStatus;
   reasonCode: string;
-  value: number;
+  value: number | null;
   unit: InternalAuditSignalUnit;
   limit?: number;
 };
@@ -123,7 +126,19 @@ export function parseInternalAuditSignalEnvelope(
   if (new Set(parsedSignals.map((signal) => signal.criterionId)).size !== parsedSignals.length) {
     throw new Error("internal_audit_signal_duplicate");
   }
+  if (sampleRef !== createInternalAuditSampleRef(parsedSignals)) {
+    throw new Error("internal_audit_sample_ref_mismatch");
+  }
   return { observedAt, sampleRef, signals: parsedSignals };
+}
+
+/** SHA-256 of the canonical UTF-8 JSON representation of the signals array. */
+export function createInternalAuditSampleRef(
+  signals: readonly InternalAuditSignal[],
+): string {
+  return `sha256:${createHash("sha256")
+    .update(canonicalizeForSignature(signals), "utf8")
+    .digest("hex")}`;
 }
 
 export function signalCriteriaForResource(
@@ -162,6 +177,10 @@ function parseSignal(
   const value = input.value;
   const unit = input.unit;
   const limit = input.limit;
+  const hasNullValue = value === null;
+  const expectedLimit = typeof criterionId === "string" && typeof reasonCode === "string"
+    ? expectedInternalAuditMetricLimit(criterionId, reasonCode)
+    : undefined;
   if (
     typeof criterionId !== "string" ||
     !(criterionId in INTERNAL_AUDIT_CRITERIA) ||
@@ -171,12 +190,13 @@ function parseSignal(
     reasonCode.length > 64 ||
     !REASON_CODE.test(reasonCode) ||
     !REASON_CODES[criterionId as InternalAuditCriterion].includes(reasonCode) ||
-    typeof value !== "number" ||
-    !Number.isFinite(value) ||
     !isOneOf(UNITS, unit) ||
-    !isValueBounded(value, unit) ||
+    (hasNullValue
+      ? (status !== "unknown" && status !== "not_applicable")
+      : (typeof value !== "number" || !Number.isFinite(value) || !isValueBounded(value, unit))) ||
     (unit !== "boolean" && limit === undefined) ||
-    (limit !== undefined && (typeof limit !== "number" || !Number.isFinite(limit) || !isValueBounded(limit, unit)))
+    (limit !== undefined && (typeof limit !== "number" || !Number.isFinite(limit) || !isValueBounded(limit, unit))) ||
+    (expectedLimit !== undefined && (unit !== expectedLimit.unit || limit !== expectedLimit.limit))
   ) {
     throw new Error("internal_audit_signal_invalid");
   }
@@ -184,7 +204,7 @@ function parseSignal(
     criterionId: criterionId as InternalAuditCriterion,
     status,
     reasonCode,
-    value,
+    value: value as number | null,
     unit,
     ...(limit === undefined ? {} : { limit }),
   };

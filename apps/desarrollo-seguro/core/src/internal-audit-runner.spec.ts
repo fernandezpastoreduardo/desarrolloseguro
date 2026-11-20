@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { runInternalAudit } from "./internal-audit-runner.js";
 import { signedAuditEvidence, TEST_AUDIT_AUTH } from "./internal-audit-test-support.js";
+import { createInternalAuditSampleRef } from "./internal-audit-signal-envelope.js";
 
 const request = {
   policyVersion: "beta-d-0.1",
@@ -186,29 +187,30 @@ describe("internal audit runner", () => {
   });
 
   it("requires both privacy and ethics scopes for composite privacy signals", async () => {
+    const signals = [
+      {
+        criterionId: "privacy.consent",
+        status: "pass",
+        reasonCode: "consent_state_respected",
+        value: 1,
+        unit: "boolean",
+      },
+      {
+        criterionId: "ethics.transparency",
+        status: "pass",
+        reasonCode: "privacy_notice_present",
+        value: 1,
+        unit: "boolean",
+      },
+    ] as const;
     const fetcher = vi.fn(async () => ({
       ok: true,
       status: 200,
       headers: { get: (name: string) => name === "content-type" ? "application/json" : null },
       json: async () => signedAuditEvidence({
         observedAt,
-        sampleRef: `sha256:${"8".repeat(64)}`,
-        signals: [
-          {
-            criterionId: "privacy.consent",
-            status: "pass",
-            reasonCode: "consent_state_respected",
-            value: 1,
-            unit: "boolean",
-          },
-          {
-            criterionId: "ethics.transparency",
-            status: "pass",
-            reasonCode: "privacy_notice_present",
-            value: 1,
-            unit: "boolean",
-          },
-        ],
+        sampleRef: createInternalAuditSampleRef(signals),
+        signals,
       }),
     }));
 
