@@ -11,7 +11,7 @@ operativa del VPS.
 | --- | --- | --- | --- | --- |
 | A · lectura y evaluación pública | Presente en código | Tests, PostgreSQL aislado, CI y smoke contractual | El VPS ya expone un informe real de `grumphya.com` con evidencias de DNS, HTTP, TLS, cabeceras, cookies y rendimiento; sigue siendo una lectura acotada y no una certificación | Pendiente de validación operativa completa |
 | B · historial y comparabilidad | Presente en código | Tests de historial, UUID, perfiles comparables, retención y Playwright | No hay evidencia de un recorrido real sobre producción en la versión actual | Pendiente de validación operativa |
-| C · auditoría periódica | Presente en Compose y despliegue aislado | Migraciones 026/027, tests del scheduler y PostgreSQL aislado | El scheduler renovó `grumphya.com` en producción con un informe nuevo, ficha actualizada y `certifiedReportId` coincidente; el VPS registra 9 leases expirados terminados tras 3 intentos; queda observar una notificación de incidencia real | **Transición y recuperación demostradas; aceptación operativa final pendiente** |
+| C · auditoría periódica | Presente en Compose y despliegue aislado | Migraciones 026/027, tests del scheduler y PostgreSQL aislado | El scheduler renovó `grumphya.com` en producción con un informe nuevo, ficha actualizada y `certifiedReportId` coincidente; el VPS registra 9 leases expirados terminados tras 3 intentos; el 20-11-2026 observó `certification_audit_cycle_failed` y recuperó `running/healthy` | **Aceptada para Beta 0.1** |
 | D · auditoría privada de Grumphya | Contrato, lectores allowlisted, proyección, puntuación separada, informe y runner D-08 presentes | Tests unitarios, PostgreSQL aislado y puertas de tipado/lint/build; no se usan fixtures como evidencia de producción | Smoke autenticado posterior al despliegue `6981d16`: siete rutas firmadas, 14/14 criterios, `internalScore=100`, `externalScore=null`, sin modificar certificación pública | **Aceptada para el alcance `beta-d-0.2`; ampliaciones requieren una nueva versión contractual** |
 
 Las etapas son independientes: A no requiere B, C ni D; B no requiere C ni D;
@@ -83,16 +83,14 @@ diagnóstico acotado, sin convertirla en un aprobado.
 
 ## Criterio para cerrar esta revisión
 
-La etapa C no se declara completada mientras no exista evidencia de una
-auditoría certificada vencida que actualice informe, ficha, sello y estado en el
-entorno donde opera el servicio, junto con una notificación producida por una
-incidencia real. La recuperación ante leases expirados ya tiene evidencia de
-producción. El scheduler, su canal JSONL y su reinicio controlado ya
-están demostrados en `44352363402`. La comprobación de solo lectura del VPS
-del 18 de noviembre de 2026 confirmó además ambos schedulers arrancados y
-señales de ciclo completado, pero `grumphya.com` no tiene una certificación
-activa (`certifiedReportId: null`), así que lo restante es una validación
-operativa específica, no una nueva funcionalidad. En D, el runner local ya
+La etapa C queda completada porque existe evidencia de una auditoría
+certificada vencida que actualizó informe, ficha, sello y estado en el entorno
+real, junto con una notificación producida por una incidencia real del
+scheduler el 20 de noviembre de 2026 a las 17:32:50 UTC. La recuperación ante
+leases expirados también tiene evidencia de producción. El scheduler, su canal
+JSONL y su reinicio controlado están demostrados; la red se reconectó y el
+contenedor volvió a `running/healthy` sin reiniciar API, worker, base de datos ni
+web. En D, el runner local ya
 coordina la lectura secuencial y el fallo seguro. La ejecución privada
 autorizada del 19 de noviembre de 2026 confirma el canal de producción, la
 verificación JWT/atestación y la proyección acotada; su resultado deliberadamente
@@ -141,8 +139,9 @@ La puerta ejecutada con el informe anterior como referencia devolvió
 `assessment=eligible` y `certified_report=matches`. La ficha pública enlazada
 al informe programado responde `200`. Esta evidencia demuestra la transición
 de informe y puntero de certificación producida por C; la validación de
-recuperación ante lease ya tiene evidencia específica de producción; conserva
-pendiente la notificación ante una incidencia real.
+recuperación ante lease ya tiene evidencia específica de producción. La
+notificación real de `certification_audit_cycle_failed` queda documentada en
+la evaluación de C y cierra el último criterio operativo.
 
 Los informes detallados de esta revisión están en
 [`beta-stage-c-assessment.md`](beta-stage-c-assessment.md), el plan de D en
