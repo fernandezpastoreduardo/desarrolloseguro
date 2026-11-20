@@ -123,10 +123,25 @@ criterios evaluados) y la evaluación Beta es `100/100`, con las tres
 categorías concluyentes en `pass`. La certificación quedó `active` y su
 `certifiedReportId` coincide con ese informe.
 
-Esta evidencia cierra la comprobación pública de CSP y deja disponible una
-certificación activa para la siguiente validación de C. No demuestra todavía
-que el scheduler haya renovado la certificación tras su vencimiento; esa
-transición programada continúa siendo la comprobación operativa pendiente.
+ Esta evidencia cierra la comprobación pública de CSP y deja disponible una
+ certificación activa para la siguiente validación de C.
+
+### Renovación programada observada (20 de noviembre de 2026, 05:29 UTC)
+
+La comprobación posterior confirmó que el scheduler sí ejecutó la renovación:
+el último informe pasó a ser `2c6fdf6c-18b2-4c31-b230-6d52d9e0687c` con
+`trigger: scheduled`, distinto del informe manual anterior
+`7d9ad93f-cd1a-4af2-9176-d9cfb69d1e0b`. El veredicto continúa en `pass`,
+`DS-HDR-01` mantiene `csp: true`, la evaluación Beta es `100/100` y la
+certificación permanece `active` con `certifiedReportId` coincidente.
+
+La puerta ejecutada con el informe anterior como referencia devolvió
+`report_refreshed=yes`, `certification_state=active`,
+`assessment=eligible` y `certified_report=matches`. La ficha pública enlazada
+al informe programado responde `200`. Esta evidencia demuestra la transición
+de informe y puntero de certificación producida por C; la validación de
+recuperación ante lease y de notificaciones ante una incidencia real conserva
+su evidencia específica de tests y runtime.
 
 Los informes detallados de esta revisión están en
 [`beta-stage-c-assessment.md`](beta-stage-c-assessment.md), el plan de D en

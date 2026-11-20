@@ -163,6 +163,24 @@ informe certificado activo que pueda activar una auditoría periódica. Esta
 observación confirma continuidad del servicio, pero no añade evidencia de la
 transición funcional que falta para aceptar C.
 
+### Transición programada observada (20 de noviembre de 2026)
+
+La certificación activa disponible tras el informe manual fue renovada por el
+scheduler certificador. El informe resultante
+`2c6fdf6c-18b2-4c31-b230-6d52d9e0687c` lleva `trigger: scheduled` y reemplaza al
+informe manual `7d9ad93f-cd1a-4af2-9176-d9cfb69d1e0b`. La evaluación Beta se
+mantiene en `100/100`, las tres categorías siguen en `pass`, el estado de
+certificación es `active` y `certifiedReportId` coincide con el informe nuevo.
+
+La validación de transición con el identificador anterior confirmó
+`report_refreshed=yes`, `certified_report=matches` y `assessment=eligible`. La
+ruta pública de la ficha del informe programado respondió `200`. Por tanto, la
+renovación periódica y la actualización del informe, ficha y puntero de sello
+ya tienen evidencia en producción. Permanecen como comprobaciones separadas la
+recuperación ante un lease expirado y una notificación generada por una
+incidencia real, además de las pruebas automatizadas que ya cubren esos
+contratos.
+
 ### Despliegue posterior y comprobación de transporte (19 de noviembre de 2026)
 
 El workflow `44568309742` publicó `d113292` después de que pasaran Playwright,
