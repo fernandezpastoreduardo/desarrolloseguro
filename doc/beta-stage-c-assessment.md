@@ -66,10 +66,11 @@ La evaluación separa cuatro niveles que no son equivalentes:
 - El fix posterior del smoke está en `1ef0814`, pero su CI fue un push y el
   job de deploy quedó omitido. No existe, por tanto, evidencia operativa de
   ese commit en el VPS.
-- No existe evidencia de una ejecución horaria real, de recuperación del
-  scheduler ni de actualización de sello tras una auditoría programada en el
-  VPS. El canal de notificación ya está implementado y cubierto localmente,
-  pero queda pendiente observarlo en operación.
+- La evidencia operativa inicial no incluía una ejecución horaria real ni una
+  recuperación de lease en el VPS. Las comprobaciones posteriores ya observaron
+  la renovación programada, la actualización del sello y nueve leases
+  expirados terminados tras tres intentos. El canal de notificación sigue
+  pendiente de una incidencia real que lo active.
 
 ## Criterios de aceptación
 
@@ -78,7 +79,7 @@ La evaluación separa cuatro niveles que no son equivalentes:
 | Planificación horaria | Implementada y arrancada en producción | El scheduler certificador completa el ciclo inicial en el deploy `44352363402`; queda observar una auditoría vencida |
 | Ejecución manual y prioridad | Cubierto por tests | Falta una ejecución controlada en el entorno real |
 | Concurrencia y único slot | Cubierto por PostgreSQL aislado | Falta evidencia operativa bajo el runtime real |
-| Recuperación y cancelación segura | Cubierto por tests y reinicio controlado | El mismo deploy reinició ambos schedulers y volvió a observar ciclos completados sin tocar otros servicios |
+| Recuperación y cancelación segura | Cubierto por tests, reinicio controlado y evidencia de producción | El VPS registra 9 trabajos con `worker_lease_expired`, todos terminales tras 3 intentos; los schedulers siguen saludables |
 | Actualización de informe, puntuación, ficha y sello | Implementada en código | Falta observar una transición real producida por C |
 | Estados de certificación | Implementados y probados localmente | Falta ciclo operativo `active`/`suspended`/reactivación |
 | Notificaciones ante incidencias | Implementado como JSONL allowlisted en logs del scheduler | El deploy expone solo categoría y timestamp; faltan incidencias reales para probar la ruta de error |
@@ -88,8 +89,6 @@ La evaluación separa cuatro niveles que no son equivalentes:
 ### Bloqueantes para aceptar C
 
 - Demostrar un ciclo horario que actualice informe, evaluación, ficha y sello.
-- Demostrar recuperación ante un lease expirado y continuación del ciclo en una
-  auditoría certificada real.
 
 ### Validaciones operativas pendientes
 
@@ -150,9 +149,10 @@ del informe ni valores arbitrarios de la respuesta.
 C está implementada, validada automáticamente y desplegada con operación base
 demostrada. La transición de certificación en producción ya está observada:
 el scheduler generó un informe nuevo, actualizó la ficha y dejó el puntero de
-sello coincidente. La aceptación operativa final conserva dos comprobaciones
-separadas: recuperación ante un lease expirado y una notificación producida por
-una incidencia real. No se amplían retroactivamente los criterios para exigir D.
+sello coincidente. La aceptación operativa final conserva una comprobación
+separada: una notificación producida por una incidencia real. La recuperación
+ante leases expirados ya tiene evidencia en producción. No se amplían
+retroactivamente los criterios para exigir D.
 
 ### Comprobación de estado del VPS (19 de noviembre de 2026)
 
@@ -177,10 +177,9 @@ La validación de transición con el identificador anterior confirmó
 `report_refreshed=yes`, `certified_report=matches` y `assessment=eligible`. La
 ruta pública de la ficha del informe programado respondió `200`. Por tanto, la
 renovación periódica y la actualización del informe, ficha y puntero de sello
-ya tienen evidencia en producción. Permanecen como comprobaciones separadas la
-recuperación ante un lease expirado y una notificación generada por una
-incidencia real, además de las pruebas automatizadas que ya cubren esos
-contratos.
+ya tienen evidencia en producción. Permanece como comprobación separada una
+notificación generada por una incidencia real, además de las pruebas
+automatizadas que cubren ese contrato.
 
 ### Despliegue posterior y comprobación de transporte (19 de noviembre de 2026)
 
@@ -240,9 +239,23 @@ leases obsoletos y finalización atómica del informe. El contenedor se eliminó
 automáticamente al terminar.
 
 Esta evidencia cierra la validación reproducible del contrato de recuperación
-sin tocar producción. La aceptación operativa de C todavía conserva la
-observación de un lease expirado en el VPS y una notificación generada por una
-incidencia real del scheduler como comprobaciones separadas.
+sin tocar producción. La observación del VPS se documenta a continuación; solo
+queda una notificación generada por una incidencia real del scheduler.
+
+### Recuperación de leases observada en producción (20 de noviembre de 2026)
+
+Una consulta agregada de solo lectura en la base de Desarrollo Seguro mostró
+`worker_lease_expired|9` y fecha máxima `2026-11-18 10:52:53.957157+00`. Los
+nueve trabajos quedaron en estado `failed` con `attempts=3`, el límite de
+reintentos configurado. La misma consulta encontró 32 trabajos `completed`, sin
+interrumpir servicios ni leer hostname, identificadores o informes.
+
+Esta evidencia confirma que el worker recupera leases vencidos y termina de
+forma acotada los trabajos que alcanzan el límite. Los schedulers de producción
+están `running/healthy` y el certificador emitió ciclos reales a las
+`05:29:12Z` (`affectedCount: 1`) y `06:29:12Z` (`affectedCount: 0`). No se
+observó una categoría `*_cycle_failed` en esos logs; esa es la única prueba
+operativa que queda para cerrar C.
 
 ### Notificación del proceso scheduler en entorno efímero (20 de noviembre de 2026, 06:52 UTC)
 

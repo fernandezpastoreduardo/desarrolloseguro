@@ -7,7 +7,9 @@ La suite cubre reglas del core, persistencia, API de estado/informe, políticas 
 Una prueba de implementación o de CI no demuestra por sí sola operación en
 producción ni aceptación de una etapa. Para aceptar C se necesita, además,
 evidencia del scheduler horario real, actualización de certificación/sello,
-recuperación ante fallo y notificación autorizada. La auditoría privada de D y
+recuperación ante fallo y notificación autorizada. La recuperación de leases ya
+tiene evidencia en producción; queda pendiente observar una incidencia que
+active la notificación. La auditoría privada de D y
 la puntuación global absoluta se validan por separado.
 
 La suite PostgreSQL puede crear/borrar bases y roles globales. En local requiere `DS_TEST_POSTGRES_ISOLATED=1`, URL de loopback sin query/fragmento y base administrativa con prefijo `development_security_test_`. Ejecutarla solo contra un cluster local dedicado. La puerta `pnpm ci:verify postgres` valida esas condiciones antes de ejecutar Vitest para que una configuración ausente no convierta los tests en omitidos silenciosos. CI usa un servicio PostgreSQL/pgvector efímero.

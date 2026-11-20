@@ -11,7 +11,7 @@ operativa del VPS.
 | --- | --- | --- | --- | --- |
 | A · lectura y evaluación pública | Presente en código | Tests, PostgreSQL aislado, CI y smoke contractual | El VPS ya expone un informe real de `grumphya.com` con evidencias de DNS, HTTP, TLS, cabeceras, cookies y rendimiento; sigue siendo una lectura acotada y no una certificación | Pendiente de validación operativa completa |
 | B · historial y comparabilidad | Presente en código | Tests de historial, UUID, perfiles comparables, retención y Playwright | No hay evidencia de un recorrido real sobre producción en la versión actual | Pendiente de validación operativa |
-| C · auditoría periódica | Presente en Compose y despliegue aislado | Migraciones 026/027, tests del scheduler y PostgreSQL aislado | El scheduler renovó `grumphya.com` en producción con un informe nuevo, ficha actualizada y `certifiedReportId` coincidente; siguen separadas las evidencias de lease expirado y notificación de incidencia real | **Transición demostrada; aceptación operativa final pendiente** |
+| C · auditoría periódica | Presente en Compose y despliegue aislado | Migraciones 026/027, tests del scheduler y PostgreSQL aislado | El scheduler renovó `grumphya.com` en producción con un informe nuevo, ficha actualizada y `certifiedReportId` coincidente; el VPS registra 9 leases expirados terminados tras 3 intentos; queda observar una notificación de incidencia real | **Transición y recuperación demostradas; aceptación operativa final pendiente** |
 | D · auditoría privada de Grumphya | Contrato, lectores allowlisted, proyección, puntuación separada, informe y runner D-08 presentes | Tests unitarios y puertas de tipado/lint/build; no se usan fixtures como evidencia de producción | Primera ejecución autorizada completada; informe privado `incomplete` con 6/14 criterios, sin certificación pública | Pendiente de ampliar cobertura y aceptar D de forma completa |
 
 Las etapas son independientes: A no requiere B, C ni D; B no requiere C ni D;
@@ -85,8 +85,9 @@ diagnóstico acotado, sin convertirla en un aprobado.
 
 La etapa C no se declara completada mientras no exista evidencia de una
 auditoría certificada vencida que actualice informe, ficha, sello y estado en el
-entorno donde opera el servicio, junto con la comprobación de recuperación ante
-un lease expirado. El scheduler, su canal JSONL y su reinicio controlado ya
+entorno donde opera el servicio, junto con una notificación producida por una
+incidencia real. La recuperación ante leases expirados ya tiene evidencia de
+producción. El scheduler, su canal JSONL y su reinicio controlado ya
 están demostrados en `44352363402`. La comprobación de solo lectura del VPS
 del 18 de noviembre de 2026 confirmó además ambos schedulers arrancados y
 señales de ciclo completado, pero `grumphya.com` no tiene una certificación
@@ -140,8 +141,8 @@ La puerta ejecutada con el informe anterior como referencia devolvió
 `assessment=eligible` y `certified_report=matches`. La ficha pública enlazada
 al informe programado responde `200`. Esta evidencia demuestra la transición
 de informe y puntero de certificación producida por C; la validación de
-recuperación ante lease y de notificaciones ante una incidencia real conserva
-su evidencia específica de tests y runtime.
+recuperación ante lease ya tiene evidencia específica de producción; conserva
+pendiente la notificación ante una incidencia real.
 
 Los informes detallados de esta revisión están en
 [`beta-stage-c-assessment.md`](beta-stage-c-assessment.md), el plan de D en
