@@ -40,6 +40,14 @@ es deliberado. La ausencia de una señal no se convierte en un aprobado ni en
 una penalización inventada. El informe solo proyecta controles para los que la
 respuesta firmada aporta evidencia allowlisted.
 
+La comprobación posterior del 20 de noviembre de 2026 repitió el preflight
+anónimo y obtuvo `internal_audit_resources_ready count=7`. La configuración del
+servicio normal continúa en `internal_audit_disabled`, como exige el diseño
+opt-in; disponer de las siete rutas protegidas no activa por sí solo una nueva
+auditoría ni cambia el informe privado existente. Las suites específicas de
+contrato, lector, atestación, puntuación, runner y runtime pasan 33/33 pruebas
+locales.
+
 ## Controles demostrados
 
 1. El JWT usa `iss=desarrolloseguro-audit`, `aud=grumphya-audit`,
