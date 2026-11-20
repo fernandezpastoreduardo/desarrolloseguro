@@ -19,6 +19,23 @@ test("renders the public portal and allows changing its theme", async ({
   await expect(page.getByRole("navigation", { name: "Navegación principal" })).toContainText(
     "Metodología",
   );
+  const publicNavigation = page.getByRole("navigation", { name: "Navegación principal" });
+  await expect(publicNavigation.getByRole("link", { name: "Inicio" })).toHaveAttribute(
+    "href",
+    "/desarrollo-seguro/",
+  );
+  await expect(publicNavigation.getByRole("link", { name: "Metodología" })).toHaveAttribute(
+    "href",
+    "/desarrollo-seguro/metodologia.html",
+  );
+  await expect(publicNavigation.getByRole("link", { name: "Privacidad" })).toHaveAttribute(
+    "href",
+    "/desarrollo-seguro/privacidad.html",
+  );
+  await expect(publicNavigation.getByRole("link", { name: "Sello" })).toHaveAttribute(
+    "href",
+    "/desarrollo-seguro/sello.html",
+  );
   await expect(
     page.getByRole("heading", { name: "¿Qué se ve desde fuera?" }),
   ).toBeVisible();

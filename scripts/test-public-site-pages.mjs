@@ -29,22 +29,23 @@ for (const [index, html] of pageContents.entries()) {
   assert.match(html, /<main\b/u, `${pages[index]} has a main landmark`);
   assert.match(html, /href="\/app\/"/u, `${pages[index]} links to the app`);
   assert.match(html, /href="\/app\/site\.css"/u, `${pages[index]} loads compiled Sass`);
-  assert.match(html, /assets\/desarrollo-seguro-logo-v1\.svg/u, `${pages[index]} uses the approved local logo`);
+  assert.match(html, /src="\/desarrollo-seguro\/assets\/desarrollo-seguro-logo-v1\.svg"/u, `${pages[index]} uses the approved local logo`);
   assert.doesNotMatch(html, /brand-mark/u, `${pages[index]} does not use the retired placeholder mark`);
   assert.doesNotMatch(html, /href="\/desarrollo-seguro\/styles\.css"/u);
   assert.doesNotMatch(html, /href="#(?!contenido\b)[^"]+"/u, `${pages[index]} has no section-navigation anchors`);
-  assert.match(html, /href="(?:\.\/)?(?:index|metodologia|privacidad|sello)\.html"/u, `${pages[index]} has page navigation`);
+  assert.match(html, /href="\/desarrollo-seguro\/(?:metodologia|privacidad|sello)\.html"/u, `${pages[index]} has page navigation`);
+  assert.doesNotMatch(html, /(?:href|src)="(?:index|metodologia|privacidad|sello|verificar|informe-grumphya-prototipo)\.html|(?:href|src)="assets\//u, `${pages[index]} uses deployable public routes`);
   assert.doesNotMatch(html, /no realiza análisis|no genera resultados|aún no consulta sitios|no ofrece\s+informes operativos|no está activo/u, `${pages[index]} does not claim the scanner is non-operational`);
 }
 
-assert.match(home, /href="metodologia\.html"/u);
-assert.match(home, /href="privacidad\.html"/u);
-assert.match(home, /href="sello\.html"/u);
-assert.match(home, /href="informe-grumphya-prototipo\.html"/u, "home page links to the Grumphya prototype report");
+assert.match(home, /href="\/desarrollo-seguro\/metodologia\.html"/u);
+assert.match(home, /href="\/desarrollo-seguro\/privacidad\.html"/u);
+assert.match(home, /href="\/desarrollo-seguro\/sello\.html"/u);
+assert.match(home, /href="\/desarrollo-seguro\/informe-grumphya-prototipo\.html"/u, "home page links to the Grumphya prototype report");
 assert.match(methodology, /Metodología|metodología/u);
 assert.match(privacy, /Privacidad|privacidad/u);
 assert.match(seal, /sello|distintivo/iu);
-assert.match(seal, /href="verificar\.html"/u, "seal page links to the public verifier");
+assert.match(seal, /href="\/desarrollo-seguro\/verificar\.html"/u, "seal page links to the public verifier");
 assert.match(verifier, /noindex, nofollow/u, "verification tokens are excluded from indexing");
 assert.match(verifier, /verificar\.js/u, "verification page loads its local verifier script");
 assert.match(verifier, /id="verification-result"/u, "verification page has an accessible result region");
