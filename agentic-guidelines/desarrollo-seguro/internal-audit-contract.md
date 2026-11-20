@@ -122,3 +122,7 @@ de datos ni comparte la red interna; usa únicamente la red de egress y termina
 sin leer claves cuando `AUDIT_ENABLED` no es exactamente `true`. La activación
 requiere además que el runtime valide la lista de `kid` activa y una ACL sin
 redes abiertas.
+
+El preflight acepta únicamente entradas de host exactas para esa ACL: IPv4
+`/32` o IPv6 `/128`. Prefijos más amplios, una subnet Docker o una red abierta
+se rechazan aunque sean CIDR válidos.

@@ -16,6 +16,9 @@ El script de despliegue fuerza `COMPOSE_PROFILES` vacío y
 `DEVELOPMENT_SECURITY_AUDIT_ENABLED=false`. El perfil `internal-audit` nunca
 se hereda del entorno del operador ni se arranca como parte del deploy normal;
 solo puede ejecutarse como operación opt-in después del preflight externo.
+La sonda manual de egress y su procedimiento están en
+[internal-audit-egress-runbook.md](internal-audit-egress-runbook.md); no forman
+parte de CI ni consumen minutos de GitHub.
 
 Después del deploy, el workflow comprueba que `www.desarrolloseguro.org` redirige a `https://desarrolloseguro.org/` sin exponer puertos internos y solicita un análisis autorizado de `grumphya.com`. El gate exige un informe `domain-v3` válido, nueve comprobaciones, al menos cinco criterios concluyentes, una matriz TLS 1.0–1.3 completa (cada versión debe aportar aceptación booleana o un código de sonda acotado), cookies, referencias a rastreadores, respuesta inicial y puntuación calculable. Si la política Beta devuelve `queued` o `running`, espera hasta 15 minutos para acomodar la cola global serializada y registra cada 30 segundos el estado del trabajo; si devuelve `cached` o `rate_limited`, valida el informe público existente para que un deploy repetido no dependa de crear otra admisión. Un `unknown` de transporte es válido cuando conserva esa matriz diagnóstica; no se confunde una versión que no pudo negociar con una ausencia de evidencia. Si el análisis termina con error, el worker conserva solo la fase, categoría operativa y códigos de las pruebas de red fallidas; el smoke los imprime en la línea de error. No se almacenan mensajes, rutas, salida de Docker ni contenido del dominio.
 
