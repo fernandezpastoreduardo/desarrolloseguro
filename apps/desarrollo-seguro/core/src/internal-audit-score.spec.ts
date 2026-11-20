@@ -52,6 +52,34 @@ describe("internal audit score", () => {
     expect(result.reasons).toContain("internal_audit_evidence_incomplete");
   });
 
+  it("keeps the production-shaped six-of-fourteen result incomplete by category", () => {
+    const result = assessInternalAudit([
+      evidence("pass", "infrastructure.tls", "infrastructure"),
+      evidence("pass", "application.dependencies", "application"),
+      evidence("pass", "authentication.authorization", "authentication"),
+      evidence("pass", "quality.e2e", "quality"),
+      evidence("pass", "privacy.cookies", "privacy"),
+      evidence("pass", "ai.disclosure", "ai"),
+    ]);
+
+    expect(result).toMatchObject({
+      status: "incomplete",
+      score: null,
+      assessedCriteria: 6,
+      totalCriteria: 14,
+      externalScore: null,
+    });
+    expect(result.categories).toEqual([
+      { scope: "infrastructure", score: null, assessedCriteria: 1, totalCriteria: 3 },
+      { scope: "application", score: null, assessedCriteria: 1, totalCriteria: 2 },
+      { scope: "authentication", score: 100, assessedCriteria: 1, totalCriteria: 1 },
+      { scope: "quality", score: null, assessedCriteria: 1, totalCriteria: 3 },
+      { scope: "privacy", score: null, assessedCriteria: 1, totalCriteria: 3 },
+      { scope: "ethics", score: null, assessedCriteria: 0, totalCriteria: 1 },
+      { scope: "ai", score: 100, assessedCriteria: 1, totalCriteria: 1 },
+    ]);
+  });
+
   it("marks critical failures and preserves their weighted score when complete", () => {
     const result = assessInternalAudit(ALL_CRITERIA.map(([criterion, scope]) =>
       evidence(criterion === "infrastructure.tls" ? "fail" : "pass", criterion, scope),
