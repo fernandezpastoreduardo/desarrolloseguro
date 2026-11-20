@@ -1,80 +1,56 @@
-# Prompt para el agente de Grumphya
+# Encargo operativo para Grumphya — auditoría privada Beta D
 
-Implementa el resto de la integración de auditoría privada D en el repositorio
-de Grumphya. No modifiques Desarrollo Seguro ni actives `AUDIT_ENABLED=true`
-hasta que todos los preflights y pruebas pasen.
+Implementa únicamente el lado Grumphya del contrato descrito en
+[`grumphya-beta-d-signal-prompt.md`](grumphya-beta-d-signal-prompt.md) y en
+[`beta-stage-d-grumphya-handoff.md`](beta-stage-d-grumphya-handoff.md). Esos
+documentos son la fuente de verdad y no dependen de un commit de otro
+repositorio.
 
-## Contrato de identidad
+## Decisiones que no se pueden cambiar
 
-- Acepta únicamente JWT EdDSA de Desarrollo Seguro.
-- `iss` exacto: `desarrolloseguro-audit`.
-- `aud` exacto: `grumphya-audit`.
-- `environment` exacto: `production`.
-- `domain` exacto: `grumphya.com`.
-- `scope` debe contener únicamente valores `audit:<recurso>` allowlisted.
-- Exige `kid` allowlisted, `iat`/`exp` con TTL máximo de 5 minutos y tolerancia
-  de reloj máxima de 60 segundos.
-- Rechaza cookies, JWT de usuario, credenciales en URL, métodos distintos de
-  `GET`, consultas, redirecciones y rutas no allowlisted.
+- Conserva exactamente las siete rutas `GET`: `infrastructure`, `deployment`,
+  `dependencies`, `auth`, `quality`, `privacy` y `ai`.
+- No añadas rutas `application` o `ethics`, métodos de escritura ni ingesta
+  externa. Las rutas de lectura no reciben evidencias de Desarrollo Seguro.
+- `/audit/privacy` puede transportar `ethics.transparency`; el scope externo
+  es únicamente `audit:privacy`. No existe `audit:ethics`.
+- Mantén la envoltura `beta-d-0.2`, `cardinality=1`, `environment=production`,
+  `deploymentDigest` y la atestación EdDSA. La respuesta debe usar exactamente
+  las claves especificadas en el contrato.
+- `sampleRef` es el SHA-256 de la lista canónica UTF-8 de `signals` y debe
+  verificarse antes de aceptar la evidencia. `unknown` y `not_applicable` usan
+  `value: null` con `unit` obligatoria.
+- El JWT exige `iss=desarrolloseguro-audit`, `sub=desarrolloseguro-audit`,
+  `aud=grumphya-audit`, `domain=grumphya.com`, `hostname=grumphya.com`,
+  `environment=production`, `kid` allowlisted y scopes `audit:<recurso>`.
+  TTL máximo: cinco minutos; tolerancia de reloj: 60 segundos.
+- Mantén `AUDIT_ENABLED` como esté en la configuración viva. No lo actives ni
+  lo desactives por este cambio.
 
-Configura en `/opt/grumphya/.secrets/grumphya_env`, sin registrar valores:
+## Configuración y persistencia
 
-- `AUDIT_TECHNICAL_AUTH_PUBLIC_KEY` (PEM pública de Desarrollo Seguro).
-- `AUDIT_TECHNICAL_AUTH_ALLOWED_KIDS` (los `kid` exactos y activos).
-- `AUDIT_ALLOWED_NETWORKS` (la IP/CIDR que vea realmente el proxy; no uses una
-  red Docker compartida ni una red abierta).
-- `AUDIT_RELEASE_MANIFEST_PUBLIC_KEY` (PEM pública de la atestación de
-  releases).
-- `AUDIT_RELEASE_MANIFEST_ALLOWED_KIDS` (los `kid` exactos de las claves de
-  atestación activas, incluido el que configure Desarrollo Seguro).
+Configura sin registrar valores:
 
-La primera identidad preparada por Desarrollo Seguro usa `kid`
-`ds-auditor-2026`. Verifica la PEM recibida mediante un canal seguro y
-confirma su huella antes de escribirla; no pegues claves privadas en issues,
-commits ni logs.
+- `AUDIT_TECHNICAL_AUTH_PUBLIC_KEY` y `AUDIT_TECHNICAL_AUTH_ALLOWED_KIDS`.
+- `AUDIT_ALLOWED_NETWORKS` con la IP/CIDR que observe el proxy real; nunca una
+  red Docker compartida ni una red abierta.
+- `AUDIT_RELEASE_MANIFEST_PUBLIC_KEY` y sus `kid` allowlisted.
+- `AUDIT_RELEASE_SIGNING_KEY` solo como secreto privado de GitHub Actions; no
+  se copia al VPS ni a Desarrollo Seguro.
 
-## Recursos y escritura
+La API conserva `SELECT` únicamente. La retención usa un rol separado con
+`DELETE` limitado a evidencias y atestaciones, y cualquier escritor interno
+usa TLS y permisos mínimos. La base es exclusiva de Grumphya. No se modifican
+certificaciones públicas, `certifiedReportId` ni puntuaciones externas.
 
-Publica las rutas JSON versionadas allowlisted bajo `/audit/` con la envolvente
-`beta-d-0.2` y la atestación EdDSA definida en el handoff. Mantén `/audit/privacy`
-para señales de privacidad/transparencia ética y `/audit/ai` como ruta separada
-para `ai_disclosure_present`; no mezcles ambas señales en una sola respuesta.
-Una petición sin identidad o con claims inválidos debe devolver un rechazo
-categórico y no tocar la base de datos.
+## Validación y entrega
 
-Las rutas de lectura no son un canal de escritura. Implementa un canal de
-ingesta autenticado, allowlisted y TLS para las evidencias que envíe Desarrollo
-Seguro. No compartas redes Docker entre aplicaciones ni aceptes conexiones sin
-TLS.
+Añade pruebas de las siete rutas, claims JWT, ACL, TLS, firma, canonicalización,
+`sampleRef`, cardinalidad, estados, límites, criterios cruzados y permisos SQL.
+El preflight debe fallar cerrado con configuración incompleta. Ejecuta lint,
+typecheck, tests, build y smoke autenticado local; no conviertas fixtures en
+evidencia de producción.
 
-## PostgreSQL y retención
-
-Elige y documenta la opción de menor privilegio, preferentemente:
-
-1. rol de API con `SELECT` únicamente sobre `audit.evidence` y
-   `audit.release_attestations`;
-2. rol de mantenimiento/retención independiente con `DELETE` limitado a esas
-   tablas y a las ventanas de retención aprobadas;
-3. rol de ingesta separado para insertar únicamente evidencias válidas.
-
-Si por compatibilidad la retención sigue ejecutándose con la conexión de la
-API, documenta y prueba explícitamente los dos `DELETE`; no presentes una API
-como estrictamente de solo lectura en ese caso. Usa la base de Grumphya,
-conexiones TLS, credenciales rotables y sin compartir la base de Desarrollo
-Seguro.
-
-## Atestación y despliegue
-
-- Genera el par Ed25519 en un entorno controlado.
-- Guarda la privada exclusivamente como secreto de GitHub Actions:
-  `AUDIT_RELEASE_SIGNING_KEY`.
-- Instala solo la pública en `grumphya_env` y entrégala también para que
-  Desarrollo Seguro pueda verificarla.
-- Añade preflight fail-closed, pruebas unitarias/integración y un smoke
-  autenticado que compruebe firma, `kid`, claims, ACL, TLS, cardinalidad,
-  expiración y permisos PostgreSQL.
-- Mantén `AUDIT_ENABLED=false` hasta que todas esas pruebas pasen en producción.
-
-Entrega: commit Conventional Commits, documentación operativa, matriz de
-permisos, evidencia de pruebas y los nombres de los valores pendientes, nunca
-los secretos. No conviertas fixtures en evidencia de producción.
+Entrega un commit Conventional Commit, documentación operativa, matriz de
+permisos y resultados de pruebas. No incluyas secretos, no actives auditoría ni
+despliegues hasta que todas las pruebas del contrato pasen.
