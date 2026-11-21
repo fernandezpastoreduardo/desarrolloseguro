@@ -61,6 +61,12 @@ Para incluirlo en `grumphya.com`, usa el `token` devuelto por la emisión. El wi
 
 La política CSP del sitio que incrusta debe permitir el script `https://desarrolloseguro.org` y las conexiones `connect-src https://desarrolloseguro.org`.
 
+El servidor entrega `Cross-Origin-Resource-Policy: cross-origin` únicamente
+para `/desarrollo-seguro/badge-widget.js`, porque el sitio que lo incrusta
+puede aplicar COEP `require-corp`. El resto del sitio mantiene sus cabeceras
+actuales. La respuesta del widget usa `Cache-Control: no-store` para que el
+navegador cargue siempre su versión vigente.
+
 El API permite CORS solo desde `https://grumphya.com` y `https://desarrolloseguro.org`. En la página de Desarrollo Seguro, el navegador realiza una petición same-origin; el servidor acepta esa solicitud con `Sec-Fetch-Site: same-origin` cuando el navegador omite `Origin`. Un origen distinto o una respuesta de red fallida no muestra el sello.
 
 ## Revocación

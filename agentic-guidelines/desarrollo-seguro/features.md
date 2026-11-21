@@ -55,6 +55,17 @@ UUID y `canonicalHostname`; los fallos devuelven diagnósticos categóricos sin
 token. La allowlist de `Origin` sigue independiente de la identidad del
 informe.
 
+El widget público puede incrustarse desde `grumphya.com`, incluso cuando el
+documento consumidor aplica COEP `require-corp`: únicamente la respuesta de
+`/desarrollo-seguro/badge-widget.js` publica
+`Cross-Origin-Resource-Policy: cross-origin`. No se relajan CSP, CORP ni CORS
+para el resto del sitio o para scripts genéricos.
+
+**Criterio adicional:** la petición del script devuelve HTTP 200 y la cabecera
+CORP indicada; un navegador con COEP puede cargarlo y ejecutar la verificación.
+El asset sigue con `Cache-Control: no-store` para que los cambios de widget
+lleguen sin cambiar su URL.
+
 ## F6. Historial público y comparabilidad
 
 **Incremento B-01 disponible:** el endpoint `GET /domains/:hostname/history`
