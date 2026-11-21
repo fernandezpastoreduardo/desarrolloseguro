@@ -10,6 +10,17 @@ como vigentes. Una suspensión oculta automáticamente el sello y una evaluació
 elegible posterior lo reactiva sin cambiar el dominio autorizado ni el snippet
 del sitio.
 
+El scheduler de certificaciones comprueba cada cinco minutos si hay auditorías
+que llevan 40 minutos pendientes. Solo las auditorías programadas reutilizan
+informes de menos de 40 minutos; las solicitudes manuales mantienen la política
+actual de Beta, sin caché ni enfriamiento. Esto deja margen para renovar el
+informe antes de su caducidad y evita añadir hasta otra hora de espera.
+Tras completarse una auditoría elegible, la verificación del token ya instalado
+resuelve el nuevo informe certificado y conserva el sello sin volver a emitir
+otro token. Mientras el escaneo está en cola o ejecutándose, o si el informe
+vence antes de completarse, el widget lo oculta hasta que exista un informe
+fresco; una suspensión real también lo oculta.
+
 `grumphya.com` y `www.grumphya.com` usan la misma identidad solo si un informe
 reciente observó una cadena completa de redirección permanente 301/308 entre
 ambos nombres y el escáner validó todos sus destinos. El destino observado es

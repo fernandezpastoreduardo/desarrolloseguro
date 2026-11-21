@@ -10,7 +10,7 @@ Desarrollo Seguro tiene su propio archivo [`compose.production.yaml`](../compose
 - `development-security-worker`: consume trabajos y solo tiene acceso a PostgreSQL y al socket Unix del coordinador.
 - `development-security-runtime-coordinator`: proceso aislado sin red con acceso al socket Docker; crea únicamente executor/broker por trabajo.
 - `development-security-retention-scheduler`: scheduler diario con el rol `ds_retention`, sin puertos ni egress.
-- `development-security-certification-scheduler`: scheduler horario con el rol `ds_retention`, sin puertos ni egress.
+- `development-security-certification-scheduler`: revisa cada cinco minutos si hay auditorías de certificación de más de 40 minutos y las encola con el rol `ds_retention`, sin puertos ni egress.
 - `development-security-web`: Nginx con archivos estáticos y proxy TLS a la API. No publica puertos del host y se une a la red de entrada dedicada `development-security-ingress`.
 
 El proxy público, DNS y certificados externos quedan fuera de este repositorio. Crea antes la red Docker externa `development-security-ingress` como red bridge interna. Conecta a ella únicamente el proxy público y `development-security-web`; no conectes el proxy a `development-security-edge`, porque esa red también contiene la API. Así, el proxy público solo puede alcanzar la web de Desarrollo Seguro y no la API ni PostgreSQL.

@@ -3,7 +3,7 @@ import { pathToFileURL } from "node:url";
 import { resolveRetentionPoolConfig } from "./retention-scheduler.js";
 import { emitSchedulerNotification } from "./scheduler-notification.js";
 
-export const CERTIFICATION_AUDIT_INTERVAL_MS = 60 * 60 * 1_000;
+export const CERTIFICATION_AUDIT_INTERVAL_MS = 5 * 60 * 1_000;
 const CERTIFICATION_AUDIT_FAILURE = "certification_audit_cycle_failed";
 const CERTIFICATION_AUDIT_RESULT_INVALID = "certification_audit_result_invalid";
 

@@ -2,18 +2,6 @@
 
 Añade aquí solo cambios o features que el usuario haya decidido expresamente posponer. Al implementar una idea, elimínala de esta lista y documenta el resultado para personas en `doc/`.
 
-## Bug: retirada del sello de Grumphya tras una hora
-
-### Comportamiento observado
-
-El sello de certificación desaparece de la web de Grumphya cuando transcurre una hora desde un escaneo bajo demanda. Si se solicita otro escaneo bajo demanda, el sello vuelve a mostrarse; una hora después vuelve a desaparecer.
-
-### Tarea pendiente
-
-Investigar y corregir el ciclo de vigencia y renovación del sello para que una certificación válida no se retire por el mero paso de una hora y el sello permanezca visible mientras corresponda según el estado real de certificación.
-
-Comprobar especialmente si los escáneres automáticos que deberían ejecutarse cada hora están renovando correctamente la vigencia del sello o si actualmente solo se están ejecutando escaneos bajo demanda. La causa todavía no está confirmada.
-
 ## Integración simplificada de certificación por cliente
 
 ### Objetivo
