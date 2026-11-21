@@ -119,7 +119,12 @@ ENV NODE_ENV=production \
 
 WORKDIR /workspace
 
-RUN npm install --global pnpm@12.5.1
+RUN npm install --global pnpm@12.5.1 \
+    && rm -rf /usr/lib/node_modules/npm /usr/local/lib/node_modules/npm \
+        /usr/bin/npm /usr/bin/npx /usr/local/bin/npm /usr/local/bin/npx \
+    && apt-get purge --yes gstreamer1.0-plugins-bad libgstreamer-plugins-bad1.0-0 \
+    && apt-get autoremove --yes \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/desarrollo-seguro/api/package.json apps/desarrollo-seguro/api/package.json
