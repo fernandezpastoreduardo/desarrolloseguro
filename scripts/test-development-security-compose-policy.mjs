@@ -246,6 +246,11 @@ assert.match(
   /location = \/desarrollo-seguro\/badge-widget\.js \{\s+add_header Cross-Origin-Resource-Policy "cross-origin" always;\s+add_header Cache-Control "no-store" always;\s+try_files \$uri =404;\s+\}/u,
   "only the public badge widget opts into cross-origin embedding under COEP",
 );
+assert.match(
+  nginx,
+  /location = \/desarrollo-seguro\/badge-api\.mjs \{\s+default_type application\/javascript;\s+add_header Cache-Control "no-store" always;\s+try_files \$uri =404;\s+\}/u,
+  "the verification page's ES module dependency uses a browser-executable MIME type",
+);
 assert.match(nginx, /location \^~ \/desarrollo-seguro\/ \{\s+add_header Cache-Control "no-store" always;/u);
 assert.match(nginx, /location \/app\/ \{\s+add_header Cache-Control "no-store" always;\s+try_files \$uri \$uri\/ \/app\/index\.html/u);
 assert.doesNotMatch(nginx, /location \^~ \/app\//u, "hashed asset locations must remain eligible for immutable caching");

@@ -24,6 +24,7 @@ const styleSources = [
 ];
 const styles = await Promise.all(styleSources.map((path) => readFile(path, "utf8")));
 const prototypeStyles = await readFile("desarrollo-seguro/informe-grumphya-prototipo.scss", "utf8");
+const badgeWidgetStyles = await readFile("desarrollo-seguro/badge-widget.scss", "utf8");
 
 for (const [index, html] of pageContents.entries()) {
   assert.match(html, /<html lang="es-ES">/u, `${pages[index]} declares Spanish`);
@@ -50,6 +51,10 @@ assert.match(seal, /href="\/desarrollo-seguro\/verificar\.html"/u, "seal page li
 assert.match(verifier, /noindex, nofollow/u, "verification tokens are excluded from indexing");
 assert.match(verifier, /verificar\.js/u, "verification page loads its local verifier script");
 assert.match(verifier, /id="verification-result"/u, "verification page has an accessible result region");
+assert.match(verifier, /id="verification-report-summary"/u, "verification page has a report summary region");
+assert.match(verifier, /id="verification-categories"/u, "verification page exposes evaluated certification categories");
+assert.match(verifier, /id="verification-report-link"/u, "verification page links to the full public report");
+assert.match(verifier, /Logotipo de Desarrollo Seguro/u, "verification page shows the approved logo beside authenticity status");
 assert.match(seal, /badge-widget\.js/u, "seal page documents the live embeddable widget");
 assert.doesNotMatch(seal, /data-report-id/u, "the public embed does not pin the seal to a report that will age out");
 const prototypeReport = pageContents.at(-1);
@@ -72,6 +77,8 @@ assert.match(prototypeStyles, /\.prototype-report__hero/u, "prototype report has
 assert.match(verifier, /no-referrer/u, "verification links do not leak tokens through referrers");
 assert.match(styles[0], /\$navy:\s*#/u, "the public site uses Sass design tokens");
 assert.match(styles[1], /\$ds-teal:\s*#/u, "the app uses Sass design tokens");
+assert.match(styles[0], /\.verification-panel\[data-state="valid"\]/u, "verification result has a distinct visual approval state");
+assert.match(badgeWidgetStyles, /\.ds-verified-badge__logo/u, "the embedded approval seal styles its logo");
 for (const obsoleteCss of [
   "desarrollo-seguro/styles.css",
   "apps/desarrollo-seguro/web/src/public-scan-portal/public-scan-portal.css",
@@ -81,6 +88,11 @@ for (const obsoleteCss of [
 
 const reportId = "8d140e17-68d6-489a-b451-7e87408187ae";
 const verifierScript = await readFile("desarrollo-seguro/verificar.js", "utf8");
+assert.match(verifierScript, /history\.replaceState\(null, "", `\$\{window\.location\.pathname\}\$\{window\.location\.search\}`\)/u, "verification removes the bearer token fragment from browser history");
+assert.match(verifierScript, /Sello auténtico y vigente/u, "verification reports a successful authenticity check");
+assert.match(verifierScript, /fetchPublicReport\(result\.reportId\)/u, "verification loads the report summary after authenticity succeeds");
+assert.match(verifierScript, /reportLink\.hidden = true/u, "verification hides the report link after an authenticity failure");
+assert.match(verifierScript, /REPORT_API_PATH = "\/api\/desarrollo-seguro\/v1\/reports"/u, "report details use the same-origin public API");
 const portalScript = await readFile(
   "apps/desarrollo-seguro/web/src/public-scan-portal/public-scan-portal.tsx",
   "utf8",
@@ -179,30 +191,48 @@ assert.match(widgetScript, /method: "GET"/u);
 assert.match(widgetScript, /cache: "no-store"/u);
 assert.match(widgetScript, /widget\.hidden = false/u, "badge link is exposed only after server verification");
 assert.match(widgetScript, /widget\.dataset\.diagnostic = result\.code[\s\S]*?widget\.hidden = true/u, "failed verification keeps the dynamic seal hidden while retaining a safe diagnostic");
-assert.match(widgetScript, /widget\.textContent/u, "badge content is never parsed as markup");
+assert.match(widgetScript, /createBrandLogo\(\)/u, "the verified badge displays the approved brand logo");
+assert.match(widgetScript, /createElement\("style"\)/u, "the widget applies its build-time Sass styles under the host CSP");
+assert.match(badgeWidgetStyles, /width:\s*min\(270px,\s*100%\)/u, "the compact badge stays within a narrow footer column");
+assert.match(widgetScript, /Beta activa/u, "the badge summarizes current beta approval");
 
 async function executeBadgeWidget(state, certificationState, verificationResult) {
-  class TestAnchor {
-    dataset = {
-      token: "A".repeat(43),
-      hostname: "grumphya.com",
-      reportId: "6bff5c3e-ff99-4f68-bfe9-fb5f5dfb2823",
-    };
-    hidden = false;
-    href = "";
-    textContent = "";
-    attributes = new Map();
+  class TestElement {
+    constructor(tagName = "a") {
+      this.tagName = tagName;
+      this.children = [];
+      this.attributes = new Map();
+      this.className = "";
+      this.dataset = {};
+      this.classList = { add: (className) => { this.className = `${this.className} ${className}`.trim(); } };
+    }
 
-    setAttribute(name, value) {
-      this.attributes.set(name, value);
+    append(...children) { this.children.push(...children); }
+    replaceChildren(...children) { this.children = children; }
+    setAttribute(name, value) { this.attributes.set(name, value); }
+    addEventListener() {}
+  }
+  class TestAnchor extends TestElement {
+    constructor() {
+      super("a");
+      this.dataset = {
+        token: "A".repeat(43),
+        hostname: "grumphya.com",
+        reportId: "6bff5c3e-ff99-4f68-bfe9-fb5f5dfb2823",
+      };
+      this.hidden = false;
+      this.href = "";
+      this.textContent = "";
     }
   }
   const anchor = new TestAnchor();
   const requests = [];
   const context = {
-    document: { querySelectorAll: () => [anchor] },
+    document: { querySelectorAll: () => [anchor], createElement: (tagName) => new TestElement(tagName) },
     HTMLAnchorElement: TestAnchor,
     URLSearchParams,
+    URL: { createObjectURL: () => "blob:development-seguro-logo", revokeObjectURL() {} },
+    Blob,
     fetch: async (url, options) => {
       requests.push({ url, options });
       return {
@@ -227,6 +257,10 @@ const renderedBadge = await executeBadgeWidget("fresh", "active", {
 assert.equal(renderedBadge.anchor.hidden, false, "the live widget appears for the current active report");
 assert.equal(renderedBadge.anchor.dataset.state, "valid");
 assert.match(renderedBadge.anchor.href, new RegExp(`reportId=${currentReportId}`, "u"));
+assert.match(renderedBadge.anchor.className, /ds-verified-badge/u);
+assert.equal(renderedBadge.anchor.children[0].tagName, "img");
+assert.equal(renderedBadge.anchor.children[0].src, "blob:development-seguro-logo");
+assert.match(renderedBadge.anchor.children[1].children[0].textContent, /Sello aprobado/u);
 assert.equal(JSON.parse(renderedBadge.requests[1].options.body).reportId, currentReportId, "the old embedded ID is replaced with the current one");
 const hiddenBadge = await executeBadgeWidget("stale", "active", { verified: false, code: "report_not_current" });
 assert.equal(hiddenBadge.requests.length, 1, "a stale report is rejected before verification");
@@ -265,6 +299,10 @@ try {
   await access(join(buildDirectory, "desarrollo-seguro/badge-widget.js"));
   await access(join(buildDirectory, "desarrollo-seguro/verificar.js"));
   await access(join(buildDirectory, "desarrollo-seguro/assets/desarrollo-seguro-logo-v1.svg"));
+  const builtWidget = await readFile(join(buildDirectory, "desarrollo-seguro/badge-widget.js"), "utf8");
+  assert.doesNotMatch(builtWidget, /const BADGE_WIDGET_(?:STYLES|LOGO_SVG) = "__DS_BADGE_WIDGET_/u, "the build injects Sass and the approved logo into the standalone widget");
+  assert.match(builtWidget, /\.ds-verified-badge__logo/u, "the public widget ships with its compiled SCSS");
+  assert.match(builtWidget, /<svg xmlns=/u, "the public widget contains the approved SVG needed by restrictive img-src policies");
 } finally {
   await rm(buildDirectory, { recursive: true, force: true });
 }

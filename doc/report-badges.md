@@ -45,7 +45,7 @@ La respuesta contiene `hostname`, `canonicalHostname`, `reportId`, `token`, `ver
 
 ## Verificación desde la página pública y el sitio
 
-`verifyUrl` abre `/desarrollo-seguro/verificar.html`. El token va en el fragmento `#` de la URL, que no se envía al servidor al abrir la página. El verificador consulta primero `GET /api/desarrollo-seguro/v1/domains/<hostname>/status` y obtiene `lastReport.certification.certifiedReportId`; después consulta `POST /api/desarrollo-seguro/v1/badges/verify` con `cache: "no-store"`. El token solo va en el cuerpo de la petición de verificación. La página muestra dominio e ID con `textContent` y enlaza a la vista humana `/app/?report=<reportId>`, el formato que consume el buscador. Usa `noindex`, `nofollow` y `no-referrer`.
+`verifyUrl` abre `/desarrollo-seguro/verificar.html`. El token va en el fragmento `#` de la URL, que no se envía al servidor al abrir la página. El verificador lo lee y elimina el fragmento del historial del navegador antes de hacer peticiones. Consulta primero `GET /api/desarrollo-seguro/v1/domains/<hostname>/status` y obtiene `lastReport.certification.certifiedReportId`; después consulta `POST /api/desarrollo-seguro/v1/badges/verify` con `cache: "no-store"`. El token solo va en el cuerpo de la petición de verificación. Si la API confirma el sello, la página muestra el estado de autenticidad y solicita el informe público para presentar dominio, veredicto, certificación beta, puntuación, categorías, fecha, alcance y caducidad. El enlace abre `/app/?report=<reportId>`, el formato que consume el buscador. Si la autenticidad falla, no se muestran el resumen ni el enlace al informe. La página usa `noindex`, `nofollow` y `no-referrer`.
 
 La comprobación es un `POST` con el token en el cuerpo JSON, por lo que no aparece en la URL ni en los access logs. La API comprueba que el `reportId` recibido sea el `certifiedReportId` vigente, que la certificación esté activa, que el informe certificado no haya caducado, que el sello no haya caducado ni se haya revocado, que la identidad del alias tenga evidencia reciente y que el origen sea el sitio autorizado. Una respuesta fallida incluye un código seguro (`hostname_not_authorized`, `report_not_current`, `badge_expired`, `badge_revoked`, `redirect_not_valid` o `network_failure`); el widget conserva ese código como diagnóstico DOM y mantiene el enlace oculto. Los diagnósticos no incluyen tokens.
 
@@ -66,6 +66,14 @@ para `/desarrollo-seguro/badge-widget.js`, porque el sitio que lo incrusta
 puede aplicar COEP `require-corp`. El resto del sitio mantiene sus cabeceras
 actuales. La respuesta del widget usa `Cache-Control: no-store` para que el
 navegador cargue siempre su versión vigente.
+
+El widget genera la insignia compacta con el logo aprobado y estilos Sass
+incluidos en el propio script. El logo SVG se entrega mediante una URL `blob:`
+para que pueda mostrarse bajo la CSP de Grumphya, que permite imágenes `blob:`
+pero no imágenes externas. La insignia aparece solo después de verificar el
+sello; enlaza a la página pública anterior. Nginx sirve `badge-api.mjs` como
+`application/javascript` para que los navegadores permitan cargarlo como
+módulo.
 
 El API permite CORS solo desde `https://grumphya.com` y `https://desarrolloseguro.org`. En la página de Desarrollo Seguro, el navegador realiza una petición same-origin; el servidor acepta esa solicitud con `Sec-Fetch-Site: same-origin` cuando el navegador omite `Origin`. Un origen distinto o una respuesta de red fallida no muestra el sello.
 

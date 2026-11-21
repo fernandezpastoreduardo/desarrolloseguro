@@ -1,0 +1,79 @@
+$ds-teal: #007e79;
+$ds-teal-dark: #004b49;
+$ds-ink: #141414;
+$ds-paper: #fffaf0;
+
+.ds-verified-badge {
+  display: inline-flex;
+  min-height: 48px;
+  width: min(270px, 100%);
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid $ds-teal;
+  border-radius: 999px;
+  padding: 5px 11px 5px 6px;
+  color: $ds-ink;
+  background: $ds-paper;
+  box-shadow: 0 2px 8px #004b491a;
+  font: 600 12px/1.25 system-ui, sans-serif;
+  text-decoration: none;
+  vertical-align: middle;
+}
+
+.ds-verified-badge:hover {
+  border-color: $ds-teal-dark;
+  box-shadow: 0 3px 12px #004b4926;
+}
+
+.ds-verified-badge:focus-visible {
+  outline: 3px solid $ds-teal;
+  outline-offset: 3px;
+}
+
+.ds-verified-badge__logo {
+  display: block;
+  width: 34px;
+  height: 32px;
+  flex: 0 0 34px;
+  object-fit: contain;
+}
+
+.ds-verified-badge__copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.ds-verified-badge__title {
+  color: $ds-teal-dark;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .035em;
+  text-transform: uppercase;
+}
+
+.ds-verified-badge__domain {
+  overflow: hidden;
+  color: $ds-ink;
+  font-size: 11px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ds-verified-badge__check {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  place-items: center;
+  border-radius: 50%;
+  color: $ds-paper;
+  background: $ds-teal-dark;
+  font-size: 14px;
+  font-weight: 800;
+}

@@ -66,6 +66,32 @@ CORP indicada; un navegador con COEP puede cargarlo y ejecutar la verificación.
 El asset sigue con `Cache-Control: no-store` para que los cambios de widget
 lleguen sin cambiar su URL.
 
+**Presentación y verificación pública:** el enlace del footer es una insignia
+compacta de aprobación con el logotipo aprobado de Desarrollo Seguro y texto
+legible; sus estilos se mantienen en SCSS y se entregan con el widget sin
+depender de CSS ni cambios del sitio Grumphya. La página de destino confirma
+visualmente el estado del sello y su comprobación reciente, y muestra el
+informe público relacionado: dominio, veredicto, puntuación/estado beta,
+categorías evaluadas, fecha, alcance e identificador, además de un enlace a la
+vista completa existente. Solo muestra resultados y enlace de informe cuando
+la API confirma que el token no ha caducado ni se ha revocado y que el informe
+es el certificado vigente. Los fallos muestran una explicación categórica y no
+se quedan en estado pendiente. Token: fragmento de URL al abrir, cuerpo JSON
+al verificar y nunca texto visible, telemetría ni URL de petición.
+
+El consumidor de Grumphya aplica `img-src 'self' blob:` y `connect-src
+'self' https://desarrolloseguro.org`; por ello el widget debe incluir el SVG
+aprobado como recurso `blob:` local creado desde el asset compilado. Los
+módulos `.mjs` públicos se sirven con MIME `application/javascript` para que
+Chromium y otros navegadores los acepten como módulos ES.
+
+**Criterios adicionales:** el navegador carga el verificador sin errores MIME;
+una verificación válida deja el estado pendiente y muestra el resultado
+autorizado y el resumen del informe; un token inválido, vencido, revocado o una
+API no disponible muestra un error y no publica resultado de aprobación. La
+insignia visible contiene el logotipo y pasa contraste/reflow móvil; no hace
+peticiones de recursos a Grumphya ni incorpora seguimiento externo.
+
 ## F6. Historial público y comparabilidad
 
 **Incremento B-01 disponible:** el endpoint `GET /domains/:hostname/history`
