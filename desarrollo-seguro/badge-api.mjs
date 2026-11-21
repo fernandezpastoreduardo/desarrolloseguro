@@ -1,5 +1,6 @@
 const API_ORIGIN = "https://desarrolloseguro.org";
 const API_PATH = "/api/desarrollo-seguro/v1/badges/verify";
+const STATUS_PATH = "/api/desarrollo-seguro/v1/domains";
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
 const REPORT_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 export const AUTHORIZED_BADGE_HOSTNAMES = new Set(["grumphya.com", "www.grumphya.com"]);
@@ -7,14 +8,15 @@ export const AUTHORIZED_BADGE_HOSTNAMES = new Set(["grumphya.com", "www.grumphya
 export async function verifyReportBadge(input, fetchImpl = fetch) {
   if (
     typeof input?.token !== "string" || !TOKEN_PATTERN.test(input.token) ||
-    !AUTHORIZED_BADGE_HOSTNAMES.has(input.hostname) ||
-    typeof input.reportId !== "string" || !REPORT_ID_PATTERN.test(input.reportId)
+    !AUTHORIZED_BADGE_HOSTNAMES.has(input.hostname)
   ) {
     return { verified: false, code: "hostname_not_authorized", hostname: safeDisplayValue(input?.hostname), reportId: safeDisplayValue(input?.reportId) };
   }
 
-  const url = `${API_ORIGIN}${API_PATH}`;
   try {
+    const currentReportId = await resolveCurrentReportId(input.hostname, fetchImpl);
+    if (!currentReportId) return { verified: false, code: "report_not_current", hostname: input.hostname, reportId: "No indicado" };
+    const url = `${API_ORIGIN}${API_PATH}`;
     const response = await fetchImpl(url, {
       method: "POST",
       mode: "cors",
@@ -23,19 +25,39 @@ export async function verifyReportBadge(input, fetchImpl = fetch) {
       redirect: "error",
       referrerPolicy: "no-referrer",
       headers: { Accept: "application/json", "Content-Type": "application/json" },
-      body: JSON.stringify({ token: input.token, hostname: input.hostname, reportId: input.reportId }),
+      body: JSON.stringify({ token: input.token, hostname: input.hostname, reportId: currentReportId }),
     });
-    if (!response.ok) return { verified: false, code: "network_failure", hostname: input.hostname, reportId: input.reportId };
+    if (!response.ok) return { verified: false, code: "network_failure", hostname: input.hostname, reportId: currentReportId };
     const result = await response.json();
     const verified = isRecord(result) && result.verified === true &&
       AUTHORIZED_BADGE_HOSTNAMES.has(result.hostname) &&
-      result.canonicalHostname === result.hostname && result.reportId === input.reportId;
+      result.canonicalHostname === result.hostname && result.reportId === currentReportId;
     return verified
       ? { verified: true, hostname: result.hostname, reportId: result.reportId }
-      : { verified: false, code: safeFailureCode(result), hostname: input.hostname, reportId: input.reportId };
+      : { verified: false, code: safeFailureCode(result), hostname: input.hostname, reportId: currentReportId };
   } catch {
-    return { verified: false, code: "network_failure", hostname: input.hostname, reportId: input.reportId };
+    return { verified: false, code: "network_failure", hostname: input.hostname, reportId: "No indicado" };
   }
+}
+
+async function resolveCurrentReportId(hostname, fetchImpl) {
+  const url = `${API_ORIGIN}${STATUS_PATH}/${encodeURIComponent(hostname)}/status`;
+  const response = await fetchImpl(url, {
+    method: "GET",
+    mode: "cors",
+    credentials: "omit",
+    cache: "no-store",
+    redirect: "error",
+    referrerPolicy: "no-referrer",
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) throw new Error("badge_status_unavailable");
+  const status = await response.json();
+  const reportId = status?.lastReport?.certification?.certifiedReportId;
+  return ["fresh", "updating"].includes(status?.state) && status?.lastReport?.certification?.state === "active" &&
+    typeof reportId === "string" && REPORT_ID_PATTERN.test(reportId)
+    ? reportId
+    : null;
 }
 
 function safeFailureCode(result) {
