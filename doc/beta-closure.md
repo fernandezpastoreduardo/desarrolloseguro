@@ -1,5 +1,15 @@
 # Cierre de la Beta 0.1
 
+> **Estado vigente (21 de noviembre de 2026):** las etapas A, B, C y D están
+> aceptadas y el cierre global de Beta 0.1 queda completado para los alcances
+> `domain-v3` y `beta-d-0.2`. La fila A y las secciones históricas siguientes
+> reflejan estados anteriores al informe fresco
+> `796d5c1b-356f-47ce-8aba-572afd9d18a1`; para la evidencia vigente, los límites
+> de cobertura y las condiciones del cierre, véase
+> [la evaluación global](beta-global-closure-assessment.md). La evaluación
+> externa continúa parcial (7/8 criterios); esto no se presenta como una
+> puntuación global absoluta ni amplía lo que Beta evalúa.
+
 Este documento fija el estado de la entrega Beta revisada antes de definir el
 MVP. Separa implementación, validación automatizada, validación operativa y
 aceptación de etapa. No autoriza despliegues ni sustituye la validación
@@ -9,7 +19,7 @@ operativa del VPS.
 
 | Etapa | Implementación | Validación automatizada | Validación operativa | Aceptación |
 | --- | --- | --- | --- | --- |
-| A · lectura y evaluación pública | Presente en código | Tests, PostgreSQL aislado, CI y smoke contractual | El VPS expone un informe real de `grumphya.com` con 9/9 comprobaciones y 7/8 criterios; la proyección es acotada y no contiene datos sensibles. El informe actual falla CSP y no concede certificación | **Validada operativamente; certificación pendiente por el resultado observado** |
+| A · lectura y evaluación pública | Presente en código | Tests, PostgreSQL aislado, CI y smoke contractual | Informe fresco del 21-11-2026: `796d5c1b-356f-47ce-8aba-572afd9d18a1`, 9/9 controles, CSP válida, Beta 100/100 y certificación activa con puntero coincidente; evaluación ética 7/8, parcial | **Aceptada para el alcance `domain-v3`** |
 | B · historial y comparabilidad | Presente en código | Tests de historial, UUID, perfiles comparables, retención y Playwright | La API pública devuelve 12 entradas acotadas, ordenadas y del mismo perfil; cada UUID resuelve y el puntero certificado coincide con un informe histórico | **Validada para el alcance Beta** |
 | C · auditoría periódica | Presente en Compose y despliegue aislado | Migraciones 026/027, tests del scheduler y PostgreSQL aislado | El scheduler renovó `grumphya.com` en producción con un informe nuevo, ficha actualizada y `certifiedReportId` coincidente; el VPS registra 9 leases expirados terminados tras 3 intentos; el 20-11-2026 observó `certification_audit_cycle_failed` y recuperó `running/healthy` | **Aceptada para Beta 0.1** |
 | D · auditoría privada de Grumphya | Contrato, lectores allowlisted, proyección, puntuación separada, informe y runner D-08 presentes | Tests unitarios, PostgreSQL aislado y puertas de tipado/lint/build; no se usan fixtures como evidencia de producción | Smoke autenticado posterior al despliegue `6981d16`: siete rutas firmadas, 14/14 criterios, `internalScore=100`, `externalScore=null`, sin modificar certificación pública | **Aceptada para el alcance `beta-d-0.2`; ampliaciones requieren una nueva versión contractual** |

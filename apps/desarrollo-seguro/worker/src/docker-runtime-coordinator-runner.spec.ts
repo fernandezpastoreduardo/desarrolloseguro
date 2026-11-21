@@ -9,6 +9,7 @@ import {
   type DockerRuntimeSessionFactory,
 } from "./docker-runtime-coordinator-runner.js";
 import type { TransportV1ExecutorRequest } from "./transport-v1-executor-protocol.js";
+import type { PrivacyBrowserFlowObservation, PrivacyBrowserObservation } from "./privacy-browser-observer.js";
 
 const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }));
 vi.mock("node:child_process", () => ({ spawn: spawnMock }));
@@ -27,6 +28,7 @@ const dockerBehavior = {
   executorExitCode: 0,
   hangExecutor: false,
   spawnErrorOnVolumeCreate: false,
+  privacyProxyStopped: false,
 };
 
 beforeEach(() => {
@@ -45,6 +47,7 @@ beforeEach(() => {
     executorExitCode: 0,
     hangExecutor: false,
     spawnErrorOnVolumeCreate: false,
+    privacyProxyStopped: false,
   });
   spawnMock.mockReset();
   spawnMock.mockImplementation((_binary: string, args: string[]) => {
@@ -57,6 +60,7 @@ beforeEach(() => {
     const containerName = nameIndex >= 0 ? args[nameIndex + 1] : undefined;
     const isBroker = containerName?.startsWith("development-security-broker-") === true;
     const isExecutor = containerName?.startsWith("development-security-executor-") === true;
+    const isPrivacyBrowser = containerName?.startsWith("development-security-privacy-browser-") === true;
     let requestText = "";
     const child = new FakeDockerChild(() => {
       if (isBroker) {
@@ -71,6 +75,7 @@ beforeEach(() => {
         })}\n`;
         queueMicrotask(() => child.finish(dockerBehavior.executorExitCode, output));
       }
+      if (isPrivacyBrowser) queueMicrotask(() => child.finish(0, `${JSON.stringify(makePrivacyObservation())}\n`));
     });
     child.stdin.on("data", (chunk) => {
       requestText += chunk.toString("utf8");
@@ -90,6 +95,16 @@ beforeEach(() => {
       }
     } else if (args[0] === "run" && isExecutor) {
       // The executor response is scheduled when the command's stdin closes.
+    } else if (args[0] === "run" && isPrivacyBrowser) {
+      // The bounded browser observation is emitted at process completion.
+    } else if (args[0] === "logs") {
+      const output = dockerBehavior.privacyProxyStopped
+        ? '{"event":"privacy_proxy_stats","receivedBytes":321,"budgetExceeded":false}\n'
+        : '{"event":"privacy_proxy_ready","port":3128}\n';
+      queueMicrotask(() => child.finish(0, output));
+    } else if (args[0] === "stop") {
+      dockerBehavior.privacyProxyStopped = true;
+      queueMicrotask(() => child.finish(0, "proxy\n"));
     } else if (
       args[0] === "rm" &&
       args[2]?.startsWith("development-security-broker-") === true
@@ -122,6 +137,26 @@ beforeEach(() => {
 let activeBroker: FakeDockerChild | undefined;
 
 describe("createDockerRuntimeCoordinatorRunner", () => {
+  it("runs the browser only on its internal network behind the bounded egress proxy", async () => {
+    const factory = createDockerRuntimeSessionFactory({
+      executorImage: "executor:local", brokerImage: "broker:local",
+      privacyBrowserImage: "privacy-browser:local", privacyEgressImage: "privacy-egress:local",
+      brokerNetwork: "development-security-egress",
+    });
+    const session = await factory.create(REQUEST, new AbortController().signal);
+    const observation = await session.observePrivacy!(REQUEST, new AbortController().signal);
+    await session.close();
+
+    expect(observation.receivedBytes).toBe(321);
+    expect(dockerCalls.some((args) => args[0] === "network" && args[1] === "create" && args.includes("--internal"))).toBe(true);
+    const browserRun = dockerCalls.find((args) => args[0] === "run" && args.includes("privacy-browser:local"));
+    expect(browserRun?.[browserRun.indexOf("--network") + 1]).toMatch(/^development-security-privacy-/u);
+    expect(browserRun).not.toContain("development-security-egress");
+    expect(browserRun).toContain("--cap-drop");
+    expect(browserRun).toContain("ALL");
+    expect(dockerCalls.some((args) => args[0] === "network" && args[1] === "connect" && args.includes("--alias"))).toBe(true);
+  });
+
   it("reduces broker startup stderr to a safe failure category", () => {
     expect(classifyBrokerStartupStderr("Cannot find module '/private/runtime.js'"))
       .toBe("runtime_broker_module_load_failed");
@@ -146,7 +181,7 @@ describe("createDockerRuntimeCoordinatorRunner", () => {
     const runner = createDockerRuntimeCoordinatorRunner(factory);
     const signal = new AbortController().signal;
 
-    await expect(runner.execute(REQUEST, signal)).resolves.toEqual(result);
+    await expect(runner.execute(REQUEST, signal)).resolves.toMatchObject(result);
 
     expect(factory.create).toHaveBeenCalledExactlyOnceWith(REQUEST, signal);
     expect(execute).toHaveBeenCalledExactlyOnceWith(REQUEST, signal);
@@ -579,6 +614,23 @@ function makeResult(): Omit<ScanRunInput, "jobId" | "leaseToken" | "hostname" | 
       evidence: {},
     })),
     metrics: { requestsCount: 0, bytesCount: 0, durationMs: 0, pagesCount: 0 },
+  };
+}
+
+function makePrivacyObservation(): PrivacyBrowserObservation {
+  const flow = (): PrivacyBrowserFlowObservation => ({
+    status: "evaluated", pageLoaded: true, consentPromptDetected: false,
+    acceptVisibleAtFirstLayer: false, rejectVisibleAtFirstLayer: false,
+    actionsToAccept: 0, actionsToReject: 0, preferenceWriteAllowed: false,
+    rejectionPersistedAfterReload: null, signalHostsAfterChoice: [], completedHostsAfterChoice: [],
+    cookiesAfterChoice: [], storageKeysAfterChoice: [], cookieReadComplete: true, storageReadComplete: true,
+  });
+  return {
+    protocolVersion: 1, requestId: REQUEST.requestId, hostname: REQUEST.hostname, status: "complete",
+    context: { browser: "Chromium", locale: "es-ES", timezone: "Europe/Madrid", viewport: "desktop-1365x768" },
+    initial: flow(), accept: flow(), reject: flow(), requestCount: 1, blockedRequestCount: 0,
+    vendorControlCoverage: "not_applicable", vendorControlCount: 0, vendorControls: [],
+    requestBudgetExceeded: false, thirdPartyRequestHosts: [], receivedBytes: null,
   };
 }
 

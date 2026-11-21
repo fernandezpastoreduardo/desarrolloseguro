@@ -429,7 +429,7 @@ describePostgres.sequential("PostgresScanStore", () => {
 
   it("queues due certified audits and gives manual requests priority", async () => {
     const hostname = "scheduled-certification.example.net";
-    const completedAt = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    const completedAt = new Date(Date.now() - 45 * 60 * 1000);
     await store.ensureDomain(hostname, "on_demand", "domain-v3");
     await store.ensureFreshScan({ hostname, profileVersion: "domain-v3", trigger: "requested" });
     const certificationJob = await store.claimNextScan(new Date(), TEST_LEASE_MS);
@@ -451,9 +451,15 @@ describePostgres.sequential("PostgresScanStore", () => {
       pool.query("SELECT state FROM ds_beta_certifications WHERE hostname = $1", [hostname]),
     ).resolves.toMatchObject({ rows: [{ state: "active" }] });
 
+    const notDue = await pool.query<{ ds_enqueue_due_certification_scans: number }>(
+      "SELECT public.ds_enqueue_due_certification_scans($1)",
+      [new Date(completedAt.getTime() + 39 * 60 * 1000)],
+    );
+    expect(notDue.rows[0].ds_enqueue_due_certification_scans).toBe(0);
+
     const audit = await pool.query<{ ds_enqueue_due_certification_scans: number }>(
       "SELECT public.ds_enqueue_due_certification_scans($1)",
-      [new Date(completedAt.getTime() + 2 * 60 * 60 * 1000)],
+      [new Date(completedAt.getTime() + 40 * 60 * 1000)],
     );
     expect(audit.rows[0].ds_enqueue_due_certification_scans).toBe(1);
 

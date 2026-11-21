@@ -14,7 +14,7 @@ import { readScanFailureDiagnostic } from "./runtime-diagnostics.js";
 
 const MAX_ACTIVE_JOBS = 1;
 const REQUEST_TIMEOUT_MS = 5_000;
-const EXECUTION_TIMEOUT_MS = 40_000;
+const EXECUTION_TIMEOUT_MS = 155_000;
 const SOCKET_MODE = 0o660;
 
 export type RuntimeCoordinatorRunner = {

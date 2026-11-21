@@ -155,10 +155,32 @@ jobs:
           docker build --pull --target development-security-runtime-coordinator --tag "desarrolloseguro-runtime:${IMAGE_REVISION}" .
           docker build --pull --target development-security-executor --tag "desarrolloseguro-executor:${IMAGE_REVISION}" .
           docker build --pull --target development-security-egress-broker --tag "desarrolloseguro-egress-broker:${IMAGE_REVISION}" .
+          docker build --pull --target development-security-privacy-browser --tag "desarrolloseguro-privacy-browser:${IMAGE_REVISION}" .
+          docker build --pull --target development-security-privacy-egress --tag "desarrolloseguro-privacy-egress:${IMAGE_REVISION}" .
           docker build --pull --file docker/postgres/Dockerfile --tag desarrolloseguro-postgres:pg19-candidate .
           docker pull pgvector/pgvector:0.8.7-pg17-bookworm
       - name: Smoke test production API image
         run: bash scripts/test-development-security-production-smoke.sh "desarrolloseguro-api:${GITHUB_SHA}"
+      - name: Smoke test consent and provider controls in isolated Chromium
+        shell: bash
+        env:
+          IMAGE_REVISION: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --network none \
+            --read-only \
+            --user 1000:1000 \
+            --cap-drop ALL \
+            --security-opt no-new-privileges \
+            --pids-limit 128 \
+            --memory 512m \
+            --cpus 0.5 \
+            --shm-size 128m \
+            --tmpfs /tmp:rw,noexec,nosuid,size=64m,uid=1000,gid=1000 \
+            --entrypoint node \
+            "desarrolloseguro-privacy-browser:${IMAGE_REVISION}" \
+            /workspace/apps/desarrollo-seguro/worker/scripts/privacy-browser-fixture-smoke.mjs
       - name: Smoke test runtime coordinator Docker CLI
         shell: bash
         run: |
@@ -184,7 +206,7 @@ jobs:
           if ! node --test scripts/trivy-report-summary.spec.mjs; then
             scan_failed=1
           fi
-          for component in api web worker runtime executor egress-broker; do
+          for component in api web worker runtime executor egress-broker privacy-browser privacy-egress; do
             image="desarrolloseguro-${component}:${IMAGE_REVISION}"
             report="$report_dir/${component}.json"
             printf 'Scanning image: %s\n' "$image"

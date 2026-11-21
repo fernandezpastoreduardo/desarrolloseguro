@@ -14,7 +14,7 @@ import {
 import type { TransportV1ScanJob } from "./transport-v1-executor.js";
 import type { ScanExecutor } from "./scan-job-processor.js";
 
-const DEFAULT_COORDINATOR_TIMEOUT_MS = 40_000;
+const DEFAULT_COORDINATOR_TIMEOUT_MS = 155_000;
 
 export type RuntimeCoordinatorExecutorOptions = {
   socketPath: string;

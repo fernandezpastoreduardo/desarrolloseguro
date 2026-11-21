@@ -35,6 +35,8 @@ fi
 docker compose --project-name "$PROJECT_NAME" --file "$COMPOSE_FILE" config --quiet
 docker build --tag desarrolloseguro-executor:local --target development-security-executor .
 docker build --tag desarrolloseguro-egress-broker:local --target development-security-egress-broker .
+docker build --tag desarrolloseguro-privacy-browser:local --target development-security-privacy-browser .
+docker build --tag desarrolloseguro-privacy-egress:local --target development-security-privacy-egress .
 docker compose --project-name "$PROJECT_NAME" --file "$COMPOSE_FILE" \
   build development-security-api development-security-runtime-coordinator development-security-worker development-security-web
 # Apply the DS schema with its dedicated migrator against the existing DS database.

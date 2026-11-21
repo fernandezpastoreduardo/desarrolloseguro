@@ -5,6 +5,8 @@ const SOCKET_UID = "DS_RUNTIME_COORDINATOR_UID";
 const SOCKET_GID = "DS_RUNTIME_COORDINATOR_GID";
 const EXECUTOR_IMAGE = "DS_RUNTIME_EXECUTOR_IMAGE";
 const BROKER_IMAGE = "DS_RUNTIME_BROKER_IMAGE";
+const PRIVACY_BROWSER_IMAGE = "DS_RUNTIME_PRIVACY_BROWSER_IMAGE";
+const PRIVACY_EGRESS_IMAGE = "DS_RUNTIME_PRIVACY_EGRESS_IMAGE";
 const DOCKER_BINARY = "DS_RUNTIME_DOCKER_BINARY";
 const DOCKER_SOCKET = "DS_RUNTIME_DOCKER_SOCKET";
 const EGRESS_NETWORK = "DS_RUNTIME_EGRESS_NETWORK";
@@ -20,6 +22,8 @@ export type RuntimeCoordinatorConfiguration = {
   socketGid: number;
   executorImage: string;
   brokerImage: string;
+  privacyBrowserImage: string;
+  privacyEgressImage: string;
   dockerBinary: string;
   dockerSocketPath: string;
   egressNetwork: string;
@@ -33,6 +37,8 @@ export function resolveRuntimeCoordinatorConfiguration(
   const socketGid = parseNonNegativeInteger(environment[SOCKET_GID]);
   const executorImage = environment[EXECUTOR_IMAGE];
   const brokerImage = environment[BROKER_IMAGE];
+  const privacyBrowserImage = environment[PRIVACY_BROWSER_IMAGE];
+  const privacyEgressImage = environment[PRIVACY_EGRESS_IMAGE];
   const dockerBinary = environment[DOCKER_BINARY] ?? DEFAULT_DOCKER_BINARY;
   const dockerSocketPath = environment[DOCKER_SOCKET] ?? DEFAULT_DOCKER_SOCKET;
   const egressNetwork = environment[EGRESS_NETWORK] ?? DEFAULT_EGRESS_NETWORK;
@@ -46,6 +52,10 @@ export function resolveRuntimeCoordinatorConfiguration(
     !IMAGE_REFERENCE.test(executorImage) ||
     !brokerImage ||
     !IMAGE_REFERENCE.test(brokerImage) ||
+    !privacyBrowserImage ||
+    !IMAGE_REFERENCE.test(privacyBrowserImage) ||
+    !privacyEgressImage ||
+    !IMAGE_REFERENCE.test(privacyEgressImage) ||
     !isAbsolute(dockerBinary) ||
     !isAbsolute(dockerSocketPath) ||
     !NETWORK_REFERENCE.test(egressNetwork)
@@ -59,6 +69,8 @@ export function resolveRuntimeCoordinatorConfiguration(
     socketGid,
     executorImage,
     brokerImage,
+    privacyBrowserImage,
+    privacyEgressImage,
     dockerBinary,
     dockerSocketPath,
     egressNetwork,

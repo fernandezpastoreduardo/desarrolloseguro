@@ -28,6 +28,8 @@ export async function startRuntimeCoordinator(
       createDockerRuntimeSessionFactory({
         executorImage: configuration.executorImage,
         brokerImage: configuration.brokerImage,
+        privacyBrowserImage: configuration.privacyBrowserImage,
+        privacyEgressImage: configuration.privacyEgressImage,
         dockerBinary: configuration.dockerBinary,
         dockerSocketPath: configuration.dockerSocketPath,
         brokerNetwork: configuration.egressNetwork,

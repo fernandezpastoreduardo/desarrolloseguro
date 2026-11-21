@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { assessPrivacy } from "@desarrolloseguro/core";
 import {
   provisionDevelopmentSecurityDatabase,
   type ProvisioningSettings,
@@ -243,7 +244,8 @@ describePostgres.sequential(
          has_table_privilege('ds_api', 'ds_scan_runs', 'INSERT') AS api_can_write_reports,
          has_column_privilege('ds_worker', 'ds_scan_jobs', 'state', 'UPDATE') AS worker_can_update_state,
          has_column_privilege('ds_worker', 'ds_scan_jobs', 'hostname', 'UPDATE') AS worker_can_update_hostname,
-         has_function_privilege('ds_worker', 'public.ds_complete_scan(uuid,uuid,timestamp with time zone,text,timestamp with time zone,text,jsonb,jsonb,jsonb)', 'EXECUTE') AS worker_can_execute_completion,
+         has_function_privilege('ds_worker', 'public.ds_complete_scan_with_privacy(uuid,uuid,timestamp with time zone,text,timestamp with time zone,text,jsonb,jsonb,jsonb,jsonb)', 'EXECUTE') AS worker_can_execute_completion,
+         has_function_privilege('ds_worker', 'public.ds_complete_scan(uuid,uuid,timestamp with time zone,text,timestamp with time zone,text,jsonb,jsonb,jsonb)', 'EXECUTE') AS worker_can_execute_legacy_completion,
          has_function_privilege('ds_worker', 'public.ds_recover_expired_scan_leases(integer)', 'EXECUTE') AS worker_can_execute_lease_recovery,
          has_function_privilege('ds_migrator', 'public.ds_purge_expired_reports(timestamp with time zone)', 'EXECUTE') AS migrator_can_execute_retention,
          has_function_privilege('ds_api', 'public.ds_purge_expired_reports(timestamp with time zone)', 'EXECUTE') AS api_can_execute_retention,
@@ -265,6 +267,8 @@ describePostgres.sequential(
          has_table_privilege('ds_read', 'ds_scan_runs', 'SELECT') AS reader_can_select,
          has_column_privilege('ds_read', 'public.ds_check_results', 'evidence_json', 'SELECT') AS reader_can_select_raw_evidence,
          has_table_privilege('ds_read', 'public.ds_public_check_results', 'SELECT') AS reader_can_select_public_evidence,
+         has_column_privilege('ds_read', 'public.ds_scan_privacy_assessments', 'assessment_json', 'SELECT') AS reader_can_select_privacy_assessments,
+         has_table_privilege('ds_worker', 'public.ds_scan_privacy_assessments', 'SELECT') AS worker_can_select_privacy_assessments,
          has_table_privilege('ds_read', 'ds_scan_runs', 'INSERT') AS reader_can_insert`,
         [TEST_DATABASE_NAME],
       );
@@ -294,6 +298,7 @@ describePostgres.sequential(
         worker_can_update_state: false,
         worker_can_update_hostname: false,
         worker_can_execute_completion: true,
+        worker_can_execute_legacy_completion: false,
         worker_can_execute_lease_recovery: true,
         migrator_can_execute_retention: true,
         api_can_execute_retention: false,
@@ -309,6 +314,8 @@ describePostgres.sequential(
         reader_can_select: false,
         reader_can_select_raw_evidence: false,
         reader_can_select_public_evidence: true,
+        reader_can_select_privacy_assessments: true,
+        worker_can_select_privacy_assessments: false,
         reader_can_insert: false,
       });
     });
@@ -395,7 +402,7 @@ describePostgres.sequential(
       const result = await targetAdminPool?.query(
         "SELECT count(*)::integer AS migration_count FROM public.ds_schema_migrations",
       );
-      expect(result?.rows[0].migration_count).toBe(31);
+      expect(result?.rows[0].migration_count).toBe(33);
 
       const client = await targetAdminPool!.connect();
       try {
@@ -427,11 +434,13 @@ describePostgres.sequential(
           can_insert: boolean;
         }>(
           `SELECT
-             has_function_privilege(current_user, 'public.ds_complete_scan(uuid,uuid,timestamptz,text,timestamptz,text,jsonb,jsonb,jsonb)', 'EXECUTE') AS can_execute,
+             has_function_privilege(current_user, 'public.ds_complete_scan_with_privacy(uuid,uuid,timestamptz,text,timestamptz,text,jsonb,jsonb,jsonb,jsonb)', 'EXECUTE') AS can_execute,
+             has_function_privilege(current_user, 'public.ds_complete_scan(uuid,uuid,timestamptz,text,timestamptz,text,jsonb,jsonb,jsonb)', 'EXECUTE') AS can_execute_legacy,
              has_table_privilege(current_user, 'public.ds_scan_runs', 'INSERT') AS can_insert`,
         );
         expect(privileges.rows[0]).toEqual({
           can_execute: true,
+          can_execute_legacy: false,
           can_insert: false,
         });
         await expect(client.query("SELECT 1")).resolves.toMatchObject({
@@ -925,8 +934,8 @@ describePostgres.sequential(
       const completedAt = new Date();
       const startedAt = new Date(completedAt.getTime() - 1000);
       const result = await client.query<{ id: string }>(
-        `SELECT public.ds_complete_scan(
-           $1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9::jsonb
+        `SELECT public.ds_complete_scan_with_privacy(
+           $1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9::jsonb, $10::jsonb
          ) AS id`,
         [
           job.id,
@@ -949,6 +958,7 @@ describePostgres.sequential(
             durationMs: 1,
             pagesCount: scope.length,
           }),
+          JSON.stringify(assessPrivacy({ criteria: [] })),
         ],
       );
       return { id: result.rows[0].id };

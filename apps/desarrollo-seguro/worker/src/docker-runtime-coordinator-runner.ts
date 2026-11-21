@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { isAbsolute } from "node:path";
 import type { ScanRunInput } from "@desarrolloseguro/persistence";
+import { assessPrivacy } from "@desarrolloseguro/core";
 import { SCAN_FAILURE_CODES, type ScanFailureCode } from "@desarrolloseguro/core";
 import {
   MAX_EXECUTOR_RESPONSE_BYTES,
@@ -9,6 +10,8 @@ import {
   type TransportV1ExecutorRequest,
 } from "./transport-v1-executor-protocol.js";
 import type { RuntimeCoordinatorRunner } from "./runtime-coordinator-server.js";
+import { assessPrivacyObservation } from "./privacy-assessment-builder.js";
+import type { PrivacyBrowserObservation } from "./privacy-browser-observer.js";
 import {
   createJsonLineRuntimeDiagnostic,
   RUNTIME_DIAGNOSTIC_CODES,
@@ -25,6 +28,7 @@ const DOCKER_CLEANUP_COMMAND_TIMEOUT_MS = 3_000;
 const DOCKER_CLEANUP_ATTEMPTS = 3;
 const DOCKER_CLEANUP_RETRY_DELAY_MS = 100;
 const EXECUTOR_COMMAND_TIMEOUT_MS = 38_000;
+const PRIVACY_BROWSER_COMMAND_TIMEOUT_MS = 125_000;
 const BROKER_STOP_TIMEOUT_MS = 3_000;
 const MAX_DOCKER_COMMAND_OUTPUT_BYTES = 256 * 1024;
 const MAX_DOCKER_ERROR_OUTPUT_BYTES = 4 * 1024;
@@ -34,6 +38,9 @@ const EGRESS_SOCKET_DIRECTORY = "/run/development-security-egress";
 const VOLUME_PREFIX = "development-security-job-";
 const BROKER_CONTAINER_PREFIX = "development-security-broker-";
 const EXECUTOR_CONTAINER_PREFIX = "development-security-executor-";
+const PRIVACY_NETWORK_PREFIX = "development-security-privacy-";
+const PRIVACY_PROXY_PREFIX = "development-security-privacy-proxy-";
+const PRIVACY_BROWSER_PREFIX = "development-security-privacy-browser-";
 const SAFE_BROKER_STARTUP_FAILURES = new Set([
   "egress_broker_startup_invalid",
   "egress_broker_startup_failed",
@@ -64,6 +71,8 @@ const BROKER_INITIALIZER =
 export type DockerRuntimeCoordinatorRunnerOptions = {
   executorImage: string;
   brokerImage: string;
+  privacyBrowserImage?: string;
+  privacyEgressImage?: string;
   dockerBinary?: string;
   dockerSocketPath?: string;
   brokerNetwork?: string;
@@ -76,6 +85,7 @@ export type DockerRuntimeSession = {
     request: TransportV1ExecutorRequest,
     signal: AbortSignal,
   ): Promise<unknown>;
+  observePrivacy?(request: TransportV1ExecutorRequest, signal: AbortSignal): Promise<PrivacyBrowserObservation>;
   close(): Promise<void>;
 };
 
@@ -138,6 +148,14 @@ export function createDockerRuntimeCoordinatorRunner(
           );
         }
         result = response.result;
+        let privacyAssessment = assessPrivacy({ criteria: [] });
+        try {
+          const observation = await session.observePrivacy?.(request, signal);
+          if (observation) privacyAssessment = assessPrivacyObservation(observation);
+        } catch {
+          // Privacy browser failures lower coverage but never block the established scan or certification.
+        }
+        result = { ...result, privacyAssessment };
       } catch (error) {
         executionError = error;
       }
@@ -214,6 +232,9 @@ export function createDockerRuntimeSessionFactory(
   if (
     !IMAGE_REFERENCE.test(options.executorImage) ||
     !IMAGE_REFERENCE.test(options.brokerImage) ||
+    (options.privacyBrowserImage !== undefined && !IMAGE_REFERENCE.test(options.privacyBrowserImage)) ||
+    (options.privacyEgressImage !== undefined && !IMAGE_REFERENCE.test(options.privacyEgressImage)) ||
+    ((options.privacyBrowserImage === undefined) !== (options.privacyEgressImage === undefined)) ||
     dockerBinary.length === 0 ||
     !isAbsolute(dockerSocketPath) ||
     !NETWORK_REFERENCE.test(brokerNetwork) ||
@@ -234,9 +255,15 @@ export function createDockerRuntimeSessionFactory(
       const volumeName = `${VOLUME_PREFIX}${runtimeId}`;
       const brokerName = `${BROKER_CONTAINER_PREFIX}${runtimeId}`;
       const executorName = `${EXECUTOR_CONTAINER_PREFIX}${runtimeId}`;
+      const privacyNetworkName = `${PRIVACY_NETWORK_PREFIX}${runtimeId}`;
+      const privacyProxyName = `${PRIVACY_PROXY_PREFIX}${runtimeId}`;
+      const privacyBrowserName = `${PRIVACY_BROWSER_PREFIX}${runtimeId}`;
       let volumeMayExist = false;
       let brokerProcess: ChildProcessWithoutNullStreams | undefined;
       let executorMayExist = false;
+      let privacyNetworkMayExist = false;
+      let privacyProxyMayExist = false;
+      let privacyBrowserMayExist = false;
       let closed = false;
 
       const close = async () => {
@@ -253,6 +280,14 @@ export function createDockerRuntimeSessionFactory(
           );
           if (!removed) cleanupFailed = true;
           executorMayExist = false;
+        }
+        for (const [name, active] of [[privacyBrowserName, privacyBrowserMayExist], [privacyProxyName, privacyProxyMayExist]] as const) {
+          if (active && !await removeContainer(dockerBinary, name, dockerSocketPath, "executor_container_cleanup", diagnostic)) cleanupFailed = true;
+        }
+        if (privacyNetworkMayExist) {
+          try {
+            await runDockerCleanup(dockerBinary, ["network", "rm", privacyNetworkName], dockerSocketPath, /not found|no such network/iu, "executor_container_cleanup", diagnostic);
+          } catch { cleanupFailed = true; }
         }
         if (brokerProcess) {
           const removed = await removeContainer(
@@ -362,6 +397,48 @@ export function createDockerRuntimeSessionFactory(
             throw error;
           }
         },
+        observePrivacy: async (privacyRequest, privacySignal) => {
+          if (!options.privacyBrowserImage || !options.privacyEgressImage) {
+            throw new Error("privacy_runtime_images_missing");
+          }
+          if (closed || privacySignal.aborted) throw new Error("request_aborted");
+          const browserInput = JSON.stringify({ protocolVersion: 1, requestId: privacyRequest.requestId, hostname: privacyRequest.hostname });
+          privacyNetworkMayExist = true;
+          await runDocker(dockerBinary, ["network", "create", "--internal", "--label", "io.desarrolloseguro.role=ephemeral-privacy", privacyNetworkName], undefined, privacySignal, undefined, undefined, undefined, dockerSocketPath);
+          privacyProxyMayExist = true;
+          await runDocker(dockerBinary, ["run", "--detach", "--name", privacyProxyName, "--network", brokerNetwork, "--read-only", "--user", "1000:1000", "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "--pids-limit", "64", "--memory", "128m", "--cpus", "0.25", "--tmpfs", "/tmp:rw,noexec,nosuid,size=16m,uid=1000,gid=1000", "--env", "DS_PRIVACY_MAX_RECEIVED_BYTES=20971520", options.privacyEgressImage], undefined, privacySignal, undefined, undefined, undefined, dockerSocketPath);
+          await runDocker(dockerBinary, ["network", "connect", "--alias", "privacy-egress", privacyNetworkName, privacyProxyName], undefined, privacySignal, undefined, undefined, undefined, dockerSocketPath);
+          await waitForPrivacyProxy(dockerBinary, dockerSocketPath, privacyProxyName, privacySignal);
+          privacyBrowserMayExist = true;
+          const output = await runDocker(dockerBinary, ["run", "--interactive", "--name", privacyBrowserName, ...restrictedPrivacyBrowserArguments(privacyNetworkName), options.privacyBrowserImage], `${browserInput}\n`, privacySignal, 256 * 1024, false, PRIVACY_BROWSER_COMMAND_TIMEOUT_MS, dockerSocketPath);
+          try {
+            let observation = JSON.parse(output.trim()) as PrivacyBrowserObservation;
+            const proxyStats = await stopPrivacyProxyAndReadStats(dockerBinary, dockerSocketPath, privacyProxyName, privacySignal);
+            if (!proxyStats || proxyStats.receivedBytes > 20 * 1024 * 1024 || proxyStats.budgetExceeded) {
+              observation = {
+                ...observation,
+                status: "partial",
+                receivedBytes: proxyStats?.receivedBytes ?? null,
+                vendorControlCoverage: "partial",
+                vendorControls: observation.vendorControls.map((check) => ({
+                  ...check,
+                  status: "unknown",
+                  disabled: null,
+                  persistedDisabled: null,
+                  signalHostsAfterDisable: [],
+                  completedHostsAfterDisable: [],
+                  cookiesAfterDisable: [],
+                })),
+                initial: { ...observation.initial, status: "unknown", cookieReadComplete: false, storageReadComplete: false },
+                accept: { ...observation.accept, status: "unknown", cookieReadComplete: false, storageReadComplete: false },
+                reject: { ...observation.reject, status: "unknown", cookieReadComplete: false, storageReadComplete: false },
+              };
+            } else {
+              observation = { ...observation, receivedBytes: proxyStats.receivedBytes };
+            }
+            return observation;
+          } catch { throw new Error("privacy_browser_response_invalid"); }
+        },
         close,
       };
     },
@@ -436,6 +513,59 @@ function restrictedContainerArguments(network: string): string[] {
     "--cpus", "0.5",
     "--tmpfs", "/tmp:rw,noexec,nosuid,size=16m,uid=1000,gid=1000",
   ];
+}
+
+function restrictedPrivacyBrowserArguments(network: string): string[] {
+  return ["--network", network, "--read-only", "--user", "1000:1000", "--cap-drop", "ALL",
+    "--security-opt", "no-new-privileges", "--pids-limit", "128", "--memory", "512m", "--cpus", "0.5",
+    "--shm-size", "128m", "--tmpfs", "/tmp:rw,noexec,nosuid,size=64m,uid=1000,gid=1000"];
+}
+
+async function waitForPrivacyProxy(
+  dockerBinary: string,
+  dockerSocketPath: string,
+  containerName: string,
+  signal: AbortSignal,
+): Promise<void> {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    if (signal.aborted) throw new Error("request_aborted");
+    try {
+      const output = await runDocker(dockerBinary, ["logs", "--tail", "20", containerName], undefined, signal,
+        MAX_BROKER_STARTUP_OUTPUT_BYTES, true, 1_000, dockerSocketPath);
+      if (output.includes('"event":"privacy_proxy_ready"')) return;
+    } catch { /* The container may not have emitted its startup line yet. */ }
+    await new Promise((resolveWait) => setTimeout(resolveWait, 100));
+  }
+  throw new Error("privacy_proxy_ready_timeout");
+}
+
+async function stopPrivacyProxyAndReadStats(
+  dockerBinary: string,
+  dockerSocketPath: string,
+  containerName: string,
+  signal: AbortSignal,
+): Promise<{ receivedBytes: number; budgetExceeded: boolean } | null> {
+  try {
+    await runDocker(dockerBinary, ["stop", "--time", "3", containerName], undefined, signal,
+      MAX_BROKER_STARTUP_OUTPUT_BYTES, false, 5_000, dockerSocketPath);
+    const output = await runDocker(dockerBinary, ["logs", "--tail", "20", containerName], undefined, signal,
+      MAX_BROKER_STARTUP_OUTPUT_BYTES, true, 1_000, dockerSocketPath);
+    for (const line of output.split(/\r?\n/u).reverse()) {
+      try {
+        const value: unknown = JSON.parse(line);
+        if (isRecord(value) && value.event === "privacy_proxy_stats" && Number.isSafeInteger(value.receivedBytes) &&
+            typeof value.budgetExceeded === "boolean") {
+          return { receivedBytes: value.receivedBytes as number, budgetExceeded: value.budgetExceeded };
+        }
+      } catch { /* Ignore bounded startup lines. */ }
+    }
+  } catch { return null; }
+  return null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function waitForBrokerReady(

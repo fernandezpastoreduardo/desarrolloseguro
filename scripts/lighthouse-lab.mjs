@@ -11,6 +11,7 @@ export const REQUIRED_CATEGORIES = [
   "accessibility",
   "best-practices",
 ];
+// SEO remains informational while the explicitly noindex /app/ policy is in force.
 export const INFORMATIONAL_CATEGORIES = ["seo"];
 export const MINIMUM_SCORE = 96;
 

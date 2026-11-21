@@ -12,6 +12,10 @@ import {
 describe("certification audit scheduler", () => {
   afterEach(() => vi.useRealTimers());
 
+  it("checks for due certifications every five minutes", () => {
+    expect(CERTIFICATION_AUDIT_INTERVAL_MS).toBe(5 * 60 * 1_000);
+  });
+
   it("enqueues due certification audits with the scheduler clock", async () => {
     const now = new Date("2026-11-18T16:00:00.000Z");
     const query = vi.fn().mockResolvedValue({

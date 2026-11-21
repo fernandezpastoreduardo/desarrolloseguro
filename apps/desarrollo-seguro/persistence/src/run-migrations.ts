@@ -103,6 +103,14 @@ const MIGRATIONS = [
     version: "031_grumphya_hostname_redirect_evidence",
     file: "031_grumphya_hostname_redirect_evidence.sql",
   },
+  {
+    version: "032_solistos_privacy_assessments",
+    file: "032_solistos_privacy_assessments.sql",
+  },
+  {
+    version: "033_certification_refresh_headroom",
+    file: "033_certification_refresh_headroom.sql",
+  },
 ] as const;
 
 const MIGRATION_LOCK_ID = 728194032;

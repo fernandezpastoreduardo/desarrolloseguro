@@ -664,6 +664,7 @@ describe("PublicScanService", () => {
         "expiresAt",
         "verdict",
         "ethicsAssessment",
+        "privacyAssessment",
         "betaCertification",
         "certification",
         "scope",

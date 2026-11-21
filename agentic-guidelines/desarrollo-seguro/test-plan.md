@@ -6,7 +6,7 @@ La suite cubre reglas del core, persistencia, API de estado/informe, políticas 
 
 Una prueba de implementación o de CI no demuestra por sí sola operación en
 producción ni aceptación de una etapa. Para aceptar C se necesita, además,
-evidencia del scheduler horario real, actualización de certificación/sello,
+evidencia del scheduler real (sondeo cada cinco minutos, renovación programada a los 40 minutos y actualización de certificación/sello),
 recuperación ante fallo y notificación autorizada. La recuperación de leases ya
 tiene evidencia en producción; queda pendiente observar una incidencia que
 active la notificación. La auditoría privada de D y

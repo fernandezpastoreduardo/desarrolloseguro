@@ -1,4 +1,4 @@
-import { normalizeHostname, SCAN_FAILURE_CODES, parseScanFailureDiagnostic, type ScanFailureCode, type ScanFailureDiagnostic } from "@desarrolloseguro/core";
+import { normalizeHostname, SCAN_FAILURE_CODES, parsePrivacyAssessment, parseScanFailureDiagnostic, type ScanFailureCode, type ScanFailureDiagnostic } from "@desarrolloseguro/core";
 import type { ScanCheck, ScanRunInput } from "@desarrolloseguro/persistence";
 import { isNetworkProbeFailureList, type NetworkProbeFailure, type ScanProfileVersion } from "./transport-v1-executor.js";
 
@@ -147,7 +147,7 @@ function parseExecutorResult(
   if (completedAt.getTime() < startedAt.getTime()) {
     throw new Error("executor_result_invalid");
   }
-  return {
+  const result: Omit<ScanRunInput, "jobId" | "leaseToken" | "hostname" | "profileVersion"> = {
     scannerVersion: value.scannerVersion,
     startedAt,
     completedAt,
@@ -161,6 +161,12 @@ function parseExecutorResult(
       pagesCount: parseCount(value.metrics.pagesCount, 0),
     },
   };
+  if (value.privacyAssessment !== undefined) {
+    const privacyAssessment = parsePrivacyAssessment(value.privacyAssessment);
+    if (!privacyAssessment) throw new Error("executor_result_invalid");
+    result.privacyAssessment = privacyAssessment;
+  }
+  return result;
 }
 
 function isScanProfileVersion(value: unknown): value is ScanProfileVersion {
