@@ -13,7 +13,7 @@ readonly NETWORK_NAME="$STACK_ID-network"
 readonly DATABASE_NAME="$STACK_ID-database"
 readonly API_NAME="$STACK_ID-api"
 readonly TEMP_ROOT=$(mktemp -d)
-readonly POSTGRES_IMAGE='pgvector/pgvector:0.8.7-pg17'
+readonly POSTGRES_IMAGE=${DEVELOPMENT_SECURITY_SMOKE_POSTGRES_IMAGE:-desarrolloseguro-postgres:pg19-candidate}
 readonly ADMIN_PASSWORD='ci-development-security-admin-password'
 readonly DATABASE_PASSWORD='ci-development-security-password'
 
@@ -104,17 +104,21 @@ docker exec "$DATABASE_NAME" psql \
   -c "CREATE ROLE ds_api LOGIN PASSWORD '$DATABASE_PASSWORD' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION" \
   -c 'CREATE DATABASE desarrollo_seguro OWNER ds_api' >/dev/null
 
-docker cp "$TEMP_ROOT/tls/server.crt" "$DATABASE_NAME:/var/lib/postgresql/data/server.crt"
-docker cp "$TEMP_ROOT/tls/server.key" "$DATABASE_NAME:/var/lib/postgresql/data/server.key"
+readonly DATABASE_DATA_DIRECTORY=$(docker exec "$DATABASE_NAME" psql \
+  -U development_security_smoke_admin \
+  -d development_security_smoke_admin \
+  -Atqc 'SHOW data_directory')
+docker cp "$TEMP_ROOT/tls/server.crt" "$DATABASE_NAME:$DATABASE_DATA_DIRECTORY/server.crt"
+docker cp "$TEMP_ROOT/tls/server.key" "$DATABASE_NAME:$DATABASE_DATA_DIRECTORY/server.key"
 docker exec --user 0 "$DATABASE_NAME" sh -c \
-  'chown postgres:postgres /var/lib/postgresql/data/server.crt /var/lib/postgresql/data/server.key && chmod 600 /var/lib/postgresql/data/server.key'
+  "chown postgres:postgres '$DATABASE_DATA_DIRECTORY/server.crt' '$DATABASE_DATA_DIRECTORY/server.key' && chmod 600 '$DATABASE_DATA_DIRECTORY/server.key'"
 docker exec "$DATABASE_NAME" psql \
   -U development_security_smoke_admin \
   -d development_security_smoke_admin \
   -v ON_ERROR_STOP=1 \
   -c "ALTER SYSTEM SET ssl = 'on'" \
-  -c "ALTER SYSTEM SET ssl_cert_file = '/var/lib/postgresql/data/server.crt'" \
-  -c "ALTER SYSTEM SET ssl_key_file = '/var/lib/postgresql/data/server.key'" \
+  -c "ALTER SYSTEM SET ssl_cert_file = '$DATABASE_DATA_DIRECTORY/server.crt'" \
+  -c "ALTER SYSTEM SET ssl_key_file = '$DATABASE_DATA_DIRECTORY/server.key'" \
   -c "SELECT pg_reload_conf()" >/dev/null
 docker exec "$DATABASE_NAME" sh -c \
   'hba_file=$(psql -U development_security_smoke_admin -d development_security_smoke_admin -Atc "SHOW hba_file") && sed -i "1ihostnossl all all all reject" "$hba_file" && psql -U development_security_smoke_admin -d development_security_smoke_admin -c "SELECT pg_reload_conf()" >/dev/null'

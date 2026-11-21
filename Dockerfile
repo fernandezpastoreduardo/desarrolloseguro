@@ -1,4 +1,4 @@
-FROM node:26.13.0-alpine3.24 AS node-base
+FROM node:26.13.1-alpine3.24 AS node-base
 
 RUN apk upgrade --no-cache
 
