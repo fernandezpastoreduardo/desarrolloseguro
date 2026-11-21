@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { access, mkdtemp, readFile, rm } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
+import { runInNewContext } from "node:vm";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { verifyReportBadge } from "../desarrollo-seguro/badge-api.mjs";
@@ -50,6 +51,7 @@ assert.match(verifier, /noindex, nofollow/u, "verification tokens are excluded f
 assert.match(verifier, /verificar\.js/u, "verification page loads its local verifier script");
 assert.match(verifier, /id="verification-result"/u, "verification page has an accessible result region");
 assert.match(seal, /badge-widget\.js/u, "seal page documents the live embeddable widget");
+assert.doesNotMatch(seal, /data-report-id/u, "the public embed does not pin the seal to a report that will age out");
 const prototypeReport = pageContents.at(-1);
 assert.match(prototypeReport, /FICHA PROTOTIPO/u);
 assert.match(prototypeReport, /Seguridad/u);
@@ -91,45 +93,145 @@ assert.match(
 );
 assert.doesNotMatch(verifierScript, /\/app\/#report=/u);
 
-let observedRequest;
+let observedRequests = [];
+const currentReportId = "9193860a-3e3b-4ce1-a871-1624ea98301b";
+const statusResponse = (hostname, state = "fresh", certificationState = "active", reportId = currentReportId) => ({
+  state,
+  hostname,
+  lastReport: { certification: { state: certificationState, certifiedReportId: reportId } },
+});
 const validResult = await verifyReportBadge(
-  { token: "A".repeat(43), hostname: "grumphya.com", reportId },
+  { token: "A".repeat(43), hostname: "grumphya.com", reportId: "6bff5c3e-ff99-4f68-bfe9-fb5f5dfb2823" },
   async (url, options) => {
-    observedRequest = { url, options };
-    return { ok: true, json: async () => ({ verified: true, hostname: "grumphya.com", canonicalHostname: "grumphya.com", reportId }) };
+    observedRequests.push({ url, options });
+    return {
+      ok: true,
+      json: async () => url.endsWith("/status")
+        ? statusResponse("grumphya.com")
+        : { verified: true, hostname: "grumphya.com", canonicalHostname: "grumphya.com", reportId: currentReportId },
+    };
   },
 );
-assert.deepEqual(validResult, { verified: true, hostname: "grumphya.com", reportId });
-assert.equal(observedRequest.options.cache, "no-store");
-assert.equal(observedRequest.options.method, "POST");
-assert.equal(observedRequest.url, "https://desarrolloseguro.org/api/desarrollo-seguro/v1/badges/verify");
-assert.equal(observedRequest.options.body, JSON.stringify({ token: "A".repeat(43), hostname: "grumphya.com", reportId }));
-assert.doesNotMatch(observedRequest.url, /A{43}/u, "verification tokens stay out of URL and access logs");
+assert.deepEqual(validResult, { verified: true, hostname: "grumphya.com", reportId: currentReportId });
+assert.equal(observedRequests.length, 2);
+assert.equal(observedRequests[0].options.method, "GET");
+assert.equal(observedRequests[0].options.cache, "no-store");
+assert.equal(observedRequests[0].url, "https://desarrolloseguro.org/api/desarrollo-seguro/v1/domains/grumphya.com/status");
+assert.equal(observedRequests[1].options.cache, "no-store");
+assert.equal(observedRequests[1].options.method, "POST");
+assert.equal(observedRequests[1].url, "https://desarrolloseguro.org/api/desarrollo-seguro/v1/badges/verify");
+assert.equal(observedRequests[1].options.body, JSON.stringify({ token: "A".repeat(43), hostname: "grumphya.com", reportId: currentReportId }));
+assert.doesNotMatch(observedRequests[1].url, /A{43}/u, "verification tokens stay out of URL and access logs");
 const failClosed = await verifyReportBadge(
   { token: "A".repeat(43), hostname: "grumphya.com", reportId },
   async () => { throw new Error("offline"); },
 );
 assert.equal(failClosed.verified, false);
+assert.equal(failClosed.code, "network_failure");
+let verificationPosted = false;
+const inactiveResult = await verifyReportBadge(
+  { token: "A".repeat(43), hostname: "grumphya.com" },
+  async (url) => {
+    if (!url.endsWith("/status")) verificationPosted = true;
+    return { ok: true, json: async () => statusResponse("grumphya.com", "fresh", "suspended") };
+  },
+);
+assert.deepEqual(inactiveResult, { verified: false, code: "report_not_current", hostname: "grumphya.com", reportId: "No indicado" });
+assert.equal(verificationPosted, false, "inactive certification never reaches the verification POST");
+const staleResult = await verifyReportBadge(
+  { token: "A".repeat(43), hostname: "grumphya.com" },
+  async (url) => ({
+    ok: true,
+    json: async () => url.endsWith("/status") ? statusResponse("grumphya.com", "stale") : {},
+  }),
+);
+assert.equal(staleResult.code, "report_not_current");
 const aliasResult = await verifyReportBadge(
   { token: "A".repeat(43), hostname: "www.grumphya.com", reportId },
   async (_url, options) => {
-    assert.equal(options.body, JSON.stringify({ token: "A".repeat(43), hostname: "www.grumphya.com", reportId }));
-    return { ok: true, json: async () => ({ verified: true, hostname: "grumphya.com", canonicalHostname: "grumphya.com", reportId }) };
+    return {
+      ok: true,
+      json: async () => options.method === "GET"
+        ? statusResponse("www.grumphya.com", "updating")
+        : { verified: true, hostname: "grumphya.com", canonicalHostname: "grumphya.com", reportId: currentReportId },
+    };
   },
 );
-assert.deepEqual(aliasResult, { verified: true, hostname: "grumphya.com", reportId });
+assert.deepEqual(aliasResult, { verified: true, hostname: "grumphya.com", reportId: currentReportId });
 const mismatchedReport = await verifyReportBadge(
   { token: "A".repeat(43), hostname: "grumphya.com", reportId },
-  async () => ({ ok: true, json: async () => ({ verified: true, hostname: "grumphya.com", reportId: "different" }) }),
+  async (url) => ({
+    ok: true,
+    json: async () => url.endsWith("/status")
+      ? statusResponse("grumphya.com")
+      : { verified: true, hostname: "grumphya.com", reportId: "different" },
+  }),
 );
 assert.equal(mismatchedReport.verified, false);
+assert.equal(mismatchedReport.code, "report_not_current");
 const widgetScript = await readFile("desarrollo-seguro/badge-widget.js", "utf8");
 assert.doesNotMatch(widgetScript, /innerHTML/u);
 assert.match(widgetScript, /mode: "cors"/u);
 assert.match(widgetScript, /method: "POST"/u);
+assert.match(widgetScript, /certifiedReportId/u, "the widget resolves the current certified report instead of trusting a baked-in ID");
+assert.doesNotMatch(widgetScript, /dataset\.reportId/u, "a stale report ID from the embedding page is ignored");
+assert.match(widgetScript, /method: "GET"/u);
 assert.match(widgetScript, /cache: "no-store"/u);
 assert.match(widgetScript, /widget\.hidden = false/u, "badge link is exposed only after server verification");
+assert.match(widgetScript, /widget\.dataset\.diagnostic = result\.code[\s\S]*?widget\.hidden = true/u, "failed verification keeps the dynamic seal hidden while retaining a safe diagnostic");
 assert.match(widgetScript, /widget\.textContent/u, "badge content is never parsed as markup");
+
+async function executeBadgeWidget(state, certificationState, verificationResult) {
+  class TestAnchor {
+    dataset = {
+      token: "A".repeat(43),
+      hostname: "grumphya.com",
+      reportId: "6bff5c3e-ff99-4f68-bfe9-fb5f5dfb2823",
+    };
+    hidden = false;
+    href = "";
+    textContent = "";
+    attributes = new Map();
+
+    setAttribute(name, value) {
+      this.attributes.set(name, value);
+    }
+  }
+  const anchor = new TestAnchor();
+  const requests = [];
+  const context = {
+    document: { querySelectorAll: () => [anchor] },
+    HTMLAnchorElement: TestAnchor,
+    URLSearchParams,
+    fetch: async (url, options) => {
+      requests.push({ url, options });
+      return {
+        ok: true,
+        json: async () => options.method === "GET"
+          ? statusResponse("grumphya.com", state, certificationState)
+          : verificationResult,
+      };
+    },
+  };
+  runInNewContext(widgetScript, context);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  return { anchor, requests };
+}
+
+const renderedBadge = await executeBadgeWidget("fresh", "active", {
+  verified: true,
+  hostname: "grumphya.com",
+  canonicalHostname: "grumphya.com",
+  reportId: currentReportId,
+});
+assert.equal(renderedBadge.anchor.hidden, false, "the live widget appears for the current active report");
+assert.equal(renderedBadge.anchor.dataset.state, "valid");
+assert.match(renderedBadge.anchor.href, new RegExp(`reportId=${currentReportId}`, "u"));
+assert.equal(JSON.parse(renderedBadge.requests[1].options.body).reportId, currentReportId, "the old embedded ID is replaced with the current one");
+const hiddenBadge = await executeBadgeWidget("stale", "active", { verified: false, code: "report_not_current" });
+assert.equal(hiddenBadge.requests.length, 1, "a stale report is rejected before verification");
+assert.equal(hiddenBadge.anchor.hidden, true, "an invalid or stale seal remains visually absent");
+assert.equal(hiddenBadge.anchor.textContent, "", "failed verification does not replace the badge with an error notice");
 
 const buildDirectory = await mkdtemp(join(tmpdir(), "development-security-site-build-"));
 try {

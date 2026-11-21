@@ -65,6 +65,8 @@ jobs:
         run: pnpm --filter @desarrolloseguro/web exec playwright install chromium
       - name: Run browser tests
         run: pnpm test:e2e
+      - name: Run privacy-preserving Lighthouse laboratory gate
+        run: pnpm test:lighthouse
 
   postgres-integration:
     name: PostgreSQL integration
@@ -73,7 +75,7 @@ jobs:
     timeout-minutes: 30
     services:
       postgres:
-        image: pgvector/pgvector:0.8.7-pg17
+        image: pgvector/pgvector:0.8.7-pg19-bookworm
         env:
           POSTGRES_DB: development_security_test_admin
           POSTGRES_USER: postgres
@@ -153,6 +155,8 @@ jobs:
           docker build --pull --target development-security-runtime-coordinator --tag "desarrolloseguro-runtime:${IMAGE_REVISION}" .
           docker build --pull --target development-security-executor --tag "desarrolloseguro-executor:${IMAGE_REVISION}" .
           docker build --pull --target development-security-egress-broker --tag "desarrolloseguro-egress-broker:${IMAGE_REVISION}" .
+          docker build --pull --file docker/postgres/Dockerfile --tag desarrolloseguro-postgres:pg19-candidate .
+          docker pull pgvector/pgvector:0.8.7-pg17-bookworm
       - name: Smoke test production API image
         run: bash scripts/test-development-security-production-smoke.sh "desarrolloseguro-api:${GITHUB_SHA}"
       - name: Smoke test runtime coordinator Docker CLI
@@ -173,7 +177,9 @@ jobs:
         run: |
           set -uo pipefail
           report_dir="$RUNNER_TEMP/desarrollo-seguro-trivy-reports"
+          raw_report_dir="$RUNNER_TEMP/desarrollo-seguro-trivy-raw-reports"
           mkdir -p "$report_dir"
+          mkdir -p "$raw_report_dir"
           scan_failed=0
           if ! node --test scripts/trivy-report-summary.spec.mjs; then
             scan_failed=1
@@ -194,6 +200,36 @@ jobs:
               scan_failed=1
             fi
           done
+          database_image=desarrolloseguro-postgres:pg19-candidate
+          report="$report_dir/database-pg19-candidate.json"
+          raw_report="$raw_report_dir/database-pg19-candidate-all-findings.json"
+          printf 'Scanning image: %s\n' "$database_image"
+          if ! trivy image \
+            --scanners vuln \
+            --pkg-types os,library \
+            --severity HIGH,CRITICAL \
+            --timeout 15m \
+            --format json \
+            --output "$raw_report" \
+            --exit-code 0 \
+            "$database_image"; then
+            scan_failed=1
+          fi
+          if ! trivy image \
+            --scanners vuln \
+            --pkg-types os,library \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --timeout 15m \
+            --format json \
+            --output "$report" \
+            --exit-code 0 \
+            "$database_image"; then
+            scan_failed=1
+          fi
+          if ! TARGET_IMAGE="$database_image" bash scripts/test-postgres-major-upgrade.sh; then
+            scan_failed=1
+          fi
           if ! node scripts/trivy-report-summary.mjs "$report_dir"; then
             scan_failed=1
           fi
@@ -203,7 +239,9 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: desarrollo-seguro-trivy-${{ github.sha }}
-          path: ${{ runner.temp }}/desarrollo-seguro-trivy-reports/*.json
+          path: |
+            ${{ runner.temp }}/desarrollo-seguro-trivy-reports/*.json
+            ${{ runner.temp }}/desarrollo-seguro-trivy-raw-reports/*.json
           if-no-files-found: ignore
           retention-days: 14
 

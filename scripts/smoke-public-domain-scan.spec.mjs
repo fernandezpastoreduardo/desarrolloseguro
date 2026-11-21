@@ -7,6 +7,7 @@ import {
   validateReusableAdmission,
   validateTerminalFailure,
   describeTerminalFailure,
+  describeStatusProgress,
   waitForPublicScanReport,
 } from "./smoke-public-domain-scan.mjs";
 
@@ -168,6 +169,27 @@ test("returns a safe terminal scan failure category to the deploy smoke", () => 
   }), "executor_failed");
 });
 
+test("formats bounded state diagnostics without exposing job or report identifiers", () => {
+  assert.equal(describeStatusProgress({
+    state: "failed",
+    activeJobId: "job-secret-id",
+    lastReport: { id: "report-secret-id" },
+    failureCode: "executor_failed",
+    failureDiagnostic: {
+      stage: "executor",
+      code: "executor_application_failed",
+      probeFailures: [
+        { operation: "dns", code: "dns_resolution_failed" },
+        { operation: "http-get", code: "connection_failed" },
+        { operation: "tls", code: "tls_failed" },
+        { operation: "headers", code: "headers_failed" },
+        { operation: "extra", code: "ignored" },
+      ],
+    },
+  }), "public_scan_wait state=failed active_job=active last_report=present failure=executor_failed diagnostic_stage=executor diagnostic_code=executor_application_failed probe_failures=5");
+  assert.doesNotMatch(describeStatusProgress({ activeJobId: "job-secret-id" }), /job-secret-id|report-secret-id/u);
+});
+
 test("polls through a queued scan and emits safe progress before returning its fresh report", async () => {
   let currentTime = 0;
   let calls = 0;
@@ -190,7 +212,7 @@ test("polls through a queued scan and emits safe progress before returning its f
 
   assert.equal(result.id, report.id);
   assert.equal(calls, 3);
-  assert.deepEqual(progress, ["public_scan_wait state=updating active_job=active"]);
+  assert.deepEqual(progress, ["public_scan_wait state=updating active_job=active last_report=missing failure=none diagnostic_stage=none diagnostic_code=none probe_failures=0"]);
   assert.doesNotMatch(progress[0], /job-secret-id/u);
 });
 
@@ -208,9 +230,9 @@ test("reports the final public scan state when its bounded wait expires", async 
       onProgress: (message) => progress.push(message),
       getStatus: async () => ({ state: "updating", activeJobId: "job-id", lastReport: null }),
     }),
-    { message: "public_scan_completion_timeout" },
+    { message: "public_scan_completion_timeout_state_updating_active_job_active_last_report_missing_failure_none_diagnostic_stage_none_diagnostic_code_none_probe_failures_0" },
   );
-  assert.equal(progress.at(-1), "public_scan_wait state=updating active_job=active");
+  assert.equal(progress.at(-1), "public_scan_wait state=updating active_job=active last_report=missing failure=none diagnostic_stage=none diagnostic_code=none probe_failures=0");
 });
 
 test("fails immediately when admission has no visible job or new report", async () => {

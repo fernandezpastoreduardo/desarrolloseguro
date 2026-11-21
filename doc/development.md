@@ -2,9 +2,9 @@
 
 ## Requisitos
 
-- Node.js 26.13.x (`.nvmrc`) y pnpm 12.5.1.
+- Node.js 26.13.1 (`.nvmrc`) y pnpm 12.5.1.
 - Docker Engine/Desktop con Docker Compose.
-- Para verificaciones PostgreSQL: instancia local y dedicada de PostgreSQL 17 con pgvector.
+- Para verificaciones PostgreSQL: instancia local y dedicada de PostgreSQL 19 con pgvector 0.8.7.
 
 Instala dependencias y arranca la aplicación:
 

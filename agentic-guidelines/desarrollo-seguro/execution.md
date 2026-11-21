@@ -4,7 +4,7 @@ Antes de cambiar código, lee [AGENTS.md](../../AGENTS.md), [README.md](README.m
 
 ## Verificación local
 
-Requisitos: Node `26.13.0`, pnpm `12.5.1` y lockfile vigente.
+Requisitos: Node `26.13.1`, pnpm `12.5.1` y lockfile vigente.
 
 ```sh
 pnpm install --frozen-lockfile

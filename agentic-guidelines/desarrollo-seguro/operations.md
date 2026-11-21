@@ -62,3 +62,10 @@ La ejecución real permanece deshabilitada. El paquete worker tiene un executor 
 El coordinador arranca como `development-security-runtime-coordinator` en Compose, con `network_mode: none`. Requiere `DS_RUNTIME_COORDINATOR_SOCKET`, UID/GID, `DS_RUNTIME_EXECUTOR_IMAGE` y `DS_RUNTIME_BROKER_IMAGE`; opcionalmente acepta rutas absolutas `DS_RUNTIME_DOCKER_BINARY` y `DS_RUNTIME_DOCKER_SOCKET` (por defecto `/usr/bin/docker` y `/var/run/docker.sock`). La imagen del coordinador instala `docker-cli` compatible con Alpine y el CLI fija el daemon mediante `docker --host unix://…`, sin usar el contexto Docker del usuario. El socket Docker da control equivalente a root: solo este proceso lo monta. No se monta el binario del host, cuya libc puede no ser compatible con Alpine. El worker accede por un socket Unix con UID 0, GID 1000 y modo `0660`; el directorio compartido impide escritura de otros usuarios.
 
 `scripts/create-development-security-egress-network.sh` crea una bridge sin IPv6 y con el nombre fijo `br-ds-egress`. `scripts/configure-development-security-egress-firewall.sh` instala reglas limitadas a esa interfaz: salida TCP 80/443, denegación de destinos reservados/privados, bloqueo de entrada al host y bloqueo de forwarding IPv6. Nunca vacía cadenas generales ni toca UFW. Antes de activar el tráfico real, valida estas reglas con servicios señuelo en las redes internas de Desarrollo Seguro; la prueba debe fallar al acceder a host, loopback, RFC1918, link-local y IPv6, y permitir únicamente el acceso web previsto. El procedimiento operativo está en [production.md](../../doc/production.md).
+
+La auditoría privada añade una comprobación independiente de conectividad desde
+la bridge real. Debe distinguir resolución DNS, conexión TCP, negociación TLS,
+respuesta HTTP y rechazo de autenticación. La sonda no envía credenciales ni
+persiste respuestas. La ACL de Grumphya solo se fija después de observar la IP
+que recibe su proxy; el preflight de Desarrollo Seguro solo acepta hosts
+exactos (`/32` o `/128`).

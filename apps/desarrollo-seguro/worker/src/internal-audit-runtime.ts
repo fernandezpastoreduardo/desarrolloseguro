@@ -181,7 +181,7 @@ function validateAllowedNetworks(value: string | undefined): void {
     const [address, prefix] = network.split("/");
     const family = isIP(address);
     const prefixLength = Number(prefix);
-    return network === "0.0.0.0/0" || network === "::/0" || family === 0 || !Number.isInteger(prefixLength) || prefixLength < 1 || prefixLength > (family === 4 ? 32 : 128);
+    return network === "0.0.0.0/0" || network === "::/0" || family === 0 || !Number.isInteger(prefixLength) || prefixLength !== (family === 4 ? 32 : 128);
   })) {
     throw new Error("internal_audit_networks_invalid");
   }

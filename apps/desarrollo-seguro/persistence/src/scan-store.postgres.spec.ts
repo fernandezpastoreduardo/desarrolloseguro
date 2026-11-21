@@ -227,7 +227,7 @@ describePostgres.sequential("PostgresScanStore", () => {
       await store.ensureFreshScan({ hostname, profileVersion: "domain-v3", trigger: "requested" });
       const job = await store.claimNextScan(new Date(), TEST_LEASE_MS);
       if (!job) throw new Error("expected_claimed_lifecycle_scan");
-      const completedAt = new Date(Date.now() - 2 * 60 * 60 * 1000);
+      const completedAt = new Date(Date.now() - 5 * 60 * 1000);
       const reportId = await store.completeScan({
         jobId: job.id,
         leaseToken: job.leaseToken,
@@ -306,6 +306,12 @@ describePostgres.sequential("PostgresScanStore", () => {
         { from_state: "suspended", to_state: "active", report_id: reactivatedReportId, reason_code: "eligible_assessment" },
       ],
     });
+    await expect(
+      store.verifyReportBadge({ hostname, reportId: eligibleReportId, tokenHash, at: new Date() }),
+    ).resolves.toBe("report_not_current");
+    await expect(
+      store.verifyReportBadge({ hostname, reportId: reactivatedReportId, tokenHash, at: new Date() }),
+    ).resolves.toBe("verified");
     await expect(store.issueReportBadge({ hostname, reportId: reactivatedReportId, tokenHash: "e".repeat(64), expiresAt })).resolves.toBe(true);
   });
 
@@ -336,13 +342,13 @@ describePostgres.sequential("PostgresScanStore", () => {
       return reportId;
     };
 
-    const eligibleReportId = await completeAt(new Date(Date.now() - 2 * 60 * 60 * 1000), makeEligibleDomainV3Checks(), "pass");
+    const eligibleReportId = await completeAt(new Date(Date.now() - 30 * 60 * 1000), makeEligibleDomainV3Checks(), "pass");
     const pendingChecks = makeEligibleDomainV3Checks().map((check) =>
       check.controlId === "DS-HDR-01"
         ? { ...check, status: "unknown" as const, summary: "Comprobación DS-HDR-01: unknown." }
         : check,
     );
-    const pendingReportId = await completeAt(new Date(Date.now() - 60 * 60 * 1000), pendingChecks, "inconclusive");
+    const pendingReportId = await completeAt(new Date(Date.now() - 10 * 60 * 1000), pendingChecks, "inconclusive");
     const tokenHash = "f".repeat(64);
     const expiresAt = new Date(Date.now() + 86_400_000);
 
@@ -354,6 +360,14 @@ describePostgres.sequential("PostgresScanStore", () => {
     expect(pendingReportId).not.toBe(eligibleReportId);
     await expect(store.issueReportBadge({ hostname, reportId: eligibleReportId, tokenHash, expiresAt })).resolves.toBe(true);
     await expect(store.verifyReportBadge({ hostname, reportId: eligibleReportId, tokenHash, at: new Date() })).resolves.toBe("verified");
+    await expect(
+      store.verifyReportBadge({
+        hostname,
+        reportId: eligibleReportId,
+        tokenHash,
+        at: new Date(Date.now() + 2 * 60 * 60 * 1000),
+      }),
+    ).resolves.toBe("report_not_current");
   });
 
   it("does not let an older report overwrite a newer certification state", async () => {

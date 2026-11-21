@@ -245,6 +245,7 @@ export class PostgresScanStore implements ScanJobStore {
         AND certification.state = 'active'
         AND certification.certified_report_id = reports.id
        WHERE reports.id = $2 AND reports.hostname = $3
+         AND reports.expires_at > now()
          AND reports.profile_version IN ('domain-v1', 'domain-v2', 'domain-v3')
        RETURNING token_hash`,
       [record.tokenHash, record.reportId, record.hostname, record.expiresAt],
@@ -280,16 +281,18 @@ export class PostgresScanStore implements ScanJobStore {
 
   async verifyReportBadge(input: { hostname: string; requestedHostname?: string; reportId: string; tokenHash: string; at: Date }): Promise<"verified" | "report_not_current" | "badge_expired" | "badge_revoked" | "redirect_not_valid"> {
     const result = await this.pool.query<Record<string, unknown>>(
-      `SELECT badges.hostname AS badge_hostname, badges.report_id AS badge_report_id,
-         badges.expires_at, badges.revoked_at, reports.id AS current_report_id,
+      `SELECT badges.hostname AS badge_hostname, badges.expires_at, badges.revoked_at,
+         certified_report.id AS current_report_id,
+         certified_report.expires_at AS current_report_expires_at,
          certification.state AS certification_state,
          certification.certified_report_id
        FROM public.ds_report_badges AS badges
-       LEFT JOIN public.ds_scan_runs AS reports
-         ON reports.id = badges.report_id AND reports.hostname = badges.hostname
        LEFT JOIN public.ds_beta_certifications AS certification
-         ON certification.hostname = reports.hostname
+         ON certification.hostname = badges.hostname
         AND certification.policy_version = 'beta-0.1'
+       LEFT JOIN public.ds_scan_runs AS certified_report
+         ON certified_report.id = certification.certified_report_id
+        AND certified_report.hostname = certification.hostname
        WHERE badges.token_hash = $1 LIMIT 1`,
       [input.tokenHash],
     );
@@ -303,7 +306,7 @@ export class PostgresScanStore implements ScanJobStore {
       (requestedHostname !== input.hostname && resolvedHostname !== input.hostname) ||
       (row.badge_hostname !== requestedHostname && resolvedHostname !== row.badge_hostname)
     ) return "redirect_not_valid";
-    if (row.badge_hostname !== input.hostname || row.badge_report_id !== input.reportId) {
+    if (row.badge_hostname !== input.hostname) {
       return "report_not_current";
     }
     if (row.revoked_at !== null) return "badge_revoked";
@@ -311,7 +314,9 @@ export class PostgresScanStore implements ScanJobStore {
     if (
       row.current_report_id !== input.reportId ||
       row.certification_state !== "active" ||
-      row.certified_report_id !== input.reportId
+      row.certified_report_id !== input.reportId ||
+      !(row.current_report_expires_at instanceof Date) ||
+      row.current_report_expires_at <= input.at
     ) return "report_not_current";
     return "verified";
   }

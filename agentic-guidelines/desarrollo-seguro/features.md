@@ -23,19 +23,38 @@ Un informe identifica hostname, perfil, rutas cubiertas, métodos, resultados, f
 La migración 023 conserva una certificación por dominio y política. Los estados
 `pending`, `active` y `suspended` se derivan al completar un informe; los
 eventos de transición quedan registrados sin guardar contenido sensible.
-El sello solo se emite y verifica para el informe certificado vigente de una
-certificación `active`. La evidencia incompleta mantiene una certificación
-activa en revisión; un incumplimiento bloqueante la suspende y un informe
-elegible posterior la reactiva.
+El sello se emite para una identidad de dominio con certificación `active` y
+un informe certificado vigente. El token, con vencimiento de 30 días, queda
+asociado a la identidad canónica del dominio; no queda fijado para siempre al
+UUID que existía al emitirlo. En cada verificación, el widget obtiene el
+`certifiedReportId` vigente desde el estado público y la API comprueba que ese
+UUID siga siendo el informe certificado, fresco y activo. El widget puede
+seguir visible durante una revisión (`updating`) mientras el certificado
+anterior siga fresco; la API vuelve a comprobar su vigencia. Por tanto, una
+renovación elegible actualiza el informe que verifica el mismo sello; una
+suspensión, caducidad del informe, revocación o expiración del token lo oculta.
+La evidencia incompleta mantiene una certificación activa en revisión; un
+incumplimiento bloqueante la suspende y un informe elegible posterior la
+reactiva.
 
-**Criterios:** no se puede emitir un sello para un informe pendiente, bloqueado
-o histórico; un sello suspendido deja de verificarse aunque su token siga
-existiendo; la ficha pública muestra el estado y la fecha de última evaluación.
+**Criterios:** no se puede emitir un sello para una identidad sin informe
+certificado vigente; un informe pendiente, bloqueado o histórico nunca se
+verifica como certificado. Un sello suspendido deja de verificarse aunque su
+token siga existiendo. Una renovación elegible mueve la verificación al nuevo
+informe sin modificar el snippet ni emitir otro token. El sello también deja
+de verificarse si el informe, la certificación o el token caducan; la ficha
+pública muestra el estado y la fecha de última evaluación.
 Para los dos hostnames autorizados de Grumphya, emisión y verificación resuelven
 el hostname canónico con la evidencia reciente 301/308 y ligan el sello al
-informe certificado vigente de ese destino. La respuesta de verificación incluye
-`canonicalHostname`; los fallos devuelven diagnósticos categóricos sin token.
-La allowlist de `Origin` sigue independiente de la identidad del informe.
+informe certificado vigente de ese destino en cada petición. El widget resuelve
+`certifiedReportId` mediante `GET /domains/:hostname/status`; el `reportId`
+estático del embed es opcional y no autoritativo. Resuelve estados `fresh` y
+`updating`; cualquier otro estado oculta el sello. La verificación acepta solo
+el UUID que actualmente señala la certificación activa, y responde con ese
+UUID y `canonicalHostname`; los fallos devuelven diagnósticos categóricos sin
+token. La allowlist de `Origin` sigue independiente de la identidad del
+informe.
+
 El widget público puede incrustarse desde `grumphya.com`, incluso cuando el
 documento consumidor aplica COEP `require-corp`: únicamente la respuesta de
 `/desarrollo-seguro/badge-widget.js` publica

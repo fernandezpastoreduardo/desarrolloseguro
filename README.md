@@ -15,7 +15,7 @@ Desarrollo Seguro es una aplicación académica para observar controles técnico
 
 ## Requisitos
 
-Node.js `26.13.0`, pnpm `12.5.1` y Docker Compose para la base local o el stack aislado.
+Node.js `26.13.1`, pnpm `12.5.1` y Docker Compose para la base local o el stack aislado.
 
 ```sh
 pnpm install --frozen-lockfile
@@ -33,7 +33,7 @@ DS_TEST_DATABASE_URL=postgresql://...
 pnpm test:postgres
 ```
 
-Consulta [desarrollo local](doc/development.md), [verificación](doc/verification.md), [CI](doc/ci-cd.md) y [operación del stack aislado](doc/production.md).
+Consulta [desarrollo local](doc/development.md), [verificación](doc/verification.md), [CI](doc/ci-cd.md), [operación del stack aislado](doc/production.md) y [migración major de PostgreSQL](doc/postgresql-major-upgrade.md).
 
 ## Stack Docker aislado
 

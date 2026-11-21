@@ -164,7 +164,8 @@ export function canonicalizeForSignature(value: unknown): string {
     return `[${value.map(canonicalizeForSignature).join(",")}]`;
   }
   if (isRecord(value)) {
-    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalizeForSignature(value[key])}`).join(",")}}`;
+    const keys = Object.keys(value).sort(); // NOSONAR: UTF-16 code-unit order is required to preserve signed JSON bytes.
+    return `{${keys.map((key) => `${JSON.stringify(key)}:${canonicalizeForSignature(value[key])}`).join(",")}}`;
   }
   throw new Error("internal_audit_response_envelope_invalid");
 }
@@ -226,6 +227,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function hasExactKeys(value: Record<string, unknown>, required: readonly string[]): boolean {
-  const keys = Object.keys(value).sort();
+  const keys = Object.keys(value);
   return keys.length === required.length && required.every((key) => keys.includes(key));
 }

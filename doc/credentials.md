@@ -48,7 +48,9 @@ Grumphya. La observación de solo lectura del VPS del 19 de noviembre de 2026
 mostró `31.70.130.181` como IP pública de salida
 (`src=31.70.130.181`). Por tanto, el valor candidato para
 `AUDIT_ALLOWED_NETWORKS` es `31.70.130.181/32`; Grumphya debe confirmar que
-su proxy ve esa misma IP antes de escribirla en su ACL. La auditoría permanece
+su proxy ve esa misma IP antes de escribirla en su ACL. El preflight solo
+acepta hosts exactos (`/32` en IPv4 o `/128` en IPv6), nunca `/24`, una subnet
+Docker o una red abierta. La auditoría permanece
 desactivada hasta que Grumphya confirme claves, ACL, rutas JSON, atestación,
 TLS y roles PostgreSQL.
 

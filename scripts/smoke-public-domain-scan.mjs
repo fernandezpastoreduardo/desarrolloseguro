@@ -151,6 +151,36 @@ export function describeTerminalFailure(status) {
   return `public_scan_terminal_${detail}`;
 }
 
+export function describeStatusProgress(status) {
+  const allowedStates = new Set([
+    "queued",
+    "running",
+    "updating",
+    "fresh",
+    "stale",
+    "failed",
+    "not_scanned",
+    "unavailable",
+  ]);
+  const state = allowedStates.has(status?.state) ? status.state : "unknown";
+  const activeJob = status?.activeJobId ? "active" : "none";
+  const report = status?.lastReport ? "present" : "missing";
+  const failure = typeof status?.failureCode === "string" && SCAN_FAILURE_CODES.has(status.failureCode)
+    ? status.failureCode
+    : "none";
+  const diagnostic = status?.failureDiagnostic;
+  const diagnosticStage = diagnostic && typeof diagnostic.stage === "string" && /^[a-z0-9_]+$/u.test(diagnostic.stage)
+    ? diagnostic.stage
+    : "none";
+  const diagnosticCode = diagnostic && typeof diagnostic.code === "string" && /^[a-z0-9_]+$/u.test(diagnostic.code)
+    ? diagnostic.code
+    : "none";
+  const probeCount = diagnostic && Array.isArray(diagnostic.probeFailures)
+    ? Math.min(diagnostic.probeFailures.length, 5)
+    : 0;
+  return `public_scan_wait state=${state} active_job=${activeJob} last_report=${report} failure=${failure} diagnostic_stage=${diagnosticStage} diagnostic_code=${diagnosticCode} probe_failures=${probeCount}`;
+}
+
 export async function waitForPublicScanReport({
   getStatus,
   previousReportId,
@@ -180,22 +210,16 @@ export async function waitForPublicScanReport({
     await wait(Math.min(pollIntervalMs, deadline - now()));
   }
   emitProgressIfDue(status, now(), nextProgressAt, onProgress);
-  throw new Error("public_scan_completion_timeout");
+  const diagnostic = describeStatusProgress(status)
+    .replace("public_scan_wait ", "")
+    .replaceAll("=", "_")
+    .replaceAll(" ", "_");
+  throw new Error(`public_scan_completion_timeout_${diagnostic}`);
 }
 
 function emitProgressIfDue(status, now, nextProgressAt, onProgress) {
   if (now < nextProgressAt) return;
-  const allowedStates = new Set([
-    "updating",
-    "fresh",
-    "stale",
-    "failed",
-    "not_scanned",
-    "unavailable",
-  ]);
-  const state = allowedStates.has(status?.state) ? status.state : "unknown";
-  const job = status?.activeJobId ? "active" : "none";
-  onProgress(`public_scan_wait state=${state} active_job=${job}`);
+  onProgress(describeStatusProgress(status));
 }
 
 async function fetchJson(path, init = {}) {

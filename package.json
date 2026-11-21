@@ -11,6 +11,7 @@
     "build": "pnpm -r build",
     "test": "pnpm --workspace-concurrency=1 -r test",
     "test:e2e": "pnpm --filter @desarrolloseguro/web test:e2e",
+    "test:lighthouse": "node scripts/lighthouse-lab.mjs",
     "test:coverage": "pnpm -r build && pnpm --workspace-concurrency=1 -r test:coverage",
     "test:postgres": "pnpm --filter @desarrolloseguro/persistence test:postgres && pnpm --filter @desarrolloseguro/worker test:postgres",
     "typecheck": "pnpm -r typecheck",
@@ -20,12 +21,14 @@
     "audit:preflight": "node scripts/check-internal-audit-config.mjs",
     "audit:identity:provision": "bash scripts/provision-internal-audit-identity.sh",
     "audit:resources:preflight": "node scripts/check-internal-audit-resources.mjs",
+    "audit:egress:probe": "bash scripts/probe-development-security-egress.sh",
     "ci:verify": "bash scripts/ci-verify.sh",
     "quality:check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "quality:sonar": "pnpm test:coverage && node scripts/run-sonarqube-local.mjs",
     "sandbox:check": "bash scripts/verify-executor-sandbox.sh"
   },
   "devDependencies": {
-    "@sonar/scan": "5.1.0"
+    "@sonar/scan": "5.1.0",
+    "lighthouse": "13.6.0"
   }
 }

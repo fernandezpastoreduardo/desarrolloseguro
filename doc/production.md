@@ -4,7 +4,7 @@ Desarrollo Seguro tiene su propio archivo [`compose.production.yaml`](../compose
 
 ## Topología
 
-- `development-security-database`: PostgreSQL 17 con pgvector y TLS, en red interna.
+- `development-security-database`: PostgreSQL 17 con el paquete pgvector 0.8.7 y TLS, en red interna. La base activa y su volumen siguen en PG17 mientras se valida la migración a PG19.
 - `development-security-migrate`: aprovisiona la base y aplica migraciones antes de iniciar la API.
 - `development-security-api`: API HTTPS en redes internas, sin puerto publicado.
 - `development-security-worker`: consume trabajos y solo tiene acceso a PostgreSQL y al socket Unix del coordinador.
@@ -42,6 +42,8 @@ docker compose -f compose.production.yaml up -d --build --wait
 ```
 
 La ruta raíz `/` y `/desarrollo-seguro/` sirven la página estática inicial; `/app/` sirve el portal de consulta y `/api/desarrollo-seguro/v1/` se reenvía a la API. La persistencia usa el volumen `development-security-postgres`. `docker compose down` conserva los datos; evita `down -v` salvo que quieras borrar deliberadamente la base.
+
+La migración major de PostgreSQL se prepara en [la guía PostgreSQL 17→19](postgresql-major-upgrade.md). CI ya ejecuta integración en PG19 y una restauración lógica sintética; la producción mantiene PG17 hasta terminar la investigación del sello de Grumphya y verificar una copia externa restaurada. No cambies la etiqueta de imagen dejando el montaje del volumen PG17. Para el futuro corte se reservarán otro nombre y otra ruta para el volumen, `DEVELOPMENT_SECURITY_POSTGRES_VOLUME=development-security-postgres-pg19`, `DEVELOPMENT_SECURITY_POSTGRES_DATA_MOUNT=/var/lib/postgresql` y `DEVELOPMENT_SECURITY_POSTGRES_DATA_DIRECTORY=/var/lib/postgresql/19/docker`; el plan debe restaurar roles y todas las bases antes de iniciar la aplicación sobre el volumen nuevo.
 
 Para detener los servicios:
 
