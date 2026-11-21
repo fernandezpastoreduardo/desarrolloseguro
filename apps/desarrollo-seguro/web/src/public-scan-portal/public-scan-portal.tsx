@@ -1368,6 +1368,7 @@ function CategoryDetailsModal({
   return (
     <div
       className="ds-portal__category-modal-backdrop"
+      role="presentation"
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}

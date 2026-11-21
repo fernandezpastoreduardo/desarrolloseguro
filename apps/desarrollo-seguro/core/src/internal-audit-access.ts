@@ -74,6 +74,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function hasExactKeys(value: Record<string, unknown>, required: readonly string[]): boolean {
-  const keys = Object.keys(value).sort();
+  const keys = Object.keys(value);
   return keys.length === required.length && required.every((key) => keys.includes(key));
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { COOKIE_CATALOG_SOURCE } from "./data/cookie-pattern-catalog.js";
+import { COOKIE_CATALOG, COOKIE_CATALOG_SOURCE } from "./data/cookie-pattern-catalog.js";
 import { inspectPassivePageSignals } from "./passive-page-signals.js";
 
 describe("inspectPassivePageSignals", () => {
@@ -85,6 +85,10 @@ describe("inspectPassivePageSignals", () => {
       revision: "7786335566460016f07a50705a92fc781c976f6f",
       license: "Apache-2.0",
     });
+  });
+
+  it("uses secure HTTPS for published cookie privacy links", () => {
+    expect(COOKIE_CATALOG.every((entry) => entry.privacyUrl === "" || entry.privacyUrl.startsWith("https://"))).toBe(true);
   });
 
   it("handles deeply nested untrusted markup without recursive traversal", () => {
