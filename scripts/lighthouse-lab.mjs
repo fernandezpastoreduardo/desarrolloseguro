@@ -80,10 +80,21 @@ function run(command, args, options = {}) {
   });
 }
 
-async function waitForServer(url, child) {
+async function waitForServer(url, child, getStderr) {
+  if (child.pid === undefined) {
+    await new Promise((resolveSpawn, rejectSpawn) => {
+      child.once("spawn", resolveSpawn);
+      child.once("error", rejectSpawn);
+    });
+  }
   const deadline = Date.now() + 20_000;
   while (Date.now() < deadline) {
-    if (child.exitCode !== null) throw new Error("lighthouse_preview_exited_early");
+    if (child.exitCode !== null && child.exitCode !== undefined) {
+      throw new Error(`lighthouse_preview_exited_early:${getStderr()}`);
+    }
+    if (child.signalCode !== null && child.signalCode !== undefined) {
+      throw new Error(`lighthouse_preview_signaled_early:${child.signalCode}:${getStderr()}`);
+    }
     try {
       const response = await fetch(url, { signal: AbortSignal.timeout(1_000) });
       if (response.ok) return;
@@ -117,13 +128,18 @@ export async function runLighthouseLab({ cwd = process.cwd() } = {}) {
   const previewPort = await findAvailablePort();
   const baseUrl = `http://127.0.0.1:${previewPort}/app/`;
   const artifactDirectory = await mkdtemp(join(tmpdir(), "desarrollo-seguro-lighthouse-"));
-  const preview = spawn("pnpm", [
-    "--filter", "@desarrolloseguro/web", "exec", "vite", "preview",
-    "--host", "127.0.0.1", "--port", String(previewPort), "--strictPort",
-  ], { cwd, stdio: "ignore" });
+  const preview = spawn(process.execPath, [
+    join(webDirectory, "node_modules/vite/bin/vite.js"),
+    "preview", "--host", "127.0.0.1", "--port", String(previewPort), "--strictPort",
+  ], { cwd: webDirectory, stdio: ["ignore", "pipe", "pipe"] });
+  let previewStderr = "";
+  preview.stdout?.resume();
+  preview.stderr?.on("data", (chunk) => {
+    previewStderr = `${previewStderr}${chunk}`.slice(-2_000);
+  });
 
   try {
-    await waitForServer(baseUrl, preview);
+    await waitForServer(baseUrl, preview, () => previewStderr);
     const requireFromWeb = createRequire(join(webDirectory, "package.json"));
     const chromePath = process.env.CHROME_PATH || requireFromWeb("@playwright/test").chromium.executablePath();
     const reports = [
