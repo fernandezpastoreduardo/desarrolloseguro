@@ -134,6 +134,9 @@ COPY apps/desarrollo-seguro/web/package.json apps/desarrollo-seguro/web/package.
 COPY apps/desarrollo-seguro/worker/package.json apps/desarrollo-seguro/worker/package.json
 RUN pnpm install --prod --filter @desarrolloseguro/worker... --frozen-lockfile --ignore-scripts
 
+RUN rm -rf /usr/lib/node_modules/pnpm /usr/local/lib/node_modules/pnpm \
+    && rm -f /usr/bin/pnpm /usr/bin/pnpx /usr/local/bin/pnpm /usr/local/bin/pnpx
+
 COPY --from=development-security-worker-build --chown=pwuser:pwuser /workspace/apps/desarrollo-seguro/worker/dist /workspace/apps/desarrollo-seguro/worker/dist
 COPY --from=development-security-worker-build --chown=pwuser:pwuser /workspace/apps/desarrollo-seguro/core/dist /workspace/apps/desarrollo-seguro/core/dist
 COPY --chown=pwuser:pwuser apps/desarrollo-seguro/worker/scripts/privacy-browser-fixture-smoke.mjs /workspace/apps/desarrollo-seguro/worker/scripts/privacy-browser-fixture-smoke.mjs
