@@ -1,13 +1,14 @@
 # Sello verificable de informe
 
-El API puede emitir un identificador aleatorio de 256 bits ligado al informe certificado vigente de `grumphya.com` con perfil `domain-v1`, `domain-v2` o `domain-v3` (el perfil activo actual es `domain-v3`). Solo guarda su SHA-256. Cada sello dura 30 días, puede revocarse y desaparece si la política de retención elimina el informe. No se emite desde datos de muestra, desde un informe pendiente o desde un informe bloqueado.
+El API puede emitir un identificador aleatorio de 256 bits para la identidad canónica de `grumphya.com` con perfil `domain-v1`, `domain-v2` o `domain-v3` (el perfil activo actual es `domain-v3`). Solo guarda su SHA-256. Cada sello dura 30 días y puede revocarse. Al emitirlo se exige una certificación `active` con informe certificado vigente. El token no se fija al UUID de ese primer informe: en cada verificación se comprueba el `certifiedReportId` actual. Una renovación elegible mantiene el mismo sello; una certificación suspendida, un informe vencido, la revocación o el vencimiento del token lo ocultan. No se emite desde datos de muestra, desde una identidad sin informe certificado vigente o desde un informe bloqueado.
 
 La certificación beta se persiste por dominio (`pending`, `active` o
-`suspended`). La emisión y la verificación requieren una certificación
-`active` y que `report_id` coincida con `certified_report_id`; los informes
-históricos no generan un sello verificable. Una suspensión oculta
-automáticamente el sello y una evaluación elegible posterior lo reactiva sin
-cambiar el dominio autorizado.
+`suspended`). La emisión requiere una certificación `active`; la verificación
+resuelve el informe vigente desde el estado público y comprueba que su ID
+coincida con `certified_report_id`. Los informes históricos nunca se presentan
+como vigentes. Una suspensión oculta automáticamente el sello y una evaluación
+elegible posterior lo reactiva sin cambiar el dominio autorizado ni el snippet
+del sitio.
 
 `grumphya.com` y `www.grumphya.com` usan la misma identidad solo si un informe
 reciente observó una cadena completa de redirección permanente 301/308 entre
@@ -28,7 +29,7 @@ Para emitir desde el checkout de Desarrollo Seguro en el VPS, ejecuta el helper 
 node scripts/issue-report-badge.mjs <uuid-del-informe-real>
 ```
 
-El helper valida el UUID, lee la clave solo desde el archivo privado y muestra la respuesta pública de emisión. La API guarda solo SHA-256 del token aleatorio; conserva el token y `verifyUrl` de la salida para el embed. No se puede recuperar después. La emisión acepta cualquiera de los dos hostnames y resuelve el informe vigente del hostname canónico. Se rechaza si el ID no es el informe certificado vigente o no pertenece a un informe del perfil de análisis de dominio.
+El helper valida el UUID, lee la clave solo desde el archivo privado y muestra la respuesta pública de emisión. La API guarda solo SHA-256 del token aleatorio; conserva el token y `verifyUrl` de la salida para el embed. No se puede recuperar después. La emisión acepta cualquiera de los dos hostnames y resuelve la identidad del hostname canónico. Se rechaza si no hay una certificación activa con informe vigente o si el hostname no pertenece al perfil de análisis de dominio. El UUID devuelto identifica el informe vigente al emitir; no debe fijarse en el embed.
 
 La emisión se autoriza con el secreto que solo conserva el VPS:
 
@@ -44,17 +45,16 @@ La respuesta contiene `hostname`, `canonicalHostname`, `reportId`, `token`, `ver
 
 ## Verificación desde la página pública y el sitio
 
-`verifyUrl` abre `/desarrollo-seguro/verificar.html`. El token va en el fragmento `#` de la URL, que no se envía al servidor al abrir la página. El verificador consulta `POST /api/desarrollo-seguro/v1/badges/verify` con `cache: "no-store"`; el token está en el cuerpo de la solicitud y no aparece en el access log. Muestra dominio e ID con `textContent` y enlaza a la vista humana `/app/?report=<reportId>`, el formato que consume el buscador. La página usa `noindex`, `nofollow` y `no-referrer`.
+`verifyUrl` abre `/desarrollo-seguro/verificar.html`. El token va en el fragmento `#` de la URL, que no se envía al servidor al abrir la página. El verificador consulta primero `GET /api/desarrollo-seguro/v1/domains/<hostname>/status` y obtiene `lastReport.certification.certifiedReportId`; después consulta `POST /api/desarrollo-seguro/v1/badges/verify` con `cache: "no-store"`. El token solo va en el cuerpo de la petición de verificación. La página muestra dominio e ID con `textContent` y enlaza a la vista humana `/app/?report=<reportId>`, el formato que consume el buscador. Usa `noindex`, `nofollow` y `no-referrer`.
 
-La comprobación es un `POST` con el token en el cuerpo JSON, por lo que no aparece en la URL ni en los access logs. La API comprueba que el informe siga existiendo y sea el certificado vigente, que el sello no haya caducado ni se haya revocado, que la identidad del alias tenga evidencia reciente y que el origen sea el sitio autorizado. Una respuesta fallida incluye un código seguro (`hostname_not_authorized`, `report_not_current`, `badge_expired`, `badge_revoked`, `redirect_not_valid` o `network_failure`); los diagnósticos no incluyen tokens.
+La comprobación es un `POST` con el token en el cuerpo JSON, por lo que no aparece en la URL ni en los access logs. La API comprueba que el `reportId` recibido sea el `certifiedReportId` vigente, que la certificación esté activa, que el informe certificado no haya caducado, que el sello no haya caducado ni se haya revocado, que la identidad del alias tenga evidencia reciente y que el origen sea el sitio autorizado. Una respuesta fallida incluye un código seguro (`hostname_not_authorized`, `report_not_current`, `badge_expired`, `badge_revoked`, `redirect_not_valid` o `network_failure`); el widget conserva ese código como diagnóstico DOM y mantiene el enlace oculto. Los diagnósticos no incluyen tokens.
 
-Para incluirlo en `grumphya.com`, usa el `token` y `reportId` devueltos por la emisión. Este widget solo revela el enlace cuando la respuesta del servidor es válida desde el origen autorizado. Si se copia a otro dominio, el navegador envía el origen de ese dominio y la comprobación falla de forma cerrada:
+Para incluirlo en `grumphya.com`, usa el `token` devuelto por la emisión. El widget remoto resuelve el informe actual; `data-report-id` es opcional y no debe quedar codificado en el sitio. El widget solo revela el enlace cuando el estado público es `fresh` o `updating`, la certificación está activa y la verificación del servidor confirma que el informe certificado sigue fresco. Si se copia a otro dominio, el navegador envía el origen de ese dominio y la comprobación falla de forma cerrada:
 
 ```html
 <a data-ds-verified-badge
    data-token="TOKEN_EMITIDO"
    data-hostname="grumphya.com"
-   data-report-id="UUID_DEL_INFORME"
    hidden>Comprobando sello…</a>
 <script src="https://desarrolloseguro.org/desarrollo-seguro/badge-widget.js" defer></script>
 ```
