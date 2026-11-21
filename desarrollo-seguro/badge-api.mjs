@@ -4,6 +4,7 @@ const STATUS_PATH = "/api/desarrollo-seguro/v1/domains";
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
 const REPORT_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 export const AUTHORIZED_BADGE_HOSTNAMES = new Set(["grumphya.com", "www.grumphya.com"]);
+const REQUEST_TIMEOUT_MS = 10_000;
 
 export async function verifyReportBadge(input, fetchImpl = fetch) {
   if (
@@ -17,7 +18,7 @@ export async function verifyReportBadge(input, fetchImpl = fetch) {
     const currentReportId = await resolveCurrentReportId(input.hostname, fetchImpl);
     if (!currentReportId) return { verified: false, code: "report_not_current", hostname: input.hostname, reportId: "No indicado" };
     const url = `${API_ORIGIN}${API_PATH}`;
-    const response = await fetchImpl(url, {
+    const response = await fetchWithTimeout(fetchImpl, url, {
       method: "POST",
       mode: "cors",
       credentials: "omit",
@@ -42,7 +43,7 @@ export async function verifyReportBadge(input, fetchImpl = fetch) {
 
 async function resolveCurrentReportId(hostname, fetchImpl) {
   const url = `${API_ORIGIN}${STATUS_PATH}/${encodeURIComponent(hostname)}/status`;
-  const response = await fetchImpl(url, {
+  const response = await fetchWithTimeout(fetchImpl, url, {
     method: "GET",
     mode: "cors",
     credentials: "omit",
@@ -58,6 +59,16 @@ async function resolveCurrentReportId(hostname, fetchImpl) {
     typeof reportId === "string" && REPORT_ID_PATTERN.test(reportId)
     ? reportId
     : null;
+}
+
+async function fetchWithTimeout(fetchImpl, url, options) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    return await fetchImpl(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function safeFailureCode(result) {

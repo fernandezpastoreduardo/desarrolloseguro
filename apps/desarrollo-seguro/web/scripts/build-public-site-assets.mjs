@@ -19,10 +19,14 @@ const htmlPages = [
 const publicScripts = ["badge-api.mjs", "badge-widget.js", "verificar.js"];
 const publicAssets = ["assets/desarrollo-seguro-logo-v1.svg"];
 const prototypeStylesPath = resolve(repositoryRoot, "desarrollo-seguro/informe-grumphya-prototipo.scss");
+const badgeWidgetStylesPath = resolve(repositoryRoot, "desarrollo-seguro/badge-widget.scss");
+const badgeWidgetLogoPath = resolve(repositoryRoot, "desarrollo-seguro/assets/desarrollo-seguro-logo-v1.svg");
 
 export async function buildPublicSiteAssets(outputDirectory = defaultOutputDirectory) {
   const { css } = sass.compile(sourcePath, { style: "compressed", sourceMap: false });
   const { css: prototypeCss } = sass.compile(prototypeStylesPath, { style: "compressed", sourceMap: false });
+  const { css: badgeWidgetCss } = sass.compile(badgeWidgetStylesPath, { style: "compressed", sourceMap: false });
+  const logoSvg = await readFile(badgeWidgetLogoPath, "utf8");
   const digest = createHash("sha256").update(css).digest("hex").slice(0, 16);
   const prototypeDigest = createHash("sha256").update(prototypeCss).digest("hex").slice(0, 16);
   const stylesheetName = `site-${digest}.css`;
@@ -47,7 +51,16 @@ export async function buildPublicSiteAssets(outputDirectory = defaultOutputDirec
     await writeFile(join(publicSiteDirectory, page), generated);
   }));
   await Promise.all(publicScripts.map(async (script) => {
-    const source = await readFile(join(repositoryRoot, "desarrollo-seguro", script));
+    let source = await readFile(join(repositoryRoot, "desarrollo-seguro", script), "utf8");
+    if (script === "badge-widget.js") {
+      source = source
+        .replace('const BADGE_WIDGET_STYLES = "__DS_BADGE_WIDGET_STYLES__";', `const BADGE_WIDGET_STYLES = ${JSON.stringify(badgeWidgetCss)};`)
+        .replace('const BADGE_WIDGET_LOGO_SVG = "__DS_BADGE_WIDGET_LOGO_SVG__";', `const BADGE_WIDGET_LOGO_SVG = ${JSON.stringify(logoSvg)};`);
+      if (source.includes('const BADGE_WIDGET_STYLES = "__DS_BADGE_WIDGET_STYLES__";') ||
+        source.includes('const BADGE_WIDGET_LOGO_SVG = "__DS_BADGE_WIDGET_LOGO_SVG__";')) {
+        throw new Error("badge_widget_asset_injection_failed");
+      }
+    }
     await writeFile(join(publicSiteDirectory, script), source);
   }));
   await Promise.all(publicAssets.map(async (asset) => {
