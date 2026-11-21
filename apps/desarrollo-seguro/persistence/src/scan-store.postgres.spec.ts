@@ -96,11 +96,94 @@ describePostgres.sequential("PostgresScanStore", () => {
 
     await expect(store.issueReportBadge({ hostname, reportId, tokenHash, expiresAt })).resolves.toBe(true);
     await expect(store.issueReportBadge({ hostname: "other.example", reportId, tokenHash: "b".repeat(64), expiresAt })).resolves.toBe(false);
-    await expect(store.verifyReportBadge({ hostname: "other.example", reportId, tokenHash, at: new Date() })).resolves.toBe(false);
-    await expect(store.verifyReportBadge({ hostname, reportId, tokenHash, at: new Date() })).resolves.toBe(true);
-    await expect(store.verifyReportBadge({ hostname, reportId, tokenHash, at: new Date(expiresAt.getTime() + 1) })).resolves.toBe(false);
+    await expect(store.verifyReportBadge({ hostname: "other.example", reportId, tokenHash, at: new Date() })).resolves.toBe("redirect_not_valid");
+    await expect(store.verifyReportBadge({ hostname, reportId, tokenHash, at: new Date() })).resolves.toBe("verified");
+    await expect(store.verifyReportBadge({ hostname, reportId, tokenHash, at: new Date(expiresAt.getTime() + 1) })).resolves.toBe("badge_expired");
     await expect(store.revokeReportBadge({ hostname, reportId, tokenHash, at: new Date() })).resolves.toBe(true);
-    await expect(store.verifyReportBadge({ hostname, reportId, tokenHash, at: new Date() })).resolves.toBe(false);
+    await expect(store.verifyReportBadge({ hostname, reportId, tokenHash, at: new Date() })).resolves.toBe("badge_revoked");
+  });
+
+  it("resolves a fresh www report to the permanent redirect destination and its certified report", async () => {
+    const completeDomainReport = async (hostname: string, checks: ScanCheck[]) => {
+      await store.ensureDomain(hostname, "on_demand", "domain-v3");
+      await store.ensureFreshScan({ hostname, profileVersion: "domain-v3", trigger: "requested" });
+      const job = await store.claimNextScan(new Date(), TEST_LEASE_MS);
+      if (!job) throw new Error("expected_claimed_hostname_resolution_scan");
+      return store.completeScan({
+        jobId: job.id,
+        leaseToken: job.leaseToken,
+        hostname,
+        profileVersion: "domain-v3",
+        scannerVersion: TEST_SCANNER,
+        startedAt: new Date(Date.now() - 1_000),
+        completedAt: new Date(),
+        verdict: "pass",
+        scope: ["/"],
+        checks,
+        metrics: { requestsCount: 0, bytesCount: 0, durationMs: 1, pagesCount: 0 },
+      });
+    };
+    const canonicalReportId = await completeDomainReport("grumphya.com", makeEligibleDomainV3Checks());
+    const aliasChecks = makeEligibleDomainV3Checks().map((check) =>
+      check.controlId === "DS-HTTP-01" && check.method === "GET"
+        ? {
+            ...check,
+            evidence: {
+              ...check.evidence,
+              requestedHostname: "www.grumphya.com",
+              finalHostname: "grumphya.com",
+              canonicalHostname: "grumphya.com",
+              redirectStatusCode: 301,
+              redirectFromHostname: "www.grumphya.com",
+              redirectToHostname: "grumphya.com",
+            },
+          }
+        : check,
+    );
+    const aliasReportId = await completeDomainReport("www.grumphya.com", aliasChecks);
+
+    await expect(store.resolveCanonicalHostname("www.grumphya.com")).resolves.toBe("grumphya.com");
+    const snapshot = await store.readPublicDomainSnapshot("www.grumphya.com");
+    expect(snapshot?.hostnameResolution).toMatchObject({
+      observedReportId: aliasReportId,
+      requestedHostname: "www.grumphya.com",
+      canonicalHostname: "grumphya.com",
+      statusCode: 301,
+    });
+    expect(snapshot?.lastReport?.id).toBe(canonicalReportId);
+    expect((await store.readPublicReport(aliasReportId))?.certification).toBeNull();
+
+    const temporaryChecks = makeEligibleDomainV3Checks().map((check) =>
+      check.controlId === "DS-HTTP-01" && check.method === "GET"
+        ? { ...check, evidence: { ...check.evidence, requestedHostname: "www.grumphya.com", finalHostname: "grumphya.com", redirectStatusCode: 302, redirectFromHostname: "www.grumphya.com", redirectToHostname: "grumphya.com" } }
+        : check,
+    );
+    await completeDomainReport("www.grumphya.com", temporaryChecks);
+    await expect(store.resolveCanonicalHostname("www.grumphya.com")).resolves.toBeNull();
+
+    const wwwCurrentSnapshot = await store.readPublicDomainSnapshot("www.grumphya.com");
+    const reverseChecks = makeEligibleDomainV3Checks().map((check) =>
+      check.controlId === "DS-HTTP-01" && check.method === "GET"
+        ? {
+            ...check,
+            evidence: {
+              ...check.evidence,
+              requestedHostname: "grumphya.com",
+              finalHostname: "www.grumphya.com",
+              canonicalHostname: "www.grumphya.com",
+              redirectStatusCode: 308,
+              redirectFromHostname: "grumphya.com",
+              redirectToHostname: "www.grumphya.com",
+            },
+          }
+        : check,
+    );
+    await completeDomainReport("grumphya.com", reverseChecks);
+    await expect(store.resolveCanonicalHostname("grumphya.com")).resolves.toBe("www.grumphya.com");
+    await expect(store.readPublicDomainSnapshot("grumphya.com")).resolves.toMatchObject({
+      hostnameResolution: { canonicalHostname: "www.grumphya.com", statusCode: 308 },
+      lastReport: { id: wwwCurrentSnapshot?.lastReport?.id, hostname: "www.grumphya.com" },
+    });
   });
 
   it("does not issue a badge while the certification is pending", async () => {
@@ -205,7 +288,7 @@ describePostgres.sequential("PostgresScanStore", () => {
         { from_state: "active", to_state: "suspended", report_id: blockedReportId, reason_code: "blocked_assessment" },
       ],
     });
-    await expect(store.verifyReportBadge({ hostname, reportId: eligibleReportId, tokenHash, at: new Date() })).resolves.toBe(false);
+    await expect(store.verifyReportBadge({ hostname, reportId: eligibleReportId, tokenHash, at: new Date() })).resolves.toBe("report_not_current");
 
     const reactivatedReportId = await completeLifecycleScan(makeEligibleDomainV3Checks(), "pass");
     await expect(
@@ -270,7 +353,7 @@ describePostgres.sequential("PostgresScanStore", () => {
     });
     expect(pendingReportId).not.toBe(eligibleReportId);
     await expect(store.issueReportBadge({ hostname, reportId: eligibleReportId, tokenHash, expiresAt })).resolves.toBe(true);
-    await expect(store.verifyReportBadge({ hostname, reportId: eligibleReportId, tokenHash, at: new Date() })).resolves.toBe(true);
+    await expect(store.verifyReportBadge({ hostname, reportId: eligibleReportId, tokenHash, at: new Date() })).resolves.toBe("verified");
   });
 
   it("does not let an older report overwrite a newer certification state", async () => {

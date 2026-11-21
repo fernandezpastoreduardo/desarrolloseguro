@@ -65,6 +65,8 @@ jobs:
         run: pnpm --filter @desarrolloseguro/web exec playwright install chromium
       - name: Run browser tests
         run: pnpm test:e2e
+      - name: Run privacy-preserving Lighthouse laboratory gate
+        run: pnpm test:lighthouse
 
   postgres-integration:
     name: PostgreSQL integration

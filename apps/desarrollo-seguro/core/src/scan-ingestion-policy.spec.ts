@@ -48,6 +48,60 @@ describe("sanitizeScanObservations", () => {
     expect(result.checks.every((check) => check.status === "pass")).toBe(true);
   });
 
+  it("preserves a bounded permanent Grumphya hostname redirect in public evidence", () => {
+    const checks = makeTransportV1Checks().map((check) =>
+      check.controlId === "DS-HTTP-01" && check.method === "GET"
+        ? {
+            ...check,
+            evidence: {
+              ...check.evidence,
+              requestedHostname: "www.grumphya.com",
+              finalHostname: "grumphya.com",
+              redirectStatusCode: 301,
+              redirectFromHostname: "www.grumphya.com",
+              redirectToHostname: "grumphya.com",
+              canonicalHostname: "grumphya.com",
+            },
+          }
+        : check,
+    );
+    const result = sanitizeScanObservations("www.grumphya.com", "domain-v3", ["/"], [
+      ...checks,
+      makeUnknownCheck("DS-PRIV-05", "/", "GET"),
+      makeUnknownCheck("DS-PRIV-06", "/", "GET"),
+      makeUnknownCheck("DS-QUAL-02", "/", "GET"),
+      makeUnknownCheck("DS-TLS-02", "/", "TLS"),
+    ]);
+    expect(result.checks.find((check) => check.controlId === "DS-HTTP-01" && check.method === "GET")?.evidence)
+      .toMatchObject({
+        requestedHostname: "www.grumphya.com",
+        finalHostname: "grumphya.com",
+        redirectStatusCode: 301,
+        canonicalHostname: "grumphya.com",
+      });
+  });
+
+  it("rejects a canonical hostname claim without permanent redirect evidence", () => {
+    const checks = makeTransportV1Checks().map((check) =>
+      check.controlId === "DS-HTTP-01" && check.method === "GET"
+        ? {
+            ...check,
+            evidence: {
+              ...check.evidence,
+              requestedHostname: "www.grumphya.com",
+              finalHostname: "grumphya.com",
+              redirectStatusCode: 302,
+              redirectFromHostname: "www.grumphya.com",
+              redirectToHostname: "grumphya.com",
+              canonicalHostname: "grumphya.com",
+            },
+          }
+        : check,
+    );
+    expect(() => sanitizeScanObservations("www.grumphya.com", "transport-v1", ["/"], checks))
+      .toThrow("scan_evidence_invalid");
+  });
+
   it("rejects non-root scope and any unmeasured control in transport-v1", () => {
     expect(() =>
       sanitizeScanObservations(

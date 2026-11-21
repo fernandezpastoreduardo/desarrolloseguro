@@ -15,6 +15,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { LookupFunction } from "node:net";
 import {
   requestPinnedHttpUpgrade,
+  validateUpgradeLocation,
   type HttpRequestFactory,
 } from "./pinned-http-upgrade.js";
 import type { HttpsRequestFactory } from "./pinned-https-transport.js";
@@ -27,6 +28,17 @@ const { createEphemeralHttpsFixture } = createRequire(import.meta.url)(
 ) as { createEphemeralHttpsFixture: () => { certificate: string; privateKey: string } };
 const { certificate: FIXTURE_CERTIFICATE, privateKey: FIXTURE_PRIVATE_KEY } =
   createEphemeralHttpsFixture();
+
+describe("validateUpgradeLocation", () => {
+  it("accepts only the two authorized Grumphya hostnames and preserves the observed response status", () => {
+    expect(validateUpgradeLocation("https://grumphya.com/", "www.grumphya.com", "/", ["/"], 301))
+      .toEqual({ hostname: "grumphya.com", path: "/" });
+    expect(validateUpgradeLocation("https://www.grumphya.com/", "grumphya.com", "/", ["/"], 308))
+      .toEqual({ hostname: "www.grumphya.com", path: "/" });
+    expect(validateUpgradeLocation("https://outside.example/", "www.grumphya.com", "/", ["/"], 301))
+      .toBeUndefined();
+  });
+});
 
 function createResponse(
   statusCode: number,

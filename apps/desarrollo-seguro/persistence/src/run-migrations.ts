@@ -99,6 +99,10 @@ const MIGRATIONS = [
     version: "030_temporarily_disable_report_cache",
     file: "030_temporarily_disable_report_cache.sql",
   },
+  {
+    version: "031_grumphya_hostname_redirect_evidence",
+    file: "031_grumphya_hostname_redirect_evidence.sql",
+  },
 ] as const;
 
 const MIGRATION_LOCK_ID = 728194032;

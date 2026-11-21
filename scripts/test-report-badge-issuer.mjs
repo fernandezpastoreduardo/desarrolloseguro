@@ -12,6 +12,7 @@ const result = await issueReportBadge(reportId, issuerToken, async (url, options
     ok: true,
     json: async () => ({
       hostname: "grumphya.com",
+      canonicalHostname: "grumphya.com",
       reportId,
       token: publicToken,
       verifyUrl: `https://desarrolloseguro.org/desarrollo-seguro/verificar.html#token=${publicToken}&hostname=grumphya.com&reportId=${reportId}`,

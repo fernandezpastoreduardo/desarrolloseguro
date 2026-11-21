@@ -65,7 +65,7 @@ La página del verificador tiene una región viva útil, pero el fallo de red y 
 3. Test de navegador móvil a 390×844: sin overflow horizontal, CTA y checkbox alcanzables, resumen y evidencias legibles.
 4. Test de teclado: `Tab`, `Shift+Tab`, `Enter` y `Space` cubren buscador, tema, autorización, solicitud, historial y `details`.
 5. Test del verificador: inválido, error de red y válido; en los dos primeros casos el enlace al informe permanece oculto.
-6. Lighthouse local, sin red externa: escritorio y móvil, mínimo 96 en Rendimiento, Accesibilidad, Buenas prácticas y SEO. Un resultado inferior bloquea el cambio.
+6. Lighthouse local, sin red externa: escritorio y móvil, mínimo 96 en Rendimiento, Accesibilidad y Buenas prácticas. SEO se mide y se informa, pero no bloquea `/app/` mientras conserve `noindex`.
 
 ## Orden sugerido para la siguiente iteración
 

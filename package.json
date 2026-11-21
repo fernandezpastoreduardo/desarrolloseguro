@@ -11,6 +11,7 @@
     "build": "pnpm -r build",
     "test": "pnpm --workspace-concurrency=1 -r test",
     "test:e2e": "pnpm --filter @desarrolloseguro/web test:e2e",
+    "test:lighthouse": "node scripts/lighthouse-lab.mjs",
     "test:coverage": "pnpm -r build && pnpm --workspace-concurrency=1 -r test:coverage",
     "test:postgres": "pnpm --filter @desarrolloseguro/persistence test:postgres && pnpm --filter @desarrolloseguro/worker test:postgres",
     "typecheck": "pnpm -r typecheck",
@@ -27,6 +28,7 @@
     "sandbox:check": "bash scripts/verify-executor-sandbox.sh"
   },
   "devDependencies": {
-    "@sonar/scan": "5.1.0"
+    "@sonar/scan": "5.1.0",
+    "lighthouse": "13.6.0"
   }
 }

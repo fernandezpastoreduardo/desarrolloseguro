@@ -53,7 +53,8 @@ function isIssuedBadge(value, reportId) {
   } catch {
     return false;
   }
-  return value.hostname === "grumphya.com" && value.reportId === reportId &&
+  return ["grumphya.com", "www.grumphya.com"].includes(value.hostname) &&
+    value.canonicalHostname === value.hostname && value.reportId === reportId &&
     typeof value.token === "string" && BADGE_TOKEN_PATTERN.test(value.token) &&
     verifyUrl.origin === "https://desarrolloseguro.org" &&
     verifyUrl.pathname === "/desarrollo-seguro/verificar.html" &&

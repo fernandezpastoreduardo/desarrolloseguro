@@ -41,6 +41,14 @@ export type PinnedHttpUpgradeResult = {
   tlsProtocol?: "TLSv1" | "TLSv1.1" | "TLSv1.2" | "TLSv1.3";
   requestsCount: number;
   bytesCount: number;
+  grumphyaRedirectEvidence?: {
+    requestedHostname: string;
+    finalHostname: string;
+    redirectStatusCode: number | null;
+    redirectFromHostname: string | null;
+    redirectToHostname: string | null;
+    canonicalHostname: string | null;
+  };
 };
 
 export type HttpRequestFactory = (
@@ -87,14 +95,14 @@ export async function requestPinnedHttpUpgrade(
       lookup: lookupFactory(hostname, HTTP_PORT),
       requestFactory: dependencies.requestFactory ?? defaultHttpRequest,
     });
-    const upgradedPath = validateUpgradeLocation(
+    const upgradedTarget = validateUpgradeLocation(
       httpResult.location,
       hostname,
       input.path,
       allowedPaths,
       httpResult.statusCode,
     );
-    if (upgradedPath === undefined) {
+    if (upgradedTarget === undefined) {
       return {
         statusCode: httpResult.statusCode,
         finalPath: input.path,
@@ -117,8 +125,17 @@ export async function requestPinnedHttpUpgrade(
     try {
       httpsResult = await requestPinnedHttps(
         {
-          hostname,
-          path: upgradedPath,
+          hostname: upgradedTarget.hostname,
+          requestedHostname: hostname,
+          allowGrumphyaAliasRedirects: hostname === "grumphya.com" || hostname === "www.grumphya.com",
+          ...(upgradedTarget.hostname !== hostname ? {
+            initialRedirect: {
+              statusCode: httpResult.statusCode,
+              fromHostname: hostname,
+              toHostname: upgradedTarget.hostname,
+            },
+          } : {}),
+          path: upgradedTarget.path,
           method: input.method,
           allowedPaths,
           signal: scopedSignal.signal,
@@ -146,6 +163,16 @@ export async function requestPinnedHttpUpgrade(
       tlsProtocol: httpsResult.tlsProtocol,
       requestsCount: httpResult.requestsCount + httpsResult.requestsCount,
       bytesCount: httpResult.bytesCount + httpsResult.bytesCount,
+      ...(httpsResult.redirectFromHostname && (hostname === "grumphya.com" || hostname === "www.grumphya.com") ? {
+        grumphyaRedirectEvidence: {
+          requestedHostname: hostname,
+          finalHostname: httpsResult.finalHostname,
+          redirectStatusCode: httpsResult.redirectStatusCode,
+          redirectFromHostname: httpsResult.redirectFromHostname,
+          redirectToHostname: httpsResult.redirectToHostname,
+          canonicalHostname: httpsResult.canonicalHostname,
+        },
+      } : {}),
     };
   } finally {
     scopedSignal.dispose();
@@ -287,13 +314,13 @@ function getReceivedBytesCount(
   return Math.max(bodyBytes, socket.bytesRead);
 }
 
-function validateUpgradeLocation(
+export function validateUpgradeLocation(
   location: string | undefined,
   hostname: string,
   currentPath: string,
   allowedPaths: readonly string[],
   statusCode: number,
-): string | undefined {
+): { hostname: string; path: string } | undefined {
   if (!REDIRECT_STATUS_CODES.has(statusCode) || !location || location.length > 2_048) {
     return undefined;
   }
@@ -305,7 +332,7 @@ function validateUpgradeLocation(
   }
   if (
     target.protocol !== "https:" ||
-    target.hostname !== hostname ||
+    (target.hostname !== hostname && !isAllowedGrumphyaAlias(hostname, target.hostname)) ||
     (target.port !== "" && target.port !== "443") ||
     target.username !== "" ||
     target.password !== "" ||
@@ -314,7 +341,12 @@ function validateUpgradeLocation(
     return undefined;
   }
   const path = `${target.pathname}${target.search}`;
-  return allowedPaths.includes(path) ? path : undefined;
+  return allowedPaths.includes(path) ? { hostname: target.hostname, path } : undefined;
+}
+
+function isAllowedGrumphyaAlias(fromHostname: string, toHostname: string): boolean {
+  return (fromHostname === "grumphya.com" || fromHostname === "www.grumphya.com") &&
+    (toHostname === "grumphya.com" || toHostname === "www.grumphya.com");
 }
 
 function validatePath(path: string, allowedPaths: readonly string[]): void {
