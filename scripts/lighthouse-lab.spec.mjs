@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { INFORMATIONAL_CATEGORIES, inspectLighthouseReport, REQUIRED_CATEGORIES } from "./lighthouse-lab.mjs";
+import { INFORMATIONAL_CATEGORIES, inspectLighthouseReport, lighthouseChromeFlags, REQUIRED_CATEGORIES } from "./lighthouse-lab.mjs";
 
 function makeReport(scores = {}) {
   return {
@@ -51,4 +51,15 @@ test("fails closed when network request evidence is missing", () => {
   delete report.audits["network-requests"];
   const result = inspectLighthouseReport(report, "http://127.0.0.1:4173");
   assert.deepEqual(result.failures, ["privacy: network request evidence is missing"]);
+});
+
+test("uses the CI-only Chromium flags needed by the isolated Linux runner", () => {
+  assert.equal(
+    lighthouseChromeFlags({ ci: true, platform: "linux" }),
+    "--headless --disable-extensions --no-sandbox --disable-dev-shm-usage",
+  );
+  assert.equal(
+    lighthouseChromeFlags({ ci: false, platform: "darwin" }),
+    "--headless --disable-extensions",
+  );
 });

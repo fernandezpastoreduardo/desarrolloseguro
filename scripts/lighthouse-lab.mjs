@@ -14,6 +14,12 @@ export const REQUIRED_CATEGORIES = [
 export const INFORMATIONAL_CATEGORIES = ["seo"];
 export const MINIMUM_SCORE = 96;
 
+export function lighthouseChromeFlags({ ci = process.env.CI === "true", platform = process.platform } = {}) {
+  const flags = ["--headless", "--disable-extensions"];
+  if (ci && platform === "linux") flags.push("--no-sandbox", "--disable-dev-shm-usage");
+  return flags.join(" ");
+}
+
 export function inspectLighthouseReport(report, expectedOrigin, minimumScore = MINIMUM_SCORE) {
   const categories = {};
   const failures = [];
@@ -113,7 +119,7 @@ async function runLighthouse({ url, outputPath, preset, chromePath, cwd }) {
     "--quiet",
     "--no-enable-error-reporting",
     "--only-categories=performance,accessibility,best-practices,seo",
-    "--chrome-flags=--headless --disable-extensions",
+    `--chrome-flags=${lighthouseChromeFlags()}`,
   ];
   if (preset) args.push(`--preset=${preset}`);
   await run("pnpm", args, {
