@@ -127,6 +127,37 @@ describe("PublicScanPortal", () => {
     ).toHaveAttribute("data-phase", "queued");
   });
 
+  it("shows the permanent redirect evidence separately from the canonical report", async () => {
+    const aliasReport = { ...PUBLIC_REPORT, hostname: "grumphya.com" };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({
+      hostname: "www.grumphya.com",
+      enrollment: "monitored",
+      state: "fresh",
+      failureCode: null,
+      activeJobId: null,
+      lastReport: aliasReport,
+      hostnameResolution: {
+        observedReportId: REPORT_ID,
+        requestedHostname: "www.grumphya.com",
+        canonicalHostname: "grumphya.com",
+        statusCode: 301,
+        responseStatusCode: 200,
+        fromHostname: "www.grumphya.com",
+        toHostname: "grumphya.com",
+      },
+      checkedAt: "2026-11-03T08:00:00.000Z",
+    })));
+    const user = userEvent.setup();
+    render(<PublicScanPortal />);
+    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "www.grumphya.com");
+    await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
+    expect(await screen.findByText(/redirección permanente HTTP 301 a grumphya\.com/i)).toBeVisible();
+    expect(screen.getByText(/respuesta final fue HTTP 200/i)).toBeVisible();
+    expect(screen.getByRole("link", { name: "Consultar la evidencia de redirección" }))
+      .toHaveAttribute("href", `/app/?report=${REPORT_ID}`);
+    expect(screen.getByRole("heading", { name: /Informe/ })).toBeVisible();
+  });
+
   it("stops after one poll when an accepted request has no active job", async () => {
     const status = {
       hostname: "example.com",

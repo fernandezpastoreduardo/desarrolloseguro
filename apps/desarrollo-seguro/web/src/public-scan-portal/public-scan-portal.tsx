@@ -213,6 +213,15 @@ type DomainStatus = {
   failureCode: ScanFailureCode | null;
   activeJobId: string | null;
   lastReport: PublicReport | null;
+  hostnameResolution?: {
+    observedReportId: string;
+    requestedHostname: string;
+    canonicalHostname: string;
+    statusCode: 301 | 308;
+    responseStatusCode: number;
+    fromHostname: string;
+    toHostname: string;
+  };
   checkedAt: string;
 };
 type PublicReportHistoryEntry = {
@@ -739,6 +748,14 @@ function DomainResult({
       <h2 id="ds-result-heading">
         {STATE_LABELS[status.state] ?? "Estado del informe"}
       </h2>
+      {status.hostnameResolution && (
+        <div className="ds-portal__disclaimer" role="status">
+          <p>{status.hostnameResolution.requestedHostname} respondió con una redirección permanente HTTP {status.hostnameResolution.statusCode} a {status.hostnameResolution.canonicalHostname}; la respuesta final fue HTTP {status.hostnameResolution.responseStatusCode}. {status.lastReport?.hostname === status.hostnameResolution.canonicalHostname
+            ? "Se muestra el informe vigente de ese destino."
+            : "El informe vigente de ese destino todavía no está disponible; no se presenta su puntuación desde este análisis."}</p>
+          <a href={`/app/?report=${encodeURIComponent(status.hostnameResolution.observedReportId)}`}>Consultar la evidencia de redirección</a>
+        </div>
+      )}
       {status.state === "updating" && (
         <p>
           Hay una actualización en curso. El informe anterior se conserva como
@@ -1472,13 +1489,28 @@ function isDomainStatus(value: unknown): value is DomainStatus {
     (value.state !== "failed" && value.failureCode !== null) ||
     (value.activeJobId !== null && !isUuid(value.activeJobId)) ||
     (value.lastReport !== null && !isPublicReport(value.lastReport)) ||
+    (value.hostnameResolution !== undefined && !isHostnameResolution(value.hostnameResolution)) ||
     !isIsoTimestamp(value.checkedAt)
   ) {
     return false;
   }
   return (
-    value.lastReport === null || value.lastReport.hostname === value.hostname
+    value.lastReport === null || value.lastReport.hostname === value.hostname ||
+    (isHostnameResolution(value.hostnameResolution) &&
+      value.lastReport.hostname === value.hostnameResolution.canonicalHostname)
   );
+}
+
+function isHostnameResolution(value: unknown): value is NonNullable<DomainStatus["hostnameResolution"]> {
+  return isRecord(value) &&
+    isUuid(value.observedReportId) &&
+    (value.requestedHostname === "grumphya.com" || value.requestedHostname === "www.grumphya.com") &&
+    (value.canonicalHostname === "grumphya.com" || value.canonicalHostname === "www.grumphya.com") &&
+    value.requestedHostname !== value.canonicalHostname &&
+    (value.statusCode === 301 || value.statusCode === 308) &&
+    typeof value.responseStatusCode === "number" && Number.isInteger(value.responseStatusCode) && value.responseStatusCode >= 100 && value.responseStatusCode <= 599 &&
+    value.fromHostname === value.requestedHostname &&
+    value.toHostname === value.canonicalHostname;
 }
 
 function isPublicReport(value: unknown): value is PublicReport {
