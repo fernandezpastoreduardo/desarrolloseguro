@@ -1,9 +1,12 @@
 services:
   development-security-database:
-    image: ${DEVELOPMENT_SECURITY_DATABASE_IMAGE:-pgvector/pgvector:0.8.7-pg17}
+    image: ${DEVELOPMENT_SECURITY_DATABASE_IMAGE:-desarrolloseguro-postgres:local}
+    build:
+      context: .
+      dockerfile: docker/postgres/Dockerfile
     restart: unless-stopped
     environment:
-      PGDATA: ${DEVELOPMENT_SECURITY_POSTGRES_DATA_DIRECTORY:-/var/lib/postgresql/data}
+      PGDATA: ${DEVELOPMENT_SECURITY_POSTGRES_DATA_DIRECTORY:-/var/lib/postgresql/19/docker}
       POSTGRES_USER: ds_bootstrap
       POSTGRES_PASSWORD_FILE: /run/secrets/development_security_admin_password
       POSTGRES_DB: postgres
@@ -35,7 +38,7 @@ services:
       - development_security_database_tls.crt
       - development_security_database_tls.key
     volumes:
-      - development-security-postgres:${DEVELOPMENT_SECURITY_POSTGRES_DATA_MOUNT:-/var/lib/postgresql/data}
+      - development-security-postgres:${DEVELOPMENT_SECURITY_POSTGRES_DATA_MOUNT:-/var/lib/postgresql}
       - ./docker/postgres-pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
     healthcheck:
       test: [CMD-SHELL, "pg_isready -U ds_bootstrap -d postgres"]
@@ -446,7 +449,7 @@ networks:
 
 volumes:
   development-security-postgres:
-    name: ${DEVELOPMENT_SECURITY_POSTGRES_VOLUME:-development-security-postgres}
+    name: ${DEVELOPMENT_SECURITY_POSTGRES_VOLUME:-development-security-postgres-pg19}
   development-security-runtime:
     name: development-security-runtime
 

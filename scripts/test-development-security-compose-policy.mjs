@@ -62,9 +62,10 @@ const retentionScheduler = serviceBlock("development-security-retention-schedule
 const certificationScheduler = serviceBlock("development-security-certification-scheduler");
 const internalAudit = serviceBlock("development-security-internal-audit");
 
-assert.match(database, /pgvector\/pgvector:0\.8\.7-pg17/u);
-assert.match(database, /PGDATA: \$\{DEVELOPMENT_SECURITY_POSTGRES_DATA_DIRECTORY:-\/var\/lib\/postgresql\/data\}/u);
-assert.match(database, /development-security-postgres:\$\{DEVELOPMENT_SECURITY_POSTGRES_DATA_MOUNT:-\/var\/lib\/postgresql\/data\}/u);
+assert.match(database, /desarrolloseguro-postgres:local/u);
+assert.match(database, /dockerfile: docker\/postgres\/Dockerfile/u);
+assert.match(database, /PGDATA: \$\{DEVELOPMENT_SECURITY_POSTGRES_DATA_DIRECTORY:-\/var\/lib\/postgresql\/19\/docker\}/u);
+assert.match(database, /development-security-postgres:\$\{DEVELOPMENT_SECURITY_POSTGRES_DATA_MOUNT:-\/var\/lib\/postgresql\}/u);
 assert.match(database, /POSTGRES_USER:\s*ds_bootstrap/u);
 assert.match(database, /POSTGRES_PASSWORD_FILE:.*development_security_admin_password/u);
 assert.match(database, /ssl=on/u);
@@ -72,7 +73,7 @@ assert.match(database, /ssl_min_protocol_version=TLSv1\.2/u);
 assert.match(database, /cap_drop:\s*\[ALL\]/u);
 assert.match(database, /read_only:\s*true/u);
 assert.doesNotMatch(database, /^\s+ports:/mu);
-assert.match(workflow, /image: pgvector\/pgvector:0\.8\.7-pg19-bookworm/u);
+assert.match(workflow, /image: pgvector\/pgvector:0\.8\.7-pg19-trixie/u);
 assert.match(workflow, /docker\/postgres\/Dockerfile/u);
 assert.match(workflow, /database_image=desarrolloseguro-postgres:pg19-candidate/u);
 assert.match(workflow, /--ignore-unfixed/u);
@@ -172,7 +173,7 @@ assert.match(caddyFragment, /reverse_proxy development-security-web:8080/u);
 assert.match(caddyFragment, /Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'"/u);
 assert.match(caddyFragment, /www\.desarrolloseguro\.org \{/u);
 assert.doesNotMatch(caddyFragment, /api:3001|database|grumphya/iu);
-assert.match(compose, /name: \$\{DEVELOPMENT_SECURITY_POSTGRES_VOLUME:-development-security-postgres\}/u);
+assert.match(compose, /name: \$\{DEVELOPMENT_SECURITY_POSTGRES_VOLUME:-development-security-postgres-pg19\}/u);
 assert.match(dockerfile, /AS development-security-worker\n/u);
 assert.match(
   dockerfile,

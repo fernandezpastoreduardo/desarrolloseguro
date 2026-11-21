@@ -11,7 +11,7 @@ readonly SOURCE_VOLUME="$RUN_ID-source-data"
 readonly TARGET_VOLUME="$RUN_ID-target-data"
 readonly DATABASE_NAME=desarrollo_seguro
 readonly APPLICATION_ROLE=ds_migrator
-readonly ADMIN_ROLE=ds_migration_admin
+readonly ADMIN_ROLE=ds_bootstrap
 readonly FIXTURE_PASSWORD=fixture-only-not-a-production-secret
 
 started_source=0
@@ -76,6 +76,8 @@ for role in ds_api ds_worker ds_retention; do
   docker exec "$SOURCE_CONTAINER" psql --set ON_ERROR_STOP=1 --username ds_bootstrap --dbname postgres \
     --command "CREATE ROLE $role LOGIN PASSWORD '$FIXTURE_PASSWORD' NOSUPERUSER NOCREATEDB NOCREATEROLE;"
 done
+docker exec "$SOURCE_CONTAINER" psql --set ON_ERROR_STOP=1 --username ds_bootstrap --dbname postgres \
+  --command 'CREATE ROLE ds_read NOLOGIN; GRANT ds_read TO ds_api;'
 docker exec "$SOURCE_CONTAINER" createdb --username ds_bootstrap --owner "$APPLICATION_ROLE" "$DATABASE_NAME"
 docker exec --interactive "$SOURCE_CONTAINER" psql --set ON_ERROR_STOP=1 --username ds_bootstrap --dbname "$DATABASE_NAME" <<'SQL'
 CREATE EXTENSION vector;
@@ -99,11 +101,16 @@ source_version=$(docker exec "$SOURCE_CONTAINER" psql --tuples-only --no-align -
   --command 'SHOW server_version_num;')
 source_rows=$(docker exec "$SOURCE_CONTAINER" psql --tuples-only --no-align --username ds_bootstrap --dbname "$DATABASE_NAME" \
   --command 'SELECT count(*) FROM migration_probe;')
-[[ $source_version -ge 170000 && $source_version -lt 180000 && $source_rows == 2 ]]
+source_role_membership=$(docker exec "$SOURCE_CONTAINER" psql --tuples-only --no-align --username ds_bootstrap --dbname postgres \
+  --command "SELECT pg_has_role('ds_api', 'ds_read', 'USAGE');")
+source_membership_grantor=$(docker exec "$SOURCE_CONTAINER" psql --tuples-only --no-align --username ds_bootstrap --dbname postgres \
+  --command "SELECT grantor.rolname FROM pg_auth_members membership JOIN pg_roles granted ON granted.oid = membership.roleid JOIN pg_roles member ON member.oid = membership.member JOIN pg_roles grantor ON grantor.oid = membership.grantor WHERE granted.rolname = 'ds_read' AND member.rolname = 'ds_api';")
+[[ $source_version -ge 170000 && $source_version -lt 180000 && $source_rows == 2 && $source_role_membership == t && $source_membership_grantor == ds_bootstrap ]]
 
 printf 'Restoring a synthetic PostgreSQL 17 cluster into a clean PostgreSQL 19 volume.\n'
 set -o pipefail
 docker exec "$SOURCE_CONTAINER" pg_dumpall --username ds_bootstrap --no-password \
+  | sed -E '/^(CREATE ROLE|ALTER ROLE) ds_bootstrap([ ;]|$)/d; s/ GRANTED BY ds_bootstrap//g' \
   | docker exec --interactive "$TARGET_CONTAINER" psql --set ON_ERROR_STOP=1 --username "$ADMIN_ROLE" --dbname "$ADMIN_ROLE"
 
 target_version=$(docker exec "$TARGET_CONTAINER" psql --tuples-only --no-align --username "$ADMIN_ROLE" --dbname "$ADMIN_ROLE" \
@@ -120,11 +127,16 @@ target_roles=$(docker exec "$TARGET_CONTAINER" psql --tuples-only --no-align --u
   --command "SELECT count(*) FROM pg_roles WHERE rolname IN ('ds_bootstrap', 'ds_migrator', 'ds_api', 'ds_worker', 'ds_retention');")
 target_permissions=$(docker exec "$TARGET_CONTAINER" psql --tuples-only --no-align --username "$ADMIN_ROLE" --dbname postgres \
   --command "SELECT count(*) FROM pg_database d JOIN pg_roles r ON r.rolname = 'ds_api' WHERE d.datname = 'desarrollo_seguro' AND has_database_privilege(r.oid, d.oid, 'CONNECT');")
+target_role_membership=$(docker exec "$TARGET_CONTAINER" psql --tuples-only --no-align --username "$ADMIN_ROLE" --dbname postgres \
+  --command "SELECT pg_has_role('ds_api', 'ds_read', 'USAGE');")
+target_membership_grantor=$(docker exec "$TARGET_CONTAINER" psql --tuples-only --no-align --username "$ADMIN_ROLE" --dbname postgres \
+  --command "SELECT grantor.rolname FROM pg_auth_members membership JOIN pg_roles granted ON granted.oid = membership.roleid JOIN pg_roles member ON member.oid = membership.member JOIN pg_roles grantor ON grantor.oid = membership.grantor WHERE granted.rolname = 'ds_read' AND member.rolname = 'ds_api';")
 
 [[ $target_version -ge 190000 && $target_version -lt 200000 ]]
 [[ $target_rows == "$source_rows" && $target_migrations == 1 ]]
 [[ $target_vector == 0.8.7 && $target_index == 1 ]]
-[[ $target_roles == 5 && $target_permissions == 1 ]]
+[[ $target_roles == 5 && $target_permissions == 1 && $target_role_membership == "$source_role_membership" ]]
+[[ $target_membership_grantor == "$source_membership_grantor" ]]
 
 printf 'PostgreSQL major-upgrade rehearsal passed: source=%s target=%s pgvector=%s rows=%s roles=%s; source volume remained unchanged.\n' \
   "$source_version" "$target_version" "$target_vector" "$target_rows" "$target_roles"

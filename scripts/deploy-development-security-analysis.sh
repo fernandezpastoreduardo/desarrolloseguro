@@ -15,6 +15,7 @@ scripts/configure-development-security-egress-firewall.sh verify
 export DEVELOPMENT_SECURITY_RUNTIME_IMAGE="desarrolloseguro-runtime:local"
 export DEVELOPMENT_SECURITY_WORKER_IMAGE="desarrolloseguro-worker:local"
 export DEVELOPMENT_SECURITY_WEB_IMAGE="desarrolloseguro-web:local"
+export DEVELOPMENT_SECURITY_DATABASE_IMAGE="desarrolloseguro-postgres:local"
 export DEVELOPMENT_SECURITY_SECRETS_DIR="/opt/desarrollo-seguro/secrets"
 # The normal production deploy never starts the private audit. Do not
 # inherit a profile or an enable flag from an operator shell or CI environment.

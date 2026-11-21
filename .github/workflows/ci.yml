@@ -75,7 +75,7 @@ jobs:
     timeout-minutes: 30
     services:
       postgres:
-        image: pgvector/pgvector:0.8.7-pg19-bookworm
+        image: pgvector/pgvector:0.8.7-pg19-trixie
         env:
           POSTGRES_DB: development_security_test_admin
           POSTGRES_USER: postgres
