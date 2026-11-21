@@ -87,6 +87,7 @@ $ds-space-block: 40px;
 .ds-portal__notice,
 .ds-portal__verdict,
 .ds-portal__ethics,
+.ds-portal__privacy,
 .ds-portal__report-category,
 .ds-portal__report-takeaway,
 .ds-portal__category-summary,
@@ -545,6 +546,39 @@ $ds-space-block: 40px;
   background:
     linear-gradient(145deg, color-mix(in srgb, var(--ds-paper) 92%, var(--ds-accent)) 0%, var(--ds-canvas-deep) 100%);
   box-shadow: 0 18px 45px color-mix(in srgb, var(--ds-ink) 10%, transparent);
+}
+
+.ds-portal__privacy {
+  margin: $ds-space 0;
+  border: 1px solid var(--ds-line);
+  border-left: 4px solid var(--ds-accent);
+  padding: $ds-space-block;
+  color: var(--ds-ink);
+  background: var(--ds-canvas-deep);
+}
+
+.ds-portal__privacy h3 {
+  margin: $ds-space-min 0 $ds-space-small;
+}
+
+.ds-portal__privacy-evidence {
+  display: grid;
+  gap: 0.75rem;
+  margin: 1rem 0 0;
+}
+
+.ds-portal__privacy-evidence div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.ds-portal__privacy-evidence dt {
+  font-weight: 700;
+}
+
+.ds-portal__privacy-evidence dd {
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .ds-portal__ethics h3 {

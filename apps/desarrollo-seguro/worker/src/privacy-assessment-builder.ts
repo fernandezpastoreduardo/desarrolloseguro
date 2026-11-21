@@ -1,0 +1,270 @@
+import {
+  assessPrivacy,
+  isThirdPartyPrivacyHost,
+  PRIVACY_EXCESS_THRESHOLDS,
+  type PrivacyAssessment,
+  type PrivacyCriterionId,
+  type PrivacySeverity,
+} from "@desarrolloseguro/core";
+import { PRIVACY_KNOWLEDGE_RULES } from "./privacy-knowledge-catalog.js";
+import { matchPrivacySignal, type PrivacyKnowledgeMatch } from "./privacy-knowledge-base.js";
+import type { PrivacyBrowserFlowObservation, PrivacyBrowserObservation } from "./privacy-browser-observer.js";
+
+type Finding = { id: string; severity: PrivacySeverity; confidence: "confirmed" | "unknown" };
+type Criterion = { id: PrivacyCriterionId; status: "evaluated" | "unknown" | "not_applicable"; findings: Finding[] };
+
+/** Converts bounded browser observations into the published v1 privacy score. */
+export function assessPrivacyObservation(observation: PrivacyBrowserObservation): PrivacyAssessment {
+  const initial = assessInitialActivity(observation);
+  const excess = assessContextualExcess(observation);
+  const parity = assessChoiceParity(observation.initial);
+  const rejection = assessRejection(observation);
+  const vendorControls = assessVendorControls(observation);
+  const evidence = summarizePublicEvidence(observation);
+  return assessPrivacy({ criteria: [initial, excess, parity, rejection, vendorControls], evidence });
+}
+
+function summarizePublicEvidence(observation: PrivacyBrowserObservation): PrivacyAssessment["evidence"] {
+  const flows = [observation.initial, observation.accept, observation.reject];
+  const cookieNames = new Set<string>();
+  const providers = new Set<string>();
+  const domains = new Set<string>();
+  for (const flow of flows) {
+    for (const name of flow.cookiesAfterChoice.map(({ name }) => name)) {
+      if (name.length > 0 && name.length <= 128 && isCleanText(name)) cookieNames.add(name);
+    }
+    for (const hostname of [...flow.signalHostsAfterChoice, ...flow.completedHostsAfterChoice]) {
+      if (isThirdPartyPrivacyHost(observation.hostname, hostname) && isSafeHostname(hostname)) domains.add(normalizeHostname(hostname));
+    }
+    for (const cookie of flow.cookiesAfterChoice) {
+      if (isThirdPartyPrivacyHost(observation.hostname, cookie.domain) && isSafeHostname(cookie.domain)) domains.add(normalizeHostname(cookie.domain));
+      for (const match of matchCookie(cookie.name, cookie.domain, flow.completedHostsAfterChoice)) providers.add(match.provider);
+    }
+    for (const hostname of flow.completedHostsAfterChoice) {
+      if (!isThirdPartyPrivacyHost(observation.hostname, hostname)) continue;
+      for (const match of matchRequestHost(hostname)) providers.add(match.provider);
+    }
+  }
+  for (const check of observation.vendorControls) {
+    if (isCleanText(check.provider) && check.provider.length > 0 && check.provider.length <= 100) providers.add(check.provider);
+    for (const hostname of [...check.signalHostsAfterDisable, ...check.completedHostsAfterDisable]) {
+      if (isThirdPartyPrivacyHost(observation.hostname, hostname) && isSafeHostname(hostname)) domains.add(normalizeHostname(hostname));
+    }
+    for (const cookie of check.cookiesAfterDisable) {
+      if (cookie.name.length > 0 && cookie.name.length <= 128 && isCleanText(cookie.name)) cookieNames.add(cookie.name);
+      if (isThirdPartyPrivacyHost(observation.hostname, cookie.domain) && isSafeHostname(cookie.domain)) domains.add(normalizeHostname(cookie.domain));
+    }
+  }
+  return {
+    cookieNames: [...cookieNames].sort((left, right) => left.localeCompare(right, "en-US")).slice(0, 100),
+    providers: [...providers].sort((left, right) => left.localeCompare(right, "en-US")).slice(0, 100),
+    domains: [...domains].sort((left, right) => left.localeCompare(right, "en-US")).slice(0, 100),
+  };
+}
+
+function isSafeHostname(value: string): boolean {
+  let normalized = value;
+  while (normalized.startsWith(".")) normalized = normalized.slice(1);
+  while (normalized.endsWith(".")) normalized = normalized.slice(0, -1);
+  return normalized.length <= 253 && /^[a-z0-9.-]+$/iu.test(normalized);
+}
+
+function normalizeHostname(value: string): string {
+  let normalized = value.toLowerCase();
+  while (normalized.startsWith(".")) normalized = normalized.slice(1);
+  while (normalized.endsWith(".")) normalized = normalized.slice(0, -1);
+  return normalized;
+}
+
+function isCleanText(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code <= 31 || code === 127) return false;
+  }
+  return true;
+}
+
+function assessInitialActivity(observation: PrivacyBrowserObservation): Criterion {
+  const flow = observation.initial;
+  if (flow.status !== "evaluated" || !flow.cookieReadComplete || !flow.storageReadComplete) {
+    return criterion("preference-before-tracking", "unknown");
+  }
+  const thirdPartyAttempts = thirdPartyHosts(observation.hostname, flow.signalHostsAfterChoice);
+  const completedHosts = thirdPartyHosts(observation.hostname, flow.completedHostsAfterChoice);
+  const completedHostSet = new Set(completedHosts);
+  const findings: Finding[] = [];
+  for (const [index, hostname] of thirdPartyAttempts.entries()) {
+    const matches = matchRequestHost(hostname);
+    if (!completedHostSet.has(hostname)) {
+      findings.push(finding(`initial-request-unconfirmed:${index}`, "low", "unknown"));
+    } else if (matches.some(isConfirmedMatch)) {
+      for (const match of matches.filter(isConfirmedMatch)) findings.push(finding(`initial-host:${match.ruleId}`, "high"));
+    } else {
+      findings.push(finding(`initial-host-unclassified:${index}`, "low", "unknown"));
+    }
+  }
+
+  for (const [index, cookie] of flow.cookiesAfterChoice.entries()) {
+    const matches = matchCookie(cookie.name, cookie.domain, flow.completedHostsAfterChoice);
+    const confirmed = matches.filter(isConfirmedMatch);
+    if (confirmed.length > 0) {
+      findings.push(...confirmed.map(({ ruleId }) => finding(`initial-cookie:${ruleId}:${index}`, "medium")));
+    } else {
+      findings.push(finding(`initial-cookie-unclassified:${index}`, "low", "unknown"));
+    }
+  }
+  for (const [index] of flow.storageKeysAfterChoice.entries()) findings.push(finding(`initial-storage-unclassified:${index}`, "low", "unknown"));
+  return { ...criterion("preference-before-tracking", "evaluated"), findings };
+}
+
+function assessContextualExcess(observation: PrivacyBrowserObservation): Criterion {
+  if (observation.initial.consentPromptDetected === false) return criterion("contextual-excess", "not_applicable");
+  const flow = observation.accept;
+  if (flow.status !== "evaluated" || !flow.cookieReadComplete || !flow.storageReadComplete) {
+    return criterion("contextual-excess", "unknown");
+  }
+  const confirmed = flow.cookiesAfterChoice.flatMap((cookie) =>
+    matchCookie(cookie.name, cookie.domain, flow.completedHostsAfterChoice)
+      .filter(isConfirmedMatch)
+      .map((match) => ({ ...match, cookieName: cookie.name })),
+  );
+  const findings: Finding[] = [];
+  for (const [index, cookie] of flow.cookiesAfterChoice.entries()) {
+    if (!matchCookie(cookie.name, cookie.domain, flow.completedHostsAfterChoice).some(isConfirmedMatch)) {
+      findings.push(finding(`accepted-cookie-unclassified:${index}`, "low", "unknown"));
+    }
+  }
+  for (const [index] of flow.storageKeysAfterChoice.entries()) findings.push(finding(`accepted-storage-unclassified:${index}`, "low", "unknown"));
+  const perProviderPurpose = new Map<string, Set<string>>();
+  const perPurpose = new Map<string, Set<string>>();
+  for (const item of confirmed) {
+    const group = `${item.provider}\0${item.purpose}`;
+    const providerCookies = perProviderPurpose.get(group) ?? new Set<string>();
+    providerCookies.add(item.cookieName);
+    perProviderPurpose.set(group, providerCookies);
+    const purposeCookies = perPurpose.get(item.purpose) ?? new Set<string>();
+    purposeCookies.add(`${item.provider}\0${item.cookieName}`);
+    perPurpose.set(item.purpose, purposeCookies);
+  }
+  for (const [group, cookies] of perProviderPurpose) {
+    if (cookies.size > PRIVACY_EXCESS_THRESHOLDS.cookiesPerProviderAndPurpose) findings.push(finding(`excess-provider:${group}`, "high"));
+  }
+  for (const [purpose, cookies] of perPurpose) {
+    if (cookies.size > PRIVACY_EXCESS_THRESHOLDS.cookiesPerPurpose) findings.push(finding(`excess-purpose:${purpose}`, "high"));
+  }
+  return { ...criterion("contextual-excess", "evaluated"), findings };
+}
+
+function assessChoiceParity(flow: PrivacyBrowserFlowObservation): Criterion {
+  if (flow.consentPromptDetected === false) return criterion("choice-parity", "not_applicable");
+  if (flow.consentPromptDetected !== true || !flow.pageLoaded ||
+      flow.acceptVisibleAtFirstLayer === null || flow.rejectVisibleAtFirstLayer === null ||
+      flow.actionsToAccept === null || flow.actionsToReject === null) {
+    return criterion("choice-parity", "unknown");
+  }
+  const findings: Finding[] = [];
+  if (flow.acceptVisibleAtFirstLayer !== flow.rejectVisibleAtFirstLayer) {
+    findings.push(finding("choice-visibility-differs", "high"));
+  }
+  if (flow.actionsToAccept !== flow.actionsToReject) {
+    findings.push(finding("choice-action-count-differs", "medium"));
+  }
+  return { ...criterion("choice-parity", "evaluated"), findings };
+}
+
+function assessRejection(observation: PrivacyBrowserObservation): Criterion {
+  if (observation.initial.consentPromptDetected === false) return criterion("rejection-persistence", "not_applicable");
+  const flow = observation.reject;
+  if (flow.status !== "evaluated" || flow.rejectionPersistedAfterReload === null ||
+      !flow.cookieReadComplete || !flow.storageReadComplete) {
+    return criterion("rejection-persistence", "unknown");
+  }
+  const confirmedHosts = thirdPartyHosts(observation.hostname, flow.completedHostsAfterChoice)
+    .flatMap((hostname) => matchRequestHost(hostname))
+    .filter(isConfirmedMatch);
+  const confirmedCookies = flow.cookiesAfterChoice.flatMap((cookie) =>
+    matchCookie(cookie.name, cookie.domain, flow.completedHostsAfterChoice).filter(isConfirmedMatch),
+  );
+  const findings: Finding[] = [];
+  if (!flow.rejectionPersistedAfterReload) findings.push(finding("rejection-not-persisted", "high"));
+  for (const match of [...confirmedHosts, ...confirmedCookies]) {
+    findings.push(finding(`rejected-provider-active:${match.ruleId}`, "high"));
+  }
+  for (const [index, cookie] of flow.cookiesAfterChoice.entries()) {
+    if (!matchCookie(cookie.name, cookie.domain, flow.completedHostsAfterChoice).some(isConfirmedMatch)) {
+      findings.push(finding(`rejected-cookie-unclassified:${index}`, "low", "unknown"));
+    }
+  }
+  for (const [index] of flow.storageKeysAfterChoice.entries()) findings.push(finding(`rejected-storage-unclassified:${index}`, "low", "unknown"));
+  return { ...criterion("rejection-persistence", "evaluated"), findings };
+}
+
+function assessVendorControls(observation: PrivacyBrowserObservation): Criterion {
+  if (observation.initial.consentPromptDetected === false) return criterion("vendor-controls", "not_applicable");
+  if (observation.initial.consentPromptDetected !== true) return criterion("vendor-controls", "unknown");
+  if (observation.vendorControlCoverage !== "complete" || observation.vendorControls.length === 0 ||
+      observation.vendorControls.some(({ status, disabled, persistedDisabled }) =>
+        status !== "evaluated" || disabled !== true || persistedDisabled !== true)) {
+    return {
+      ...criterion("vendor-controls", "unknown"),
+      findings: [finding("vendor-control-coverage-incomplete", "low", "unknown")],
+    };
+  }
+  const findings: Finding[] = [];
+  for (const [index, check] of observation.vendorControls.entries()) {
+    const baselineActive = hasConfirmedProviderActivity(check.provider, observation.accept.cookiesAfterChoice, observation.accept.completedHostsAfterChoice);
+    const activityAfterDisable = hasConfirmedProviderActivity(check.provider, check.cookiesAfterDisable, check.completedHostsAfterDisable);
+    if (!baselineActive && !activityAfterDisable) {
+      return {
+        ...criterion("vendor-controls", "unknown"),
+        findings: [finding(`provider-baseline-unobserved:${index}`, "low", "unknown")],
+      };
+    }
+    for (const [step] of Array.from({ length: check.actionsToDisable ?? 0 }).entries()) {
+      findings.push(finding(`provider-toggle-action:${index}:${step}`, "low"));
+    }
+    if (activityAfterDisable) findings.push(finding(`provider-active-after-disable:${index}`, "high"));
+  }
+  return { ...criterion("vendor-controls", "evaluated"), findings };
+}
+
+function hasConfirmedProviderActivity(
+  provider: string,
+  cookies: readonly { name: string; domain: string }[],
+  completedHostnames: readonly string[],
+): boolean {
+  const hostMatches = completedHostnames.flatMap(matchRequestHost)
+    .some((match) => match.provider === provider && isConfirmedMatch(match));
+  if (hostMatches) return true;
+  return cookies.some((cookie) => matchCookie(cookie.name, cookie.domain, completedHostnames)
+    .some((match) => match.provider === provider && isConfirmedMatch(match)));
+}
+
+function matchCookie(name: string, domain: string, corroboratingHostnames: readonly string[]): PrivacyKnowledgeMatch[] {
+  return matchPrivacySignal({
+    signalType: "cookie_name",
+    value: name,
+    observedHostname: domain,
+    corroboratingHostnames,
+  }, PRIVACY_KNOWLEDGE_RULES);
+}
+
+function matchRequestHost(hostname: string): PrivacyKnowledgeMatch[] {
+  return matchPrivacySignal({ signalType: "request_host", value: hostname, observedHostname: hostname }, PRIVACY_KNOWLEDGE_RULES);
+}
+
+function thirdPartyHosts(requestedHostname: string, hostnames: readonly string[]): string[] {
+  return [...new Set(hostnames.filter((hostname) => isThirdPartyPrivacyHost(requestedHostname, hostname)))];
+}
+
+function isConfirmedMatch(match: PrivacyKnowledgeMatch): boolean {
+  return match.classification === "confirmed" && match.confidence === "high";
+}
+
+function criterion(id: PrivacyCriterionId, status: Criterion["status"]): Criterion {
+  return { id, status, findings: [] };
+}
+
+function finding(id: string, severity: PrivacySeverity, confidence: Finding["confidence"] = "confirmed"): Finding {
+  return { id, severity, confidence };
+}

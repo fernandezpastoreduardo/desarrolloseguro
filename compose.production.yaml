@@ -198,6 +198,8 @@ services:
       DS_RUNTIME_COORDINATOR_GID: "1000"
       DS_RUNTIME_EXECUTOR_IMAGE: desarrolloseguro-executor:local
       DS_RUNTIME_BROKER_IMAGE: desarrolloseguro-egress-broker:local
+      DS_RUNTIME_PRIVACY_BROWSER_IMAGE: desarrolloseguro-privacy-browser:local
+      DS_RUNTIME_PRIVACY_EGRESS_IMAGE: desarrolloseguro-privacy-egress:local
       DS_RUNTIME_DOCKER_BINARY: /usr/bin/docker
       DS_RUNTIME_DOCKER_SOCKET: /var/run/docker.sock
       DS_RUNTIME_EGRESS_NETWORK: development-security-egress

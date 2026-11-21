@@ -1,0 +1,88 @@
+# Privacidad observable (Solistos v1)
+
+Solistos añade una dimensión de Privacidad a los informes de análisis de la
+portada. Busca señales técnicas observables sobre cookies, almacenamiento del
+navegador, solicitudes a otros hosts y decisiones de consentimiento. Una web sin
+seguimiento conocido puede recibir evidencia positiva aunque no muestre un
+banner. Solistos no emite conclusiones de conformidad legal.
+
+## Cómo se realiza el análisis
+
+Cada análisis usa Chromium 1.65.0 en un contenedor efímero y un proxy de salida
+dedicado. El navegador se configura en español (`es-ES`) y zona horaria de
+Madrid; el informe identifica ese contexto. Solo se visita `/` del host
+analizado. Se observan la carga inicial, aceptar, rechazar, la persistencia del
+rechazo después de recargar y los controles individuales que coinciden con una
+regla local revisada de proveedor.
+
+Las páginas públicas y sus recursos se ejecutan dentro del navegador aislado.
+Por ello los hosts contactados pueden recibir la IP pública de salida del
+auditor. El proxy bloquea destinos no públicos, métodos no permitidos y
+solicitudes fuera de alcance. Solo abre una ventana temporal para escrituras
+de preferencias al elegir una opción o cambiar un proveedor. No envía
+formularios ni realiza acciones de cuenta.
+
+El presupuesto máximo agregado por análisis es de 120 segundos, 300 solicitudes
+HTTP(S), 20 MiB recibidos, 30 controles de proveedor y ocho contextos limpios.
+Los flujos usan contextos separados; los controles por proveedor que excedan la
+capacidad disponible quedan `unknown`/`partial` y no se penalizan. Se destruyen
+los contextos al terminar.
+
+## Cómo leer la nota
+
+La nota `Privacidad` es independiente del sello. No concede, bloquea ni
+suspende una certificación. Se calcula con la política versionada `privacy-v1`:
+
+| Criterio | Peso |
+| --- | ---: |
+| Actividad no esencial antes de elegir | 30 |
+| Exceso y redundancia contextual | 10 |
+| Visibilidad de aceptar y rechazar | 20 |
+| Eficacia del rechazo y persistencia | 20 |
+| Controles de proveedores | 20 |
+
+Cada hallazgo confirmado descuenta 0,25 (bajo), 0,5 (medio) o 1 (alto) punto
+absoluto, hasta el peso del criterio. Coincidencias dudosas y evidencia
+incompleta quedan como `unknown` y restan cero. Los criterios desconocidos se
+excluyen del denominador; el informe muestra la cobertura y los no aplicables.
+Si no hay señales conocidas y la observación está completa, la ausencia de
+panel no baja la nota.
+
+La regla cuantitativa inicial cuenta solo señales no esenciales activas después
+de consentir: exceso si un proveedor tiene más de cinco cookies de un mismo
+propósito o si un propósito supera diez cookies entre proveedores. No hay un
+límite bruto de proveedores: solo se considera duplicación cuando se observa
+que varios proveedores realizan la misma función.
+
+## Evidencia y límites
+
+El informe puede enumerar nombres de cookies y claves, proveedores y hosts
+observados; no incluye valores de cookies, almacenamiento, cuerpos, HTML,
+capturas, formularios ni credenciales. Distingue intentos bloqueados de
+solicitudes completadas. Una coincidencia de nombre por sí sola no confirma el
+proveedor: la regla local requiere atribución reproducible por el host/origen.
+
+La versión inicial del catálogo tiene cuatro reglas de Google Analytics
+basadas en documentación de Google Developers y conserva su fuente, licencia,
+fecha y nivel de confianza. No se consultan catálogos remotos durante cada
+análisis. Una declaración de “interés legítimo” se registra como texto
+observado, no como validación jurídica.
+
+El alcance se limita a la portada y a señales catalogadas. No demuestra ausencia
+total de seguimiento, conducta en otras rutas, en todas las regiones o en
+navegaciones posteriores. Una evaluación `unknown` significa que el navegador
+no obtuvo evidencia suficiente para ese criterio.
+
+## Uso operativo
+
+El worker ejecuta Solistos con cada análisis manual y periódico. Las imágenes
+de Chromium y del proxy se construyen como `development-security-privacy-browser`
+y `development-security-privacy-egress`; el contenedor de Chromium no tiene
+socket Docker ni montajes del host. CI ejecuta también un fixture sintético de
+consentimiento y control de Google Analytics en Chromium con la red del
+contenedor desactivada; ese resultado solo verifica el runtime y nunca se
+presenta como evidencia de un dominio. Las pruebas de policy, presupuesto y
+runtime se ejecutan con la suite del worker y los workflows de CI. Consulta
+[Producción](production.md), [Verificación](verification.md) y la
+[especificación operativa para agentes](../agentic-guidelines/desarrollo-seguro/solistos-phase.md)
+para el despliegue, puertas y decisiones completas de la versión.

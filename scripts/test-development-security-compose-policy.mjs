@@ -140,6 +140,8 @@ assert.match(runtimeCoordinator, /DS_RUNTIME_DOCKER_BINARY:\s*\/usr\/bin\/docker
 assert.match(runtimeCoordinator, /development-security-runtime:\/run\/development-security/u);
 assert.doesNotMatch(runtimeCoordinator, /development-security-ingress|development-security-backend|ports:/u);
 assert.match(runtimeCoordinator, /DS_RUNTIME_EGRESS_NETWORK:\s*development-security-egress/u);
+assert.match(runtimeCoordinator, /DS_RUNTIME_PRIVACY_BROWSER_IMAGE:\s*desarrolloseguro-privacy-browser:local/u);
+assert.match(runtimeCoordinator, /DS_RUNTIME_PRIVACY_EGRESS_IMAGE:\s*desarrolloseguro-privacy-egress:local/u);
 assert.match(runtimeCoordinator, /cap_drop:\s*\[ALL\]/u);
 assert.match(runtimeCoordinator, /cap_add:\s*\[CHOWN, FOWNER\]/u);
 assert.match(runtimeCoordinator, /read_only:\s*true/u);

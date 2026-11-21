@@ -402,6 +402,27 @@ describe("PostgresScanStore unit behavior", () => {
     expect(persistedChecks[0].summary).not.toContain("private page contents");
     expect(persistedChecks[0].limitation).not.toContain("secret-value");
     expect(persistedChecks[0].evidence).toEqual({});
+    const persistedPrivacyAssessment = JSON.parse(query.mock.calls[0][1][9] as string) as {
+      policyVersion: string;
+      score: number | null;
+      unknownCriteria: number;
+    };
+    expect(persistedPrivacyAssessment).toMatchObject({
+      policyVersion: "privacy-v1",
+      score: null,
+      unknownCriteria: 5,
+    });
+  });
+
+  it("rejects malformed privacy scores before writing the report", async () => {
+    const query = vi.fn();
+    const store = new PostgresScanStore(makePool({ query }));
+
+    await expect(store.completeScan({
+      ...VALID_REPORT,
+      privacyAssessment: { score: 100 } as never,
+    })).rejects.toThrow("invalid_privacy_assessment");
+    expect(query).not.toHaveBeenCalled();
   });
 
   it("rejects an unknown profile before writing to the database", async () => {

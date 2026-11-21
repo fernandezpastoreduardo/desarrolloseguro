@@ -58,6 +58,8 @@ for (const target of [
   "development-security-runtime-coordinator",
   "development-security-executor",
   "development-security-egress-broker",
+  "development-security-privacy-browser",
+  "development-security-privacy-egress",
 ]) {
   assert.match(workflow, new RegExp(`--target ${target} `, "u"));
 }

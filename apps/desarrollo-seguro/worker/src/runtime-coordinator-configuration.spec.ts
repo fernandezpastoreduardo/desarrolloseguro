@@ -7,6 +7,8 @@ const BASE_ENVIRONMENT: NodeJS.ProcessEnv = {
   DS_RUNTIME_COORDINATOR_GID: "1101",
   DS_RUNTIME_EXECUTOR_IMAGE: "development-security-executor:local",
   DS_RUNTIME_BROKER_IMAGE: "development-security-egress-broker:local",
+  DS_RUNTIME_PRIVACY_BROWSER_IMAGE: "development-security-privacy-browser:local",
+  DS_RUNTIME_PRIVACY_EGRESS_IMAGE: "development-security-privacy-egress:local",
 };
 
 describe("resolveRuntimeCoordinatorConfiguration", () => {
@@ -17,6 +19,8 @@ describe("resolveRuntimeCoordinatorConfiguration", () => {
       socketGid: 1101,
       executorImage: "development-security-executor:local",
       brokerImage: "development-security-egress-broker:local",
+      privacyBrowserImage: "development-security-privacy-browser:local",
+      privacyEgressImage: "development-security-privacy-egress:local",
       dockerBinary: "/usr/bin/docker",
       dockerSocketPath: "/var/run/docker.sock",
       egressNetwork: "none",
@@ -30,6 +34,8 @@ describe("resolveRuntimeCoordinatorConfiguration", () => {
     ["missing executor image", { DS_RUNTIME_EXECUTOR_IMAGE: undefined }],
     ["unsafe executor image", { DS_RUNTIME_EXECUTOR_IMAGE: "--privileged" }],
     ["missing broker image", { DS_RUNTIME_BROKER_IMAGE: undefined }],
+    ["missing privacy browser image", { DS_RUNTIME_PRIVACY_BROWSER_IMAGE: undefined }],
+    ["missing privacy egress image", { DS_RUNTIME_PRIVACY_EGRESS_IMAGE: undefined }],
     ["relative Docker binary", { DS_RUNTIME_DOCKER_BINARY: "docker" }],
     ["relative Docker socket", { DS_RUNTIME_DOCKER_SOCKET: "docker.sock" }],
     ["unsafe egress network", { DS_RUNTIME_EGRESS_NETWORK: "none;unexpected" }],

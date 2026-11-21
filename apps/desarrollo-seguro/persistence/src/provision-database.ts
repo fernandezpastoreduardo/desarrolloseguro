@@ -309,6 +309,8 @@ async function applyRuntimeGrants(pool: Pool): Promise<void> {
       target_path, method, summary, limitation
     ) ON public.ds_check_results TO ds_read;
     GRANT SELECT ON public.ds_public_check_results TO ds_read;
+    GRANT SELECT (run_id, assessment_json, created_at)
+      ON public.ds_scan_privacy_assessments TO ds_read;
     GRANT SELECT (hostname, policy_version, state, latest_report_id,
       certified_report_id, latest_assessment_status, latest_assessment,
       state_reason, last_checked_at, activated_at, suspended_at)
@@ -324,10 +326,13 @@ async function applyRuntimeGrants(pool: Pool): Promise<void> {
     REVOKE INSERT ON ds_scan_runs, ds_check_results, ds_scan_metrics FROM ds_worker;
     REVOKE UPDATE (state, lease_until, lease_token, attempts, available_at,
       finished_at, public_error_code) ON ds_scan_jobs FROM ds_worker;
+    REVOKE EXECUTE ON FUNCTION ds_complete_scan(
+      uuid, uuid, timestamptz, text, timestamptz, text, jsonb, jsonb, jsonb
+    ) FROM ds_worker;
     GRANT EXECUTE ON FUNCTION ds_claim_next_scan(integer),
       ds_renew_scan_lease(uuid, uuid, integer),
       ds_recover_expired_scan_leases(integer),
-      ds_complete_scan(uuid, uuid, timestamptz, text, timestamptz, text, jsonb, jsonb, jsonb)
+      ds_complete_scan_with_privacy(uuid, uuid, timestamptz, text, timestamptz, text, jsonb, jsonb, jsonb, jsonb)
       TO ds_worker;
     ALTER DEFAULT PRIVILEGES FOR ROLE ds_migrator IN SCHEMA public
       REVOKE SELECT ON TABLES FROM ds_read;

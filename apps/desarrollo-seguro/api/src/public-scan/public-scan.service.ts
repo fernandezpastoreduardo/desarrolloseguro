@@ -14,6 +14,7 @@ import {
   type BetaControlObservation,
   type ScanFailureCode,
   type DomainEthicsAssessment,
+  type PrivacyAssessment,
   type ScanFailureDiagnostic,
 } from "@desarrolloseguro/core";
 import {
@@ -48,6 +49,7 @@ export type PublicReport = {
   expiresAt: string;
   verdict: "pass" | "fail" | "inconclusive";
   ethicsAssessment: DomainEthicsAssessment;
+  privacyAssessment: PrivacyAssessment | null;
   betaCertification: ReturnType<typeof assessBetaCertification>;
   certification: PublicBetaCertificationResponse | null;
   scope: string[];
@@ -292,6 +294,7 @@ function toPublicReport(report: PublicScanReport): PublicReport {
     expiresAt: report.expiresAt.toISOString(),
     verdict: report.verdict,
     ethicsAssessment: assessDomainEthics(report.checks),
+    privacyAssessment: report.privacyAssessment ?? null,
     betaCertification: assessBetaCertification(toBetaObservations(report.checks)),
     certification: toPublicCertification(report.certification),
     scope: report.scope,

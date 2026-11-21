@@ -107,6 +107,36 @@ FROM development-security-executor AS development-security-egress-broker
 
 ENTRYPOINT ["node", "apps/desarrollo-seguro/worker/dist/transport-v1-egress-broker-child.js"]
 
+FROM development-security-executor AS development-security-privacy-egress
+
+ENTRYPOINT ["node", "apps/desarrollo-seguro/worker/dist/privacy-egress-proxy-entrypoint.js"]
+
+FROM mcr.microsoft.com/playwright:v1.65.0-noble AS development-security-privacy-browser
+
+ENV NODE_ENV=production \
+    PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
+    DS_PRIVACY_PROXY_URL=http://privacy-egress:3128
+
+WORKDIR /workspace
+
+RUN npm install --global pnpm@12.5.1
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/desarrollo-seguro/api/package.json apps/desarrollo-seguro/api/package.json
+COPY apps/desarrollo-seguro/core/package.json apps/desarrollo-seguro/core/package.json
+COPY apps/desarrollo-seguro/persistence/package.json apps/desarrollo-seguro/persistence/package.json
+COPY apps/desarrollo-seguro/web/package.json apps/desarrollo-seguro/web/package.json
+COPY apps/desarrollo-seguro/worker/package.json apps/desarrollo-seguro/worker/package.json
+RUN pnpm install --prod --filter @desarrolloseguro/worker... --frozen-lockfile --ignore-scripts
+
+COPY --from=development-security-worker-build --chown=pwuser:pwuser /workspace/apps/desarrollo-seguro/worker/dist /workspace/apps/desarrollo-seguro/worker/dist
+COPY --from=development-security-worker-build --chown=pwuser:pwuser /workspace/apps/desarrollo-seguro/core/dist /workspace/apps/desarrollo-seguro/core/dist
+COPY --chown=pwuser:pwuser apps/desarrollo-seguro/worker/scripts/privacy-browser-fixture-smoke.mjs /workspace/apps/desarrollo-seguro/worker/scripts/privacy-browser-fixture-smoke.mjs
+
+USER pwuser
+
+ENTRYPOINT ["node", "apps/desarrollo-seguro/worker/dist/privacy-browser-executor-entrypoint.js"]
+
 FROM pnpm-base AS development-security-worker-dependencies
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./

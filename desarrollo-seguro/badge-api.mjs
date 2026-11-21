@@ -6,7 +6,7 @@ const REPORT_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a
 export const AUTHORIZED_BADGE_HOSTNAMES = new Set(["grumphya.com", "www.grumphya.com"]);
 const REQUEST_TIMEOUT_MS = 10_000;
 
-export async function verifyReportBadge(input, fetchImpl = fetch) {
+export async function verifyReportBadge(input, fetchImpl = fetch, timeoutMs = REQUEST_TIMEOUT_MS) {
   if (
     typeof input?.token !== "string" || !TOKEN_PATTERN.test(input.token) ||
     !AUTHORIZED_BADGE_HOSTNAMES.has(input.hostname)
@@ -15,10 +15,10 @@ export async function verifyReportBadge(input, fetchImpl = fetch) {
   }
 
   try {
-    const currentReportId = await resolveCurrentReportId(input.hostname, fetchImpl);
+    const currentReportId = await resolveCurrentReportId(input.hostname, fetchImpl, timeoutMs);
     if (!currentReportId) return { verified: false, code: "report_not_current", hostname: input.hostname, reportId: "No indicado" };
     const url = `${API_ORIGIN}${API_PATH}`;
-    const response = await fetchWithTimeout(fetchImpl, url, {
+    const result = await fetchJsonWithTimeout(fetchImpl, url, {
       method: "POST",
       mode: "cors",
       credentials: "omit",
@@ -27,23 +27,23 @@ export async function verifyReportBadge(input, fetchImpl = fetch) {
       referrerPolicy: "no-referrer",
       headers: { Accept: "application/json", "Content-Type": "application/json" },
       body: JSON.stringify({ token: input.token, hostname: input.hostname, reportId: currentReportId }),
-    });
-    if (!response.ok) return { verified: false, code: "network_failure", hostname: input.hostname, reportId: currentReportId };
-    const result = await response.json();
-    const verified = isRecord(result) && result.verified === true &&
-      AUTHORIZED_BADGE_HOSTNAMES.has(result.hostname) &&
-      result.canonicalHostname === result.hostname && result.reportId === currentReportId;
+    }, timeoutMs);
+    if (!result.ok) return { verified: false, code: "network_failure", hostname: input.hostname, reportId: currentReportId };
+    const body = result.body;
+    const verified = isRecord(body) && body.verified === true &&
+      AUTHORIZED_BADGE_HOSTNAMES.has(body.hostname) &&
+      body.canonicalHostname === body.hostname && body.reportId === currentReportId;
     return verified
-      ? { verified: true, hostname: result.hostname, reportId: result.reportId }
-      : { verified: false, code: safeFailureCode(result), hostname: input.hostname, reportId: currentReportId };
+      ? { verified: true, hostname: body.hostname, reportId: body.reportId }
+      : { verified: false, code: safeFailureCode(body), hostname: input.hostname, reportId: currentReportId };
   } catch {
     return { verified: false, code: "network_failure", hostname: input.hostname, reportId: "No indicado" };
   }
 }
 
-async function resolveCurrentReportId(hostname, fetchImpl) {
+async function resolveCurrentReportId(hostname, fetchImpl, timeoutMs) {
   const url = `${API_ORIGIN}${STATUS_PATH}/${encodeURIComponent(hostname)}/status`;
-  const response = await fetchWithTimeout(fetchImpl, url, {
+  const result = await fetchJsonWithTimeout(fetchImpl, url, {
     method: "GET",
     mode: "cors",
     credentials: "omit",
@@ -51,9 +51,9 @@ async function resolveCurrentReportId(hostname, fetchImpl) {
     redirect: "error",
     referrerPolicy: "no-referrer",
     headers: { Accept: "application/json" },
-  });
-  if (!response.ok) throw new Error("badge_status_unavailable");
-  const status = await response.json();
+  }, timeoutMs);
+  if (!result.ok) throw new Error("badge_status_unavailable");
+  const status = result.body;
   const reportId = status?.lastReport?.certification?.certifiedReportId;
   return ["fresh", "updating"].includes(status?.state) && status?.lastReport?.certification?.state === "active" &&
     typeof reportId === "string" && REPORT_ID_PATTERN.test(reportId)
@@ -61,11 +61,12 @@ async function resolveCurrentReportId(hostname, fetchImpl) {
     : null;
 }
 
-async function fetchWithTimeout(fetchImpl, url, options) {
+async function fetchJsonWithTimeout(fetchImpl, url, options, timeoutMs) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await fetchImpl(url, { ...options, signal: controller.signal });
+    const response = await fetchImpl(url, { ...options, signal: controller.signal });
+    return { ok: response.ok, body: response.ok ? await response.json() : null };
   } finally {
     clearTimeout(timeout);
   }

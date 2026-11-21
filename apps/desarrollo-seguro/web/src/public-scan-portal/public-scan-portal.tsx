@@ -87,7 +87,7 @@ const MAX_REPORT_CHECKS = 32;
 
 const REPORT_CATEGORIES = [
   { id: "ethics", label: "Ética", description: "Busca señales visibles de herramientas de seguimiento. Esta prueba no puede confirmar contratos ni si una empresa vende o reutiliza datos.", criteria: ["third-party-data-use", "tracking"], controls: ["DS-PRIV-04", "DS-PRIV-06"] },
-  { id: "privacy", label: "Privacidad", description: "Revisa las cookies que se envían al abrir la portada. No acepta avisos de consentimiento ni navega por la web.", criteria: ["initial-cookie-risk"], controls: ["DS-PRIV-05"] },
+  { id: "privacy", label: "Privacidad", description: "Observa la portada, prueba aceptar y rechazar si hay controles y comprueba si se conserva el rechazo tras recargar. No navega a otras páginas.", criteria: ["initial-cookie-risk"], controls: ["DS-PRIV-05"] },
   { id: "security", label: "Seguridad", description: "Revisa que el dominio responda, use una conexión cifrada y envíe protecciones básicas al navegador.", criteria: ["dns-integrity", "transport-security", "http-availability", "security-headers"], controls: ["DS-DNS-01", "DS-TLS-01", "DS-TLS-02", "DS-HTTP-01", "DS-HDR-01"] },
   { id: "performance", label: "Rendimiento", description: "Mide cuánto tarda y cuánto pesa la respuesta de portada. No representa toda la experiencia desde otros dispositivos o páginas.", criteria: ["performance"], controls: ["DS-QUAL-02"] },
 ] as const;
@@ -195,6 +195,25 @@ type PublicReport = {
     reasons: string[];
     interpretation: string;
   };
+  privacyAssessment?: {
+    policyVersion: "privacy-v1";
+    score: number | null;
+    assessedCriteria: number;
+    unknownCriteria: number;
+    notApplicableCriteria: number;
+    totalCriteria: number;
+    evidence: { cookieNames: string[]; providers: string[]; domains: string[] };
+    criteria: Array<{
+      id: string;
+      label: string;
+      status: "evaluated" | "unknown" | "not_applicable";
+      weight: number;
+      deduction: number | null;
+      awarded: number | null;
+      confirmedFindings: number;
+      unknownFindings: number;
+    }>;
+  } | null;
   certification: {
     policyVersion: "beta-0.1";
     state: "pending" | "active" | "suspended";
@@ -1009,6 +1028,22 @@ function ReportSummary({
           </ul>
         )}
       </section>
+      {report.privacyAssessment && (
+        <section className="ds-portal__privacy" aria-labelledby="privacy-summary-heading">
+          <p className="ds-portal__eyebrow">Dimensión independiente</p>
+          <h3 id="privacy-summary-heading">Privacidad</h3>
+          <p>
+            {report.privacyAssessment.score === null
+              ? `Sin puntuación: falta evidencia del navegador · ${report.privacyAssessment.assessedCriteria} de ${report.privacyAssessment.totalCriteria} criterios evaluados · ${report.privacyAssessment.unknownCriteria} desconocidos · ${report.privacyAssessment.notApplicableCriteria} no aplican`
+              : `${report.privacyAssessment.score}/100 · ${report.privacyAssessment.assessedCriteria} de ${report.privacyAssessment.totalCriteria} criterios evaluados · ${report.privacyAssessment.unknownCriteria} desconocidos · ${report.privacyAssessment.notApplicableCriteria} no aplican`}
+          </p>
+          <dl className="ds-portal__privacy-evidence">
+            <div><dt>Cookies observadas</dt><dd>{report.privacyAssessment.evidence.cookieNames.join(", ") || "Ninguna detectada"}</dd></div>
+            <div><dt>Proveedores identificados</dt><dd>{report.privacyAssessment.evidence.providers.join(", ") || "Ninguno identificado"}</dd></div>
+            <div><dt>Dominios de terceros</dt><dd>{report.privacyAssessment.evidence.domains.join(", ") || "Ninguno observado"}</dd></div>
+          </dl>
+        </section>
+      )}
       <div className="ds-portal__verdict" data-verdict={report.verdict}>
         <span>{isCurrent ? "Vigente" : "Histórico"}</span>
         <strong>
@@ -1528,6 +1563,7 @@ function isPublicReport(value: unknown): value is PublicReport {
     !isIsoTimestamp(value.expiresAt) ||
     !isOneOf(value.verdict, SCAN_VERDICTS) ||
     !isEthicsAssessment(value.ethicsAssessment) ||
+    !isPrivacyAssessment(value.privacyAssessment) ||
     !isPublicCertification(value.certification) ||
     !Array.isArray(value.checks) ||
     value.checks.length === 0 ||
@@ -1558,6 +1594,47 @@ function isPublicReport(value: unknown): value is PublicReport {
     !value.checks.some((check) => check.status === "fail")
   ) {
     return false;
+  }
+  return true;
+}
+
+function isPrivacyAssessment(value: unknown): value is NonNullable<PublicReport["privacyAssessment"]> | null | undefined {
+  if (value === null || value === undefined) return true;
+  if (!isRecord(value) || value.policyVersion !== "privacy-v1" ||
+      (value.score !== null && (!isInteger(value.score) || value.score < 0 || value.score > 100)) ||
+      !isInteger(value.assessedCriteria) || !isInteger(value.unknownCriteria) ||
+      !isInteger(value.notApplicableCriteria) || value.totalCriteria !== 5 ||
+      !isRecord(value.evidence) || !isEvidenceNames(value.evidence.cookieNames, 128) ||
+      !isEvidenceNames(value.evidence.providers, 100) || !isEvidenceNames(value.evidence.domains, 253) ||
+      !Array.isArray(value.criteria) || value.criteria.length !== 5) return false;
+  const expected = [
+    ["preference-before-tracking", 30], ["contextual-excess", 10], ["choice-parity", 20],
+    ["rejection-persistence", 20], ["vendor-controls", 20],
+  ] as const;
+  if (!value.criteria.every((item, index) => {
+    const [id, weight] = expected[index]!;
+    return isRecord(item) && item.id === id && item.weight === weight && typeof item.label === "string" &&
+      isOneOf(item.status, ["evaluated", "unknown", "not_applicable"] as const) &&
+      (item.deduction === null || typeof item.deduction === "number" && Number.isFinite(item.deduction)) &&
+      (item.awarded === null || typeof item.awarded === "number" && Number.isFinite(item.awarded)) &&
+      isInteger(item.confirmedFindings) && item.confirmedFindings >= 0 &&
+      isInteger(item.unknownFindings) && item.unknownFindings >= 0;
+  })) return false;
+  return value.criteria.filter((item) => isRecord(item) && item.status === "evaluated").length === value.assessedCriteria &&
+    value.criteria.filter((item) => isRecord(item) && item.status === "unknown").length === value.unknownCriteria &&
+    value.criteria.filter((item) => isRecord(item) && item.status === "not_applicable").length === value.notApplicableCriteria;
+}
+
+function isEvidenceNames(value: unknown, maxLength: number): value is string[] {
+  return Array.isArray(value) && value.length <= 100 && value.every((item) =>
+    typeof item === "string" && item.length > 0 && item.length <= maxLength && isCleanEvidenceText(item),
+  ) && new Set(value).size === value.length;
+}
+
+function isCleanEvidenceText(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code <= 31 || code === 127) return false;
   }
   return true;
 }

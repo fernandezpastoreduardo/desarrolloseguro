@@ -140,6 +140,18 @@ const failClosed = await verifyReportBadge(
 );
 assert.equal(failClosed.verified, false);
 assert.equal(failClosed.code, "network_failure");
+const stalledJson = await verifyReportBadge(
+  { token: "A".repeat(43), hostname: "grumphya.com" },
+  async (_url, { signal }) => ({
+    ok: true,
+    json: () => new Promise((_resolve, reject) => {
+      signal.addEventListener("abort", () => reject(new Error("response_body_timeout")), { once: true });
+    }),
+  }),
+  5,
+);
+assert.equal(stalledJson.verified, false, "stalled JSON bodies fail closed");
+assert.equal(stalledJson.code, "network_failure", "the request timeout remains active while parsing JSON");
 let verificationPosted = false;
 const inactiveResult = await verifyReportBadge(
   { token: "A".repeat(43), hostname: "grumphya.com" },
@@ -189,6 +201,7 @@ assert.match(widgetScript, /certifiedReportId/u, "the widget resolves the curren
 assert.doesNotMatch(widgetScript, /dataset\.reportId/u, "a stale report ID from the embedding page is ignored");
 assert.match(widgetScript, /method: "GET"/u);
 assert.match(widgetScript, /cache: "no-store"/u);
+assert.match(widgetScript, /async function fetchJsonWithTimeout[\s\S]*?await response\.json\(\)[\s\S]*?clearTimeout\(timeout\)/u, "widget request timeout covers response-body parsing");
 assert.match(widgetScript, /widget\.hidden = false/u, "badge link is exposed only after server verification");
 assert.match(widgetScript, /widget\.dataset\.diagnostic = result\.code[\s\S]*?widget\.hidden = true/u, "failed verification keeps the dynamic seal hidden while retaining a safe diagnostic");
 assert.match(widgetScript, /createBrandLogo\(\)/u, "the verified badge displays the approved brand logo");
@@ -196,7 +209,7 @@ assert.match(widgetScript, /createElement\("style"\)/u, "the widget applies its 
 assert.match(badgeWidgetStyles, /width:\s*min\(270px,\s*100%\)/u, "the compact badge stays within a narrow footer column");
 assert.match(widgetScript, /Beta activa/u, "the badge summarizes current beta approval");
 
-async function executeBadgeWidget(state, certificationState, verificationResult) {
+async function executeBadgeWidget(state, certificationState, verificationResult, settings = {}) {
   class TestElement {
     constructor(tagName = "a") {
       this.tagName = tagName;
@@ -227,14 +240,29 @@ async function executeBadgeWidget(state, certificationState, verificationResult)
   }
   const anchor = new TestAnchor();
   const requests = [];
+  const executableScript = widgetScript.replace(
+    "const BADGE_REQUEST_TIMEOUT_MS = 10_000;",
+    `const BADGE_REQUEST_TIMEOUT_MS = ${settings.timeoutMs ?? 10_000};`,
+  );
   const context = {
     document: { querySelectorAll: () => [anchor], createElement: (tagName) => new TestElement(tagName) },
     HTMLAnchorElement: TestAnchor,
     URLSearchParams,
     URL: { createObjectURL: () => "blob:development-seguro-logo", revokeObjectURL() {} },
     Blob,
+    AbortController,
+    setTimeout,
+    clearTimeout,
     fetch: async (url, options) => {
       requests.push({ url, options });
+      if (settings.stallJson === true) {
+        return {
+          ok: true,
+          json: async () => new Promise((_resolve, reject) => {
+            options.signal.addEventListener("abort", () => reject(new Error("response_body_timeout")), { once: true });
+          }),
+        };
+      }
       return {
         ok: true,
         json: async () => options.method === "GET"
@@ -243,8 +271,8 @@ async function executeBadgeWidget(state, certificationState, verificationResult)
       };
     },
   };
-  runInNewContext(widgetScript, context);
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  runInNewContext(executableScript, context);
+  await new Promise((resolve) => setTimeout(resolve, settings.stallJson ? settings.timeoutMs + 5 : 0));
   return { anchor, requests };
 }
 
@@ -256,6 +284,9 @@ const renderedBadge = await executeBadgeWidget("fresh", "active", {
 });
 assert.equal(renderedBadge.anchor.hidden, false, "the live widget appears for the current active report");
 assert.equal(renderedBadge.anchor.dataset.state, "valid");
+const stalledBadge = await executeBadgeWidget("fresh", "active", {}, { timeoutMs: 5, stallJson: true });
+assert.equal(stalledBadge.anchor.hidden, true, "a stalled status response eventually leaves the widget safely hidden");
+assert.equal(stalledBadge.anchor.dataset.diagnostic, "network_failure");
 assert.match(renderedBadge.anchor.href, new RegExp(`reportId=${currentReportId}`, "u"));
 assert.match(renderedBadge.anchor.className, /ds-verified-badge/u);
 assert.equal(renderedBadge.anchor.children[0].tagName, "img");

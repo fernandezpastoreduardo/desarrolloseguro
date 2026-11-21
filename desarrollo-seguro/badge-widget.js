@@ -4,6 +4,7 @@ const REPORT_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a
 const AUTHORIZED_HOSTNAMES = new Set(["grumphya.com", "www.grumphya.com"]);
 const BADGE_WIDGET_STYLES = "__DS_BADGE_WIDGET_STYLES__";
 const BADGE_WIDGET_LOGO_SVG = "__DS_BADGE_WIDGET_LOGO_SVG__";
+const BADGE_REQUEST_TIMEOUT_MS = 10_000;
 
 const widgets = document.querySelectorAll("[data-ds-verified-badge]");
 installWidgetStyles();
@@ -90,7 +91,7 @@ async function verifyBadge(input) {
     const reportId = await resolveCurrentReportId(input.hostname);
     if (!reportId) return { verified: false, code: "report_not_current" };
     const endpoint = `${API_ORIGIN}/api/desarrollo-seguro/v1/badges/verify`;
-    const response = await fetch(endpoint, {
+    const result = await fetchJsonWithTimeout(endpoint, {
       method: "POST",
       mode: "cors",
       credentials: "omit",
@@ -100,24 +101,24 @@ async function verifyBadge(input) {
       headers: { Accept: "application/json", "Content-Type": "application/json" },
       body: JSON.stringify({ token: input.token, hostname: input.hostname, reportId }),
     });
-    if (!response.ok) return { verified: false, code: "network_failure" };
-    const result = await response.json();
-    const verified = isRecord(result) && result.verified === true &&
-      AUTHORIZED_HOSTNAMES.has(result.hostname) &&
-      result.canonicalHostname === result.hostname && result.reportId === reportId;
-    if (verified) return { verified: true, hostname: result.hostname, reportId: result.reportId };
+    if (!result.ok) return { verified: false, code: "network_failure" };
+    const body = result.body;
+    const verified = isRecord(body) && body.verified === true &&
+      AUTHORIZED_HOSTNAMES.has(body.hostname) &&
+      body.canonicalHostname === body.hostname && body.reportId === reportId;
+    if (verified) return { verified: true, hostname: body.hostname, reportId: body.reportId };
     const codes = new Set([
       "hostname_not_authorized", "report_not_current", "badge_expired",
       "badge_revoked", "redirect_not_valid", "network_failure",
     ]);
-    return { verified: false, code: isRecord(result) && codes.has(result.code) ? result.code : "report_not_current" };
+    return { verified: false, code: isRecord(body) && codes.has(body.code) ? body.code : "report_not_current" };
   } catch {
     return { verified: false, code: "network_failure" };
   }
 }
 
 async function resolveCurrentReportId(hostname) {
-  const response = await fetch(`${API_ORIGIN}${STATUS_PATH}/${encodeURIComponent(hostname)}/status`, {
+  const result = await fetchJsonWithTimeout(`${API_ORIGIN}${STATUS_PATH}/${encodeURIComponent(hostname)}/status`, {
     method: "GET",
     mode: "cors",
     credentials: "omit",
@@ -126,14 +127,25 @@ async function resolveCurrentReportId(hostname) {
     referrerPolicy: "no-referrer",
     headers: { Accept: "application/json" },
   });
-  if (!response.ok) throw new Error("badge_status_unavailable");
-  const status = await response.json();
+  if (!result.ok) throw new Error("badge_status_unavailable");
+  const status = result.body;
   const certification = status?.lastReport?.certification;
   return ["fresh", "updating"].includes(status?.state) && certification?.state === "active" &&
     typeof certification.certifiedReportId === "string" &&
     REPORT_ID_PATTERN.test(certification.certifiedReportId)
     ? certification.certifiedReportId
     : null;
+}
+
+async function fetchJsonWithTimeout(url, options) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), BADGE_REQUEST_TIMEOUT_MS);
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    return { ok: response.ok, body: response.ok ? await response.json() : null };
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function isRecord(value) {

@@ -25,7 +25,7 @@ test("rejects a report with a missing category score", () => {
   assert.deepEqual(result.failures, ["performance: missing score"]);
 });
 
-test("reports a low SEO score without blocking while the app uses noindex", () => {
+test("reports SEO informationally while the app uses noindex", () => {
   const result = inspectLighthouseReport(makeReport({ seo: 63 }), "http://127.0.0.1:4173");
   assert.equal(result.categories.seo, 63);
   assert.deepEqual(result.failures, []);
