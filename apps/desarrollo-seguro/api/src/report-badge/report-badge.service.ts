@@ -7,7 +7,7 @@ import {
 } from "@nestjs/common";
 import { REPORT_ID_PATTERN } from "../public-scan/public-scan.constants.js";
 
-const AUTHORIZED_HOSTNAMES = new Set(["grumphya.com"]);
+const AUTHORIZED_HOSTNAMES = new Set(["grumphya.com", "www.grumphya.com"]);
 const AUTHORIZED_ORIGINS = new Set([
   "https://grumphya.com",
   "https://desarrolloseguro.org",
@@ -26,8 +26,9 @@ export type BadgeRecord = {
 };
 
 export type ReportBadgeStore = {
+  resolveCanonicalHostname(hostname: string): Promise<string | null>;
   issue(record: BadgeRecord): Promise<boolean>;
-  verify(input: { hostname: string; reportId: string; tokenHash: string; at: Date }): Promise<boolean>;
+  verify(input: { hostname: string; requestedHostname: string; reportId: string; tokenHash: string; at: Date }): Promise<"verified" | "report_not_current" | "badge_expired" | "badge_revoked" | "redirect_not_valid">;
   revoke(input: { hostname: string; reportId: string; tokenHash: string; at: Date }): Promise<boolean>;
 };
 
@@ -41,36 +42,46 @@ export class ReportBadgeService {
     private readonly clock: () => Date = () => new Date(),
   ) {}
 
-  async issue(credential: unknown, hostname: unknown, reportId: unknown): Promise<{ hostname: string; reportId: string; token: string; verifyUrl: string; expiresAt: string }> {
+  async issue(credential: unknown, hostname: unknown, reportId: unknown): Promise<{ hostname: string; canonicalHostname: string; reportId: string; token: string; verifyUrl: string; expiresAt: string }> {
     this.authorizeIssuer(credential);
-    const identity = validateIdentity(hostname, reportId);
+    const requested = validateIdentity(hostname, reportId);
+    const identity = { ...requested, hostname: await this.resolveHostname(requested.hostname) };
     const token = randomBytes(32).toString("base64url");
     const expiresAt = new Date(this.clock().getTime() + BADGE_LIFETIME_MS);
     const created = await this.store.issue({ ...identity, tokenHash: hashToken(token), expiresAt });
     if (!created) throw new NotFoundException(REPORT_BADGE_NOT_FOUND);
     return {
       ...identity,
+      canonicalHostname: identity.hostname,
       token,
       verifyUrl: `${PUBLIC_API_ORIGIN}/desarrollo-seguro/verificar.html#${new URLSearchParams({ token, hostname: identity.hostname, reportId: identity.reportId }).toString()}`,
       expiresAt: expiresAt.toISOString(),
     };
   }
 
-  async verify(token: unknown, hostname: unknown, reportId: unknown, origin: unknown, fetchSite: unknown): Promise<{ verified: true; hostname: string; reportId: string } | { verified: false }> {
-    if (typeof token !== "string" || !TOKEN_PATTERN.test(token)) return { verified: false };
+  async verify(token: unknown, hostname: unknown, reportId: unknown, origin: unknown, fetchSite: unknown): Promise<{ verified: true; hostname: string; canonicalHostname: string; reportId: string } | { verified: false; code: string }> {
+    if (typeof token !== "string" || !TOKEN_PATTERN.test(token)) return { verified: false, code: "badge_expired" };
     const isAuthorizedOrigin = typeof origin === "string" && AUTHORIZED_ORIGINS.has(origin);
     const isDirectSameOriginPage = origin === undefined && fetchSite === "same-origin";
-    if (!isAuthorizedOrigin && !isDirectSameOriginPage) return { verified: false };
+    if (!isAuthorizedOrigin && !isDirectSameOriginPage) return { verified: false, code: "hostname_not_authorized" };
     let identity: { hostname: string; reportId: string };
-    try { identity = validateIdentity(hostname, reportId); } catch { return { verified: false }; }
-    const valid = await this.store.verify({ ...identity, tokenHash: hashToken(token), at: this.clock() });
-    return valid ? { verified: true, ...identity } : { verified: false };
+    try { identity = validateIdentity(hostname, reportId); } catch { return { verified: false, code: "hostname_not_authorized" }; }
+    try {
+      const canonicalHostname = await this.resolveHostname(identity.hostname);
+      const result = await this.store.verify({ hostname: canonicalHostname, requestedHostname: identity.hostname, reportId: identity.reportId, tokenHash: hashToken(token), at: this.clock() });
+      return result === "verified"
+        ? { verified: true, hostname: canonicalHostname, canonicalHostname, reportId: identity.reportId }
+        : { verified: false, code: result };
+    } catch {
+      return { verified: false, code: "network_failure" };
+    }
   }
 
   async revoke(credential: unknown, token: unknown, hostname: unknown, reportId: unknown): Promise<{ revoked: boolean }> {
     this.authorizeIssuer(credential);
     if (typeof token !== "string" || !TOKEN_PATTERN.test(token)) throw new BadRequestException(REPORT_BADGE_NOT_FOUND);
-    const identity = validateIdentity(hostname, reportId);
+    const requested = validateIdentity(hostname, reportId);
+    const identity = { ...requested, hostname: await this.resolveHostname(requested.hostname) };
     const revoked = await this.store.revoke({ ...identity, tokenHash: hashToken(token), at: this.clock() });
     if (!revoked) throw new NotFoundException(REPORT_BADGE_NOT_FOUND);
     return { revoked: true };
@@ -84,6 +95,11 @@ export class ReportBadgeService {
     const expectedDigest = createHash("sha256").update(expected).digest();
     const providedDigest = createHash("sha256").update(credential).digest();
     if (!timingSafeEqual(expectedDigest, providedDigest)) throw new UnauthorizedException(ISSUER_TOKEN_REQUIRED);
+  }
+
+  private async resolveHostname(hostname: string): Promise<string> {
+    const canonicalHostname = await this.store.resolveCanonicalHostname(hostname);
+    return canonicalHostname ?? hostname;
   }
 }
 

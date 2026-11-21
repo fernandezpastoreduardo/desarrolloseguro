@@ -51,7 +51,7 @@ export function getCanonicalScanPaths(hostname: unknown): readonly string[] {
 type ControlContract = {
   methodsByPath: Readonly<Record<string, readonly string[]>>;
   evidence: Readonly<
-    Record<string, "boolean" | "count" | "http_status" | readonly string[]>
+    Record<string, "boolean" | "count" | "http_status" | "hostname" | readonly string[]>
   >;
 };
 
@@ -103,6 +103,12 @@ const CONTROLS: Readonly<Record<string, ControlContract>> = {
       statusCode: "http_status",
       redirectedToHttps: "boolean",
       finalScheme: ["http", "https"],
+      requestedHostname: "hostname",
+      finalHostname: "hostname",
+      canonicalHostname: "hostname",
+      redirectStatusCode: "http_status",
+      redirectFromHostname: "hostname",
+      redirectToHostname: "hostname",
     },
   },
   "DS-HDR-01": {
@@ -645,6 +651,10 @@ function sanitizeEvidence(
       sanitized[key] = value;
       continue;
     }
+    if (rule === "hostname" && isAuthorizedGrumphyaHostname(value)) {
+      sanitized[key] = value;
+      continue;
+    }
     if (
       Array.isArray(rule) &&
       typeof value === "string" &&
@@ -655,8 +665,38 @@ function sanitizeEvidence(
     }
     throw new Error("scan_evidence_invalid");
   }
+  if (controlId === "DS-HTTP-01") validateGrumphyaRedirectEvidence(sanitized);
   return sanitized;
 }
+
+function isAuthorizedGrumphyaHostname(value: unknown): value is string {
+  return value === "grumphya.com" || value === "www.grumphya.com";
+}
+
+function validateGrumphyaRedirectEvidence(evidence: Record<string, SafeEvidenceValue>): void {
+  const hasRedirectIdentity = [
+    "requestedHostname", "finalHostname", "redirectStatusCode",
+    "redirectFromHostname", "redirectToHostname", "canonicalHostname",
+  ].some((key) => Object.hasOwn(evidence, key));
+  if (!hasRedirectIdentity) return;
+  if (
+    !isAuthorizedGrumphyaHostname(evidence.requestedHostname) ||
+    !isAuthorizedGrumphyaHostname(evidence.finalHostname) ||
+    !isAuthorizedGrumphyaHostname(evidence.redirectFromHostname) ||
+    !isAuthorizedGrumphyaHostname(evidence.redirectToHostname) ||
+    evidence.redirectFromHostname !== evidence.requestedHostname ||
+    evidence.redirectToHostname !== evidence.finalHostname ||
+    evidence.redirectFromHostname === evidence.redirectToHostname ||
+    typeof evidence.redirectStatusCode !== "number" ||
+    ![301, 302, 303, 307, 308].includes(evidence.redirectStatusCode)
+  ) throw new Error("scan_evidence_invalid");
+  const isPermanent = evidence.redirectStatusCode === 301 || evidence.redirectStatusCode === 308;
+  if (
+    (isPermanent && evidence.canonicalHostname !== evidence.finalHostname) ||
+    (!isPermanent && evidence.canonicalHostname !== undefined)
+  ) throw new Error("scan_evidence_invalid");
+}
+
 
 function pathsFor(
   methods: readonly string[],

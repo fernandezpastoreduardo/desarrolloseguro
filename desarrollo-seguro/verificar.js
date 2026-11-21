@@ -16,7 +16,8 @@ async function renderVerification() {
   hostname.textContent = result.hostname;
   reportId.textContent = result.reportId;
   if (!result.verified) {
-    status.textContent = "Sello no verificado";
+    status.textContent = verificationFailureMessage(result.code);
+    status.dataset.diagnostic = result.code ?? "verification_failed";
     status.dataset.state = "invalid";
     reportLink.hidden = true;
     return;
@@ -26,6 +27,18 @@ async function renderVerification() {
   status.dataset.state = "valid";
   reportLink.href = `/app/?report=${encodeURIComponent(result.reportId)}`;
   reportLink.hidden = false;
+}
+
+function verificationFailureMessage(code) {
+  const messages = {
+    hostname_not_authorized: "El hostname o el origen no está autorizado.",
+    report_not_current: "El informe ya no es el certificado vigente.",
+    badge_expired: "El sello ha caducado o no es válido.",
+    badge_revoked: "El sello ha sido revocado.",
+    redirect_not_valid: "No se ha validado la redirección permanente.",
+    network_failure: "No se pudo completar la verificación.",
+  };
+  return messages[code] ?? "El sello no se ha podido verificar.";
 }
 
 if (typeof window !== "undefined" && typeof document !== "undefined") {

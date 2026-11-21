@@ -16,9 +16,41 @@ import type {
 } from "@desarrolloseguro/persistence";
 import { ScanJobProcessor } from "./scan-job-processor.js";
 import {
+  getCanonicalHostname,
   requestPinnedHttps,
   type HttpsRequestFactory,
 } from "./pinned-https-transport.js";
+
+describe("Grumphya permanent redirect identity", () => {
+  it("uses the observed destination for a permanent hostname redirect in either direction", () => {
+    expect(getCanonicalHostname("www.grumphya.com", "grumphya.com", [
+      { statusCode: 301, from: "www.grumphya.com", to: "grumphya.com" },
+    ])).toBe("grumphya.com");
+    expect(getCanonicalHostname("grumphya.com", "www.grumphya.com", [
+      { statusCode: 308, from: "grumphya.com", to: "www.grumphya.com" },
+    ])).toBe("www.grumphya.com");
+  });
+
+  it.each([302, 303, 307])("does not treat temporary status %s as canonical evidence", (statusCode) => {
+    expect(getCanonicalHostname("www.grumphya.com", "grumphya.com", [
+      { statusCode, from: "www.grumphya.com", to: "grumphya.com" },
+    ])).toBeNull();
+  });
+
+  it("does not infer equivalence from a same-host or out-of-scope hop", () => {
+    expect(getCanonicalHostname("grumphya.com", "grumphya.com", [
+      { statusCode: 301, from: "grumphya.com", to: "grumphya.com" },
+    ])).toBeNull();
+    expect(getCanonicalHostname("www.grumphya.com", "outside.example", [
+      { statusCode: 301, from: "www.grumphya.com", to: "outside.example" },
+    ])).toBeNull();
+    expect(getCanonicalHostname("www.grumphya.com", "www.grumphya.com", [
+      { statusCode: 301, from: "www.grumphya.com", to: "grumphya.com" },
+      { statusCode: 308, from: "grumphya.com", to: "www.grumphya.com" },
+    ])).toBeNull();
+    expect(getCanonicalHostname("grumphya.com", "www.grumphya.com", [])).toBeNull();
+  });
+});
 
 const FIXTURE_HOSTNAME = "scan-fixture.example.net";
 const FIXTURE_ROOT_PATH = "/";
@@ -149,7 +181,7 @@ describe("requestPinnedHttps", () => {
     expect(lookup).toHaveBeenCalledTimes(2);
   });
 
-  it("rejects a redirect to a different hostname before resolving or connecting to it", async () => {
+  it("does not follow a redirect to a hostname outside the authorized pair", async () => {
     const fixture = await startHttpsFixture((_request, response) => {
       response.writeHead(302, {
         location: "https://outside.example.org/",
@@ -164,8 +196,7 @@ describe("requestPinnedHttps", () => {
       ) => httpsRequest({ ...options, port: fixture.port }, callback),
     );
 
-    await expect(
-      requestPinnedHttps(
+    const result = await requestPinnedHttps(
         {
           hostname: FIXTURE_HOSTNAME,
           path: FIXTURE_ROOT_PATH,
@@ -178,9 +209,10 @@ describe("requestPinnedHttps", () => {
           lookupFactory: () => lookup,
           requestFactory,
         },
-      ),
-    ).rejects.toThrow("redirect_origin_not_allowlisted");
+      );
 
+    expect(result.statusCode).toBe(302);
+    expect(result.finalHostname).toBe(FIXTURE_HOSTNAME);
     expect(requestFactory).toHaveBeenCalledOnce();
     expect(lookup).toHaveBeenCalledOnce();
   });

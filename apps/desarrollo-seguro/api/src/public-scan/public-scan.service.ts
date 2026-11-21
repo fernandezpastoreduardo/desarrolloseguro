@@ -95,6 +95,15 @@ export type PublicDomainStatus = {
   failureCode: ScanFailureCode | null;
   failureDiagnostic: ScanFailureDiagnostic | null;
   lastReport: PublicReport | null;
+  hostnameResolution?: {
+    observedReportId: string;
+    requestedHostname: string;
+    canonicalHostname: string;
+    statusCode: 301 | 308;
+    responseStatusCode: number;
+    fromHostname: string;
+    toHostname: string;
+  };
   checkedAt: string;
 };
 
@@ -113,6 +122,7 @@ type PublicReadStore = Pick<
     hostname: string,
     limit: number,
   ) => Promise<PublicScanReport[]>;
+  resolveCanonicalHostname?: (hostname: string) => Promise<string | null>;
   requestOnDemandScan?: (hostname: string) => Promise<EnsureScanResult>;
 };
 
@@ -165,6 +175,7 @@ export class PublicScanService {
       failureCode: state === "failed" ? snapshot.lastFailure?.code ?? null : null,
       failureDiagnostic: state === "failed" ? snapshot.lastFailure?.diagnostic ?? null : null,
       lastReport: report ? toPublicReport(report) : null,
+      ...(snapshot.hostnameResolution ? { hostnameResolution: snapshot.hostnameResolution } : {}),
       checkedAt: checkedAt.toISOString(),
     };
   }
@@ -195,7 +206,12 @@ export class PublicScanService {
       throw new ServiceUnavailableException(PUBLIC_STORAGE_ERROR);
     }
     try {
-      const reports = await readHistory.call(this.store.scanStore, hostname, PUBLIC_HISTORY_LIMIT);
+      const canonicalHostname = await this.store.scanStore.resolveCanonicalHostname?.(hostname);
+      const reports = await readHistory.call(
+        this.store.scanStore,
+        canonicalHostname ?? hostname,
+        PUBLIC_HISTORY_LIMIT,
+      );
       return reports.map(toPublicHistoryEntry);
     } catch {
       this.logger.error(PUBLIC_SCAN_READ_FAILED);
@@ -218,7 +234,8 @@ export class PublicScanService {
     }
 
     try {
-      const result = await scanStore.requestOnDemandScan(hostname);
+      const canonicalHostname = await scanStore.resolveCanonicalHostname?.(hostname);
+      const result = await scanStore.requestOnDemandScan(canonicalHostname ?? hostname);
       return { hostname, state: result.kind };
     } catch {
       this.logger.error(PUBLIC_SCAN_ADMISSION_FAILED);

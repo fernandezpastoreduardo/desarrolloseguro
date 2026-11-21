@@ -77,6 +77,7 @@ export class DevelopmentSecurityHealthController {
       inject: [DevelopmentSecurityDatabase],
       useFactory: (database: DevelopmentSecurityDatabase) =>
         new ReportBadgeService({
+          resolveCanonicalHostname: (hostname) => database.scanStore.resolveCanonicalHostname(hostname),
           issue: (record) => database.scanStore.issueReportBadge(record),
           verify: (input) => database.scanStore.verifyReportBadge(input),
           revoke: (input) => database.scanStore.revokeReportBadge(input),

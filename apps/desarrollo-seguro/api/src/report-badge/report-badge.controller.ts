@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Header, Headers, HttpCode, HttpStatus, Inject, Param, Post } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Header, Headers, HttpCode, HttpStatus, Inject, Post } from "@nestjs/common";
 import { ReportBadgeService } from "./report-badge.service.js";
 
 @Controller("badges")
@@ -21,12 +21,12 @@ export class ReportBadgeController {
     return this.badges.verify(input.token, input.hostname, input.reportId, origin, fetchSite);
   }
 
-  @Post(":token/revocation")
+  @Post("revocation")
   @HttpCode(HttpStatus.OK)
   @Header("Cache-Control", "no-store")
-  revoke(@Headers("authorization") authorization: string | undefined, @Param("token") token: string, @Body() body: unknown) {
-    const input = readIssueBody(body);
-    return this.badges.revoke(readBearerToken(authorization), token, input.hostname, input.reportId);
+  revoke(@Headers("authorization") authorization: string | undefined, @Body() body: unknown) {
+    const input = readRevokeBody(body);
+    return this.badges.revoke(readBearerToken(authorization), input.token, input.hostname, input.reportId);
   }
 }
 
@@ -42,6 +42,15 @@ function readVerifyBody(value: unknown): { token: string; hostname: string; repo
   const body = value as Record<string, unknown>;
   if (typeof body.token !== "string" || typeof body.hostname !== "string" || typeof body.reportId !== "string") {
     throw new BadRequestException("invalid_report_badge_verification");
+  }
+  return { token: body.token, hostname: body.hostname, reportId: body.reportId };
+}
+
+function readRevokeBody(value: unknown): { token: string; hostname: string; reportId: string } {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) throw new BadRequestException("invalid_report_badge_revocation");
+  const body = value as Record<string, unknown>;
+  if (typeof body.token !== "string" || typeof body.hostname !== "string" || typeof body.reportId !== "string") {
+    throw new BadRequestException("invalid_report_badge_revocation");
   }
   return { token: body.token, hostname: body.hostname, reportId: body.reportId };
 }

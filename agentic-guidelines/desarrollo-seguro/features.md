@@ -10,6 +10,8 @@ Una persona puede introducir un hostname público normalizado y consultar si exi
 
 **Criterios:** errores y ausencia de informe no muestran un resultado inventado ni reutilizan silenciosamente un informe anterior; respuestas llevan `Cache-Control: no-store`; el estado `not_scanned` indica que no existe observación.
 
+Para Grumphya, `grumphya.com` y `www.grumphya.com` comparten la identidad del informe solo cuando un informe reciente observa una cadena completa y validada de redirección HTTP permanente 301/308 entre ambos. El escáner continúa la redirección con las mismas protecciones DNS, TLS, rutas y salida; no transforma el hostname por texto. La respuesta pública conserva el hostname solicitado y el salto observado. El estado del alias apunta al informe vigente del destino y muestra la evidencia de redirección por separado. Sin esa evidencia permanente, los hostnames permanecen separados.
+
 ## F2. Informes y evidencia
 
 Un informe identifica hostname, perfil, rutas cubiertas, métodos, resultados, fecha UTC, punto de observación y límites. `same_vps` indica que la muestra procede del mismo VPS donde se ejecuta el servicio; no implica una observación independiente desde Internet.
@@ -29,6 +31,11 @@ elegible posterior la reactiva.
 **Criterios:** no se puede emitir un sello para un informe pendiente, bloqueado
 o histórico; un sello suspendido deja de verificarse aunque su token siga
 existiendo; la ficha pública muestra el estado y la fecha de última evaluación.
+Para los dos hostnames autorizados de Grumphya, emisión y verificación resuelven
+el hostname canónico con la evidencia reciente 301/308 y ligan el sello al
+informe certificado vigente de ese destino. La respuesta de verificación incluye
+`canonicalHostname`; los fallos devuelven diagnósticos categóricos sin token.
+La allowlist de `Origin` sigue independiente de la identidad del informe.
 
 ## F6. Historial público y comparabilidad
 

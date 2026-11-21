@@ -26,10 +26,15 @@ const MAX_REDIRECTS = 3;
 const MAX_RESPONSE_BYTES = 64 * 1024;
 const REQUEST_TIMEOUT_MS = 10_000;
 const REDIRECT_STATUS_CODES = new Set([301, 302, 303, 307, 308]);
+const PERMANENT_REDIRECT_STATUS_CODES = new Set([301, 308]);
+const GRUMPHYA_HOSTNAMES = new Set(["grumphya.com", "www.grumphya.com"]);
 const BACKSLASH = "\\";
 
 export type PinnedHttpsRequest = {
   hostname: string;
+  requestedHostname?: string;
+  initialRedirect?: { statusCode: number; fromHostname: string; toHostname: string };
+  allowGrumphyaAliasRedirects?: boolean;
   path: string;
   method: "GET" | "HEAD";
   allowedPaths: readonly string[];
@@ -42,6 +47,7 @@ export type PinnedHttpsRequest = {
 
 export type PinnedHttpsResult = {
   statusCode: number;
+  finalHostname: string;
   finalPath: string;
   finalScheme: "https";
   redirectCount: number;
@@ -52,6 +58,10 @@ export type PinnedHttpsResult = {
   passivePageSignals?: ReturnType<typeof inspectPassivePageSignals>;
   requestsCount: number;
   bytesCount: number;
+  redirectStatusCode: number | null;
+  redirectFromHostname: string | null;
+  redirectToHostname: string | null;
+  canonicalHostname: string | null;
 };
 
 export type HttpsRequestFactory = (
@@ -70,6 +80,14 @@ export async function requestPinnedHttps(
   dependencies: PinnedHttpsDependencies = {},
 ): Promise<PinnedHttpsResult> {
   const hostname = normalizeHostname(input.hostname);
+  const requestedHostname = normalizeHostname(input.requestedHostname ?? hostname);
+  if (input.initialRedirect && (
+    !REDIRECT_STATUS_CODES.has(input.initialRedirect.statusCode) ||
+    input.initialRedirect.fromHostname !== requestedHostname ||
+    input.initialRedirect.toHostname !== hostname ||
+    !GRUMPHYA_HOSTNAMES.has(requestedHostname) ||
+    !GRUMPHYA_HOSTNAMES.has(hostname)
+  )) throw new Error("invalid_scan_redirect_context");
   validateRequestMethod(input.method);
   validateAllowedPaths(input.allowedPaths);
   const canonicalPaths = getCanonicalScanPaths(hostname);
@@ -96,6 +114,11 @@ export async function requestPinnedHttps(
   }
   const deadline = Date.now() + timeoutMs;
   let currentPath = input.path;
+  let currentHostname = hostname;
+  const seenTargets = new Set([`${requestedHostname}${input.path}`, `${hostname}${input.path}`]);
+  const redirectHops: Array<{ statusCode: number; from: string; to: string }> = input.initialRedirect
+    ? [{ statusCode: input.initialRedirect.statusCode, from: input.initialRedirect.fromHostname, to: input.initialRedirect.toHostname }]
+    : [];
   let requestsCount = 0;
   let bytesCount = 0;
 
@@ -107,12 +130,12 @@ export async function requestPinnedHttps(
     let result: MakeRequestResult;
     try {
       result = await makeRequest({
-        hostname,
+        hostname: currentHostname,
         path: currentPath,
         method: input.method,
         signal: input.signal,
         timeoutMs: remainingMs,
-        lookup: lookupFactory(hostname, HTTPS_PORT),
+        lookup: lookupFactory(currentHostname, HTTPS_PORT),
         requestFactory,
         ca: dependencies.ca,
         inspectPage: input.inspectPage === true,
@@ -125,9 +148,15 @@ export async function requestPinnedHttps(
     requestsCount += 1;
     bytesCount += result.bytesCount;
 
-    if (!REDIRECT_STATUS_CODES.has(result.statusCode)) {
+    const isCrossHostnameRedirect = REDIRECT_STATUS_CODES.has(result.statusCode) &&
+      isCrossHostnameLocation(result.location, currentHostname, currentPath);
+    if (
+      !REDIRECT_STATUS_CODES.has(result.statusCode) ||
+      (isCrossHostnameRedirect && input.allowGrumphyaAliasRedirects !== true)
+    ) {
       return {
         statusCode: result.statusCode,
+        finalHostname: currentHostname,
         finalPath: currentPath,
         finalScheme: "https",
         redirectCount,
@@ -140,6 +169,10 @@ export async function requestPinnedHttps(
           : {}),
         requestsCount,
         bytesCount,
+        redirectStatusCode: getGrumphyaHostnameChange(redirectHops)?.statusCode ?? null,
+        redirectFromHostname: getGrumphyaHostnameChange(redirectHops)?.from ?? null,
+        redirectToHostname: getGrumphyaHostnameChange(redirectHops)?.to ?? null,
+        canonicalHostname: getCanonicalHostname(requestedHostname, currentHostname, redirectHops),
       };
     }
 
@@ -151,12 +184,22 @@ export async function requestPinnedHttps(
       );
     }
     try {
-      currentPath = validateRedirect(
+      const target = validateRedirect(
         result.location,
-        hostname,
+        currentHostname,
         currentPath,
         allowedPaths,
+        hostname,
+        input.allowGrumphyaAliasRedirects === true,
       );
+      const targetKey = `${target.hostname}${target.path}`;
+      if (seenTargets.has(targetKey)) {
+        throw new Error("redirect_loop_detected");
+      }
+      seenTargets.add(targetKey);
+      redirectHops.push({ statusCode: result.statusCode, from: currentHostname, to: target.hostname });
+      currentHostname = target.hostname;
+      currentPath = target.path;
     } catch (error) {
       throw new PinnedTransportError(
         safeTransportErrorCode(error, "transport_failed"),
@@ -368,7 +411,9 @@ function validateRedirect(
   hostname: string,
   currentPath: string,
   allowedPaths: readonly string[],
-): string {
+  requestedHostname: string,
+  allowGrumphyaAliasRedirects: boolean,
+): { hostname: string; path: string } {
   if (location === undefined || location.length > 2_048) {
     throw new Error("redirect_origin_not_allowlisted");
   }
@@ -380,7 +425,7 @@ function validateRedirect(
   }
   if (
     target.protocol !== "https:" ||
-    target.hostname !== hostname ||
+    !isAllowedRedirectHostname(requestedHostname, target.hostname, allowGrumphyaAliasRedirects) ||
     (target.port !== "" && target.port !== String(HTTPS_PORT)) ||
     target.username !== "" ||
     target.password !== "" ||
@@ -390,7 +435,57 @@ function validateRedirect(
   }
   const path = `${target.pathname}${target.search}`;
   validatePath(path, allowedPaths, "redirect_path_not_allowlisted");
-  return path;
+  return { hostname: target.hostname, path };
+}
+
+function isAllowedRedirectHostname(
+  requestedHostname: string,
+  targetHostname: string,
+  allowGrumphyaAliasRedirects: boolean,
+): boolean {
+  return targetHostname === requestedHostname ||
+    (allowGrumphyaAliasRedirects && GRUMPHYA_HOSTNAMES.has(requestedHostname) && GRUMPHYA_HOSTNAMES.has(targetHostname));
+}
+
+function isCrossHostnameLocation(location: string | undefined, hostname: string, currentPath: string): boolean {
+  if (!location || location.length > 2_048) return false;
+  try {
+    return new URL(location, `https://${hostname}${currentPath}`).hostname !== hostname;
+  } catch {
+    return false;
+  }
+}
+
+export function getCanonicalHostname(
+  requestedHostname: string,
+  finalHostname: string,
+  hops: readonly { statusCode: number; from: string; to: string }[],
+): string | null {
+  if (!GRUMPHYA_HOSTNAMES.has(requestedHostname) || !GRUMPHYA_HOSTNAMES.has(finalHostname)) return null;
+  if (requestedHostname === finalHostname || hops.length === 0) return null;
+  let expectedFrom = requestedHostname;
+  for (const hop of hops) {
+    if (!REDIRECT_STATUS_CODES.has(hop.statusCode) || hop.from !== expectedFrom) return null;
+    expectedFrom = hop.to;
+  }
+  if (expectedFrom !== finalHostname) return null;
+  const hostnameChanges = hops.filter((hop) => hop.from !== hop.to);
+  if (hostnameChanges.length === 0 || hostnameChanges.some((hop) =>
+    !PERMANENT_REDIRECT_STATUS_CODES.has(hop.statusCode) ||
+    !GRUMPHYA_HOSTNAMES.has(hop.from) ||
+    !GRUMPHYA_HOSTNAMES.has(hop.to),
+  )) return null;
+  return hostnameChanges.at(-1)?.to === finalHostname ? finalHostname : null;
+}
+
+function getGrumphyaHostnameChange(
+  hops: readonly { statusCode: number; from: string; to: string }[],
+): { statusCode: number; from: string; to: string } | null {
+  const changes = hops.filter((hop) => hop.from !== hop.to);
+  if (changes.length !== 1 || changes.some((hop) =>
+    !GRUMPHYA_HOSTNAMES.has(hop.from) || !GRUMPHYA_HOSTNAMES.has(hop.to),
+  )) return null;
+  return changes[0] ?? null;
 }
 
 function validatePath(

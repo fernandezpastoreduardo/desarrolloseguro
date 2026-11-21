@@ -91,6 +91,46 @@ describe("PublicScanService", () => {
     expect(readPublicDomainSnapshot).toHaveBeenCalledWith("example.com");
   });
 
+  it("presents the canonical report with separate redirect evidence for the requested alias", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(FIXED_NOW);
+    const canonicalReport = makeReport({ hostname: "grumphya.com" });
+    const service = new PublicScanService({
+      scanStore: {
+        readPublicDomainSnapshot: vi.fn().mockResolvedValue({
+          hostname: "www.grumphya.com",
+          enrollment: "monitored",
+          profileVersion: "domain-v3",
+          optedOut: false,
+          activeJobId: null,
+          lastReport: canonicalReport,
+          lastFailure: null,
+          hostnameResolution: {
+            observedReportId: REPORT_ID,
+            requestedHostname: "www.grumphya.com",
+            canonicalHostname: "grumphya.com",
+            statusCode: 301,
+            responseStatusCode: 200,
+            fromHostname: "www.grumphya.com",
+            toHostname: "grumphya.com",
+          },
+        }),
+        readPublicReport: vi.fn(),
+      },
+    });
+    const status = await service.getDomainStatus("www.grumphya.com");
+    expect(status.hostnameResolution).toEqual({
+      observedReportId: REPORT_ID,
+      requestedHostname: "www.grumphya.com",
+      canonicalHostname: "grumphya.com",
+      statusCode: 301,
+      responseStatusCode: 200,
+      fromHostname: "www.grumphya.com",
+      toHostname: "grumphya.com",
+    });
+    expect(status.lastReport?.hostname).toBe("grumphya.com");
+  });
+
   it("requires explicit authorization before requesting an on-demand analysis", async () => {
     const requestOnDemandScan = vi.fn().mockResolvedValue({ kind: "queued" });
     const service = new PublicScanService({
@@ -101,6 +141,21 @@ describe("PublicScanService", () => {
       service.requestAnalysis("example.com", { authorized: false }),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(requestOnDemandScan).not.toHaveBeenCalled();
+  });
+
+  it("requests the canonical hostname after recent permanent redirect evidence", async () => {
+    const requestOnDemandScan = vi.fn().mockResolvedValue({ kind: "queued" });
+    const service = new PublicScanService({
+      scanStore: {
+        readPublicDomainSnapshot: vi.fn(),
+        readPublicReport: vi.fn(),
+        resolveCanonicalHostname: vi.fn().mockResolvedValue("grumphya.com"),
+        requestOnDemandScan,
+      },
+    });
+    await expect(service.requestAnalysis("www.grumphya.com", { authorized: true }))
+      .resolves.toEqual({ hostname: "www.grumphya.com", state: "queued" });
+    expect(requestOnDemandScan).toHaveBeenCalledExactlyOnceWith("grumphya.com");
   });
 
   it("does not accept client-selected scan profiles or options", async () => {

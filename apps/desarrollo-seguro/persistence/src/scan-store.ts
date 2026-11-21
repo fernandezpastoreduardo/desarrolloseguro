@@ -129,6 +129,15 @@ export type PublicDomainSnapshot = {
   activeJobId: string | null;
   lastReport: PublicScanReport | null;
   lastFailure?: { code: ScanFailureCode; failedAt: Date; diagnostic?: ScanFailureDiagnostic | null } | null;
+  hostnameResolution?: {
+    observedReportId: string;
+    requestedHostname: string;
+    canonicalHostname: string;
+    statusCode: 301 | 308;
+    responseStatusCode: number;
+    fromHostname: string;
+    toHostname: string;
+  };
 };
 
 export type EnsureScanInput = {
@@ -243,22 +252,68 @@ export class PostgresScanStore implements ScanJobStore {
     return result.rowCount === 1;
   }
 
-  async verifyReportBadge(input: { hostname: string; reportId: string; tokenHash: string; at: Date }): Promise<boolean> {
-    const result = await this.pool.query(
-      `SELECT 1 FROM public.ds_report_badges AS badges
-       INNER JOIN public.ds_scan_runs AS reports
+  async resolveCanonicalHostname(hostname: string): Promise<string | null> {
+    const result = await this.pool.query<{ canonical_hostname: string }>(
+      `SELECT checks.evidence_json->>'canonicalHostname' AS canonical_hostname
+       FROM (
+         SELECT id, hostname, profile_version, expires_at
+         FROM public.ds_scan_runs
+         WHERE hostname = $1 AND profile_version IN ('domain-v1', 'domain-v2', 'domain-v3')
+         ORDER BY completed_at DESC LIMIT 1
+       ) AS reports
+       INNER JOIN public.ds_public_check_results AS checks ON checks.run_id = reports.id
+       WHERE reports.expires_at > now()
+         AND checks.control_id = 'DS-HTTP-01' AND checks.method = 'GET'
+         AND checks.evidence_json->>'requestedHostname' = $1
+         AND checks.evidence_json->>'redirectStatusCode' IN ('301', '308')
+         AND checks.evidence_json->>'redirectFromHostname' = $1
+         AND checks.evidence_json->>'redirectToHostname' = checks.evidence_json->>'canonicalHostname'
+         AND checks.evidence_json->>'finalHostname' = checks.evidence_json->>'canonicalHostname'
+       LIMIT 1`,
+      [hostname],
+    );
+    const canonicalHostname = result.rows[0]?.canonical_hostname;
+    return canonicalHostname === "grumphya.com" || canonicalHostname === "www.grumphya.com"
+      ? canonicalHostname
+      : null;
+  }
+
+  async verifyReportBadge(input: { hostname: string; requestedHostname?: string; reportId: string; tokenHash: string; at: Date }): Promise<"verified" | "report_not_current" | "badge_expired" | "badge_revoked" | "redirect_not_valid"> {
+    const result = await this.pool.query<Record<string, unknown>>(
+      `SELECT badges.hostname AS badge_hostname, badges.report_id AS badge_report_id,
+         badges.expires_at, badges.revoked_at, reports.id AS current_report_id,
+         certification.state AS certification_state,
+         certification.certified_report_id
+       FROM public.ds_report_badges AS badges
+       LEFT JOIN public.ds_scan_runs AS reports
          ON reports.id = badges.report_id AND reports.hostname = badges.hostname
-       INNER JOIN public.ds_beta_certifications AS certification
+       LEFT JOIN public.ds_beta_certifications AS certification
          ON certification.hostname = reports.hostname
         AND certification.policy_version = 'beta-0.1'
-        AND certification.state = 'active'
-        AND certification.certified_report_id = reports.id
-       WHERE badges.token_hash = $1 AND badges.hostname = $2 AND badges.report_id = $3
-         AND badges.revoked_at IS NULL AND badges.expires_at > $4
-       LIMIT 1`,
-      [input.tokenHash, input.hostname, input.reportId, input.at],
+       WHERE badges.token_hash = $1 LIMIT 1`,
+      [input.tokenHash],
     );
-    return result.rowCount === 1;
+    const row = result.rows[0];
+    if (!row) return "badge_expired";
+    const requestedHostname = input.requestedHostname ?? input.hostname;
+    const resolvedHostname = requestedHostname === input.hostname
+      ? null
+      : await this.resolveCanonicalHostname(requestedHostname);
+    if (
+      (requestedHostname !== input.hostname && resolvedHostname !== input.hostname) ||
+      (row.badge_hostname !== requestedHostname && resolvedHostname !== row.badge_hostname)
+    ) return "redirect_not_valid";
+    if (row.badge_hostname !== input.hostname || row.badge_report_id !== input.reportId) {
+      return "report_not_current";
+    }
+    if (row.revoked_at !== null) return "badge_revoked";
+    if (!(row.expires_at instanceof Date) || row.expires_at <= input.at) return "badge_expired";
+    if (
+      row.current_report_id !== input.reportId ||
+      row.certification_state !== "active" ||
+      row.certified_report_id !== input.reportId
+    ) return "report_not_current";
+    return "verified";
   }
 
   async revokeReportBadge(input: { hostname: string; reportId: string; tokenHash: string; at: Date }): Promise<boolean> {
@@ -275,6 +330,7 @@ export class PostgresScanStore implements ScanJobStore {
 
   async readPublicDomainSnapshot(
     hostname: string,
+    resolveAlias = true,
   ): Promise<PublicDomainSnapshot | null> {
     const result = await this.pool.query<Record<string, unknown>>(
       `SELECT domains.hostname, domains.enrollment, domains.profile_version,
@@ -324,7 +380,7 @@ export class PostgresScanStore implements ScanJobStore {
     if (!row) return null;
 
     const report = row.report_id ? parsePublicScanReport(row) : null;
-    return {
+    const snapshot: PublicDomainSnapshot = {
       hostname: requireString(row.hostname),
       enrollment: parseEnrollment(row.enrollment),
       profileVersion: parseProfileVersion(row.profile_version),
@@ -332,6 +388,22 @@ export class PostgresScanStore implements ScanJobStore {
       activeJobId: row.active_job_id ? requireString(row.active_job_id) : null,
       lastReport: report,
       lastFailure: parsePublicScanFailure(row),
+    };
+    if (!resolveAlias || !report) return snapshot;
+    const redirect = readGrumphyaRedirect(report, hostname);
+    if (!redirect) return snapshot;
+    const canonicalSnapshot = await this.readPublicDomainSnapshot(redirect.canonicalHostname, false);
+    if (canonicalSnapshot) {
+      return {
+        ...canonicalSnapshot,
+        hostname,
+        hostnameResolution: redirect,
+      };
+    }
+    return {
+      ...snapshot,
+      lastReport: null,
+      hostnameResolution: redirect,
     };
   }
 
@@ -576,6 +648,11 @@ function parsePublicScanReport(row: Record<string, unknown>): PublicScanReport {
   if (row.report_vantage !== "same_vps") {
     throw new Error(INVALID_PUBLIC_REPORT_ROW);
   }
+  const checks = parsePublicChecks(row.checks);
+  const isAliasReport = checks.some((check) =>
+    check.controlId === "DS-HTTP-01" && check.method === "GET" &&
+    typeof check.evidence.canonicalHostname === "string",
+  );
   return {
     id: requireString(row.report_id),
     hostname: requireString(row.report_hostname),
@@ -588,8 +665,43 @@ function parsePublicScanReport(row: Record<string, unknown>): PublicScanReport {
     expiresAt: parseDate(row.report_expires_at),
     verdict: parseOneOf(row.report_verdict, VERDICTS),
     scope: parseStringArray(row.report_scope),
-    checks: parsePublicChecks(row.checks),
-    certification: parsePublicBetaCertification(row),
+    checks,
+    certification: isAliasReport ? null : parsePublicBetaCertification(row),
+  };
+}
+
+function readGrumphyaRedirect(
+  report: PublicScanReport,
+  requestedHostname: string,
+): NonNullable<PublicDomainSnapshot["hostnameResolution"]> | null {
+  if (report.expiresAt.getTime() <= Date.now()) return null;
+  const check = report.checks.find((item) =>
+    item.controlId === "DS-HTTP-01" && item.method === "GET",
+  );
+  const evidence = check?.evidence;
+  if (
+    !evidence ||
+    evidence.requestedHostname !== requestedHostname ||
+    evidence.canonicalHostname !== evidence.finalHostname ||
+    evidence.redirectFromHostname !== requestedHostname ||
+    evidence.redirectToHostname !== evidence.canonicalHostname ||
+    (evidence.redirectStatusCode !== 301 && evidence.redirectStatusCode !== 308) ||
+    typeof evidence.finalHostname !== "string" ||
+    typeof evidence.redirectFromHostname !== "string" ||
+    typeof evidence.redirectToHostname !== "string" ||
+    typeof evidence.canonicalHostname !== "string" ||
+    typeof evidence.statusCode !== "number" ||
+    evidence.statusCode < 100 || evidence.statusCode > 599 ||
+    evidence.finalHostname === requestedHostname
+  ) return null;
+  return {
+    observedReportId: report.id,
+    requestedHostname,
+    canonicalHostname: evidence.canonicalHostname,
+    statusCode: evidence.redirectStatusCode,
+    responseStatusCode: evidence.statusCode as number,
+    fromHostname: evidence.redirectFromHostname,
+    toHostname: evidence.redirectToHostname,
   };
 }
 

@@ -21,6 +21,27 @@ describe("projectPublicEvidence", () => {
     })).toEqual({ statusCode: 200, redirectedToHttps: true });
   });
 
+  it("projects only the authorized Grumphya redirect identity fields", () => {
+    expect(projectPublicEvidence("DS-HTTP-01", {
+      statusCode: 301,
+      requestedHostname: "www.grumphya.com",
+      finalHostname: "grumphya.com",
+      canonicalHostname: "grumphya.com",
+      redirectStatusCode: 301,
+      redirectFromHostname: "www.grumphya.com",
+      redirectToHostname: "grumphya.com",
+      redirectLocation: "https://grumphya.com/private?token=secret",
+    })).toEqual({
+      statusCode: 301,
+      requestedHostname: "www.grumphya.com",
+      finalHostname: "grumphya.com",
+      canonicalHostname: "grumphya.com",
+      redirectStatusCode: 301,
+      redirectFromHostname: "www.grumphya.com",
+      redirectToHostname: "grumphya.com",
+    });
+  });
+
   it("projects only allowlisted TLS probe diagnostics", () => {
     expect(projectPublicEvidence("DS-TLS-02", {
       tls12ProbeError: "connection_failed",

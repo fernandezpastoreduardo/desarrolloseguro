@@ -96,7 +96,7 @@ const validResult = await verifyReportBadge(
   { token: "A".repeat(43), hostname: "grumphya.com", reportId },
   async (url, options) => {
     observedRequest = { url, options };
-    return { ok: true, json: async () => ({ verified: true, hostname: "grumphya.com", reportId }) };
+    return { ok: true, json: async () => ({ verified: true, hostname: "grumphya.com", canonicalHostname: "grumphya.com", reportId }) };
   },
 );
 assert.deepEqual(validResult, { verified: true, hostname: "grumphya.com", reportId });
@@ -110,6 +110,14 @@ const failClosed = await verifyReportBadge(
   async () => { throw new Error("offline"); },
 );
 assert.equal(failClosed.verified, false);
+const aliasResult = await verifyReportBadge(
+  { token: "A".repeat(43), hostname: "www.grumphya.com", reportId },
+  async (_url, options) => {
+    assert.equal(options.body, JSON.stringify({ token: "A".repeat(43), hostname: "www.grumphya.com", reportId }));
+    return { ok: true, json: async () => ({ verified: true, hostname: "grumphya.com", canonicalHostname: "grumphya.com", reportId }) };
+  },
+);
+assert.deepEqual(aliasResult, { verified: true, hostname: "grumphya.com", reportId });
 const mismatchedReport = await verifyReportBadge(
   { token: "A".repeat(43), hostname: "grumphya.com", reportId },
   async () => ({ ok: true, json: async () => ({ verified: true, hostname: "grumphya.com", reportId: "different" }) }),

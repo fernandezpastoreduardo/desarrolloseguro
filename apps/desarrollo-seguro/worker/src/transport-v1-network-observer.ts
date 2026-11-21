@@ -150,6 +150,7 @@ export function createTransportV1NetworkObserver(
         bytesCount,
         ...(negotiated.errorCode ? { errorCode: negotiated.errorCode } : {}),
       };
+
     },
     async observeHttp(hostname, method, signal) {
       return collectProbe(
@@ -174,6 +175,22 @@ export function createTransportV1NetworkObserver(
             statusCode: result.statusCode,
             redirectedToHttps: result.redirectedToHttps,
             finalScheme: result.finalScheme,
+            ...(result.grumphyaRedirectEvidence ? {
+              requestedHostname: result.grumphyaRedirectEvidence.requestedHostname,
+              finalHostname: result.grumphyaRedirectEvidence.finalHostname,
+              ...(result.grumphyaRedirectEvidence.redirectStatusCode !== null
+                ? { redirectStatusCode: result.grumphyaRedirectEvidence.redirectStatusCode }
+                : {}),
+              ...(result.grumphyaRedirectEvidence.redirectFromHostname
+                ? { redirectFromHostname: result.grumphyaRedirectEvidence.redirectFromHostname }
+                : {}),
+              ...(result.grumphyaRedirectEvidence.redirectToHostname
+                ? { redirectToHostname: result.grumphyaRedirectEvidence.redirectToHostname }
+                : {}),
+              ...(result.grumphyaRedirectEvidence.canonicalHostname
+                ? { canonicalHostname: result.grumphyaRedirectEvidence.canonicalHostname }
+                : {}),
+            } : {}),
           },
           requestsCount: result.requestsCount,
           bytesCount: result.bytesCount,
@@ -186,6 +203,7 @@ export function createTransportV1NetworkObserver(
           requestPinnedHttps(
             {
               hostname,
+              allowGrumphyaAliasRedirects: isGrumphyaHostname(hostname),
               path: "/",
               method: "GET",
               allowedPaths: ROOT_PATHS,
@@ -212,6 +230,10 @@ export function createTransportV1NetworkObserver(
       );
     },
   };
+}
+
+function isGrumphyaHostname(hostname: string): boolean {
+  return hostname === "grumphya.com" || hostname === "www.grumphya.com";
 }
 
 function toPassivePageEvidence(
