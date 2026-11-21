@@ -128,17 +128,19 @@ export async function runLighthouseLab({ cwd = process.cwd() } = {}) {
   const previewPort = await findAvailablePort();
   const baseUrl = `http://127.0.0.1:${previewPort}/app/`;
   const artifactDirectory = await mkdtemp(join(tmpdir(), "desarrollo-seguro-lighthouse-"));
-  const preview = spawn(process.execPath, [
-    join(webDirectory, "node_modules/vite/bin/vite.js"),
-    "preview", "--host", "127.0.0.1", "--port", String(previewPort), "--strictPort",
-  ], { cwd: webDirectory, stdio: ["ignore", "pipe", "pipe"] });
-  let previewStderr = "";
-  preview.stdout?.resume();
-  preview.stderr?.on("data", (chunk) => {
-    previewStderr = `${previewStderr}${chunk}`.slice(-2_000);
-  });
+  let preview;
 
   try {
+    await run("pnpm", ["--filter", "@desarrolloseguro/web", "build"], { cwd });
+    preview = spawn(process.execPath, [
+      join(webDirectory, "node_modules/vite/bin/vite.js"),
+      "preview", "--host", "127.0.0.1", "--port", String(previewPort), "--strictPort",
+    ], { cwd: webDirectory, stdio: ["ignore", "pipe", "pipe"] });
+    let previewStderr = "";
+    preview.stdout?.resume();
+    preview.stderr?.on("data", (chunk) => {
+      previewStderr = `${previewStderr}${chunk}`.slice(-2_000);
+    });
     await waitForServer(baseUrl, preview, () => previewStderr);
     const requireFromWeb = createRequire(join(webDirectory, "package.json"));
     const chromePath = process.env.CHROME_PATH || requireFromWeb("@playwright/test").chromium.executablePath();
@@ -163,12 +165,14 @@ export async function runLighthouseLab({ cwd = process.cwd() } = {}) {
     }
     if (failed) process.exitCode = 1;
   } finally {
-    preview.kill("SIGTERM");
-    await new Promise((resolveExit) => {
-      if (preview.exitCode !== null) return resolveExit();
-      const timeout = setTimeout(() => { preview.kill("SIGKILL"); resolveExit(); }, 3_000);
-      preview.once("exit", () => { clearTimeout(timeout); resolveExit(); });
-    });
+    if (preview) {
+      preview.kill("SIGTERM");
+      await new Promise((resolveExit) => {
+        if (preview.exitCode !== null) return resolveExit();
+        const timeout = setTimeout(() => { preview.kill("SIGKILL"); resolveExit(); }, 3_000);
+        preview.once("exit", () => { clearTimeout(timeout); resolveExit(); });
+      });
+    }
     await rm(artifactDirectory, { recursive: true, force: true });
   }
 }
