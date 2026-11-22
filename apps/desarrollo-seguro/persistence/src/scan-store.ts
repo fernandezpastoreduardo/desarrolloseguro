@@ -630,10 +630,10 @@ export class PostgresScanStore implements ScanJobStore {
     let processorTransparencyAssessment = input.processorTransparencyAssessment == null
       ? null
       : parseProcessorTransparencyAssessment(input.processorTransparencyAssessment);
-    if (input.hostname === "grumphya.com" && processorTransparencyAssessment === null) {
+    if ((input.hostname === "grumphya.com" || input.hostname === "desarrolloseguro.org") && processorTransparencyAssessment === null) {
       processorTransparencyAssessment = assessProcessorTransparency({ status: "auditor_error" });
     }
-    if (input.hostname !== "grumphya.com" && processorTransparencyAssessment ||
+    if (!new Set(["grumphya.com", "desarrolloseguro.org"]).has(input.hostname) && processorTransparencyAssessment ||
         input.processorTransparencyAssessment != null && !processorTransparencyAssessment) {
       throw new Error("invalid_processor_transparency_assessment");
     }
@@ -708,6 +708,9 @@ function parsePublicScanReport(row: Record<string, unknown>): PublicScanReport {
     ? null
     : parseProcessorTransparencyAssessment(row.report_processor_transparency);
   if (row.report_processor_transparency != null && !processorTransparencyAssessment) {
+    throw new Error(INVALID_PUBLIC_REPORT_ROW);
+  }
+  if (processorTransparencyAssessment?.inventory && processorTransparencyAssessment.inventory.hostname !== row.report_hostname) {
     throw new Error(INVALID_PUBLIC_REPORT_ROW);
   }
   const isAliasReport = checks.some((check) =>

@@ -3,6 +3,12 @@ set -euo pipefail
 
 readonly PROJECT_NAME="desarrollo-seguro"
 readonly COMPOSE_FILE="compose.production.yaml"
+readonly RELEASE_REVISION="${1:-}"
+
+if [[ ! "$RELEASE_REVISION" =~ ^[a-f0-9]{40,64}$ ]]; then
+  printf 'development_security_release_revision_required\n' >&2
+  exit 2
+fi
 
 if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
   printf 'development_security_deploy_requires_root\n' >&2
@@ -21,6 +27,7 @@ export DEVELOPMENT_SECURITY_SECRETS_DIR="/opt/desarrollo-seguro/secrets"
 # inherit a profile or an enable flag from an operator shell or CI environment.
 export COMPOSE_PROFILES=""
 export DEVELOPMENT_SECURITY_AUDIT_ENABLED="false"
+export DEVELOPMENT_SECURITY_RELEASE_REVISION="$RELEASE_REVISION"
 
 install -d -o root -g root -m 0700 "$DEVELOPMENT_SECURITY_SECRETS_DIR"
 readonly BADGE_ISSUER_SECRET="$DEVELOPMENT_SECURITY_SECRETS_DIR/development_security_badge_issuer_token"

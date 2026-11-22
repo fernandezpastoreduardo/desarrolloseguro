@@ -327,6 +327,17 @@ try {
   const prototypeCss = await readFile(join(buildDirectory, reportStylesheet.replace(/^\/app\//u, "")), "utf8");
   const prototypeHash = createHash("sha256").update(prototypeCss).digest("hex").slice(0, 16);
   assert.equal(reportStylesheet, `/app/assets/prototype-report-${prototypeHash}.css`);
+  const generatedVerifier = await readFile(join(buildDirectory, "desarrollo-seguro/verificar.html"), "utf8");
+  const verifierTag = generatedVerifier.match(/<script\b[^>]*src="\/desarrollo-seguro\/verificar\.js"[^>]*>/u)?.[0];
+  assert.ok(verifierTag?.includes('integrity="sha256-'), "the verification page pins its script with SRI");
+  const verifierSource = await readFile(join(buildDirectory, "desarrollo-seguro/verificar.js"));
+  const verifierHash = createHash("sha256").update(verifierSource).digest("base64");
+  assert.ok(verifierTag.includes(`integrity="sha256-${verifierHash}"`), "the SRI digest matches the published script bytes");
+  assert.match(verifierSource.toString("utf8"), /async function verifyReportBadge/u, "the verifier bundles its reviewed helper module");
+  assert.doesNotMatch(verifierSource.toString("utf8"), /^import\s/mu, "the CSP-protected verification entry has no unpinned module imports");
+  const generatedCsp = await readFile(join(buildDirectory, "nginx-security-headers.conf"), "utf8");
+  assert.ok(generatedCsp.includes(`'sha256-${verifierHash}'`) && generatedCsp.includes("'strict-dynamic'"));
+  assert.doesNotMatch(generatedCsp, /script-src[^;]*'self'/u, "the generated script policy does not authorize by host");
   await access(join(buildDirectory, "desarrollo-seguro/badge-widget.js"));
   await access(join(buildDirectory, "desarrollo-seguro/verificar.js"));
   await access(join(buildDirectory, "desarrollo-seguro/assets/desarrollo-seguro-logo-v1.svg"));

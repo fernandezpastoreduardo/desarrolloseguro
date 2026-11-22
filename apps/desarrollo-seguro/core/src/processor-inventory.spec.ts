@@ -6,7 +6,9 @@ import {
   PROCESSOR_INVENTORY_HOSTNAME,
   PROCESSOR_INVENTORY_POLICY_URL,
   PROCESSOR_INVENTORY_SCHEMA,
+  assessDevelopmentSecurityProcessorRegistry,
   assessProcessorTransparency,
+  parseProcessorTransparencyAssessment,
   readProcessorInventory,
   verifyProcessorInventory,
 } from "./processor-inventory.js";
@@ -43,6 +45,33 @@ function signedInventory(overrides: Record<string, unknown> = {}): unknown {
 }
 
 describe("verifyProcessorInventory", () => {
+  it("accepts a versioned first-party registry bound to its deployment revision", () => {
+    const assessment = assessDevelopmentSecurityProcessorRegistry({
+      deploymentRevision: "a".repeat(40),
+      registryRevision: "v1",
+      processors: [],
+      now,
+    });
+
+    expect(assessment).toMatchObject({ status: "pass", reasonCode: "inventory_complete_empty" });
+    expect(assessment.inventory).toMatchObject({
+      hostname: "desarrolloseguro.org",
+      evidenceSource: "desarrolloseguro_source_registry",
+      privacyPolicy: { revision: "v1" },
+      processors: [],
+    });
+    expect(parseProcessorTransparencyAssessment(assessment)).toEqual(assessment);
+  });
+
+  it("leaves the self-domain result unknown when no deployment revision is present", () => {
+    expect(assessDevelopmentSecurityProcessorRegistry({
+      deploymentRevision: "local",
+      registryRevision: "v1",
+      processors: [],
+      now,
+    })).toMatchObject({ status: "unknown", reasonCode: "auditor_error" });
+  });
+
   it("verifies the standalone signature and returns an allowlisted projection", () => {
     const result = verifyProcessorInventory(signedInventory(), {
       publicKeys: new Map([[PROCESSOR_INVENTORY_ATTESTATION_KID, publicKey]]),

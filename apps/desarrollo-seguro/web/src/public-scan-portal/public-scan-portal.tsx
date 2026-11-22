@@ -187,12 +187,13 @@ type PublicProcessorTransparencyAssessment = {
     policyVersion: "processor-inventory-v1";
     observedAt: string;
     validUntil: string;
-    hostname: "grumphya.com";
+    hostname: "grumphya.com" | "desarrolloseguro.org";
     deploymentDigest: string;
     inventoryStatus: "complete" | "incomplete";
-    privacyPolicy: { url: "https://grumphya.com/politica-de-privacidad"; revision: string };
+    privacyPolicy: { url: string; revision: string };
     processors: PublicProcessorDisclosure[];
-    attestation: { verified: true; keyId: "grumphya-release-2026" };
+    attestation: { verified: true; keyId: string };
+    evidenceSource?: "grumphya_signed_attestation" | "desarrolloseguro_source_registry";
   } | null;
 };
 type PublicReport = {
@@ -1072,7 +1073,9 @@ function ReportSummary({
         )}
         {report.processorTransparencyAssessment && (
           <section className="ds-portal__processors" aria-labelledby="processor-transparency-heading">
-            <h3 id="processor-transparency-heading">Procesadores backend de Grumphya</h3>
+            <h3 id="processor-transparency-heading">
+              Procesadores backend de {(report.processorTransparencyAssessment.inventory?.hostname ?? report.hostname) === "desarrolloseguro.org" ? "Desarrollo Seguro" : "Grumphya"}
+            </h3>
             <p>
               {getProcessorTransparencySummary(report.processorTransparencyAssessment)}
             </p>
@@ -1092,7 +1095,11 @@ function ReportSummary({
                             <p><strong>Propósito declarado:</strong> {processor.purpose}</p>
                             {processor.declaredStatements && processor.declaredStatements.length > 0 && (
                               <>
-                                <p className="ds-portal__declared-label">Declaraciones de Grumphya:</p>
+                                  <p className="ds-portal__declared-label">
+                                    {report.hostname === "desarrolloseguro.org"
+                                      ? "Declaraciones de Desarrollo Seguro:"
+                                      : "Declaraciones de Grumphya:"}
+                                  </p>
                                 <ul>
                                   {processor.declaredStatements.map((statement, index) => (
                                     <li key={`${processor.providerId}-${index}`}>{statement}</li>
@@ -1102,7 +1109,7 @@ function ReportSummary({
                             )}
                             {processor.policyUrl && (
                               <a href={processor.policyUrl} target="_blank" rel="noopener noreferrer">
-                                Ver política de privacidad de Grumphya
+                                Ver política de privacidad de {report.hostname === "desarrolloseguro.org" ? "Desarrollo Seguro" : "Grumphya"}
                               </a>
                             )}
                           </>
@@ -1858,16 +1865,26 @@ function isProcessorTransparencyAssessment(value: unknown): value is PublicProce
   }
   if (!isRecord(value.inventory)) return false;
   const inventory = value.inventory;
-  if (inventory.policyVersion !== "processor-inventory-v1" || inventory.hostname !== "grumphya.com" ||
+  if (inventory.policyVersion !== "processor-inventory-v1" ||
+      !isOneOf(inventory.hostname, ["grumphya.com", "desarrolloseguro.org"] as const) ||
       !isIsoTimestamp(inventory.observedAt) || !isIsoTimestamp(inventory.validUntil) ||
       typeof inventory.deploymentDigest !== "string" || !/^sha256:[a-f0-9]{64}$/u.test(inventory.deploymentDigest) ||
       !isOneOf(inventory.inventoryStatus, ["complete", "incomplete"] as const) ||
       !isRecord(inventory.privacyPolicy) ||
-      inventory.privacyPolicy.url !== "https://grumphya.com/politica-de-privacidad" ||
       typeof inventory.privacyPolicy.revision !== "string" || !/^v[1-9][0-9]*$/u.test(inventory.privacyPolicy.revision) ||
       !isRecord(inventory.attestation) || inventory.attestation.verified !== true ||
-      inventory.attestation.keyId !== "grumphya-release-2026" || !Array.isArray(inventory.processors) ||
+      typeof inventory.attestation.keyId !== "string" || !Array.isArray(inventory.processors) ||
       inventory.processors.length > 32 || !inventory.processors.every(isProcessorDisclosure)) return false;
+  const grumphyaInventory = inventory.hostname === "grumphya.com" &&
+    inventory.privacyPolicy.url === "https://grumphya.com/politica-de-privacidad" &&
+    inventory.attestation.keyId === "grumphya-release-2026" &&
+    (inventory.evidenceSource === undefined || inventory.evidenceSource === "grumphya_signed_attestation");
+  const selfInventory = inventory.hostname === "desarrolloseguro.org" &&
+    inventory.privacyPolicy.url === "https://desarrolloseguro.org/desarrollo-seguro/privacidad.html" &&
+    inventory.attestation.keyId === "desarrolloseguro-source-registry-v1" &&
+    inventory.evidenceSource === "desarrolloseguro_source_registry" &&
+    inventory.inventoryStatus === "complete" && inventory.processors.length === 0;
+  if (!grumphyaInventory && !selfInventory) return false;
   const expected = inventory.inventoryStatus === "incomplete"
     ? ["fail", "inventory_incomplete"]
     : inventory.processors.some((processor) => isRecord(processor) && processor.disclosureStatus === "missing")
@@ -2218,9 +2235,13 @@ function getProcessorTransparencySummary(
     return "Hay uno o más procesadores backend activos que no aparecen declarados en la política de privacidad.";
   }
   if (assessment.reasonCode === "inventory_complete_empty") {
-    return "El inventario completo no encontró procesadores backend externos activos en el registro de producción cubierto.";
+    return assessment.inventory?.hostname === "desarrolloseguro.org"
+      ? "Desarrollo Seguro declara, en un registro versionado ligado a esta revisión, que no hay procesadores backend externos activos dentro del alcance descrito. El inventario no verifica proveedores de infraestructura ni sus contratos."
+      : "El inventario completo no encontró procesadores backend externos activos en el registro de producción cubierto.";
   }
-  return "El inventario backend está completo y sus proveedores aparecen en la política de privacidad.";
+  return assessment.inventory?.hostname === "desarrolloseguro.org"
+    ? "Desarrollo Seguro declara que el inventario backend está completo; los proveedores incluidos aparecen en la política de privacidad."
+    : "Grumphya declara que el inventario backend está completo; los proveedores incluidos aparecen en su política de privacidad.";
 }
 
 function formatByteCount(value: number): string {

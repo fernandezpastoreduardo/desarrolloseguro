@@ -118,6 +118,8 @@ assert.match(deployScript, /COMPOSE_FILE="compose\.production\.yaml"/u);
 assert.match(deployScript, /openssl rand -hex 32/u);
 assert.match(deployScript, /export COMPOSE_PROFILES=""/u);
 assert.match(deployScript, /export DEVELOPMENT_SECURITY_AUDIT_ENABLED="false"/u);
+assert.match(deployScript, /RELEASE_REVISION="\$\{1:-\}"/u);
+assert.match(deployScript, /DEVELOPMENT_SECURITY_RELEASE_REVISION="\$RELEASE_REVISION"/u);
 assert.match(deployScript, /development_security_badge_issuer_token/u);
 assert.match(deployScript, /scripts\/configure-development-security-egress-firewall\.sh verify/u);
 assert.match(
@@ -146,7 +148,7 @@ assert.match(archiveGateway, /MAX_ARCHIVE_BYTES=50000000/u);
 assert.match(archiveGateway, /development_security_deploy_archive_path_rejected/u);
 assert.match(archiveGateway, /development_security_deploy_archive_link_rejected/u);
 assert.match(archiveGateway, /chmod 0755 "\$release_dir"\s+umask 022/u);
-assert.match(archiveGateway, /deploy-development-security-analysis\.sh/u);
+assert.match(archiveGateway, /deploy-development-security-analysis\.sh "\$revision"/u);
 assert.doesNotMatch(archiveGateway, /grumphya|caddy reload|compose down/iu);
 assert.match(compose, /^  development-security-(api|runtime-coordinator|worker|web):/mu);
 assert.match(compose, /development_security_badge_issuer_token/u);

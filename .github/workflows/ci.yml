@@ -151,7 +151,7 @@ jobs:
           set -euo pipefail
           docker build --pull --target development-security-production --tag "desarrolloseguro-api:${IMAGE_REVISION}" .
           docker build --pull --target development-security-web --tag "desarrolloseguro-web:${IMAGE_REVISION}" .
-          docker build --pull --target development-security-worker --tag "desarrolloseguro-worker:${IMAGE_REVISION}" .
+          docker build --pull --build-arg "DS_RELEASE_REVISION=${IMAGE_REVISION}" --target development-security-worker --tag "desarrolloseguro-worker:${IMAGE_REVISION}" .
           docker build --pull --target development-security-runtime-coordinator --tag "desarrolloseguro-runtime:${IMAGE_REVISION}" .
           docker build --pull --target development-security-executor --tag "desarrolloseguro-executor:${IMAGE_REVISION}" .
           docker build --pull --target development-security-egress-broker --tag "desarrolloseguro-egress-broker:${IMAGE_REVISION}" .
