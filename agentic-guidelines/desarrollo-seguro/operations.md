@@ -55,6 +55,21 @@ No añadas `--volumes` a una parada normal. El volumen es el almacenamiento pers
 
 ## Capacidad y escaneo
 
+### Presupuesto del runtime de análisis
+
+El límite de Solistos de 120 segundos cubre la observación del navegador; no
+incluye la comprobación domain-v3 previa, la creación/limpieza de los recursos
+efímeros ni el transporte de la respuesta. El timeout del coordinador debe
+cubrir esos límites acumulados con margen, sin ampliar el presupuesto del
+navegador ni los límites CPU/memoria/solicitudes/bytes aprobados.
+
+Si el coordinador agota su plazo total, devuelve un resultado demasiado grande
+o no obtiene el resultado esperado, el fallo conserva un diagnóstico
+allowlisted con etapa/código específicos. No guarda texto de excepción, salida
+de Docker, ruta local ni payload. La prueba de integración debe confirmar que
+el worker persiste ese diagnóstico y que la API pública solo expone sus
+categorías permitidas.
+
 El recolector `apps/desarrollo-seguro/worker/scripts/measure-vps-capacity.mjs` solo consulta recursos locales. Sin `--health-url`, no genera solicitudes de red. Su resultado no sustituye una prueba de carga ni autoriza un scan.
 
 La ejecución real permanece deshabilitada. El paquete worker tiene un executor `transport-v1` que deriva los controles desde DNS/IP pinning y transportes HTTP/HTTPS acotados, y un canal hijo que no transmite las credenciales del coordinador. El proceso aún comparte usuario y filesystem y no dispone de una jaula de red o sistema de archivos. Antes de activar scans hacen falta demostrar la política de egress por destino con pruebas IPv4/IPv6 contra servicios señuelo, aplicar límites globales de solicitudes/bytes/tiempo, medir capacidad y revisar el resultado público. Un fallo de esos gates debe dejar la respuesta como no evaluable, nunca como aprobado.

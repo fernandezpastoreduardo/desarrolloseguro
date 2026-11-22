@@ -13,7 +13,7 @@ export const SCAN_FAILURE_DIAGNOSTIC_CODES = [
   "runtime_broker_entrypoint_failed", "runtime_broker_application_failed",
   "runtime_broker_ready_timeout", "runtime_broker_ready_failed", "runtime_volume_create_failed",
   "runtime_volume_prepare_failed", "runtime_broker_start_failed", "runtime_cleanup_retry",
-  "runtime_cleanup_failed",
+  "runtime_cleanup_failed", "runtime_execution_timeout", "executor_response_too_large",
 ] as const;
 
 export const SCAN_DIAGNOSTIC_PROBE_OPERATIONS = ["dns", "tls", "http-head", "http-get", "headers"] as const;

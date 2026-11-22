@@ -22,4 +22,15 @@ describe("parseScanFailureDiagnostic", () => {
       { operation: "dns", code: "request_timeout" },
     ] })).toBeNull();
   });
+
+  it("accepts exact allowlisted coordinator timeout and oversized response categories", () => {
+    expect(parseScanFailureDiagnostic({
+      stage: "executor",
+      code: "runtime_execution_timeout",
+    })).toEqual({ stage: "executor", code: "runtime_execution_timeout" });
+    expect(parseScanFailureDiagnostic({
+      stage: "executor",
+      code: "executor_response_too_large",
+    })).toEqual({ stage: "executor", code: "executor_response_too_large" });
+  });
 });
