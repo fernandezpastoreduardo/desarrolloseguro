@@ -326,3 +326,7 @@ jobs:
             https://desarrolloseguro.org/api/desarrollo-seguro/v1/health --output /dev/null
       - name: Verify canonical www redirect and live Grumphya scan
         run: node scripts/smoke-public-domain-scan.mjs
+      - name: Verify the self-domain report scores 100 with source evidence
+        env:
+          DS_SMOKE_HOSTNAME: desarrolloseguro.org
+        run: node scripts/smoke-public-domain-scan.mjs

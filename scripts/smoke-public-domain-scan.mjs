@@ -3,8 +3,9 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const API_BASE_URL = "https://desarrolloseguro.org/api/desarrollo-seguro/v1";
-const VALIDATION_HOSTNAME = "grumphya.com";
 const CANONICAL_DOMAIN = "desarrolloseguro.org";
+const VALIDATION_HOSTNAMES = new Set(["grumphya.com", CANONICAL_DOMAIN]);
+const VALIDATION_HOSTNAME = process.env.DS_SMOKE_HOSTNAME ?? "grumphya.com";
 const SCAN_FAILURE_CODES = new Set([
   "coordinator_unavailable",
   "coordinator_socket_untrusted",
@@ -18,9 +19,10 @@ export const SCAN_TIMEOUT_MS = 15 * 60 * 1000;
 const POLL_INTERVAL_MS = 5_000;
 const PROGRESS_INTERVAL_MS = 30_000;
 
-export function validateCompletedReport(status, previousReportId) {
+export function validateCompletedReport(status, previousReportId, hostname = VALIDATION_HOSTNAME) {
   const report = status?.lastReport;
-  if (!report || status.hostname !== VALIDATION_HOSTNAME) {
+  if (!VALIDATION_HOSTNAMES.has(hostname)) throw new Error("public_scan_hostname_invalid");
+  if (!report || status.hostname !== hostname) {
     throw new Error("public_scan_report_missing");
   }
   if (report.id === previousReportId) {
@@ -87,17 +89,35 @@ export function validateCompletedReport(status, previousReportId) {
   ) {
     throw new Error("public_scan_ethics_assessment_incomplete");
   }
+  if (hostname === CANONICAL_DOMAIN) {
+    const privacy = report.privacyAssessment;
+    const global = report.globalAssessment;
+    const ownInventory = processorAssessment.inventory;
+    if (
+      assessment.score !== 100 ||
+      !privacy || privacy.score !== 100 || privacy.unknownCriteria !== 0 ||
+      !global || global.status !== "scored" || global.score !== 100 ||
+      ownInventory?.hostname !== CANONICAL_DOMAIN ||
+      ownInventory.evidenceSource !== "desarrolloseguro_source_registry" ||
+      ownInventory.inventoryStatus !== "complete" ||
+      ownInventory.attestation?.verified !== true ||
+      !/^sha256:[a-f0-9]{64}$/u.test(ownInventory.deploymentDigest ?? "")
+    ) {
+      throw new Error("self_domain_report_score_or_evidence_invalid");
+    }
+  }
   return report;
 }
 
-export function validateReusableAdmission(admission, status) {
+export function validateReusableAdmission(admission, status, hostname = VALIDATION_HOSTNAME) {
   if (
-    admission?.hostname !== VALIDATION_HOSTNAME ||
+    !VALIDATION_HOSTNAMES.has(hostname) ||
+    admission?.hostname !== hostname ||
     !["cached", "rate_limited"].includes(admission.state)
   ) {
     throw new Error("public_scan_admission_invalid");
   }
-  return validateCompletedReport(status, null);
+  return validateCompletedReport(status, null, hostname);
 }
 
 export function validateWwwRedirect(responseStatus, location) {

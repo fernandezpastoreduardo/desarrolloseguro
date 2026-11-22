@@ -1,5 +1,6 @@
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { assessDevelopmentSecurityProcessorRegistry } from "@desarrolloseguro/core";
 import {
   PostgresScanStore,
   ScanLeaseLostError,
@@ -48,6 +49,39 @@ describePostgres.sequential("PostgresScanStore", () => {
 
   afterAll(async () => {
     await pool?.end();
+  });
+
+  it("persists source-registry processor evidence for desarrolloseguro.org", async () => {
+    const hostname = "desarrolloseguro.org";
+    await store.ensureDomain(hostname, "on_demand", "domain-v3");
+    await store.ensureFreshScan({ hostname, profileVersion: "domain-v3", trigger: "requested" });
+    const job = await store.claimNextScan(new Date(), TEST_LEASE_MS);
+    if (!job) throw new Error("expected_claimed_self_domain_processor_scan");
+    const processorTransparencyAssessment = assessDevelopmentSecurityProcessorRegistry({
+      deploymentRevision: "a".repeat(40),
+      registryRevision: "v1",
+      processors: [],
+      now: new Date(),
+    });
+
+    const reportId = await store.completeScan({
+      jobId: job.id,
+      leaseToken: job.leaseToken,
+      hostname,
+      profileVersion: "domain-v3",
+      scannerVersion: TEST_SCANNER,
+      startedAt: new Date(Date.now() - 1_000),
+      completedAt: new Date(),
+      verdict: "pass",
+      scope: ["/"],
+      checks: makeEligibleDomainV3Checks(),
+      metrics: { requestsCount: 0, bytesCount: 0, durationMs: 1, pagesCount: 0 },
+      processorTransparencyAssessment,
+    });
+
+    const report = await store.readPublicReport(reportId);
+    expect(report?.hostname).toBe(hostname);
+    expect(report?.processorTransparencyAssessment).toEqual(processorTransparencyAssessment);
   });
 
   it("keeps domain enrollment stable when on-demand requests repeat", async () => {

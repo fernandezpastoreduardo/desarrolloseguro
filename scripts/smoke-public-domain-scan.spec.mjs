@@ -73,6 +73,32 @@ test("accepts a refreshed report with all eight v4 ethics criteria and a conclus
   assert.equal(report.checks.length, 9);
 });
 
+test("requires 100/100 and source-registry evidence for the self-domain report", () => {
+  const status = structuredClone(completedStatus());
+  status.hostname = "desarrolloseguro.org";
+  status.lastReport.hostname = "desarrolloseguro.org";
+  status.lastReport.ethicsAssessment.score = 100;
+  status.lastReport.privacyAssessment = { score: 100, unknownCriteria: 0 };
+  status.lastReport.globalAssessment = { status: "scored", score: 100 };
+  status.lastReport.processorTransparencyAssessment.inventory = {
+    hostname: "desarrolloseguro.org",
+    evidenceSource: "desarrolloseguro_source_registry",
+    inventoryStatus: "complete",
+    deploymentDigest: `sha256:${"a".repeat(64)}`,
+    attestation: { verified: true },
+  };
+
+  const report = validateCompletedReport(status, "previous-report-id", "desarrolloseguro.org");
+  assert.equal(report.ethicsAssessment.score, 100);
+  assert.equal(report.globalAssessment.score, 100);
+
+  status.lastReport.processorTransparencyAssessment.inventory.evidenceSource = "untrusted_source";
+  assert.throws(
+    () => validateCompletedReport(status, "previous-report-id", "desarrolloseguro.org"),
+    { message: "self_domain_report_score_or_evidence_invalid" },
+  );
+});
+
 test("accepts a cached or rate-limited admission when the existing report is valid", () => {
   const status = completedStatus();
   assert.equal(
