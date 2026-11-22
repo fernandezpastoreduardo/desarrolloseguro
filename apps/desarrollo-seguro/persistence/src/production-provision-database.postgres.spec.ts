@@ -295,6 +295,7 @@ describePostgres.sequential(
         can_recover: boolean;
         can_fail: boolean;
         can_complete: boolean;
+        can_complete_privacy: boolean;
         can_purge_reports: boolean;
         can_read_reports: boolean;
         can_write_reports: boolean;
@@ -307,6 +308,7 @@ describePostgres.sequential(
          has_function_privilege(current_user, 'public.ds_recover_expired_scan_leases(integer)', 'EXECUTE') AS can_recover,
          has_function_privilege(current_user, 'public.ds_fail_scan(uuid,uuid,text,integer,jsonb)', 'EXECUTE') AS can_fail,
          has_function_privilege(current_user, 'public.ds_complete_scan(uuid,uuid,timestamptz,text,timestamptz,text,jsonb,jsonb,jsonb)', 'EXECUTE') AS can_complete,
+         has_function_privilege(current_user, 'public.ds_complete_scan_with_privacy(uuid,uuid,timestamptz,text,timestamptz,text,jsonb,jsonb,jsonb,jsonb)', 'EXECUTE') AS can_complete_privacy,
          has_function_privilege(current_user, 'public.ds_purge_expired_reports(timestamptz)', 'EXECUTE') AS can_purge_reports,
          has_table_privilege(current_user, 'public.ds_scan_runs', 'SELECT') AS can_read_reports,
          has_table_privilege(current_user, 'public.ds_scan_runs', 'INSERT') AS can_write_reports,
@@ -318,7 +320,8 @@ describePostgres.sequential(
         can_renew: true,
         can_recover: true,
         can_fail: true,
-        can_complete: true,
+        can_complete: false,
+        can_complete_privacy: true,
         can_purge_reports: false,
         can_read_reports: false,
         can_write_reports: false,

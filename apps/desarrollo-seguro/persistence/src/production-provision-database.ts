@@ -493,12 +493,15 @@ async function applyRuntimeGrants(pool: Pool): Promise<void> {
       public.ds_scan_metrics FROM ${WORKER_ROLE};
     REVOKE UPDATE (state, lease_until, lease_token, attempts, available_at,
       finished_at, public_error_code) ON public.ds_scan_jobs FROM ${WORKER_ROLE};
+    REVOKE EXECUTE ON FUNCTION public.ds_complete_scan(
+      uuid, uuid, timestamptz, text, timestamptz, text, jsonb, jsonb, jsonb
+    ) FROM ${WORKER_ROLE};
     GRANT EXECUTE ON FUNCTION public.ds_claim_next_scan(integer),
       public.ds_renew_scan_lease(uuid, uuid, integer),
       public.ds_recover_expired_scan_leases(integer),
       public.ds_fail_scan(uuid, uuid, text, integer, jsonb),
-      public.ds_complete_scan(uuid, uuid, timestamptz, text, timestamptz,
-        text, jsonb, jsonb, jsonb) TO ${WORKER_ROLE};
+      public.ds_complete_scan_with_privacy(uuid, uuid, timestamptz, text,
+        timestamptz, text, jsonb, jsonb, jsonb, jsonb) TO ${WORKER_ROLE};
     GRANT EXECUTE ON FUNCTION public.ds_purge_expired_reports(timestamptz),
       public.ds_purge_inactive_public_reports(timestamptz),
       public.ds_enqueue_due_certification_scans(timestamptz)
