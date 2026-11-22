@@ -31,9 +31,12 @@ Beta 0.1.
 
 El 22-11-2026, el estado de VPS confirmó API, worker, web, base de datos,
 coordinador, scheduler de certificación y scheduler de retención activos; los
-servicios con healthcheck estaban sanos. El despliegue `44977733185` pasó
-calidad, PostgreSQL, navegador/Lighthouse, auditoría de dependencias, escaneo
-de imágenes, healthchecks y smoke de análisis público de Grumphya.
+servicios con healthcheck estaban sanos. El despliegue `45029384947`, sobre el
+commit `cb5d634`, pasó calidad, PostgreSQL, navegador/Lighthouse, auditoría de
+dependencias, escaneo de imágenes, healthchecks y smoke de análisis público de
+Grumphya. Incluye la divulgación autenticada de procesadores backend en
+`domain-ethics-v4`; no cambia el alcance de certificación Beta `domain-v3` ni
+la auditoría privada `beta-d-0.2`.
 
 ### Reconciliación de versiones anteriores
 
@@ -55,12 +58,17 @@ producto y el estado del MVP se describen por separado en
 
 ## Relación de Solistos con el MVP
 
-La toma inicial de requisitos del MVP sí menciona privacidad y ética como
-ámbitos, una base de conocimiento incremental y puntuaciones con cobertura;
-sin embargo, no incluye explícitamente la fase Solistos ni su análisis
-automatizado de cookies y almacenamiento, recorridos de consentimiento,
-catálogo local de proveedores, límites de navegador o dimensión `privacy-v1`.
-Solistos se define como fase posterior al cierre de Beta y previa al MVP, y su
-primera versión ya está desplegada. Por tanto, **la incorporación explícita de
-Solistos al alcance y plan del MVP queda pendiente de una decisión y una
-planificación separadas**; este cierre no la presupone.
+La sección 2.5 de [Requisitos iniciales del MVP](requisitos-iniciales-mvp.md)
+define explícitamente Solistos v1 como parte del alcance del MVP: reutiliza el
+navegador aislado, catálogo local, límites, evidencia, dimensión `privacy-v1`,
+persistencia y presentación, además de la puntuación global. Esa versión está
+desplegada. Por tanto, no hace falta abrir un goal separado para planificar y
+ejecutar Solistos v1.
+
+Una frase anterior de esta evaluación decía que Solistos no estaba incluida en
+el MVP. Esa conclusión quedó desactualizada al acordarse y registrar la
+sección 2.5; se corrige aquí para mantener una única descripción del alcance.
+El cierre de Beta confirma solo A–D y no afirma que todo el MVP esté terminado.
+La implementación posterior de transparencia de procesadores backend se
+publica como `domain-ethics-v4` y conserva los informes históricos de Beta
+`domain-v3` sin cambiar su significado.
