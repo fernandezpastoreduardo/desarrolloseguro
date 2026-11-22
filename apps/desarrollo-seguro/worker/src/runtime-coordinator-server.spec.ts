@@ -83,7 +83,13 @@ describe("runtime coordinator server", () => {
         { hostname: "sample.example.net", profileVersion: "transport-v1" },
         new AbortController().signal,
       ),
-    ).rejects.toThrow("executor_failed");
+    ).rejects.toMatchObject({
+      message: "executor_failed",
+      scanFailureDiagnostic: {
+        stage: "executor",
+        code: "executor_application_failed",
+      },
+    });
     expect(runner.execute).toHaveBeenCalledOnce();
   });
 

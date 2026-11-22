@@ -218,15 +218,25 @@ function handleRequest(
           executionSettled = true;
           clearTimeout(executionTimer);
           if (!controller.signal.aborted && !socket.destroyed) {
-            const response = parseTransportV1ExecutorResponse(
-              {
-                protocolVersion: 1,
-                requestId: request.requestId,
-                result: JSON.parse(JSON.stringify(result)) as unknown,
-              },
-              request.requestId,
-              request.profileVersion,
-            );
+            let response: ReturnType<typeof parseTransportV1ExecutorResponse>;
+            try {
+              response = parseTransportV1ExecutorResponse(
+                {
+                  protocolVersion: 1,
+                  requestId: request.requestId,
+                  result: JSON.parse(JSON.stringify(result)) as unknown,
+                },
+                request.requestId,
+                request.profileVersion,
+              );
+            } catch {
+              sendFailure(socket, request.requestId, "executor_failed", {
+                stage: "executor",
+                code: "executor_response_invalid",
+              });
+              finish();
+              return;
+            }
             sendResponse(socket, response);
           }
           finish();
@@ -235,7 +245,15 @@ function handleRequest(
           executionSettled = true;
           clearTimeout(executionTimer);
           if (!controller.signal.aborted && !socket.destroyed) {
-            sendFailure(socket, request.requestId, getRuntimeFailureCode(error), readScanFailureDiagnostic(error));
+            sendFailure(
+              socket,
+              request.requestId,
+              getRuntimeFailureCode(error),
+              readScanFailureDiagnostic(error) ?? {
+                stage: "executor",
+                code: "executor_application_failed",
+              },
+            );
           }
           finish();
         },
@@ -243,7 +261,17 @@ function handleRequest(
       .catch((error: unknown) => {
         executionSettled = true;
         clearTimeout(executionTimer);
-        if (!socket.destroyed) sendFailure(socket, request.requestId, getRuntimeFailureCode(error), readScanFailureDiagnostic(error));
+        if (!socket.destroyed) {
+          sendFailure(
+            socket,
+            request.requestId,
+            getRuntimeFailureCode(error),
+            readScanFailureDiagnostic(error) ?? {
+              stage: "executor",
+              code: "executor_application_failed",
+            },
+          );
+        }
         finish();
       })
       .finally(() => {
