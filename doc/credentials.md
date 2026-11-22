@@ -66,4 +66,6 @@ El script de deploy copia únicamente `audit_jwt_private.pem` y
 `release_attestation_public.pem` a `/opt/desarrollo-seguro/audit-secrets` con
 propietario root y modo `0400`; ese directorio dedicado es el único montaje de
 credenciales visible para el contenedor. El lector queda habilitado con scope
-`privacy`; el perfil `internal-audit` completo continúa apagado.
+`privacy`; el perfil `internal-audit` completo continúa apagado. El deploy
+inicia `development-security-processor-auditor` y espera a que el healthcheck
+valide el socket antes de arrancar el worker, cuyo `up` usa `--no-deps`.

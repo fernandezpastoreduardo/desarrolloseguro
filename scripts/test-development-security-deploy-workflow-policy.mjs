@@ -135,8 +135,8 @@ assert.match(
 );
 assert.match(
   normalizedDeployScript,
-  /up --detach --no-deps --wait\s+development-security-runtime-coordinator[\s\S]*up --detach --no-deps --wait\s+development-security-api\s+development-security-worker\s+development-security-retention-scheduler\s+development-security-certification-scheduler\s+development-security-web/u,
-  "deployment must wait for the isolated runtime coordinator before starting scanner and scheduler services",
+  /up --detach --no-deps --wait\s+development-security-runtime-coordinator[\s\S]*up --detach --no-deps --wait\s+development-security-processor-auditor[\s\S]*up --detach --no-deps --wait\s+development-security-api\s+development-security-worker\s+development-security-retention-scheduler\s+development-security-certification-scheduler\s+development-security-web/u,
+  "deployment must wait for the isolated runtime coordinator and processor auditor before starting the worker and scheduler services",
 );
 assert.match(
   normalizedDeployScript,

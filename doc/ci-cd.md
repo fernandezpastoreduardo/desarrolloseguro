@@ -19,7 +19,10 @@ El script de despliegue fuerza `COMPOSE_PROFILES` vacío y mantiene
 privada completa `internal-audit` no se hereda ni se arranca en un deploy
 normal. El lector aislado del inventario de procesadores sí se activa por su
 bandera independiente `DEVELOPMENT_SECURITY_PROCESSOR_TRANSPARENCY_ENABLED`;
-monta únicamente las dos claves necesarias desde
+el script inicia explícitamente `development-security-processor-auditor` y
+espera a que su healthcheck confirme el socket antes de actualizar el worker.
+Esto es necesario porque el `up` del worker usa `--no-deps` y no inicia sus
+dependencias. El auditor monta únicamente las dos claves necesarias desde
 `/opt/desarrollo-seguro/audit-secrets` y usa la ACL
 de egress exacta confirmada `172.30.0.1/32`. Su protocolo solo permite solicitar
 `GET /audit/processors` con scope `privacy`. La prueba de despliegue requiere

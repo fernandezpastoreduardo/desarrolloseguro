@@ -126,6 +126,13 @@ auditor contiene solo esos dos ficheros, con propietario root y modo `0400`;
 no se monta el directorio general de secretos ni quedan accesibles credenciales
 de PostgreSQL.
 
+El deploy debe iniciar explícitamente `development-security-processor-auditor`
+y esperar a que su healthcheck confirme el socket antes de actualizar el worker.
+El worker se arranca con `docker compose up --no-deps`; por tanto, Compose no
+iniciará automáticamente el auditor declarado en `depends_on`. Si el auditor
+no queda saludable, el deploy debe detenerse antes de arrancar/reemplazar el
+worker, manteniendo el release anterior operativo.
+
 ## Criterios de aceptación
 
 1. La observación de navegador y el inventario backend son dimensiones de
@@ -153,6 +160,8 @@ de PostgreSQL.
 11. La prueba del despliegue exige `domain-ethics-v4` con los ocho criterios
     evaluados y rechaza `unknown` propio del auditor; un inventario incompleto
     o no divulgado atribuible al dominio puede quedar como un `fail` evaluado.
+12. El script de deploy espera saludable al auditor de inventario antes de
+    actualizar el worker y falla de forma segura si el socket no está listo.
 
 ## Secuencia
 

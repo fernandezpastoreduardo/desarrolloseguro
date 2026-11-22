@@ -61,6 +61,10 @@ docker compose --project-name "$PROJECT_NAME" --file "$COMPOSE_FILE" \
   run --rm --no-deps development-security-migrate
 docker compose --project-name "$PROJECT_NAME" --file "$COMPOSE_FILE" \
   up --detach --no-deps --wait development-security-runtime-coordinator
+# The worker uses --no-deps below, so start and verify its isolated inventory
+# auditor explicitly before replacing the worker that consumes its socket.
+docker compose --project-name "$PROJECT_NAME" --file "$COMPOSE_FILE" \
+  up --detach --no-deps --wait development-security-processor-auditor
 docker compose --project-name "$PROJECT_NAME" --file "$COMPOSE_FILE" \
   up --detach --no-deps --wait \
   development-security-api development-security-worker \
