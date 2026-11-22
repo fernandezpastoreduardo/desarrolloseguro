@@ -43,6 +43,11 @@ producto realmente le transmite datos.
 
 - El origen de evidencia es local, versionado y mantenido junto al registro de
   integraciones; el informe muestra su versión y digest del release.
+- La revisión se obtiene del argumento confiable que envía CI. Si el gateway
+  remoto instalado todavía omite ese argumento, el script de despliegue puede
+  recuperarla únicamente del nombre validado `gha-<40-hex>.<6-char-suffix>`
+  de su directorio temporal de release. Si ninguna fuente coincide, el
+  despliegue debe detenerse antes de construir imágenes o modificar servicios.
 - El inventario no se obtiene desde el navegador, no contacta proveedores y no
   necesita secretos de runtime para compilarse.
 - Si se declara un proveedor activo, la proyección pública contiene únicamente

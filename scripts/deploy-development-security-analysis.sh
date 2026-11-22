@@ -3,7 +3,13 @@ set -euo pipefail
 
 readonly PROJECT_NAME="desarrollo-seguro"
 readonly COMPOSE_FILE="compose.production.yaml"
-readonly RELEASE_REVISION="${1:-}"
+readonly RELEASE_REVISION_ARGUMENT="${1:-${DEVELOPMENT_SECURITY_RELEASE_REVISION:-}}"
+readonly RELEASE_DIRECTORY_NAME="${PWD##*/}"
+RELEASE_REVISION="$RELEASE_REVISION_ARGUMENT"
+
+if [[ -z "$RELEASE_REVISION" && "$RELEASE_DIRECTORY_NAME" =~ ^gha-([a-f0-9]{40})\.[A-Za-z0-9]{6}$ ]]; then
+  RELEASE_REVISION="${BASH_REMATCH[1]}"
+fi
 
 if [[ ! "$RELEASE_REVISION" =~ ^[a-f0-9]{40,64}$ ]]; then
   printf 'development_security_release_revision_required\n' >&2
