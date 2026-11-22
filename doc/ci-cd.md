@@ -14,15 +14,24 @@ de claves con permisos de grupo/otros.
 
 Para iniciarlo manualmente, abre `Actions > CI/CD Desarrollo Seguro > Run workflow` y selecciona `main`. La casilla **Autorizar el deploy de Desarrollo Seguro a desarrolloseguro.org** está desmarcada por defecto. El job **Deploy Desarrollo Seguro** solo aparece y corre si la marcas y todos los jobs paralelos terminan correctamente. Ejecutar el flujo en un pull request o por push nunca despliega. El deploy usa un runner GitHub-hosted efímero y requiere los secretos `DS_DEPLOY_HOST`, `DS_DEPLOY_SSH_KEY` y `DS_DEPLOY_KNOWN_HOSTS` en el environment `desarrollo-seguro-production`. La clave SSH solo permite ejecutar el gateway restringido de despliegue, que valida el comando, tamaño y rutas del archivo recibido antes de extraerlo en un release dedicado. El coordinador de ejecución se inicia y se espera saludable antes que el worker de análisis, para que el worker no consuma trabajos sin tener disponible su socket. Después comprueba HTTPS y la salud de la API con reintentos.
 
-El script de despliegue fuerza `COMPOSE_PROFILES` vacío y
-`DEVELOPMENT_SECURITY_AUDIT_ENABLED=false`. El perfil `internal-audit` nunca
-se hereda del entorno del operador ni se arranca como parte del deploy normal;
-solo puede ejecutarse como operación opt-in después del preflight externo.
+El script de despliegue fuerza `COMPOSE_PROFILES` vacío y mantiene
+`DEVELOPMENT_SECURITY_AUDIT_ENABLED=false`, por lo que el perfil de auditoría
+privada completa `internal-audit` no se hereda ni se arranca en un deploy
+normal. El lector aislado del inventario de procesadores sí se activa por su
+bandera independiente `DEVELOPMENT_SECURITY_PROCESSOR_TRANSPARENCY_ENABLED`;
+monta únicamente las dos claves necesarias desde
+`/opt/desarrollo-seguro/audit-secrets` y usa la ACL
+de egress exacta confirmada `172.30.0.1/32`. Su protocolo solo permite solicitar
+`GET /audit/processors` con scope `privacy`. La prueba de despliegue requiere
+un informe `domain-ethics-v4` con 8/8 criterios éticos evaluados y falla si el
+inventario queda `unknown` por un error propio del auditor. Una falta de
+divulgación o inventario incompleto de Grumphya es un hallazgo concluyente,
+no un fallo de observabilidad.
 La sonda manual de egress y su procedimiento están en
 [internal-audit-egress-runbook.md](internal-audit-egress-runbook.md); no forman
 parte de CI ni consumen minutos de GitHub.
 
-Después del deploy, el workflow comprueba que `www.desarrolloseguro.org` redirige a `https://desarrolloseguro.org/` sin exponer puertos internos y solicita un análisis autorizado de `grumphya.com`. El gate exige un informe `domain-v3` válido, nueve comprobaciones, al menos cinco criterios concluyentes, una matriz TLS 1.0–1.3 completa (cada versión debe aportar aceptación booleana o un código de sonda acotado), cookies, referencias a rastreadores, respuesta inicial y puntuación calculable. Si la política Beta devuelve `queued` o `running`, espera hasta 15 minutos para acomodar la cola global serializada y registra cada 30 segundos el estado del trabajo; si devuelve `cached` o `rate_limited`, valida el informe público existente para que un deploy repetido no dependa de crear otra admisión. Un `unknown` de transporte es válido cuando conserva esa matriz diagnóstica; no se confunde una versión que no pudo negociar con una ausencia de evidencia. Si el análisis termina con error, el worker conserva solo la fase, categoría operativa y códigos de las pruebas de red fallidas; el smoke los imprime en la línea de error. No se almacenan mensajes, rutas, salida de Docker ni contenido del dominio.
+Después del deploy, el workflow comprueba que `www.desarrolloseguro.org` redirige a `https://desarrolloseguro.org/` sin exponer puertos internos y solicita un análisis autorizado de `grumphya.com`. El gate exige un informe `domain-v3` válido, nueve comprobaciones, al menos cinco criterios concluyentes, una matriz TLS 1.0–1.3 completa (cada versión debe aportar aceptación booleana o un código de sonda acotado), cookies, referencias a rastreadores, respuesta inicial y puntuación calculable. También exige la evaluación `domain-ethics-v4` con sus ocho criterios concluyentes, incluido el inventario backend sin errores propios del auditor. Si la política Beta devuelve `queued` o `running`, espera hasta 15 minutos para acomodar la cola global serializada y registra cada 30 segundos el estado del trabajo; si devuelve `cached` o `rate_limited`, valida el informe público existente para que un deploy repetido no dependa de crear otra admisión. Un `unknown` de transporte es válido cuando conserva esa matriz diagnóstica; no se confunde una versión que no pudo negociar con una ausencia de evidencia. Si el análisis termina con error, el worker conserva solo la fase, categoría operativa y códigos de las pruebas de red fallidas; el smoke los imprime en la línea de error. No se almacenan mensajes, rutas, salida de Docker ni contenido del dominio.
 
 El worker también escribe una línea JSON `scan_job_error` cuando una excepción impide completar el trabajo. Su `code` pertenece a una lista fija (`scan_run_insert_failed`, `scan_profile_controls_incomplete`, `worker_processing_failed`, entre otros) y nunca contiene el mensaje de la excepción, hostname, identificadores ni rutas. En una incidencia, estas líneas se consultan con `docker logs` del servicio worker para distinguir un fallo de persistencia de una expiración posterior del lease; no se debe interpretar `worker_lease_expired` como la causa raíz sin esa categoría previa.
 

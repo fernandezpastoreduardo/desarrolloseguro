@@ -118,6 +118,14 @@ assert.match(deployScript, /COMPOSE_FILE="compose\.production\.yaml"/u);
 assert.match(deployScript, /openssl rand -hex 32/u);
 assert.match(deployScript, /export COMPOSE_PROFILES=""/u);
 assert.match(deployScript, /export DEVELOPMENT_SECURITY_AUDIT_ENABLED="false"/u);
+assert.match(deployScript, /export DEVELOPMENT_SECURITY_PROCESSOR_TRANSPARENCY_ENABLED="true"/u);
+assert.match(deployScript, /PROCESSOR_AUDIT_SECRETS_DIR="\/opt\/desarrollo-seguro\/audit-secrets"/u);
+assert.match(deployScript, /install -d -o root -g root -m 0700 "\$PROCESSOR_AUDIT_SECRETS_DIR"/u);
+assert.match(deployScript, /install -o root -g root -m 0400/u);
+assert.match(deployScript, /audit_jwt_private\.pem/u);
+assert.match(deployScript, /release_attestation_public\.pem/u);
+assert.match(deployScript, /export DEVELOPMENT_SECURITY_AUDIT_SECRETS_DIR="\$PROCESSOR_AUDIT_SECRETS_DIR"/u);
+assert.match(deployScript, /172\.30\.0\.1\/32/u);
 assert.match(deployScript, /development_security_badge_issuer_token/u);
 assert.match(deployScript, /scripts\/configure-development-security-egress-firewall\.sh verify/u);
 assert.match(
