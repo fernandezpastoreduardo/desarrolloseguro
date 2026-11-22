@@ -81,7 +81,9 @@ allowlist del inventario.
    `domain-ethics-v4` con 8/8 criterios éticos concluyentes.
 2. `backend-processor-transparency` refleja exactamente el registro de
    integraciones activas del release y se presenta como evidencia declarada
-   por Desarrollo Seguro.
+   por Desarrollo Seguro. La persistencia acepta esta evaluación únicamente
+   para `desarrolloseguro.org` y `grumphya.com`, manteniendo evidencia
+   obligatoria en ambos dominios.
 3. Ningún proveedor ni condición se inventa; toda lista vacía tiene una
    definición de alcance, un registro de origen y pruebas de cobertura.
 4. Un informe nuevo de la portada produce valoración ética 100/100 y global
