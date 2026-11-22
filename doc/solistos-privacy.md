@@ -7,9 +7,12 @@ consentimiento. Una web sin seguimiento conocido puede recibir evidencia
 positiva aunque no muestre un banner. Solistos no emite conclusiones de
 conformidad legal ni modifica el estado del sello.
 
-En la puntuación global del MVP, Privacidad aporta el 50 % y la dimensión Ética
-`domain-ethics-v3` aporta el 50 %. El resultado se redondea al entero más
-cercano. Ambas puntuaciones se presentan también por separado. Si alguna
+En la puntuación global del MVP, Privacidad aporta el 50 % y Ética aporta el
+50 %. Ética usa `domain-ethics-v3` si el informe no incluye evaluación de
+procesadores backend y `domain-ethics-v4` cuando la incluye, según la
+[especificación de transparencia backend](../agentic-guidelines/desarrollo-seguro/backend-processor-transparency.md).
+El resultado se redondea al entero más cercano. Ambas puntuaciones se presentan
+también por separado. Si alguna
 dimensión carece de cobertura suficiente, el estado global queda «En revisión»
 y no se muestra una cifra combinada; las notas parciales y su cobertura siguen
 visibles. Los criterios no aplicables no impiden el cálculo. Los informes
@@ -53,8 +56,9 @@ ambos permisos con los roles de runtime.
 ## Cómo leer la nota
 
 La nota `Privacidad` es independiente del sello y aporta el 50 % de la nota
-global del MVP junto con la puntuación Ética (`domain-ethics-v3`), que aporta el
-50 % restante. La nota Privacidad no concede, bloquea ni suspende una
+global del MVP junto con la puntuación Ética vigente, que aporta el 50 %
+restante. Ética usa v3 sin evaluación backend o v4 cuando existe esa evaluación.
+La nota Privacidad no concede, bloquea ni suspende una
 certificación. Se calcula con la política versionada `privacy-v1`:
 
 | Criterio | Peso |
