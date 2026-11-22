@@ -3,10 +3,13 @@ import { readFileSync, statSync } from "node:fs";
 import { isIP } from "node:net";
 import {
   createTechnicalJwtProvider,
+  assessProcessorTransparency,
+  readProcessorInventory,
   runInternalAudit,
   type InternalAuditRunResult,
   type InternalAuditFetcher,
   type InternalAuditRequest,
+  type ProcessorTransparencyAssessment,
 } from "@desarrolloseguro/core";
 
 const AUDIT_ENABLED = "true";
@@ -43,6 +46,7 @@ export type InternalAuditRuntime = {
   request: InternalAuditRequest;
   operations: readonly (typeof OPERATIONS)[number][];
   run(signal?: AbortSignal): Promise<InternalAuditRunResult>;
+  readProcessorTransparency(signal?: AbortSignal): Promise<ProcessorTransparencyAssessment>;
 };
 
 export type InternalAuditRuntimeDependencies = {
@@ -87,10 +91,34 @@ export function createInternalAuditRuntime(
     clock: dependencies.clock,
     idFactory: dependencies.idFactory,
   });
+  const processorTechnicalJwt = createTechnicalJwtProvider({
+    privateKey,
+    kid: technicalKid,
+    issuer: EXPECTED_ISSUER,
+    audience: EXPECTED_AUDIENCE,
+    subject: SUBJECT,
+    hostname: "grumphya.com",
+    environment: "production",
+    scopes: ["privacy"],
+    clock: dependencies.clock,
+    idFactory: dependencies.idFactory,
+  });
   const fetcher = dependencies.fetcher ?? createAuditFetcher();
   return {
     request,
     operations,
+    readProcessorTransparency: async (signal) => {
+      const result = await readProcessorInventory({
+        technicalJwt: processorTechnicalJwt,
+        fetcher,
+        options: {
+          publicKeys: new Map([[attestationKid, attestationKey]]),
+          now: dependencies.clock,
+        },
+        ...(signal ? { signal } : {}),
+      });
+      return assessProcessorTransparency(result);
+    },
     run: (signal) => runInternalAudit({
       request,
       auditRef: createAuditRef(),

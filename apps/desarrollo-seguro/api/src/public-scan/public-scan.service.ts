@@ -7,6 +7,7 @@ import {
 } from "@nestjs/common";
 import {
   assessDomainEthics,
+  assessDomainEthicsV4,
   assessGlobalScore,
   assessBetaCertification,
   normalizeHostname,
@@ -17,6 +18,7 @@ import {
   type DomainEthicsAssessment,
   type GlobalScoreAssessment,
   type PrivacyAssessment,
+  type ProcessorTransparencyAssessment,
   type ScanFailureDiagnostic,
 } from "@desarrolloseguro/core";
 import {
@@ -53,6 +55,7 @@ export type PublicReport = {
   globalAssessment: GlobalScoreAssessment;
   ethicsAssessment: DomainEthicsAssessment;
   privacyAssessment: PrivacyAssessment | null;
+  processorTransparencyAssessment: ProcessorTransparencyAssessment | null;
   betaCertification: ReturnType<typeof assessBetaCertification>;
   certification: PublicBetaCertificationResponse | null;
   scope: string[];
@@ -286,7 +289,10 @@ function getPublicState(
 }
 
 function toPublicReport(report: PublicScanReport): PublicReport {
-  const ethicsAssessment = assessDomainEthics(report.checks);
+  const processorTransparencyAssessment = report.processorTransparencyAssessment ?? null;
+  const ethicsAssessment = processorTransparencyAssessment
+    ? assessDomainEthicsV4(report.checks, processorTransparencyAssessment)
+    : assessDomainEthics(report.checks);
   const privacyAssessment = report.privacyAssessment ?? null;
   return {
     id: report.id,
@@ -302,6 +308,7 @@ function toPublicReport(report: PublicScanReport): PublicReport {
     globalAssessment: assessGlobalScore(ethicsAssessment, privacyAssessment),
     ethicsAssessment,
     privacyAssessment,
+    processorTransparencyAssessment,
     betaCertification: assessBetaCertification(toBetaObservations(report.checks)),
     certification: toPublicCertification(report.certification),
     scope: report.scope,

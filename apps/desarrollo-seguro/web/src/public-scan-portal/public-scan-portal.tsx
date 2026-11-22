@@ -86,7 +86,7 @@ const PUBLIC_SCOPE_PATHS = ["/", "/precios", "/informe"] as const;
 const MAX_REPORT_CHECKS = 32;
 
 const REPORT_CATEGORIES = [
-  { id: "ethics", label: "Ética", description: "Busca señales visibles de herramientas de seguimiento. Esta prueba no puede confirmar contratos ni si una empresa vende o reutiliza datos.", criteria: ["third-party-data-use", "tracking"], controls: ["DS-PRIV-04", "DS-PRIV-06"] },
+  { id: "ethics", label: "Ética", description: "Separa las referencias visibles a rastreadores del inventario de procesadores backend cuando está disponible. Las declaraciones de privacidad se atribuyen al titular y no se contrastan con contratos.", criteria: ["third-party-data-use", "backend-processor-transparency", "tracking"], controls: ["DS-PRIV-06"] },
   { id: "privacy", label: "Privacidad", description: "Observa la portada, prueba aceptar y rechazar si hay controles y comprueba si se conserva el rechazo tras recargar. No navega a otras páginas.", criteria: ["initial-cookie-risk"], controls: ["DS-PRIV-05"] },
   { id: "security", label: "Seguridad", description: "Revisa que el dominio responda, use una conexión cifrada y envíe protecciones básicas al navegador.", criteria: ["dns-integrity", "transport-security", "http-availability", "security-headers"], controls: ["DS-DNS-01", "DS-TLS-01", "DS-TLS-02", "DS-HTTP-01", "DS-HDR-01"] },
   { id: "performance", label: "Rendimiento", description: "Mide cuánto tarda y cuánto pesa la respuesta de portada. No representa toda la experiencia desde otros dispositivos o páginas.", criteria: ["performance"], controls: ["DS-QUAL-02"] },
@@ -102,6 +102,7 @@ const CRITERION_EXPLANATIONS: Record<string, string> = {
   "http-availability": "Comprueba si la portada responde y si las visitas terminan en una conexión HTTPS cifrada.",
   "security-headers": "Revisa indicaciones que el sitio envía al navegador para reducir algunos tipos de ataque.",
   "third-party-data-use": "La respuesta técnica no permite verificar contratos ni prácticas de reutilización de datos.",
+  "backend-processor-transparency": "Compara el inventario autenticado de procesadores backend con lo que Grumphya declara en su política de privacidad. Las declaraciones se atribuyen al titular; no se verifica si los proveedores cumplen esas condiciones.",
   "initial-cookie-risk": "Cuenta cookies y coincidencias conocidas en la primera respuesta; no evalúa el consentimiento posterior.",
   tracking: "Cuenta referencias del HTML inicial a una lista local de rastreadores conocidos; no confirma conexiones ni ejecuta scripts.",
   performance: "Mide el tiempo y tamaño de una única respuesta GET inicial. No mide la experiencia completa de una persona ni métricas Core Web Vitals.",
@@ -169,6 +170,31 @@ type PublicCheck = {
   limitation: string;
   evidence: Record<string, string | number | boolean>;
 };
+type PublicProcessorDisclosure = {
+  providerId: string;
+  displayName: string;
+  product: string;
+  disclosureStatus: "published" | "missing";
+  purpose?: string;
+  policyUrl?: string;
+  declaredStatements?: string[];
+};
+type PublicProcessorTransparencyAssessment = {
+  policyVersion: "processor-inventory-v1";
+  status: "pass" | "fail" | "unknown";
+  reasonCode: string;
+  inventory: {
+    policyVersion: "processor-inventory-v1";
+    observedAt: string;
+    validUntil: string;
+    hostname: "grumphya.com";
+    deploymentDigest: string;
+    inventoryStatus: "complete" | "incomplete";
+    privacyPolicy: { url: "https://grumphya.com/politica-de-privacidad"; revision: string };
+    processors: PublicProcessorDisclosure[];
+    attestation: { verified: true; keyId: "grumphya-release-2026" };
+  } | null;
+};
 type PublicReport = {
   id: string;
   hostname: string;
@@ -194,7 +220,7 @@ type PublicReport = {
     } | null;
   };
   ethicsAssessment: {
-    policyVersion: "domain-ethics-v3";
+    policyVersion: "domain-ethics-v3" | "domain-ethics-v4";
     score: number | null;
     assessedCriteria: number;
     totalCriteria: number;
@@ -227,6 +253,7 @@ type PublicReport = {
       unknownFindings: number;
     }>;
   } | null;
+  processorTransparencyAssessment: PublicProcessorTransparencyAssessment | null;
   certification: {
     policyVersion: "beta-0.1";
     state: "pending" | "active" | "suspended";
@@ -1043,6 +1070,58 @@ function ReportSummary({
             {report.ethicsAssessment.reasons.map((reason) => <li key={reason}>{reason}</li>)}
           </ul>
         )}
+        {report.processorTransparencyAssessment && (
+          <section className="ds-portal__processors" aria-labelledby="processor-transparency-heading">
+            <h3 id="processor-transparency-heading">Procesadores backend de Grumphya</h3>
+            <p>
+              {getProcessorTransparencySummary(report.processorTransparencyAssessment)}
+            </p>
+            {report.processorTransparencyAssessment.inventory && (
+              <>
+                <p className="ds-portal__processors-meta">
+                  Política versión {report.processorTransparencyAssessment.inventory.privacyPolicy.revision} ·
+                  inventario observado {report.processorTransparencyAssessment.inventory.observedAt}
+                </p>
+                {report.processorTransparencyAssessment.inventory.processors.length > 0 ? (
+                  <ul className="ds-portal__processor-list">
+                    {report.processorTransparencyAssessment.inventory.processors.map((processor) => (
+                      <li key={processor.providerId}>
+                        <h4>{processor.displayName} <span>({processor.product})</span></h4>
+                        {processor.disclosureStatus === "published" ? (
+                          <>
+                            <p><strong>Propósito declarado:</strong> {processor.purpose}</p>
+                            {processor.declaredStatements && processor.declaredStatements.length > 0 && (
+                              <>
+                                <p className="ds-portal__declared-label">Declaraciones de Grumphya:</p>
+                                <ul>
+                                  {processor.declaredStatements.map((statement, index) => (
+                                    <li key={`${processor.providerId}-${index}`}>{statement}</li>
+                                  ))}
+                                </ul>
+                              </>
+                            )}
+                            {processor.policyUrl && (
+                              <a href={processor.policyUrl} target="_blank" rel="noopener noreferrer">
+                                Ver política de privacidad de Grumphya
+                              </a>
+                            )}
+                          </>
+                        ) : (
+                          <p>Proveedor activo sin propósito ni condiciones declarados en la política.</p>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p>El inventario completo no encontró procesadores backend externos activos en el registro cubierto.</p>
+                )}
+                <p>
+                  Estas son declaraciones publicadas por Grumphya. El análisis compara la lista con su política y no verifica contratos ni el cumplimiento de esas condiciones por parte de los proveedores.
+                </p>
+              </>
+            )}
+          </section>
+        )}
       </section>
       {report.privacyAssessment && (
         <section className="ds-portal__privacy" aria-labelledby="privacy-summary-heading">
@@ -1584,6 +1663,7 @@ function isPublicReport(value: unknown): value is PublicReport {
     !isOneOf(value.verdict, SCAN_VERDICTS) ||
     !isEthicsAssessment(value.ethicsAssessment) ||
     !isPrivacyAssessment(value.privacyAssessment) ||
+    !isProcessorTransparencyAssessment(value.processorTransparencyAssessment) ||
     !isGlobalAssessment(value.globalAssessment) ||
     !isPublicCertification(value.certification) ||
     !Array.isArray(value.checks) ||
@@ -1593,6 +1673,9 @@ function isPublicReport(value: unknown): value is PublicReport {
   ) {
     return false;
   }
+  const hasProcessorAssessment = value.processorTransparencyAssessment !== null;
+  if (hasProcessorAssessment !== (value.ethicsAssessment.policyVersion === "domain-ethics-v4") ||
+      hasProcessorAssessment && value.hostname !== "grumphya.com") return false;
   if (!isGlobalAssessmentConsistent(
     value.globalAssessment as PublicReport["globalAssessment"],
     value.ethicsAssessment as PublicReport["ethicsAssessment"],
@@ -1737,7 +1820,7 @@ function isPublicCertification(value: unknown): value is PublicReport["certifica
 function isEthicsAssessment(value: unknown): value is PublicReport["ethicsAssessment"] {
   if (!isRecord(value)) return false;
   if (
-    value.policyVersion !== "domain-ethics-v3" ||
+    !isOneOf(value.policyVersion, ["domain-ethics-v3", "domain-ethics-v4"] as const) ||
     (value.score !== null && (!isInteger(value.score) || value.score < 0 || value.score > 100)) ||
     !isInteger(value.assessedCriteria) || value.assessedCriteria < 0 ||
     !isInteger(value.totalCriteria) || value.totalCriteria <= 0 ||
@@ -1759,6 +1842,54 @@ function isEthicsAssessment(value: unknown): value is PublicReport["ethicsAssess
   return assessedCount === value.assessedCriteria &&
     ((value.assessedCriteria === 0 && value.score === null) ||
       (value.assessedCriteria > 0 && value.score !== null));
+}
+
+function isProcessorTransparencyAssessment(value: unknown): value is PublicProcessorTransparencyAssessment | null {
+  if (value === null) return true;
+  if (!isRecord(value) || value.policyVersion !== "processor-inventory-v1" ||
+      !isOneOf(value.status, ["pass", "fail", "unknown"] as const) ||
+      !isOneOf(value.reasonCode, [
+        "inventory_complete_and_disclosed", "inventory_complete_empty", "processor_not_disclosed",
+        "inventory_incomplete", "endpoint_missing", "auditor_error",
+      ] as const)) return false;
+  if (value.inventory === null) {
+    return value.status === "fail" && value.reasonCode === "endpoint_missing" ||
+      value.status === "unknown" && value.reasonCode === "auditor_error";
+  }
+  if (!isRecord(value.inventory)) return false;
+  const inventory = value.inventory;
+  if (inventory.policyVersion !== "processor-inventory-v1" || inventory.hostname !== "grumphya.com" ||
+      !isIsoTimestamp(inventory.observedAt) || !isIsoTimestamp(inventory.validUntil) ||
+      typeof inventory.deploymentDigest !== "string" || !/^sha256:[a-f0-9]{64}$/u.test(inventory.deploymentDigest) ||
+      !isOneOf(inventory.inventoryStatus, ["complete", "incomplete"] as const) ||
+      !isRecord(inventory.privacyPolicy) ||
+      inventory.privacyPolicy.url !== "https://grumphya.com/politica-de-privacidad" ||
+      typeof inventory.privacyPolicy.revision !== "string" || !/^v[1-9][0-9]*$/u.test(inventory.privacyPolicy.revision) ||
+      !isRecord(inventory.attestation) || inventory.attestation.verified !== true ||
+      inventory.attestation.keyId !== "grumphya-release-2026" || !Array.isArray(inventory.processors) ||
+      inventory.processors.length > 32 || !inventory.processors.every(isProcessorDisclosure)) return false;
+  const expected = inventory.inventoryStatus === "incomplete"
+    ? ["fail", "inventory_incomplete"]
+    : inventory.processors.some((processor) => isRecord(processor) && processor.disclosureStatus === "missing")
+      ? ["fail", "processor_not_disclosed"]
+      : inventory.processors.length === 0
+        ? ["pass", "inventory_complete_empty"]
+        : ["pass", "inventory_complete_and_disclosed"];
+  return value.status === expected[0] && value.reasonCode === expected[1];
+}
+
+function isProcessorDisclosure(value: unknown): value is PublicProcessorDisclosure {
+  if (!isRecord(value) || typeof value.providerId !== "string" || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(value.providerId) ||
+      !isBoundedString(value.displayName, 120) || !isBoundedString(value.product, 120)) return false;
+  if (value.disclosureStatus === "missing") {
+    return Object.keys(value).sort((left, right) => left.localeCompare(right, "en")).join(",") === "disclosureStatus,displayName,product,providerId";
+  }
+  return value.disclosureStatus === "published" &&
+    Object.keys(value).sort((left, right) => left.localeCompare(right, "en")).join(",") === "declaredStatements,disclosureStatus,displayName,policyUrl,product,providerId,purpose" &&
+    isBoundedString(value.purpose, 500) && typeof value.policyUrl === "string" &&
+    value.policyUrl.startsWith("https://grumphya.com/politica-de-privacidad#") &&
+    Array.isArray(value.declaredStatements) && value.declaredStatements.length <= 10 &&
+    value.declaredStatements.every((statement) => isBoundedString(statement, 500));
 }
 
 function isInteger(value: unknown): value is number {
@@ -2063,11 +2194,33 @@ function getCriterionControlIds(criterionId: string): readonly string[] {
     "http-availability": ["DS-HTTP-01"],
     "security-headers": ["DS-HDR-01"],
     "third-party-data-use": ["DS-PRIV-04"],
+    "backend-processor-transparency": [],
     "initial-cookie-risk": ["DS-PRIV-05"],
     tracking: ["DS-PRIV-06"],
     performance: ["DS-QUAL-02"],
   };
   return controlIds[criterionId] ?? [];
+}
+
+function getProcessorTransparencySummary(
+  assessment: PublicProcessorTransparencyAssessment,
+): string {
+  if (assessment.reasonCode === "auditor_error") {
+    return "El auditor no pudo verificar el inventario backend por un error propio; este resultado queda sin evaluar.";
+  }
+  if (assessment.reasonCode === "endpoint_missing") {
+    return "El dominio no ofrece el inventario autenticado de procesadores backend que requiere esta comprobación.";
+  }
+  if (assessment.reasonCode === "inventory_incomplete") {
+    return "Grumphya declara que el inventario no incluye todos los procesadores backend activos.";
+  }
+  if (assessment.reasonCode === "processor_not_disclosed") {
+    return "Hay uno o más procesadores backend activos que no aparecen declarados en la política de privacidad.";
+  }
+  if (assessment.reasonCode === "inventory_complete_empty") {
+    return "El inventario completo no encontró procesadores backend externos activos en el registro de producción cubierto.";
+  }
+  return "El inventario backend está completo y sus proveedores aparecen en la política de privacidad.";
 }
 
 function formatByteCount(value: number): string {

@@ -6,8 +6,11 @@ import {
   sanitizeScanObservations,
   parseScanFailureDiagnostic,
   assessPrivacy,
+  assessProcessorTransparency,
   parsePrivacyAssessment,
+  parseProcessorTransparencyAssessment,
   type PrivacyAssessment,
+  type ProcessorTransparencyAssessment,
   type ScanFailureDiagnostic,
 } from "@desarrolloseguro/core";
 import type { ScanFailureCode } from "@desarrolloseguro/core";
@@ -45,6 +48,7 @@ const PUBLIC_REPORT_COLUMNS = `
   reports.verdict AS report_verdict,
   reports.scope_json AS report_scope,
   privacy_row.assessment_json AS report_privacy_assessment,
+  processor_row.assessment_json AS report_processor_transparency,
   (SELECT c.state FROM public.ds_beta_certifications AS c
    WHERE c.hostname = reports.hostname AND c.policy_version = 'beta-0.1') AS certification_state,
   (SELECT c.latest_assessment_status FROM public.ds_beta_certifications AS c
@@ -75,6 +79,11 @@ const PUBLIC_PRIVACY_LATERAL = `LEFT JOIN LATERAL (
   FROM public.ds_scan_privacy_assessments
   WHERE run_id = reports.id
 ) AS privacy_row ON true`;
+const PUBLIC_PROCESSOR_TRANSPARENCY_LATERAL = `LEFT JOIN LATERAL (
+  SELECT assessment_json
+  FROM public.ds_scan_processor_transparency
+  WHERE run_id = reports.id
+) AS processor_row ON true`;
 
 export type ScanTrigger = "scheduled" | "requested";
 export type ScanEnrollment = "monitored" | "on_demand";
@@ -113,6 +122,7 @@ export type PublicScanReport = {
   checks: PublicScanReportCheck[];
   certification: PublicBetaCertification | null;
   privacyAssessment?: PrivacyAssessment | null;
+  processorTransparencyAssessment?: ProcessorTransparencyAssessment | null;
 };
 
 export type PublicBetaCertification = {
@@ -196,6 +206,7 @@ export type ScanRunInput = {
   scope: readonly string[];
   checks: readonly ScanCheck[];
   privacyAssessment?: PrivacyAssessment | null;
+  processorTransparencyAssessment?: ProcessorTransparencyAssessment | null;
   metrics: {
     requestsCount: number;
     bytesCount: number;
@@ -390,6 +401,7 @@ export class PostgresScanStore implements ScanJobStore {
        ) AS reports ON true
        ${PUBLIC_CHECKS_LATERAL}
        ${PUBLIC_PRIVACY_LATERAL}
+       ${PUBLIC_PROCESSOR_TRANSPARENCY_LATERAL}
        WHERE domains.hostname = $1`,
       [hostname],
     );
@@ -432,6 +444,7 @@ export class PostgresScanStore implements ScanJobStore {
          ON domains.hostname = reports.hostname
        ${PUBLIC_CHECKS_LATERAL}
        ${PUBLIC_PRIVACY_LATERAL}
+       ${PUBLIC_PROCESSOR_TRANSPARENCY_LATERAL}
        WHERE reports.id = $1::uuid
          AND domains.opted_out_at IS NULL`,
       [reportId],
@@ -454,6 +467,7 @@ export class PostgresScanStore implements ScanJobStore {
          ON domains.hostname = reports.hostname
        ${PUBLIC_CHECKS_LATERAL}
        ${PUBLIC_PRIVACY_LATERAL}
+       ${PUBLIC_PROCESSOR_TRANSPARENCY_LATERAL}
        WHERE reports.hostname = $1
          AND reports.profile_version IN ('domain-v1', 'domain-v2', 'domain-v3')
          AND domains.opted_out_at IS NULL
@@ -613,11 +627,21 @@ export class PostgresScanStore implements ScanJobStore {
       ? assessPrivacy({ criteria: [] })
       : parsePrivacyAssessment(input.privacyAssessment);
     if (!privacyAssessment) throw new Error("invalid_privacy_assessment");
+    let processorTransparencyAssessment = input.processorTransparencyAssessment == null
+      ? null
+      : parseProcessorTransparencyAssessment(input.processorTransparencyAssessment);
+    if (input.hostname === "grumphya.com" && processorTransparencyAssessment === null) {
+      processorTransparencyAssessment = assessProcessorTransparency({ status: "auditor_error" });
+    }
+    if (input.hostname !== "grumphya.com" && processorTransparencyAssessment ||
+        input.processorTransparencyAssessment != null && !processorTransparencyAssessment) {
+      throw new Error("invalid_processor_transparency_assessment");
+    }
 
     try {
       const result = await this.pool.query<{ ds_complete_scan: string }>(
-        `SELECT ds_complete_scan_with_privacy(
-          $1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9::jsonb, $10::jsonb
+        `SELECT ds_complete_scan_with_processor_transparency(
+          $1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9::jsonb, $10::jsonb, $11::jsonb
         ) AS ds_complete_scan`,
         [
           input.jobId,
@@ -630,6 +654,7 @@ export class PostgresScanStore implements ScanJobStore {
           JSON.stringify(observations.checks),
           JSON.stringify(input.metrics),
           JSON.stringify(privacyAssessment),
+          processorTransparencyAssessment === null ? null : JSON.stringify(processorTransparencyAssessment),
         ],
       );
       const runId = result.rows[0]?.ds_complete_scan;
@@ -679,6 +704,12 @@ function parsePublicScanReport(row: Record<string, unknown>): PublicScanReport {
   if (row.report_privacy_assessment != null && !privacyAssessment) {
     throw new Error(INVALID_PUBLIC_REPORT_ROW);
   }
+  const processorTransparencyAssessment = row.report_processor_transparency == null
+    ? null
+    : parseProcessorTransparencyAssessment(row.report_processor_transparency);
+  if (row.report_processor_transparency != null && !processorTransparencyAssessment) {
+    throw new Error(INVALID_PUBLIC_REPORT_ROW);
+  }
   const isAliasReport = checks.some((check) =>
     check.controlId === "DS-HTTP-01" && check.method === "GET" &&
     typeof check.evidence.canonicalHostname === "string",
@@ -698,6 +729,7 @@ function parsePublicScanReport(row: Record<string, unknown>): PublicScanReport {
     checks,
     certification: isAliasReport ? null : parsePublicBetaCertification(row),
     privacyAssessment,
+    processorTransparencyAssessment,
   };
 }
 

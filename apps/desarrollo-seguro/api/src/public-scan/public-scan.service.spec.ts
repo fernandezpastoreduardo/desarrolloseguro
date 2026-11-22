@@ -507,6 +507,56 @@ describe("PublicScanService", () => {
     });
   });
 
+  it("publishes backend processor transparency as Grumphya declarations", async () => {
+    const report = makeReport({
+      hostname: "grumphya.com",
+      processorTransparencyAssessment: {
+        policyVersion: "processor-inventory-v1",
+        status: "pass",
+        reasonCode: "inventory_complete_and_disclosed",
+        inventory: {
+          policyVersion: "processor-inventory-v1",
+          observedAt: "2026-11-03T10:00:00.000Z",
+          validUntil: "2026-11-04T10:00:00.000Z",
+          hostname: "grumphya.com",
+          deploymentDigest: `sha256:${"a".repeat(64)}`,
+          inventoryStatus: "complete",
+          privacyPolicy: { url: "https://grumphya.com/politica-de-privacidad", revision: "v5" },
+          processors: [{
+            providerId: "openai-api",
+            displayName: "OpenAI",
+            product: "API",
+            disclosureStatus: "published",
+            purpose: "Procesamiento de solicitudes de IA",
+            policyUrl: "https://grumphya.com/politica-de-privacidad#openai-api",
+            declaredStatements: ["Grumphya declara que no usa un endpoint regional."],
+          }],
+          attestation: { verified: true, keyId: "grumphya-release-2026" },
+        },
+      },
+    });
+    const service = new PublicScanService({
+      scanStore: {
+        readPublicDomainSnapshot: vi.fn(),
+        readPublicReport: vi.fn().mockResolvedValue(report),
+      },
+    });
+
+    const result = await service.getReport(REPORT_ID);
+
+    expect(result.ethicsAssessment.policyVersion).toBe("domain-ethics-v4");
+    expect(result.ethicsAssessment.criteria).toContainEqual(expect.objectContaining({
+      id: "backend-processor-transparency",
+      status: "pass",
+      weight: 10,
+    }));
+    expect(result.processorTransparencyAssessment?.inventory?.processors[0]).toMatchObject({
+      displayName: "OpenAI",
+      declaredStatements: ["Grumphya declara que no usa un endpoint regional."],
+    });
+    expect(JSON.stringify(result)).not.toContain("signature");
+  });
+
   it("publishes the equal-weight MVP score only when both dimensions have full coverage", async () => {
     const controlIds = [
       "DS-DNS-01", "DS-TLS-01", "DS-TLS-02", "DS-HTTP-01", "DS-HDR-01",
@@ -723,6 +773,7 @@ describe("PublicScanService", () => {
         "globalAssessment",
         "ethicsAssessment",
         "privacyAssessment",
+        "processorTransparencyAssessment",
         "betaCertification",
         "certification",
         "scope",
@@ -816,6 +867,7 @@ function makeReport(overrides: Record<string, unknown> = {}) {
     expiresAt: new Date(Date.now() + 60_000),
     verdict: "inconclusive",
     scope: ["/"],
+    processorTransparencyAssessment: null,
     checks: [
       {
         controlId: "DS-HDR-01",

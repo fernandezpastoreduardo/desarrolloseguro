@@ -190,6 +190,7 @@ test("shows the report when an authorized analysis finishes", async ({ page }) =
             { id: "vendor-controls", label: "Controles de proveedores", status: "not_applicable", weight: 20, deduction: null, awarded: null, confirmedFindings: 0, unknownFindings: 0 },
           ],
         },
+        processorTransparencyAssessment: null,
         scope: ["/"],
         checks: [
           {

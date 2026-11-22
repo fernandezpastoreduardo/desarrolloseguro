@@ -50,6 +50,7 @@ const PUBLIC_REPORT = {
     reasons: ["No hay evidencia verificable sobre reutilización o venta de datos por terceros."],
     interpretation: "Indicador provisional de DNS, TLS, HTTP, cabeceras y cookies conocidas en la respuesta inicial. No evalúa el consentimiento real, las prácticas de datos de terceros, los rastreadores dinámicos ni el rendimiento; no es una certificación.",
   },
+  processorTransparencyAssessment: null,
   scope: ["/"],
   checks: [
     {
@@ -206,6 +207,71 @@ describe("PublicScanPortal", () => {
     expect(screen.getByRole("link", { name: "Consultar la evidencia de redirección" }))
       .toHaveAttribute("href", `/app/?report=${REPORT_ID}`);
     expect(screen.getByRole("heading", { name: /Informe/ })).toBeVisible();
+  });
+
+  it("shows verified backend providers and attributes treatment statements to Grumphya", async () => {
+    const report = {
+      ...PUBLIC_REPORT,
+      hostname: "grumphya.com",
+      ethicsAssessment: {
+        ...PUBLIC_REPORT.ethicsAssessment,
+        policyVersion: "domain-ethics-v4",
+        assessedCriteria: 2,
+        criteria: PUBLIC_REPORT.ethicsAssessment.criteria.map((criterion) => criterion.id === "third-party-data-use"
+          ? { id: "backend-processor-transparency", label: "Transparencia de procesadores backend", status: "pass", weight: 10 }
+          : criterion),
+        reasons: [],
+      },
+      globalAssessment: {
+        ...PUBLIC_REPORT.globalAssessment,
+        ethicsCoverage: { assessedCriteria: 2, totalCriteria: 8 },
+      },
+      processorTransparencyAssessment: {
+        policyVersion: "processor-inventory-v1",
+        status: "pass",
+        reasonCode: "inventory_complete_and_disclosed",
+        inventory: {
+          policyVersion: "processor-inventory-v1",
+          observedAt: "2026-11-03T10:00:00.000Z",
+          validUntil: "2026-11-04T10:00:00.000Z",
+          hostname: "grumphya.com",
+          deploymentDigest: `sha256:${"a".repeat(64)}`,
+          inventoryStatus: "complete",
+          privacyPolicy: { url: "https://grumphya.com/politica-de-privacidad", revision: "v5" },
+          processors: [{
+            providerId: "openai-api",
+            displayName: "OpenAI",
+            product: "API",
+            disclosureStatus: "published",
+            purpose: "Procesamiento de solicitudes de IA",
+            policyUrl: "https://grumphya.com/politica-de-privacidad#openai-api",
+            declaredStatements: ["No se usa para entrenar modelos."],
+          }],
+          attestation: { verified: true, keyId: "grumphya-release-2026" },
+        },
+      },
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({
+      hostname: "grumphya.com",
+      enrollment: "monitored",
+      state: "fresh",
+      failureCode: null,
+      activeJobId: null,
+      lastReport: report,
+      checkedAt: "2026-11-03T10:01:00.000Z",
+    })));
+    const user = userEvent.setup();
+
+    render(<PublicScanPortal />);
+    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "grumphya.com");
+    await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
+
+    expect(await screen.findByRole("heading", { name: "Procesadores backend de Grumphya" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: /OpenAI.*API/ })).toBeVisible();
+    expect(screen.getByText("Declaraciones de Grumphya:")).toBeVisible();
+    expect(screen.getByText("No se usa para entrenar modelos.")).toBeVisible();
+    expect(screen.getByRole("link", { name: "Ver política de privacidad de Grumphya" }))
+      .toHaveAttribute("href", "https://grumphya.com/politica-de-privacidad#openai-api");
   });
 
   it("stops after one poll when an accepted request has no active job", async () => {

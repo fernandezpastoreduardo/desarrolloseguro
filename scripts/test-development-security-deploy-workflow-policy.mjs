@@ -155,6 +155,12 @@ const composeWithoutInternalAudit = compose.replace(
   /^  development-security-internal-audit:\n([\s\S]*?)(?=^  [a-z][a-z0-9-]*:|^networks:)/mu,
   "",
 );
-assert.doesNotMatch(composeWithoutInternalAudit, /grumphya|caddy/iu);
+const composeWithoutExternalAuditors = composeWithoutInternalAudit
+  .replace("  # Holds only the technical JWT private key and Grumphya's release public key.\n", "")
+  .replace(
+    /^  development-security-processor-auditor:\n([\s\S]*?)(?=^  [a-z][a-z0-9-]*:|^networks:)/mu,
+    "",
+  );
+assert.doesNotMatch(composeWithoutExternalAuditors, /grumphya|caddy/iu);
 
 process.stdout.write("Development Security deploy workflow policy passed.\n");

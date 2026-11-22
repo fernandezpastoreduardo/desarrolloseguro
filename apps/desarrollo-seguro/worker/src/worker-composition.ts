@@ -1,6 +1,8 @@
 import { Pool } from "pg";
 import { PostgresScanStore } from "@desarrolloseguro/persistence";
 import { RuntimeCoordinatorExecutor } from "./runtime-coordinator-executor.js";
+import { ProcessorAuditorClient } from "./processor-auditor-client.js";
+import { ProcessorAuditorScanExecutor } from "./processor-auditor-scan-executor.js";
 import { ScanJobProcessor } from "./scan-job-processor.js";
 import { createJsonLineScanJobTelemetry } from "./scan-job-telemetry.js";
 import { resolveScanWorkerConfiguration } from "./worker-configuration.js";
@@ -14,11 +16,19 @@ export function createScanWorker(
   const configuration = resolveScanWorkerConfiguration(environment);
   const pool = new Pool(resolveScanWorkerPoolConfig(environment));
   const store = new PostgresScanStore(pool);
-  const executor = new RuntimeCoordinatorExecutor({
+  const scanExecutor = new RuntimeCoordinatorExecutor({
     socketPath: configuration.coordinatorSocketPath,
     expectedSocketUid: configuration.coordinatorUid,
     expectedSocketGid: configuration.coordinatorGid,
   });
+  const executor = new ProcessorAuditorScanExecutor(
+    scanExecutor,
+    new ProcessorAuditorClient({
+      socketPath: configuration.processorAuditorSocketPath,
+      expectedSocketUid: configuration.processorAuditorUid,
+      expectedSocketGid: configuration.processorAuditorGid,
+    }),
+  );
   const processor = new ScanJobProcessor(
     store,
     executor,

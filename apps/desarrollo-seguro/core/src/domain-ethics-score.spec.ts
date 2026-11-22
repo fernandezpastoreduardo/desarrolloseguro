@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { assessDomainEthics } from "./domain-ethics-score.js";
+import { assessDomainEthics, assessDomainEthicsV4 } from "./domain-ethics-score.js";
+import { assessProcessorTransparency, type ProcessorTransparencyAssessment } from "./processor-inventory.js";
 
 const check = (controlId: string, status: "pass" | "fail" | "unknown") => ({
   controlId,
@@ -120,5 +121,30 @@ describe("assessDomainEthics", () => {
     ]);
 
     expect(result.criteria.find(({ id }) => id === "transport-security")?.status).toBe("fail");
+  });
+
+  it("scores backend processor transparency independently from browser observations", () => {
+    const allPublicControlsPass = [
+      check("DS-DNS-01", "pass"), check("DS-TLS-01", "pass"), check("DS-TLS-02", "pass"),
+      check("DS-HTTP-01", "pass"), check("DS-HDR-01", "pass"), check("DS-PRIV-05", "pass"),
+      check("DS-PRIV-06", "pass"), check("DS-QUAL-02", "pass"),
+    ];
+    const auditorError = assessProcessorTransparency({ status: "auditor_error" });
+    const incompleteInventory = {
+      policyVersion: "processor-inventory-v1",
+      status: "fail",
+      reasonCode: "inventory_incomplete",
+      inventory: null,
+    } as ProcessorTransparencyAssessment;
+
+    const unknown = assessDomainEthicsV4(allPublicControlsPass, auditorError);
+    const fail = assessDomainEthicsV4(allPublicControlsPass, incompleteInventory);
+
+    expect(unknown).toMatchObject({ policyVersion: "domain-ethics-v4", score: 100, assessedCriteria: 7, totalCriteria: 8 });
+    expect(unknown.criteria.find(({ id }) => id === "backend-processor-transparency")?.status).toBe("unknown");
+    expect(fail).toMatchObject({ score: 90, assessedCriteria: 8 });
+    expect(fail.criteria.find(({ id }) => id === "backend-processor-transparency")?.status).toBe("fail");
+    expect(fail.reasons).toContain("Grumphya declara que su inventario de procesadores backend está incompleto.");
+    expect(assessDomainEthics(allPublicControlsPass).policyVersion).toBe("domain-ethics-v3");
   });
 });

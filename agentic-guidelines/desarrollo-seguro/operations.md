@@ -9,6 +9,7 @@
 - `development-security-migrate` crea la base `desarrollo_seguro`, roles dedicados y aplica las migraciones.
 - `development-security-database` usa PostgreSQL/pgvector con TLS obligatorio y un volumen propio.
 - `development-security-worker` consume los trabajos pendientes, con acceso solo a la red interna de base de datos y al socket Unix del coordinador.
+- `development-security-processor-auditor` conserva las credenciales técnicas del inventario privado de Grumphya y expone al worker una única operación fija por socket Unix. No tiene acceso a PostgreSQL ni al socket Docker; su única salida es la red de egress de auditoría.
 - `development-security-runtime-coordinator` no tiene red; es el único servicio autorizado a usar el socket Docker del VPS.
 - `development-security-internal-audit` es un proceso one-shot opt-in del perfil `internal-audit`: no monta PostgreSQL, sale solo por `development-security-egress` y conserva `cap_drop: ALL`, añadiendo únicamente las capacidades necesarias para copiar claves root-only y cambiar al usuario `node`.
 
@@ -33,6 +34,26 @@ Compose lee todos los secretos desde `.secrets/` o desde `DEVELOPMENT_SECURITY_S
 La CA raíz se mantiene fuera del contenedor y del repositorio. `scripts/generate-development-security-tls.sh <ca-offline-dir> <secrets-dir>` firma certificados de servidor para `development-security-database` y `development-security-api`; no crea una CA ni reemplaza archivos existentes. Protege las claves privadas y limita sus permisos. Los clientes cargan la CA y verifican hostname/TLS 1.2+ mediante la configuración `ssl` de `pg`; las URLs de aplicación no llevan parámetros adicionales. El worker y el scheduler de retención futuros montan `internal_tls_ca.crt` como su fichero CA.
 
 El aprovisionador es una operación de una sola ejecución con `DS_PRODUCTION_BOOTSTRAP_ENABLED=1`. Revisa las URLs, contraseñas, CA y respaldo del volumen antes de levantar el stack. No reutilices una base de otro proyecto ni apuntes el aprovisionador de producción a una base de pruebas.
+
+### Auditor aislado de procesadores backend
+
+El servicio `development-security-processor-auditor` arranca con el stack y
+crea el socket local aun cuando la auditoría esté deshabilitada. En ese modo
+responde `unknown`; no presenta una lista vacía como si fuera evidencia. Para
+habilitar la lectura firmada de Grumphya, configura
+`DEVELOPMENT_SECURITY_AUDIT_ENABLED=true`, los secretos de auditoría ya
+provisionados (`audit_jwt_private.pem` y `release_attestation_public.pem`), el
+`AUDIT_ALLOWED_NETWORKS` con los CIDR exactos permitidos y el `kid`/issuer/
+audience coordinados. La clave privada solo se copia al tmpfs privado del
+auditor. No montes esos ficheros en el worker.
+
+El worker monta el volumen del socket como solo lectura y únicamente puede
+pedir `read_processor_transparency` para `grumphya.com`; el auditor fija URL,
+método, ruta y scope. Los errores del socket o de verificación producen
+`unknown` sin bloquear el informe. Comprueba el estado del auditor y la
+configuración de firewall antes de activar análisis. Los límites y el contrato
+de datos están en
+[backend-processor-transparency.md](../../agentic-guidelines/desarrollo-seguro/backend-processor-transparency.md).
 
 ## Arranque y comprobaciones
 
