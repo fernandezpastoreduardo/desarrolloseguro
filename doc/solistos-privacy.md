@@ -62,6 +62,10 @@ capturas, formularios ni credenciales. Distingue intentos bloqueados de
 solicitudes completadas. Una coincidencia de nombre por sí sola no confirma el
 proveedor: la regla local requiere atribución reproducible por el host/origen.
 
+La API de producción lee solo el identificador del informe y `assessment_json`
+de la tabla dedicada a esta evaluación. El worker no recibe permiso de lectura
+sobre esa tabla y la fecha interna de persistencia no se expone.
+
 La versión inicial del catálogo tiene cuatro reglas de Google Analytics
 basadas en documentación de Google Developers y conserva su fuente, licencia,
 fecha y nivel de confianza. No se consultan catálogos remotos durante cada

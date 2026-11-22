@@ -479,6 +479,8 @@ async function applyRuntimeGrants(pool: Pool): Promise<void> {
       target_path, method, summary, limitation
     ) ON public.ds_check_results TO ${READ_ROLE};
     GRANT SELECT ON public.ds_public_check_results TO ${READ_ROLE};
+    GRANT SELECT (run_id, assessment_json)
+      ON public.ds_scan_privacy_assessments TO ${READ_ROLE};
     GRANT SELECT (hostname, policy_version, state, latest_report_id,
       certified_report_id, latest_assessment_status, latest_assessment,
       state_reason, last_checked_at, activated_at, suspended_at)
