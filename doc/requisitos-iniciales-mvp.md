@@ -56,12 +56,18 @@ reutiliza su navegador aislado, catálogo local, límites, evidencia,
 `privacy-v1`, persistencia y presentación; no crea un segundo análisis de
 consentimiento.
 
-- `domain-ethics-v3` y `privacy-v1` son dimensiones distintas y ambas notas se
-  muestran por separado con su cobertura.
+- La rúbrica Ética es `domain-ethics-v3` cuando el informe no incorpora
+  inventario de procesadores backend. Si incluye `processorTransparencyAssessment`,
+  usa `domain-ethics-v4`, según la
+  [especificación de transparencia backend](../agentic-guidelines/desarrollo-seguro/backend-processor-transparency.md).
+  `privacy-v1` sigue siendo una dimensión distinta; ambas notas y coberturas se
+  muestran por separado.
 - La puntuación global `mvp-global-v1` combina Ética 50 % y Privacidad 50 %; se
   redondea al entero más cercano. La fórmula solo produce una cifra global
   cuando las dos dimensiones tienen puntuación y no contienen criterios
-  `unknown`. Los criterios `not_applicable` no bloquean el cálculo.
+  `unknown`. Admite la versión de rúbrica Ética usada por el informe y mantiene
+  los mismos pesos y redondeo. Los criterios `not_applicable` no bloquean el
+  cálculo.
 - Si falta evidencia por un error del auditor, el análisis queda «En revisión»:
   se conservan y muestran las notas y coberturas por dimensión y se oculta la
   cifra global combinada hasta resolver el error. No se atribuye el fallo al
@@ -138,16 +144,45 @@ La implementación debe considerar rendimiento, accesibilidad y privacidad y **n
 
 ## 6. Límites del acuerdo y pendientes
 
-Este documento representa una **toma de requisitos inicial**, no una especificación cerrada ni una orden para desarrollar todo de una sola vez. Antes de implementar, se deberán concretar al menos:
+Este documento representa una **toma de requisitos inicial**, no una orden
+para desarrollar todo de una vez. Los detalles ya acordados para Solistos, la
+puntuación global, las auditorías periódicas y el sello se especifican en sus
+documentos enlazados; la existencia de una especificación o de código no cierra
+por sí sola los requisitos que aún no tienen criterios de aceptación.
 
-- Inventario y priorización de tecnologías que cubre el MVP, pruebas, fuentes de evidencia, caducidad y equivalencia de configuraciones.
-- Requisitos definitivos por categoría, cálculo de puntuaciones y reglas de certificación, suspensión y recuperación.
-- Política de cadencia exacta, fallos de ejecución, reintentos, protección de infraestructura y tratamiento de incidencias urgentes.
-- Diseño definitivo del sello, sus medidas, integración, validación por dominio, controles antisuplantación y ficha pública.
-- Datos públicos y privados de las fichas, conservación de evidencias y requisitos de protección de datos.
-- Canales, destinatarios, deduplicación y contenido seguro de los correos internos.
-- Flujo de propuesta, revisión, aprobación, publicación y versionado del estándar.
-- Criterios de aceptación y pruebas automatizadas para cada requisito.
+Siguen pendientes de decisión o de evidencia suficiente para declarar cerrado
+el MVP:
+
+- **Catálogo inicial:** inventario de tecnologías, integraciones y CMP que
+  cubrirá el MVP, priorización, fuentes aceptables, caducidad de evidencia y
+  equivalencia de configuraciones. El catálogo Solistos v1 es incremental y no
+  fija por sí solo el alcance restante.
+- **Criterios y certificación:** requisitos definitivos de cada categoría,
+  pruebas obligatorias y criterios eliminatorios para concesión, suspensión y
+  recuperación. La fórmula global 50/50, el redondeo y las versiones Ética
+  aplicables están concretados en §2.5.
+- **Operación:** cadencia ordinaria y límites actuales están descritos en la
+  [guía de persistencia](../agentic-guidelines/desarrollo-seguro/persistence.md)
+  y la [integración continua](ci-cd.md). Falta cerrar la política completa de
+  fallos, reintentos, protección de infraestructura, incidencias urgentes y
+  comprobar los controles operativos de producción que no se acreditan en CI.
+- **Sello:** emisión, actualización, verificación, revocación y ficha pública
+  se describen en [Sello verificable](report-badges.md). Sigue pendiente
+  aprobar las dimensiones visuales exactas y demostrar la legibilidad del
+  diseño final en los tamaños de pantalla acordados.
+- **Datos y conservación:** están especificados límites públicos de Solistos,
+  informes, API y retención por separado; falta consolidar la política completa
+  de datos públicos/privados, conservación de evidencias y su aceptación para
+  cada categoría.
+- **Avisos internos:** faltan destinatarios, canal, agrupación/deduplicación,
+  reintentos y contenido seguro para investigación de tecnologías desconocidas
+  y cambios que provoquen fallos de certificación.
+- **Gobierno del estándar:** falta definir el flujo humano de propuesta,
+  revisión, aprobación, publicación, versionado e historial público que explique
+  qué cambió, cuándo y por qué.
+- **Aceptación:** falta una matriz que vincule cada requisito restante con una
+  prueba automatizada, evidencia de producción o procedimiento manual
+  reproducible.
 
 **Relación con el código actual:** la Beta 0.1 ya persiste un estado acotado
 de certificación y dispone de un sello verificable ligado a un informe
