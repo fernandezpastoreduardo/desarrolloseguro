@@ -127,7 +127,7 @@ describe("ScanJobProcessor", () => {
       JOB.leaseToken,
       "broker_failed",
       3,
-      null,
+      { stage: "executor", code: "executor_application_failed" },
     );
   });
 
@@ -544,7 +544,7 @@ describe("ScanJobProcessor", () => {
     expect(store.completeScan).not.toHaveBeenCalled();
   });
 
-  it("schedules executor failures for bounded retry without persisting a report", async () => {
+  it("uses a safe fallback diagnostic when an executor failure has no safe detail", async () => {
     const store = makeStore(JOB);
     const processor = new ScanJobProcessor(store, {
       execute: vi.fn().mockRejectedValue(new Error("sensitive diagnostic")),
@@ -557,7 +557,7 @@ describe("ScanJobProcessor", () => {
       JOB.leaseToken,
       "executor_failed",
       3,
-      null,
+      { stage: "executor", code: "executor_application_failed" },
     );
     expect(JSON.stringify(vi.mocked(store.failScan).mock.calls)).not.toContain(
       "sensitive diagnostic",

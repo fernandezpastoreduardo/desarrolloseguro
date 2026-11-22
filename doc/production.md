@@ -25,6 +25,8 @@ El presupuesto del coordinador de análisis es de 210 segundos para completar el
 
 La migración `034_coordinator_failure_diagnostics` sincroniza la lista SQL permitida con los diagnósticos del coordinador para que sus errores puedan guardarse en el estado público.
 
+Si un executor falla sin aportar un diagnóstico seguro y válido, el worker guarda la categoría genérica `executor_application_failed` en etapa `executor`. El estado público incluye así una causa operativa acotada sin revelar texto crudo ni detalles internos.
+
 Antes de desplegar el análisis, prepara la interfaz `br-ds-egress` y comprueba sus filtros exclusivos. Los scripts modifican solo `development-security-egress` y reglas `iptables`/`ip6tables` asociadas a esa interfaz; no configuran UFW ni cambian reglas de otras redes:
 
 ```sh
