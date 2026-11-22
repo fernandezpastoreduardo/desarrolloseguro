@@ -61,6 +61,7 @@ const runtimeCoordinator = serviceBlock("development-security-runtime-coordinato
 const retentionScheduler = serviceBlock("development-security-retention-scheduler");
 const certificationScheduler = serviceBlock("development-security-certification-scheduler");
 const internalAudit = serviceBlock("development-security-internal-audit");
+const processorAuditor = serviceBlock("development-security-processor-auditor");
 
 assert.match(database, /desarrolloseguro-postgres:local/u);
 assert.match(database, /dockerfile: docker\/postgres\/Dockerfile/u);
@@ -117,8 +118,19 @@ assert.match(worker, /development_security_worker_database_url/u);
 assert.match(worker, /internal_tls_ca\.crt/u);
 assert.match(worker, /DS_WORKER_DATABASE_TLS_REQUIRED=true/u);
 assert.match(worker, /development-security-runtime:\/run\/development-security:ro/u);
+assert.match(worker, /development-security-audit-runtime:\/run\/development-security-audit:ro/u);
+assert.match(worker, /DS_PROCESSOR_AUDITOR_SOCKET/u);
 assert.match(worker, /development-security-backend/u);
 assert.doesNotMatch(worker, /docker\.sock|development-security-egress|ports:/u);
+assert.match(processorAuditor, /AUDIT_ENABLED:\s*\$\{DEVELOPMENT_SECURITY_AUDIT_ENABLED:-false\}/u);
+assert.match(processorAuditor, /audit_jwt_private\.pem/u);
+assert.match(processorAuditor, /release_attestation_public\.pem/u);
+assert.match(processorAuditor, /development-security-analysis-egress/u);
+assert.match(processorAuditor, /development-security-audit-runtime:\/run\/development-security-audit/u);
+assert.match(processorAuditor, /user:\s*"0:1000"/u);
+assert.match(processorAuditor, /cap_drop:\s*\[ALL\]/u);
+assert.match(processorAuditor, /read_only:\s*true/u);
+assert.doesNotMatch(processorAuditor, /development_security_.*database|docker\.sock|ports:|development-security-backend/u);
 assert.match(internalAudit, /profiles:\s*\[internal-audit\]/u);
 assert.match(internalAudit, /image:\s*\$\{DEVELOPMENT_SECURITY_WORKER_IMAGE:-desarrolloseguro-worker:local\}/u);
 assert.match(internalAudit, /AUDIT_ENABLED:\s*\$\{DEVELOPMENT_SECURITY_AUDIT_ENABLED:-false\}/u);
@@ -184,7 +196,11 @@ assert.match(
 assert.match(dockerfile, /AS development-security-runtime-coordinator\n/u);
 assert.match(dockerfile, /FROM development-security-worker AS development-security-runtime-coordinator[\s\S]*?apk add --no-cache docker-cli/u);
 assert.match(runtimeCoordinator, /\/var\/run\/docker\.sock:\/var\/run\/docker\.sock/u);
-assert.doesNotMatch(compose.replace(internalAudit, ""), /grumphya|apps\/api|apps\/web/iu);
+const composeWithoutScopedAuditors = compose
+  .replace("  # Holds only the technical JWT private key and Grumphya's release public key.\n", "")
+  .replace(internalAudit, "")
+  .replace(processorAuditor, "");
+assert.doesNotMatch(composeWithoutScopedAuditors, /grumphya|apps\/api|apps\/web/iu);
 assert.doesNotMatch(compose, /privileged:\s*true/u);
 assert.match(dockerfile, /AS development-security-executor\n/u);
 assert.match(dockerfile, /ENTRYPOINT \["node", "apps\/desarrollo-seguro\/worker\/dist\/transport-v1-executor-child\.js"\]/u);

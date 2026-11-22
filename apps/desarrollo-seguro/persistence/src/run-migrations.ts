@@ -115,6 +115,10 @@ const MIGRATIONS = [
     version: "034_coordinator_failure_diagnostics",
     file: "034_coordinator_failure_diagnostics.sql",
   },
+  {
+    version: "035_processor_transparency_reports",
+    file: "035_processor_transparency_reports.sql",
+  },
 ] as const;
 
 const MIGRATION_LOCK_ID = 728194032;

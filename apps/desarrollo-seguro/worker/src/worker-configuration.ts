@@ -5,6 +5,9 @@ const DATABASE_URL_FILE = "DS_WORKER_DATABASE_URL_FILE";
 const COORDINATOR_SOCKET = "DS_RUNTIME_COORDINATOR_SOCKET";
 const COORDINATOR_UID = "DS_RUNTIME_COORDINATOR_UID";
 const COORDINATOR_GID = "DS_RUNTIME_COORDINATOR_GID";
+const PROCESSOR_AUDITOR_SOCKET = "DS_PROCESSOR_AUDITOR_SOCKET";
+const PROCESSOR_AUDITOR_UID = "DS_PROCESSOR_AUDITOR_UID";
+const PROCESSOR_AUDITOR_GID = "DS_PROCESSOR_AUDITOR_GID";
 const IDLE_DELAY = "DS_WORKER_IDLE_DELAY_MS";
 const ERROR_DELAY = "DS_WORKER_ERROR_DELAY_MS";
 const WORKER_DATABASE_NAME = "/desarrollo_seguro";
@@ -19,6 +22,9 @@ export type ScanWorkerConfiguration = {
   coordinatorSocketPath: string;
   coordinatorUid: number;
   coordinatorGid: number;
+  processorAuditorSocketPath: string;
+  processorAuditorUid: number;
+  processorAuditorGid: number;
   idleDelayMs: number;
   errorDelayMs: number;
 };
@@ -30,6 +36,9 @@ export function resolveScanWorkerConfiguration(
   const coordinatorSocketPath = environment[COORDINATOR_SOCKET];
   const coordinatorUid = parseNonNegativeInteger(environment[COORDINATOR_UID]);
   const coordinatorGid = parseNonNegativeInteger(environment[COORDINATOR_GID]);
+  const processorAuditorSocketPath = environment[PROCESSOR_AUDITOR_SOCKET] ?? "/run/development-security-audit/processor-auditor.sock";
+  const processorAuditorUid = parseNonNegativeInteger(environment[PROCESSOR_AUDITOR_UID] ?? "1000");
+  const processorAuditorGid = parseNonNegativeInteger(environment[PROCESSOR_AUDITOR_GID] ?? "1000");
   const idleDelayMs = parseBoundedDelay(
     environment[IDLE_DELAY],
     DEFAULT_IDLE_DELAY_MS,
@@ -47,6 +56,9 @@ export function resolveScanWorkerConfiguration(
     !isAbsolute(coordinatorSocketPath) ||
     coordinatorUid === null ||
     coordinatorGid === null ||
+    !isAbsolute(processorAuditorSocketPath) ||
+    processorAuditorUid === null ||
+    processorAuditorGid === null ||
     idleDelayMs === null ||
     errorDelayMs === null
   ) {
@@ -58,6 +70,9 @@ export function resolveScanWorkerConfiguration(
     coordinatorSocketPath,
     coordinatorUid,
     coordinatorGid,
+    processorAuditorSocketPath,
+    processorAuditorUid,
+    processorAuditorGid,
     idleDelayMs,
     errorDelayMs,
   };

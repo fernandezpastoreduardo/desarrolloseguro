@@ -244,6 +244,9 @@ services:
         export DS_RUNTIME_COORDINATOR_SOCKET=/run/development-security/runtime-coordinator.sock
         export DS_RUNTIME_COORDINATOR_UID=0
         export DS_RUNTIME_COORDINATOR_GID=1000
+        export DS_PROCESSOR_AUDITOR_SOCKET=/run/development-security-audit/processor-auditor.sock
+        export DS_PROCESSOR_AUDITOR_UID=1000
+        export DS_PROCESSOR_AUDITOR_GID=1000
         exec su -p node -s /bin/sh -c 'exec node apps/desarrollo-seguro/worker/dist/worker-entrypoint.js'
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=16m
@@ -252,6 +255,9 @@ services:
       NODE_ENV: production
       DS_WORKER_IDLE_DELAY_MS: "1000"
       DS_WORKER_ERROR_DELAY_MS: "5000"
+      DS_PROCESSOR_AUDITOR_SOCKET: /run/development-security-audit/processor-auditor.sock
+      DS_PROCESSOR_AUDITOR_UID: "1000"
+      DS_PROCESSOR_AUDITOR_GID: "1000"
     secrets:
       - development_security_worker_database_url
       - internal_tls_ca.crt
@@ -260,10 +266,71 @@ services:
         condition: service_completed_successfully
       development-security-runtime-coordinator:
         condition: service_healthy
+      development-security-processor-auditor:
+        condition: service_healthy
     volumes:
       - development-security-runtime:/run/development-security:ro
+      - development-security-audit-runtime:/run/development-security-audit:ro
     networks:
       - development-security-backend
+
+  # Holds only the technical JWT private key and Grumphya's release public key.
+  # The worker can request one fixed processor inventory over a protected local socket.
+  development-security-processor-auditor:
+    image: ${DEVELOPMENT_SECURITY_WORKER_IMAGE:-desarrolloseguro-worker:local}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development-security-worker
+    restart: unless-stopped
+    user: "0:1000"
+    privileged: false
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE, FOWNER]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 32
+    mem_limit: 128m
+    cpus: 0.25
+    read_only: true
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        install -d -o node -g node -m 0700 /run/development-security-audit
+        if [ "$${AUDIT_ENABLED}" = "true" ]; then
+          install -d -o node -g node -m 0700 /run/development-security-audit-keys
+          install -o node -g node -m 0400 /run/audit-input/audit_jwt_private.pem /run/development-security-audit-keys/jwt.pem
+          install -o node -g node -m 0400 /run/audit-input/release_attestation_public.pem /run/development-security-audit-keys/attestation.pem
+          export AUDIT_JWT_PRIVATE_KEY_FILE=/run/development-security-audit-keys/jwt.pem
+          export AUDIT_RELEASE_ATTESTATION_PUBLIC_KEY_FILE=/run/development-security-audit-keys/attestation.pem
+        fi
+        export DS_PROCESSOR_AUDITOR_SOCKET=/run/development-security-audit/processor-auditor.sock
+        export DS_PROCESSOR_AUDITOR_UID=1000
+        export DS_PROCESSOR_AUDITOR_GID=1000
+        exec su -p node -s /bin/sh -c 'exec node apps/desarrollo-seguro/worker/dist/processor-auditor-entrypoint.js'
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+      - /run/development-security-audit-keys:rw,noexec,nosuid,size=4m
+    environment:
+      NODE_ENV: production
+      AUDIT_ENABLED: ${DEVELOPMENT_SECURITY_AUDIT_ENABLED:-false}
+      AUDIT_JWT_ISSUER: ${AUDIT_JWT_ISSUER:-desarrolloseguro-audit}
+      AUDIT_JWT_AUDIENCE: ${AUDIT_JWT_AUDIENCE:-grumphya-audit}
+      AUDIT_TECHNICAL_AUTH_KID: ${AUDIT_TECHNICAL_AUTH_KID:-ds-auditor-2026}
+      AUDIT_TECHNICAL_AUTH_ALLOWED_KIDS: ${AUDIT_TECHNICAL_AUTH_ALLOWED_KIDS:-ds-auditor-2026}
+      AUDIT_ALLOWED_NETWORKS: ${AUDIT_ALLOWED_NETWORKS:-}
+      AUDIT_RELEASE_ATTESTATION_KID: ${AUDIT_RELEASE_ATTESTATION_KID:-grumphya-release-2026}
+      AUDIT_SCOPES: privacy
+    volumes:
+      - development-security-audit-runtime:/run/development-security-audit
+      - ${DEVELOPMENT_SECURITY_AUDIT_SECRETS_DIR:-./.audit-secrets}:/run/audit-input:ro
+    networks:
+      - development-security-analysis-egress
+    healthcheck:
+      test: [CMD, node, -e, "require('node:fs').statSync('/run/development-security-audit/processor-auditor.sock')"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
 
   # The private external audit is an explicit, one-shot operation. It is not
   # part of the default stack and has no database access; enable the profile
@@ -454,6 +521,8 @@ volumes:
     name: ${DEVELOPMENT_SECURITY_POSTGRES_VOLUME:-development-security-postgres-pg19}
   development-security-runtime:
     name: development-security-runtime
+  development-security-audit-runtime:
+    name: development-security-audit-runtime
 
 secrets:
   development_security_admin_password:

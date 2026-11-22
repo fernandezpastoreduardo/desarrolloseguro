@@ -481,6 +481,8 @@ async function applyRuntimeGrants(pool: Pool): Promise<void> {
     GRANT SELECT ON public.ds_public_check_results TO ${READ_ROLE};
     GRANT SELECT (run_id, assessment_json)
       ON public.ds_scan_privacy_assessments TO ${READ_ROLE};
+    GRANT SELECT (run_id, assessment_json)
+      ON public.ds_scan_processor_transparency TO ${READ_ROLE};
     GRANT SELECT (hostname, policy_version, state, latest_report_id,
       certified_report_id, latest_assessment_status, latest_assessment,
       state_reason, last_checked_at, activated_at, suspended_at)
@@ -501,7 +503,9 @@ async function applyRuntimeGrants(pool: Pool): Promise<void> {
       public.ds_recover_expired_scan_leases(integer),
       public.ds_fail_scan(uuid, uuid, text, integer, jsonb),
       public.ds_complete_scan_with_privacy(uuid, uuid, timestamptz, text,
-        timestamptz, text, jsonb, jsonb, jsonb, jsonb) TO ${WORKER_ROLE};
+        timestamptz, text, jsonb, jsonb, jsonb, jsonb),
+      public.ds_complete_scan_with_processor_transparency(uuid, uuid, timestamptz, text,
+        timestamptz, text, jsonb, jsonb, jsonb, jsonb, jsonb) TO ${WORKER_ROLE};
     GRANT EXECUTE ON FUNCTION public.ds_purge_expired_reports(timestamptz),
       public.ds_purge_inactive_public_reports(timestamptz),
       public.ds_enqueue_due_certification_scans(timestamptz)

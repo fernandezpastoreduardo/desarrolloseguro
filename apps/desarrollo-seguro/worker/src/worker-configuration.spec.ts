@@ -21,6 +21,9 @@ describe("resolveScanWorkerConfiguration", () => {
       coordinatorSocketPath: "/run/desarrollo-seguro/coordinator.sock",
       coordinatorUid: 1101,
       coordinatorGid: 1101,
+      processorAuditorSocketPath: "/run/development-security-audit/processor-auditor.sock",
+      processorAuditorUid: 1000,
+      processorAuditorGid: 1000,
       idleDelayMs: 1_000,
       errorDelayMs: 5_000,
     });
