@@ -1,11 +1,10 @@
 # Cierre de la Beta 0.1
 
-> **Estado vigente (21 de noviembre de 2026):** las etapas A, B, C y D están
+> **Estado vigente (22 de noviembre de 2026):** las etapas A, B, C y D están
 > aceptadas y el cierre global de Beta 0.1 queda completado para los alcances
-> `domain-v3` y `beta-d-0.2`. La fila A y las secciones históricas siguientes
-> reflejan estados anteriores al informe fresco
-> `796d5c1b-356f-47ce-8aba-572afd9d18a1`; para la evidencia vigente, los límites
-> de cobertura y las condiciones del cierre, véase
+> `domain-v3` y `beta-d-0.2`. Las secciones históricas siguientes conservan
+> evidencias previas y no describen un estado pendiente. Para la evidencia vigente,
+> los límites de cobertura y las condiciones del cierre, véase
 > [la evaluación global](beta-global-closure-assessment.md). La evaluación
 > externa continúa parcial (7/8 criterios); esto no se presenta como una
 > puntuación global absoluta ni amplía lo que Beta evalúa.
@@ -19,10 +18,10 @@ operativa del VPS.
 
 | Etapa | Implementación | Validación automatizada | Validación operativa | Aceptación |
 | --- | --- | --- | --- | --- |
-| A · lectura y evaluación pública | Presente en código | Tests, PostgreSQL aislado, CI y smoke contractual | Informe fresco del 21-11-2026: `796d5c1b-356f-47ce-8aba-572afd9d18a1`, 9/9 controles, CSP válida, Beta 100/100 y certificación activa con puntero coincidente; evaluación ética 7/8, parcial | **Aceptada para el alcance `domain-v3`** |
-| B · historial y comparabilidad | Presente en código | Tests de historial, UUID, perfiles comparables, retención y Playwright | La API pública devuelve 12 entradas acotadas, ordenadas y del mismo perfil; cada UUID resuelve y el puntero certificado coincide con un informe histórico | **Validada para el alcance Beta** |
-| C · auditoría periódica | Presente en Compose y despliegue aislado | Migraciones 026/027, tests del scheduler y PostgreSQL aislado | El scheduler renovó `grumphya.com` en producción con un informe nuevo, ficha actualizada y `certifiedReportId` coincidente; el VPS registra 9 leases expirados terminados tras 3 intentos; el 20-11-2026 observó `certification_audit_cycle_failed` y recuperó `running/healthy` | **Aceptada para Beta 0.1** |
-| D · auditoría privada de Grumphya | Contrato, lectores allowlisted, proyección, puntuación separada, informe y runner D-08 presentes | Tests unitarios, PostgreSQL aislado y puertas de tipado/lint/build; no se usan fixtures como evidencia de producción | Smoke autenticado posterior al despliegue `6981d16`: siete rutas firmadas, 14/14 criterios, `internalScore=100`, `externalScore=null`, sin modificar certificación pública | **Aceptada para el alcance `beta-d-0.2`; ampliaciones requieren una nueva versión contractual** |
+| A · lectura y evaluación pública | Presente en código | Tests, PostgreSQL aislado, CI y smoke contractual | Informe fresco del 22-11-2026: `ea276f54-2d15-4921-bc8f-75afddc316e4`, 9/9 controles, CSP válida, Beta 100/100 y certificación activa con puntero coincidente; evaluación ética 7/8, parcial | **Aceptada para el alcance `domain-v3`** |
+| B · historial y comparabilidad | Presente en código | Tests de historial, UUID, perfiles comparables, retención y Playwright | Verificación pública del 22-11-2026: 12 informes `domain-v3`, orden descendente, los 12 UUID resuelven con resumen coherente y el puntero certificado coincide con el informe vigente | **Validada para el alcance Beta** |
+| C · auditoría periódica | Presente en Compose y despliegue aislado | Migraciones 026/027, tests del scheduler y PostgreSQL aislado | Renovación `scheduled` de producción del 22-11-2026, informe y ficha actualizados; certificación `active/eligible` con puntero coincidente; schedulers de certificación y retención sanos | **Aceptada para Beta 0.1** |
+| D · auditoría privada de Grumphya | Contrato, lectores allowlisted, proyección, puntuación separada, informe y runner D-08 presentes | Tests unitarios, PostgreSQL aislado y puertas de tipado/lint/build; no se usan fixtures como evidencia de producción | Smoke autenticado de producción del 20-11-2026 a las 17:21 UTC: siete rutas firmadas, 14/14 criterios, `internalScore=100`, `externalScore=null`, sin modificar certificación pública | **Aceptada para el alcance `beta-d-0.2`; ampliaciones requieren una nueva versión contractual** |
 
 Las etapas son independientes: A no requiere B, C ni D; B no requiere C ni D;
 C no requiere D. La puntuación interna pertenece a D. La puntuación global
@@ -97,7 +96,7 @@ diagnóstico acotado, sin convertirla en un aprobado.
   los trabajos manuales tienen prioridad al reclamar el único slot global.
 - No se modifica el repositorio, dominio, CI ni correo de Grumphya.
 
-## Criterio para cerrar esta revisión
+## Evidencia histórica de cierre
 
 La etapa C queda completada porque existe evidencia de una auditoría
 certificada vencida que actualizó informe, ficha, sello y estado en el entorno
@@ -119,12 +118,15 @@ Madrid) volvió a completar las siete lecturas autenticadas (`6/14`, estado
 `sha256:60db0358839fd3f00bd7db273eb61a53d000a252c7b66094d3775aacf89a96a7`.
 La ejecución no activó el servicio normal ni modificó el stack persistente.
 
-El cierre global de Beta es posterior a A, B, C y D. Solo entonces se validará
-la operación integral, la puntuación externa e interna, la puntuación global
-absoluta, los estados de certificación, los sellos, las auditorías periódicas,
-las notificaciones y las evidencias de producción. La definición del MVP queda
-fuera de este cierre. No se presenta una puntuación absoluta ficticia ni se
-modifica el repositorio de Grumphya para suplir evidencias.
+La comprobación inicial encontró la brecha de CSP del informe
+`ed8e8b27-ac46-4ad0-91b2-a3e803eb9ab9`; después se corrigió y se cerró con el
+informe fresco `796d5c1b-356f-47ce-8aba-572afd9d18a1` del 21-11-2026. El
+informe `ea276f54-2d15-4921-bc8f-75afddc316e4` del 22-11-2026 vuelve a confirmar
+la evaluación Beta elegible, `csp: true` y el puntero certificado coincidente.
+El estado vigente y el alcance aceptado se detallan en la
+[evaluación global](beta-global-closure-assessment.md). La definición del MVP
+permanece fuera del cierre de Beta; no se inventa una puntuación global
+absoluta ni se modifica Grumphya para suplir evidencias.
 
 ### Informe público posterior al despliegue de Grumphya (19 de noviembre de 2026,
 21:33 UTC)

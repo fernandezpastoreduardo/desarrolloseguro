@@ -1,97 +1,66 @@
 # Evaluación del cierre global de Beta
 
-## Estado de la revisión
+## Resultado vigente (22 de noviembre de 2026)
 
-### Resultado de cierre global (21 de noviembre de 2026)
+El cierre global queda **confirmado para Beta 0.1 (`domain-v3`) y la auditoría
+privada `beta-d-0.2`**. Las cuatro etapas A–D están aceptadas en su alcance;
+las verificaciones actuales de producción y la evidencia histórica específica
+de D sustentan la aceptación. Esta conclusión no declara una certificación
+definitiva ni inicia el MVP.
 
-La revisión global queda **cerrada para el alcance Beta 0.1 y la auditoría
-privada `beta-d-0.2`**. A, B, C y D cuentan con aceptación documentada. La
-comprobación pública más reciente de `grumphya.com` terminó el
-`2026-11-21T17:28:25.215Z`: informe
-`796d5c1b-356f-47ce-8aba-572afd9d18a1`, perfil `domain-v3`, veredicto `pass`,
-9/9 controles, CSP válida, Beta 100/100 y certificación `active` cuyo
-`certifiedReportId` coincide. El historial público contiene 12 entradas
-coherentes. La auditoría privada D aceptada el 20 de noviembre completó las
-siete rutas firmadas y 14/14 criterios (`internalScore=100`), sin cambiar el
-estado público.
-
-El VPS respondió con salud HTTP correcta para la aplicación y el API; API,
-web, worker, scheduler de certificación y scheduler de retención estaban
-activos, y PostgreSQL informó versión `19.0`. El despliegue de Grumphya
-`44920505995` terminó correctamente y confirmó producción. No se hicieron
-cambios en Grumphya ni en el VPS durante esta revisión.
-
-La evaluación ética externa es 100/100 sobre 7 de 8 criterios y permanece
-**parcial**: `third-party-data-use` sigue siendo desconocido. Las puntuaciones
-externa e interna se conservan separadas y no se inventa una puntuación global
-absoluta sin cobertura suficiente. Esta limitación de cobertura no bloquea el
-cierre del alcance Beta actual; sí delimita lo que Beta no afirma evaluar.
-El MVP queda como fase posterior y no se inicia mediante este cierre.
-
-## Estado previo de la revisión
-
-Esta revisión se ejecuta después de aceptar C y D. No inicia el MVP ni concede
-una certificación definitiva por sí sola. La puntuación externa y la interna
-se mantienen separadas.
-
-| Área | Evidencia observada | Estado |
+| Etapa | Evidencia actual | Estado |
 | --- | --- | --- |
-| A · lectura pública | El endpoint público devolvió el informe `ed8e8b27-ac46-4ad0-91b2-a3e803eb9ab9` con perfil `domain-v3`, 9/9 comprobaciones y 7/8 criterios evaluados. La proyección no expone HTML, cabeceras completas, cookies, IPs ni diagnósticos crudos. | **Operativa; el resultado actual contiene un fallo de cabeceras y no es certificable** |
-| B · historial y comparabilidad | `GET /domains/grumphya.com/history` devolvió 12 entradas, dentro del límite, ordenadas por `completedAt` descendente y con el mismo perfil `domain-v3`. Cada UUID resolvió a un informe público coherente con su resumen; el puntero certificado también resolvió. | **Validada operativamente para el alcance Beta** |
-| C · auditoría periódica | Renovación programada, recuperación de leases y notificación real del scheduler ya documentadas. | **Aceptada para Beta 0.1** |
-| D · auditoría privada | Smoke autenticado de producción: siete rutas firmadas, 14/14 criterios e `internalScore=100`, sin afectar la certificación pública. | **Aceptada para `beta-d-0.2`** |
+| A · evaluación pública | El informe `ea276f54-2d15-4921-bc8f-75afddc316e4`, finalizado el `2026-11-22T02:53:03.935Z`, usa `domain-v3`, tiene veredicto `pass`, 9/9 controles concluyentes y `DS-HDR-01` con `csp: true`. La evaluación Beta está `eligible` con 100 puntos; la certificación está `active` y su `certifiedReportId` coincide con el informe. | **Aceptada para `domain-v3`** |
+| B · historial y comparabilidad | La API pública devuelve 12 informes `domain-v3` en orden descendente. El 22-11-2026 se resolvieron los 12 UUID; hostname, perfil e instante de finalización coincidieron con su resumen. El informe certificado más reciente está en el historial. | **Aceptada para Beta 0.1** |
+| C · auditoría periódica | PostgreSQL registra la renovación `scheduled` `c1df7096-de8b-4f36-af01-19edfd033a84` a las `2026-11-22T02:52:39Z`; el informe `requested` posterior actualizó la ficha de certificación, que permanece `active/eligible` con el puntero coincidente. El scheduler de certificación y el de retención están `healthy` en el VPS. | **Aceptada para Beta 0.1** |
+| D · auditoría privada | La última ejecución de producción documentada, el 20-11-2026 a las `17:21:04.234Z`, leyó las siete rutas allowlisted, validó `beta-d-0.2`, las firmas y la atestación, y completó 14/14 criterios con `internalScore=100`. `externalScore` permaneció `null` y no se modificó la certificación pública. | **Aceptada para `beta-d-0.2`** |
 
-## Comprobación actual de Grumphya
+### Cobertura y límites
 
-El informe fresco `ed8e8b27-ac46-4ad0-91b2-a3e803eb9ab9` terminó a las
-`2026-11-20T18:03:48.160Z` con:
+La evaluación ética externa del informe actual es 100/100 con 7 de 8 criterios
+evaluados; `third-party-data-use` sigue `unknown`. Se presenta como parcial y
+no se inventa una puntuación global que combine evaluaciones externas e
+internas con coberturas distintas. D queda limitado al contrato firmado
+`beta-d-0.2`; el resultado completo de 14/14 no se amplía a señales fuera de
+ese contrato.
 
-- `DS-HDR-01`: `fail`, `evidence.csp=false`.
-- Evaluación Beta: `70/100`, `eligibility=blocked`.
-- Certificación: `suspended`.
-- Puntuación externa: `78/100`, 7 de 8 criterios evaluados.
+El informe también contiene la dimensión de Privacidad de Solistos (`privacy-v1`)
+de 100/100, con 1 de 5 criterios evaluados y 4 no aplicables. Es una dimensión
+separada posterior a Beta y no interviene en la nota ni en la elegibilidad de
+Beta 0.1.
 
-La solicitud fue aceptada como `queued` y terminó sin error de worker, por lo
-que la observación no es una reutilización de caché ni un fallo del escáner.
+El 22-11-2026, el estado de VPS confirmó API, worker, web, base de datos,
+coordinador, scheduler de certificación y scheduler de retención activos; los
+servicios con healthcheck estaban sanos. El despliegue `44977733185` pasó
+calidad, PostgreSQL, navegador/Lighthouse, auditoría de dependencias, escaneo
+de imágenes, healthchecks y smoke de análisis público de Grumphya.
 
-En una lectura HTTP directa posterior, `https://grumphya.com/` sí devolvió una
-cabecera CSP válida junto con HSTS, `nosniff`, `X-Frame-Options` y una política
-de referencia segura. Esto indica una discrepancia temporal o de ruta entre la
-respuesta que produjo el informe y la respuesta actual; no se convierte en un
-`pass` hasta obtener un informe nuevo del scanner.
+### Reconciliación de versiones anteriores
 
-### Diagnóstico reproducible de CSP
+Una versión previa de esta evaluación decía que el cierre estaba pendiente por
+una discrepancia CSP: el informe del 20-11-2026 `ed8e8b27-ac46-4ad0-91b2-a3e803eb9ab9`
+marcaba `csp=false` aunque la respuesta HTTP directa mostraba una CSP presente.
+Ese estado era anterior a la corrección del rubricado. Las condiciones de
+salida se verificaron luego con el informe fresco `796d5c1b-356f-47ce-8aba-572afd9d18a1`
+del 21-11-2026 y vuelven a confirmarse con el informe actual del 22-11-2026,
+incluida `csp=true`, certificación elegible y puntero coincidente. Por tanto,
+la frase histórica «el cierre global permanece pendiente» queda supersedida y
+no describe el estado vigente.
 
-Una lectura efímera desde la red `development-security-egress` reprodujo la
-cabecera actual. Su `script-src` contiene un nonce, `'strict-dynamic'` y
-`https://desarrolloseguro.org`. El rubricado `security-headers-v1` considera
-válida una política estricta únicamente cuando `script-src` contiene nonce o
-hash junto con `'strict-dynamic'`, sin orígenes de script externos. Por eso la
-cabecera existe, pero el scanner la clasifica correctamente como `csp=false`.
+Los detalles por etapa y los límites históricos están en [Cierre de Beta](beta-closure.md),
+[la evaluación operativa de D](beta-stage-d-assessment.md) y
+[el plan incremental D](beta-stage-d-plan.md). La especificación inicial del
+producto y el estado del MVP se describen por separado en
+[Requisitos iniciales del MVP](requisitos-iniciales-mvp.md).
 
-El contrato queda protegido por un test TDD que rechaza explícitamente un
-origen de script externo aunque haya nonce y `'strict-dynamic'`. El sello debe
-cargarse como enlace, imagen o iframe autorizado, o mediante código nonceado
-servido por el propio dominio, sin añadir Desarrollo Seguro a `script-src`.
+## Relación de Solistos con el MVP
 
-## Condición de salida
-
-El cierre global permanece **pendiente** hasta que un informe fresco posterior
-a la corrección confirme simultáneamente:
-
-1. `DS-HDR-01` con `evidence.csp=true`.
-2. Evaluación Beta concluyente y puntuación al menos `90/100`.
-3. Certificación `active` y `certifiedReportId` coincidente con ese informe.
-4. Puntuación externa e interna presentadas por separado, sin calcular una
-   puntuación global absoluta si falta cobertura suficiente.
-
-Estas condiciones quedaron satisfechas por el informe fresco del 21 de
-noviembre descrito arriba. No se cambió `AUDIT_ENABLED`, el contrato Beta D ni
-la certificación desde este repositorio.
-
-## Puertas
-
-El merge documental `aef16e4` pasó el CI `44785083694`: auditoría de
-dependencias, integración PostgreSQL, quality gates, Playwright y construcción
-y escaneo de imágenes. El deploy quedó omitido porque no había código de
-runtime que publicar.
+La toma inicial de requisitos del MVP sí menciona privacidad y ética como
+ámbitos, una base de conocimiento incremental y puntuaciones con cobertura;
+sin embargo, no incluye explícitamente la fase Solistos ni su análisis
+automatizado de cookies y almacenamiento, recorridos de consentimiento,
+catálogo local de proveedores, límites de navegador o dimensión `privacy-v1`.
+Solistos se define como fase posterior al cierre de Beta y previa al MVP, y su
+primera versión ya está desplegada. Por tanto, **la incorporación explícita de
+Solistos al alcance y plan del MVP queda pendiente de una decisión y una
+planificación separadas**; este cierre no la presupone.
