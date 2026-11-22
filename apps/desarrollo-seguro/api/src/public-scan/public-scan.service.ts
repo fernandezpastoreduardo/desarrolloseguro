@@ -7,6 +7,7 @@ import {
 } from "@nestjs/common";
 import {
   assessDomainEthics,
+  assessGlobalScore,
   assessBetaCertification,
   normalizeHostname,
   projectPublicEvidence,
@@ -14,6 +15,7 @@ import {
   type BetaControlObservation,
   type ScanFailureCode,
   type DomainEthicsAssessment,
+  type GlobalScoreAssessment,
   type PrivacyAssessment,
   type ScanFailureDiagnostic,
 } from "@desarrolloseguro/core";
@@ -48,6 +50,7 @@ export type PublicReport = {
   completedAt: string;
   expiresAt: string;
   verdict: "pass" | "fail" | "inconclusive";
+  globalAssessment: GlobalScoreAssessment;
   ethicsAssessment: DomainEthicsAssessment;
   privacyAssessment: PrivacyAssessment | null;
   betaCertification: ReturnType<typeof assessBetaCertification>;
@@ -74,6 +77,7 @@ export type PublicReportHistoryEntry = {
   completedAt: string;
   expiresAt: string;
   verdict: PublicReport["verdict"];
+  globalAssessment: GlobalScoreAssessment;
   score: number | null;
   assessedCriteria: number;
   totalCriteria: number;
@@ -282,6 +286,8 @@ function getPublicState(
 }
 
 function toPublicReport(report: PublicScanReport): PublicReport {
+  const ethicsAssessment = assessDomainEthics(report.checks);
+  const privacyAssessment = report.privacyAssessment ?? null;
   return {
     id: report.id,
     hostname: report.hostname,
@@ -293,8 +299,9 @@ function toPublicReport(report: PublicScanReport): PublicReport {
     completedAt: report.completedAt.toISOString(),
     expiresAt: report.expiresAt.toISOString(),
     verdict: report.verdict,
-    ethicsAssessment: assessDomainEthics(report.checks),
-    privacyAssessment: report.privacyAssessment ?? null,
+    globalAssessment: assessGlobalScore(ethicsAssessment, privacyAssessment),
+    ethicsAssessment,
+    privacyAssessment,
     betaCertification: assessBetaCertification(toBetaObservations(report.checks)),
     certification: toPublicCertification(report.certification),
     scope: report.scope,
@@ -322,6 +329,7 @@ function toPublicHistoryEntry(report: PublicScanReport): PublicReportHistoryEntr
     completedAt: publicReport.completedAt,
     expiresAt: publicReport.expiresAt,
     verdict: publicReport.verdict,
+    globalAssessment: publicReport.globalAssessment,
     score: publicReport.ethicsAssessment.score,
     assessedCriteria: publicReport.ethicsAssessment.assessedCriteria,
     totalCriteria: publicReport.ethicsAssessment.totalCriteria,

@@ -1,10 +1,19 @@
 # Privacidad observable (Solistos v1)
 
-Solistos añade una dimensión de Privacidad a los informes de análisis de la
-portada. Busca señales técnicas observables sobre cookies, almacenamiento del
-navegador, solicitudes a otros hosts y decisiones de consentimiento. Una web sin
-seguimiento conocido puede recibir evidencia positiva aunque no muestre un
-banner. Solistos no emite conclusiones de conformidad legal.
+Solistos añade una dimensión independiente de Privacidad a los informes de
+análisis de la portada. Busca señales técnicas observables sobre cookies,
+almacenamiento del navegador, solicitudes a otros hosts y decisiones de
+consentimiento. Una web sin seguimiento conocido puede recibir evidencia
+positiva aunque no muestre un banner. Solistos no emite conclusiones de
+conformidad legal ni modifica el estado del sello.
+
+En la puntuación global del MVP, Privacidad aporta el 50 % y la dimensión Ética
+`domain-ethics-v3` aporta el 50 %. El resultado se redondea al entero más
+cercano. Ambas puntuaciones se presentan también por separado. Si alguna
+dimensión carece de cobertura suficiente, el estado global queda «En revisión»
+y no se muestra una cifra combinada; las notas parciales y su cobertura siguen
+visibles. Los criterios no aplicables no impiden el cálculo. Los informes
+históricos sin evaluación `privacy-v1` no reciben una nota global combinada.
 
 ## Cómo se realiza el análisis
 
@@ -28,6 +37,13 @@ Los flujos usan contextos separados; los controles por proveedor que excedan la
 capacidad disponible quedan `unknown`/`partial` y no se penalizan. Se destruyen
 los contextos al terminar.
 
+La falta de un rechazo utilizable o de paridad con aceptar es un incumplimiento
+confirmado cuando el navegador ha funcionado y ha podido inspeccionar la
+interfaz. La opacidad del sitio no se considera un `unknown`. Si un error propio
+de Chromium, proxy o runtime impide evaluar criterios, se conservan como
+`unknown`, el informe queda «En revisión» y no se publica la cifra global
+combinada hasta resolverlo.
+
 El aprovisionamiento de producción concede al rol `ds_worker` permiso de
 ejecutar únicamente la función de finalización que persiste conjuntamente el
 informe y su evaluación de Privacidad. La función legacy que no guarda esa
@@ -36,8 +52,10 @@ ambos permisos con los roles de runtime.
 
 ## Cómo leer la nota
 
-La nota `Privacidad` es independiente del sello. No concede, bloquea ni
-suspende una certificación. Se calcula con la política versionada `privacy-v1`:
+La nota `Privacidad` es independiente del sello y aporta el 50 % de la nota
+global del MVP junto con la puntuación Ética (`domain-ethics-v3`), que aporta el
+50 % restante. La nota Privacidad no concede, bloquea ni suspende una
+certificación. Se calcula con la política versionada `privacy-v1`:
 
 | Criterio | Peso |
 | --- | ---: |
@@ -49,8 +67,11 @@ suspende una certificación. Se calcula con la política versionada `privacy-v1`
 
 Cada hallazgo confirmado descuenta 0,25 (bajo), 0,5 (medio) o 1 (alto) punto
 absoluto, hasta el peso del criterio. Coincidencias dudosas y evidencia
-incompleta quedan como `unknown` y restan cero. Los criterios desconocidos se
-excluyen del denominador; el informe muestra la cobertura y los no aplicables.
+incompleta por un fallo o límite del auditor quedan como `unknown` y restan
+cero. Los criterios desconocidos se excluyen del denominador; el informe muestra
+la cobertura y los no aplicables. La opacidad de una interfaz no queda
+`unknown` si el navegador está funcionando y pudo inspeccionarla; no hallar un
+rechazo utilizable con paridad es un incumplimiento puntuable.
 Si no hay señales conocidas y la observación está completa, la ausencia de
 panel no baja la nota.
 
@@ -80,8 +101,10 @@ observado, no como validación jurídica.
 
 El alcance se limita a la portada y a señales catalogadas. No demuestra ausencia
 total de seguimiento, conducta en otras rutas, en todas las regiones o en
-navegaciones posteriores. Una evaluación `unknown` significa que el navegador
-no obtuvo evidencia suficiente para ese criterio.
+navegaciones posteriores. Una evaluación `unknown` significa que una limitación
+o un fallo del auditor impidió obtener evidencia suficiente. Si el sitio impide
+identificar un control mientras la observación funciona, se informa como
+incumplimiento puntuable del criterio de paridad en Privacidad.
 
 ## Uso operativo
 
