@@ -147,6 +147,10 @@ conformidad WCAG.
 - La nota de Privacidad es independiente, muestra cobertura y usa los pesos y
   umbrales publicados de su versión. Los nuevos hallazgos no alteran el estado
   del sello.
+- La API pública solo puede leer `run_id` y `assessment_json` de
+  `ds_scan_privacy_assessments` mediante su rol de lectura; el worker no recibe
+  permisos de lectura sobre esa tabla. El informe de estado y el historial
+  siguen disponibles con privilegios mínimos en la base de producción.
 - Las comprobaciones adicionales se asignan a la categoría acordada. El informe
   identifica fecha, navegador/contexto regional, pasos, evidencia, cobertura y
   límites.

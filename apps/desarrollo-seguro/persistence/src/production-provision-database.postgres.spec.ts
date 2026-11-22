@@ -201,6 +201,9 @@ describePostgres.sequential(
         api_can_select_public_columns: boolean;
         api_cannot_read_evidence: boolean;
         api_can_read_public_evidence: boolean;
+        api_can_read_privacy_assessment: boolean;
+        api_cannot_read_privacy_created_at: boolean;
+        worker_cannot_read_privacy_assessment: boolean;
         api_cannot_read_lease_token: boolean;
         api_cannot_select_all_metrics: boolean;
         api_cannot_insert_jobs: boolean;
@@ -222,6 +225,10 @@ describePostgres.sequential(
          has_column_privilege('ds_api', 'public.ds_check_results', 'summary', 'SELECT') AS api_can_select_public_columns,
          NOT has_column_privilege('ds_api', 'public.ds_check_results', 'evidence_json', 'SELECT') AS api_cannot_read_evidence,
          has_table_privilege('ds_api', 'public.ds_public_check_results', 'SELECT') AS api_can_read_public_evidence,
+         has_column_privilege('ds_api', 'public.ds_scan_privacy_assessments', 'run_id', 'SELECT')
+           AND has_column_privilege('ds_api', 'public.ds_scan_privacy_assessments', 'assessment_json', 'SELECT') AS api_can_read_privacy_assessment,
+         NOT has_column_privilege('ds_api', 'public.ds_scan_privacy_assessments', 'created_at', 'SELECT') AS api_cannot_read_privacy_created_at,
+         NOT has_table_privilege('ds_worker', 'public.ds_scan_privacy_assessments', 'SELECT') AS worker_cannot_read_privacy_assessment,
          NOT has_column_privilege('ds_api', 'public.ds_scan_jobs', 'lease_token', 'SELECT') AS api_cannot_read_lease_token,
          NOT has_table_privilege('ds_api', 'public.ds_scan_metrics', 'SELECT') AS api_cannot_select_all_metrics,
          NOT has_column_privilege('ds_api', 'public.ds_scan_jobs', 'hostname', 'INSERT') AS api_cannot_insert_jobs,
@@ -259,6 +266,9 @@ describePostgres.sequential(
         api_can_select_public_columns: true,
         api_cannot_read_evidence: true,
         api_can_read_public_evidence: true,
+        api_can_read_privacy_assessment: true,
+        api_cannot_read_privacy_created_at: true,
+        worker_cannot_read_privacy_assessment: true,
         api_cannot_read_lease_token: true,
         api_cannot_select_all_metrics: true,
         api_cannot_insert_jobs: true,
