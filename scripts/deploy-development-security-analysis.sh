@@ -17,10 +17,27 @@ export DEVELOPMENT_SECURITY_WORKER_IMAGE="desarrolloseguro-worker:local"
 export DEVELOPMENT_SECURITY_WEB_IMAGE="desarrolloseguro-web:local"
 export DEVELOPMENT_SECURITY_DATABASE_IMAGE="desarrolloseguro-postgres:local"
 export DEVELOPMENT_SECURITY_SECRETS_DIR="/opt/desarrollo-seguro/secrets"
-# The normal production deploy never starts the private audit. Do not
-# inherit a profile or an enable flag from an operator shell or CI environment.
+# The normal deploy starts only the fixed backend-inventory reader. Keep the
+# full private-audit profile off; the processor auditor gets its own enable flag.
 export COMPOSE_PROFILES=""
 export DEVELOPMENT_SECURITY_AUDIT_ENABLED="false"
+export DEVELOPMENT_SECURITY_PROCESSOR_TRANSPARENCY_ENABLED="true"
+readonly PROCESSOR_AUDIT_SECRETS_DIR="/opt/desarrollo-seguro/audit-secrets"
+for audit_key in audit_jwt_private.pem release_attestation_public.pem; do
+  if [[ ! -f "$DEVELOPMENT_SECURITY_SECRETS_DIR/$audit_key" || -L "$DEVELOPMENT_SECURITY_SECRETS_DIR/$audit_key" ]]; then
+    printf 'development_security_processor_audit_credential_missing\n' >&2
+    exit 2
+  fi
+done
+install -d -o root -g root -m 0700 "$PROCESSOR_AUDIT_SECRETS_DIR"
+install -o root -g root -m 0400 \
+  "$DEVELOPMENT_SECURITY_SECRETS_DIR/audit_jwt_private.pem" \
+  "$PROCESSOR_AUDIT_SECRETS_DIR/audit_jwt_private.pem"
+install -o root -g root -m 0400 \
+  "$DEVELOPMENT_SECURITY_SECRETS_DIR/release_attestation_public.pem" \
+  "$PROCESSOR_AUDIT_SECRETS_DIR/release_attestation_public.pem"
+export DEVELOPMENT_SECURITY_AUDIT_SECRETS_DIR="$PROCESSOR_AUDIT_SECRETS_DIR"
+export AUDIT_ALLOWED_NETWORKS="${AUDIT_ALLOWED_NETWORKS:-172.30.0.1/32}"
 
 install -d -o root -g root -m 0700 "$DEVELOPMENT_SECURITY_SECRETS_DIR"
 readonly BADGE_ISSUER_SECRET="$DEVELOPMENT_SECURITY_SECRETS_DIR/development_security_badge_issuer_token"

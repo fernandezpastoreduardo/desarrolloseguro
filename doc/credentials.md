@@ -60,3 +60,10 @@ debe contener `audit_jwt_private.pem` y
 `release_attestation_public.pem`, ambos gestionados fuera de Git.
 El servicio no tiene acceso a la base de datos y solo se conecta a la red de
 egress. El stack ordinario no lo arranca.
+
+El despliegue ordinario usa el lector separado para `GET /audit/processors`.
+El script de deploy copia únicamente `audit_jwt_private.pem` y
+`release_attestation_public.pem` a `/opt/desarrollo-seguro/audit-secrets` con
+propietario root y modo `0400`; ese directorio dedicado es el único montaje de
+credenciales visible para el contenedor. El lector queda habilitado con scope
+`privacy`; el perfil `internal-audit` completo continúa apagado.

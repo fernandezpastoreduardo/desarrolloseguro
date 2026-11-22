@@ -312,7 +312,7 @@ services:
       - /run/development-security-audit-keys:rw,noexec,nosuid,size=4m
     environment:
       NODE_ENV: production
-      AUDIT_ENABLED: ${DEVELOPMENT_SECURITY_AUDIT_ENABLED:-false}
+      AUDIT_ENABLED: ${DEVELOPMENT_SECURITY_PROCESSOR_TRANSPARENCY_ENABLED:-false}
       AUDIT_JWT_ISSUER: ${AUDIT_JWT_ISSUER:-desarrolloseguro-audit}
       AUDIT_JWT_AUDIENCE: ${AUDIT_JWT_AUDIENCE:-grumphya-audit}
       AUDIT_TECHNICAL_AUTH_KID: ${AUDIT_TECHNICAL_AUTH_KID:-ds-auditor-2026}

@@ -114,6 +114,18 @@ puede indicar URL, método, ruta, scope ni cabeceras. El auditor no accede a la
 base de datos ni al socket Docker. Un fallo del socket o del auditor produce
 `unknown` en la evaluación y no detiene el análisis público ya completado.
 
+El despliegue ordinario debe habilitar este lector acotado cuando estén
+provisionadas sus credenciales y la ACL exacta de egress. Esta activación es
+distinta de la auditoría privada completa: `COMPOSE_PROFILES` permanece vacío y
+`development-security-internal-audit` no se inicia. El lector solo puede hacer
+`GET /audit/processors` con el scope `privacy`. Debe montar las credenciales
+gestionadas y usar la ACL exacta confirmada; si falta una credencial o la
+configuración es inválida, el healthcheck del auditor debe fallar en vez de
+dejar publicado indefinidamente un resultado `unknown`. El bind mount del
+auditor contiene solo esos dos ficheros, con propietario root y modo `0400`;
+no se monta el directorio general de secretos ni quedan accesibles credenciales
+de PostgreSQL.
+
 ## Criterios de aceptación
 
 1. La observación de navegador y el inventario backend son dimensiones de
@@ -136,6 +148,11 @@ base de datos ni al socket Docker. Un fallo del socket o del auditor produce
    asociada al mismo release que la sirvió.
 9. Los informes históricos no cambian de significado al actualizar el
    inventario o la política.
+10. El despliegue ordinario activa el lector de inventario con credenciales y
+    ACL provisionadas, pero mantiene detenido el perfil de auditoría privada.
+11. La prueba del despliegue exige `domain-ethics-v4` con los ocho criterios
+    evaluados y rechaza `unknown` propio del auditor; un inventario incompleto
+    o no divulgado atribuible al dominio puede quedar como un `fail` evaluado.
 
 ## Secuencia
 
