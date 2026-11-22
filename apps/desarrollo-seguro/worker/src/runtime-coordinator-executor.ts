@@ -13,8 +13,7 @@ import {
 } from "./transport-v1-executor-protocol.js";
 import type { TransportV1ScanJob } from "./transport-v1-executor.js";
 import type { ScanExecutor } from "./scan-job-processor.js";
-
-const DEFAULT_COORDINATOR_TIMEOUT_MS = 155_000;
+import { RUNTIME_COORDINATOR_CLIENT_TIMEOUT_MS } from "./runtime-coordinator-timeouts.js";
 
 export type RuntimeCoordinatorExecutorOptions = {
   socketPath: string;
@@ -31,7 +30,7 @@ export class RuntimeCoordinatorExecutor implements ScanExecutor {
   private readonly timeoutMs: number;
 
   constructor(private readonly options: RuntimeCoordinatorExecutorOptions) {
-    this.timeoutMs = options.timeoutMs ?? DEFAULT_COORDINATOR_TIMEOUT_MS;
+    this.timeoutMs = options.timeoutMs ?? RUNTIME_COORDINATOR_CLIENT_TIMEOUT_MS;
     if (
       options.socketPath.length === 0 ||
       !Number.isSafeInteger(options.expectedSocketUid) ||

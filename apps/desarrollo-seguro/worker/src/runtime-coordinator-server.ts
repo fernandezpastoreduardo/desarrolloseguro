@@ -11,10 +11,10 @@ import {
   type TransportV1ExecutorRequest,
 } from "./transport-v1-executor-protocol.js";
 import { readScanFailureDiagnostic } from "./runtime-diagnostics.js";
+import { RUNTIME_COORDINATOR_EXECUTION_TIMEOUT_MS } from "./runtime-coordinator-timeouts.js";
 
 const MAX_ACTIVE_JOBS = 1;
 const REQUEST_TIMEOUT_MS = 5_000;
-const EXECUTION_TIMEOUT_MS = 155_000;
 const SOCKET_MODE = 0o660;
 
 export type RuntimeCoordinatorRunner = {
@@ -30,6 +30,7 @@ export type RuntimeCoordinatorServerOptions = {
   socketPath: string;
   socketUid: number;
   socketGid: number;
+  executionTimeoutMs?: number;
 };
 
 /** Serves one bounded runtime request over a protected Unix socket. */
@@ -43,7 +44,11 @@ export async function listenRuntimeCoordinator(
     !Number.isSafeInteger(options.socketUid) ||
     options.socketUid < 0 ||
     !Number.isSafeInteger(options.socketGid) ||
-    options.socketGid < 0
+    options.socketGid < 0 ||
+    (options.executionTimeoutMs !== undefined &&
+      (!Number.isSafeInteger(options.executionTimeoutMs) ||
+        options.executionTimeoutMs < 1 ||
+        options.executionTimeoutMs > RUNTIME_COORDINATOR_EXECUTION_TIMEOUT_MS))
   ) {
     throw new Error("runtime_coordinator_config_invalid");
   }
@@ -53,6 +58,7 @@ export async function listenRuntimeCoordinator(
   const controllers = new Set<AbortController>();
   const clients = new Set<Socket>();
   const activeTasks = new Set<Promise<void>>();
+  const executionTimeoutMs = options.executionTimeoutMs ?? RUNTIME_COORDINATOR_EXECUTION_TIMEOUT_MS;
   server.on("connection", (socket) => {
     if (activeJobs >= MAX_ACTIVE_JOBS) {
       socket.destroy();
@@ -60,7 +66,7 @@ export async function listenRuntimeCoordinator(
     }
     activeJobs += 1;
     clients.add(socket);
-    handleRequest(socket, runner, controllers, activeTasks, () => {
+    handleRequest(socket, runner, controllers, activeTasks, executionTimeoutMs, () => {
       activeJobs -= 1;
       clients.delete(socket);
     });
@@ -131,6 +137,7 @@ function handleRequest(
   runner: RuntimeCoordinatorRunner,
   controllers: Set<AbortController>,
   activeTasks: Set<Promise<void>>,
+  executionTimeoutMs: number,
   onClose: () => void,
 ): void {
   let receivedBytes = 0;
@@ -199,8 +206,11 @@ function handleRequest(
     }
     const executionTimer = setTimeout(() => {
       controller.abort();
-      sendFailure(socket, request.requestId);
-    }, EXECUTION_TIMEOUT_MS);
+      sendFailure(socket, request.requestId, "executor_failed", {
+        stage: "executor",
+        code: "runtime_execution_timeout",
+      });
+    }, executionTimeoutMs);
     const task = Promise.resolve()
       .then(() => runner.execute(request, controller.signal))
       .then(
@@ -249,7 +259,10 @@ function sendResponse(
 ): void {
   const payload = Buffer.from(JSON.stringify(response));
   if (payload.byteLength > MAX_EXECUTOR_RESPONSE_BYTES) {
-    sendFailure(socket, response.requestId);
+    sendFailure(socket, response.requestId, "executor_failed", {
+      stage: "executor",
+      code: "executor_response_too_large",
+    });
     return;
   }
   socket.end(payload);

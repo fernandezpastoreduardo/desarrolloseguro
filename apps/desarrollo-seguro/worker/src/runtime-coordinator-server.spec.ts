@@ -7,7 +7,10 @@ import type { ScanRunInput } from "@desarrolloseguro/persistence";
 import { RuntimeCoordinatorExecutor } from "./runtime-coordinator-executor.js";
 import { listenRuntimeCoordinator } from "./runtime-coordinator-server.js";
 import type { RuntimeCoordinatorRunner } from "./runtime-coordinator-server.js";
-import { parseTransportV1ExecutorResponse } from "./transport-v1-executor-protocol.js";
+import {
+  MAX_EXECUTOR_RESPONSE_BYTES,
+  parseTransportV1ExecutorResponse,
+} from "./transport-v1-executor-protocol.js";
 
 const directories: string[] = [];
 const closeCoordinator: Array<() => Promise<void>> = [];
@@ -82,6 +85,49 @@ describe("runtime coordinator server", () => {
       ),
     ).rejects.toThrow("executor_failed");
     expect(runner.execute).toHaveBeenCalledOnce();
+  });
+
+  it("labels a coordinator execution timeout with a bounded diagnostic", async () => {
+    const runner: RuntimeCoordinatorRunner = {
+      execute: vi.fn((_request, signal) => new Promise<Omit<ScanRunInput,
+        "hostname" | "profileVersion" | "leaseToken" | "jobId">>((_resolve, reject) => {
+        signal.addEventListener("abort", () => reject(new Error("request_aborted")), { once: true });
+      })),
+    };
+    const socketPath = await startCoordinator(runner, 5);
+    const executor = await createClient(socketPath);
+
+    await expect(executor.execute(
+      { hostname: "sample.example.net", profileVersion: "transport-v1" },
+      new AbortController().signal,
+    )).rejects.toMatchObject({
+      message: "executor_failed",
+      scanFailureDiagnostic: {
+        stage: "executor",
+        code: "runtime_execution_timeout",
+      },
+    });
+  });
+
+  it("labels an oversized executor response without exposing its payload", async () => {
+    const result = makeResult();
+    result.checks[0]!.summary = "x".repeat(MAX_EXECUTOR_RESPONSE_BYTES);
+    const runner: RuntimeCoordinatorRunner = {
+      execute: vi.fn().mockResolvedValue(result),
+    };
+    const socketPath = await startCoordinator(runner);
+    const executor = await createClient(socketPath);
+
+    await expect(executor.execute(
+      { hostname: "sample.example.net", profileVersion: "transport-v1" },
+      new AbortController().signal,
+    )).rejects.toMatchObject({
+      message: "executor_failed",
+      scanFailureDiagnostic: {
+        stage: "executor",
+        code: "executor_response_too_large",
+      },
+    });
   });
 
   it("returns only an allowlisted runtime stage category", async () => {
@@ -240,7 +286,10 @@ describe("runtime coordinator server", () => {
   });
 });
 
-async function startCoordinator(runner: RuntimeCoordinatorRunner): Promise<string> {
+async function startCoordinator(
+  runner: RuntimeCoordinatorRunner,
+  executionTimeoutMs?: number,
+): Promise<string> {
   const directory = await mkdtemp(join(tmpdir(), "ds-runtime-supervisor-"));
   directories.push(directory);
   const directoryMetadata = await stat(directory);
@@ -249,6 +298,7 @@ async function startCoordinator(runner: RuntimeCoordinatorRunner): Promise<strin
     socketPath,
     socketUid: directoryMetadata.uid,
     socketGid: directoryMetadata.gid,
+    ...(executionTimeoutMs === undefined ? {} : { executionTimeoutMs }),
   }, runner);
   closeCoordinator.push(coordinator.close);
   return socketPath;

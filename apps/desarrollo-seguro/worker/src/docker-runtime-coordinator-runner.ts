@@ -186,7 +186,13 @@ export function createDockerRuntimeCoordinatorRunner(
           safeDiagnostic,
         );
       }
-      if (!session || !result) throw new Error("executor_failed");
+      if (!session || !result) {
+        throw attachScanFailureDiagnostic(new Error("executor_failed"), {
+          type: "runtime_diagnostic",
+          stage: "executor",
+          code: "executor_application_failed",
+        });
+      }
       return result;
     },
   };
