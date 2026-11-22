@@ -4,6 +4,7 @@ import {
   sanitizeScanObservations,
   SCAN_FAILURE_CODES,
   parseScanFailureDiagnostic,
+  type ScanFailureDiagnostic,
   type ScanFailureCode,
 } from "@desarrolloseguro/core";
 import {
@@ -283,7 +284,10 @@ function getFailureCode(error: unknown): ScanFailureCode {
   return "executor_failed";
 }
 
-function getFailureDiagnostic(error: unknown) {
-  if (!(error instanceof Error) || !("scanFailureDiagnostic" in error)) return null;
-  return parseScanFailureDiagnostic(error.scanFailureDiagnostic);
+function getFailureDiagnostic(error: unknown): ScanFailureDiagnostic {
+  if (error instanceof Error && "scanFailureDiagnostic" in error) {
+    const diagnostic = parseScanFailureDiagnostic(error.scanFailureDiagnostic);
+    if (diagnostic) return diagnostic;
+  }
+  return { stage: "executor", code: "executor_application_failed" };
 }

@@ -76,6 +76,10 @@ público no queda como `executor_failed` opaco cuando no hay una categoría más
 específica segura. El catálogo de etapa/códigos de la migración SQL que valida
 `ds_fail_scan` debe actualizarse en la misma entrega que el parser TypeScript;
 una prueba PostgreSQL debe persistir al menos la nueva categoría de timeout.
+En el límite del worker, un fallo del executor sin diagnóstico válido debe
+recibir el fallback allowlisted `executor` / `executor_application_failed`
+antes de persistir; nunca se guarda el mensaje crudo del error ni se deja un
+fallo terminal del executor sin categoría diagnóstica.
 
 El recolector `apps/desarrollo-seguro/worker/scripts/measure-vps-capacity.mjs` solo consulta recursos locales. Sin `--health-url`, no genera solicitudes de red. Su resultado no sustituye una prueba de carga ni autoriza un scan.
 
