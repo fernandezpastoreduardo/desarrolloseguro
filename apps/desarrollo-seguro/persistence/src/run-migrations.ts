@@ -111,6 +111,10 @@ const MIGRATIONS = [
     version: "033_certification_refresh_headroom",
     file: "033_certification_refresh_headroom.sql",
   },
+  {
+    version: "034_coordinator_failure_diagnostics",
+    file: "034_coordinator_failure_diagnostics.sql",
+  },
 ] as const;
 
 const MIGRATION_LOCK_ID = 728194032;

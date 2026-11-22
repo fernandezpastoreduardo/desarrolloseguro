@@ -73,7 +73,9 @@ Una excepción inesperada del coordinador debe conservar el diagnóstico
 allowlisted genérico `executor_application_failed`; un resultado que no
 cumpla el esquema de respuesta usa `executor_response_invalid`. Así, el estado
 público no queda como `executor_failed` opaco cuando no hay una categoría más
-específica segura.
+específica segura. El catálogo de etapa/códigos de la migración SQL que valida
+`ds_fail_scan` debe actualizarse en la misma entrega que el parser TypeScript;
+una prueba PostgreSQL debe persistir al menos la nueva categoría de timeout.
 
 El recolector `apps/desarrollo-seguro/worker/scripts/measure-vps-capacity.mjs` solo consulta recursos locales. Sin `--health-url`, no genera solicitudes de red. Su resultado no sustituye una prueba de carga ni autoriza un scan.
 

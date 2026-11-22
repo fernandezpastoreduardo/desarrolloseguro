@@ -1191,6 +1191,24 @@ describePostgres.sequential("PostgresScanStore", () => {
     });
   });
 
+  it("persists coordinator timeout diagnostics allowed by the migration", async () => {
+    const job = await queueAndClaim();
+    await expect(
+      store.failScan(job.id, job.leaseToken, "executor_failed", 1, {
+        stage: "executor",
+        code: "runtime_execution_timeout",
+      }),
+    ).resolves.toBe("failed");
+    const failed = await pool.query(
+      "SELECT failure_diagnostic FROM ds_scan_jobs WHERE id = $1",
+      [job.id],
+    );
+    expect(failed.rows[0].failure_diagnostic).toEqual({
+      stage: "executor",
+      code: "runtime_execution_timeout",
+    });
+  });
+
   it("renews only a current unexpired lease", async () => {
     const job = await queueAndClaim();
     const renewRequestedAt = new Date();

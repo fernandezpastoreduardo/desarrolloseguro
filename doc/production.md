@@ -23,6 +23,8 @@ Provisiona en `.secrets/` los archivos requeridos por la sección `secrets` del 
 
 El presupuesto del coordinador de análisis es de 210 segundos para completar el escaneo base, la observación Solistos (máximo propio de 120 segundos), la preparación y la limpieza del runtime; el cliente espera 215 segundos para dejar margen al cierre ordenado. Estos márgenes no amplían los límites de solicitudes, datos recibidos, proveedores, contextos ni recursos del navegador. Si se agota el plazo total o la respuesta excede el máximo del protocolo, el informe conserva una categoría diagnóstica acotada (`runtime_execution_timeout` o `executor_response_too_large`) sin registrar payloads ni errores crudos. Las excepciones inesperadas usan `executor_application_failed` y una respuesta que no cumple el esquema usa `executor_response_invalid`.
 
+La migración `034_coordinator_failure_diagnostics` sincroniza la lista SQL permitida con los diagnósticos del coordinador para que sus errores puedan guardarse en el estado público.
+
 Antes de desplegar el análisis, prepara la interfaz `br-ds-egress` y comprueba sus filtros exclusivos. Los scripts modifican solo `development-security-egress` y reglas `iptables`/`ip6tables` asociadas a esa interfaz; no configuran UFW ni cambian reglas de otras redes:
 
 ```sh
