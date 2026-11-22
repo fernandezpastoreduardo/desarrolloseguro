@@ -1,10 +1,13 @@
-import { createPublicKey, verify, type KeyObject } from "node:crypto";
+import { createHash, createPublicKey, verify, type KeyObject } from "node:crypto";
 import { canonicalizeForSignature } from "./internal-audit-evidence-envelope.js";
 
 export const PROCESSOR_INVENTORY_SCHEMA = "processor-inventory-v1" as const;
 export const PROCESSOR_INVENTORY_HOSTNAME = "grumphya.com" as const;
+export const DEVELOPMENT_SECURITY_INVENTORY_HOSTNAME = "desarrolloseguro.org" as const;
 export const PROCESSOR_INVENTORY_POLICY_URL = "https://grumphya.com/politica-de-privacidad" as const;
+export const DEVELOPMENT_SECURITY_INVENTORY_POLICY_URL = "https://desarrolloseguro.org/desarrollo-seguro/privacidad.html" as const;
 export const PROCESSOR_INVENTORY_ATTESTATION_KID = "grumphya-release-2026" as const;
+export const DEVELOPMENT_SECURITY_INVENTORY_KID = "desarrolloseguro-source-registry-v1" as const;
 export const PROCESSOR_INVENTORY_MAX_AGE_MS = 24 * 60 * 60 * 1_000;
 export const PROCESSOR_INVENTORY_MAX_BYTES = 64 * 1024;
 export const PROCESSOR_INVENTORY_MAX_PROVIDERS = 32;
@@ -31,12 +34,13 @@ export type VerifiedProcessorInventory = {
   policyVersion: typeof PROCESSOR_INVENTORY_SCHEMA;
   observedAt: string;
   validUntil: string;
-  hostname: typeof PROCESSOR_INVENTORY_HOSTNAME;
+  hostname: typeof PROCESSOR_INVENTORY_HOSTNAME | typeof DEVELOPMENT_SECURITY_INVENTORY_HOSTNAME;
   deploymentDigest: string;
   inventoryStatus: "complete" | "incomplete";
-  privacyPolicy: { url: typeof PROCESSOR_INVENTORY_POLICY_URL; revision: string };
+  privacyPolicy: { url: typeof PROCESSOR_INVENTORY_POLICY_URL | typeof DEVELOPMENT_SECURITY_INVENTORY_POLICY_URL; revision: string };
   processors: ProcessorDisclosure[];
-  attestation: { verified: true; keyId: typeof PROCESSOR_INVENTORY_ATTESTATION_KID };
+  attestation: { verified: true; keyId: typeof PROCESSOR_INVENTORY_ATTESTATION_KID | typeof DEVELOPMENT_SECURITY_INVENTORY_KID };
+  evidenceSource?: "grumphya_signed_attestation" | "desarrolloseguro_source_registry";
 };
 
 export type ProcessorInventoryReaderOptions = {
@@ -169,6 +173,35 @@ export async function readProcessorInventory(
   }
 }
 
+/** Creates first-party evidence from the versioned production integration registry. */
+export function assessDevelopmentSecurityProcessorRegistry(input: {
+  deploymentRevision: string;
+  registryRevision: string;
+  processors: ProcessorDisclosure[];
+  now?: Date;
+}): ProcessorTransparencyAssessment {
+  if (!/^[a-f0-9]{40,64}$/u.test(input.deploymentRevision) ||
+      !/^v[1-9][0-9]*$/u.test(input.registryRevision) || !Array.isArray(input.processors) ||
+      input.processors.length > PROCESSOR_INVENTORY_MAX_PROVIDERS) {
+    return assessProcessorTransparency({ status: "auditor_error" });
+  }
+  const observedAt = input.now ?? new Date();
+  const validUntil = new Date(observedAt.getTime() + PROCESSOR_INVENTORY_MAX_AGE_MS);
+  const inventory: VerifiedProcessorInventory = {
+    policyVersion: PROCESSOR_INVENTORY_SCHEMA,
+    observedAt: observedAt.toISOString(),
+    validUntil: validUntil.toISOString(),
+    hostname: DEVELOPMENT_SECURITY_INVENTORY_HOSTNAME,
+    deploymentDigest: `sha256:${createHash("sha256").update(input.deploymentRevision).digest("hex")}`,
+    inventoryStatus: "complete",
+    privacyPolicy: { url: DEVELOPMENT_SECURITY_INVENTORY_POLICY_URL, revision: input.registryRevision },
+    processors: input.processors.map((processor) => ({ ...processor })),
+    attestation: { verified: true, keyId: DEVELOPMENT_SECURITY_INVENTORY_KID },
+    evidenceSource: "desarrolloseguro_source_registry",
+  };
+  return assessProcessorTransparency({ status: "verified", inventory });
+}
+
 /** Verifies the target's standalone signed payload and returns only its public allowlist. */
 export function verifyProcessorInventory(
   input: unknown,
@@ -225,6 +258,7 @@ export function verifyProcessorInventory(
     },
     processors: (input.processors as ProcessorDisclosure[]).map((processor) => ({ ...processor })),
     attestation: { verified: true, keyId: PROCESSOR_INVENTORY_ATTESTATION_KID },
+    evidenceSource: "grumphya_signed_attestation",
   };
 }
 
@@ -280,21 +314,36 @@ function isProcessor(value: unknown): value is ProcessorDisclosure {
 }
 
 function isVerifiedProjection(value: unknown): value is VerifiedProcessorInventory {
-  if (!isRecord(value) || !hasExactKeys(value, [
+  if (!isRecord(value)) return false;
+  const hasSource = Object.hasOwn(value, "evidenceSource");
+  const expectedKeys = [
     "policyVersion", "observedAt", "validUntil", "hostname", "deploymentDigest",
     "inventoryStatus", "privacyPolicy", "processors", "attestation",
-  ]) || value.policyVersion !== PROCESSOR_INVENTORY_SCHEMA || value.hostname !== PROCESSOR_INVENTORY_HOSTNAME ||
+  ];
+  if (hasSource) expectedKeys.push("evidenceSource");
+  if (!hasExactKeys(value, expectedKeys) || value.policyVersion !== PROCESSOR_INVENTORY_SCHEMA ||
       typeof value.observedAt !== "string" || !isIsoInstant(value.observedAt) ||
       typeof value.validUntil !== "string" || !isIsoInstant(value.validUntil) ||
       typeof value.deploymentDigest !== "string" || !SHA256.test(value.deploymentDigest) ||
       (value.inventoryStatus !== "complete" && value.inventoryStatus !== "incomplete") ||
       !isRecord(value.privacyPolicy) || !hasExactKeys(value.privacyPolicy, ["url", "revision"]) ||
-      value.privacyPolicy.url !== PROCESSOR_INVENTORY_POLICY_URL ||
       !isBoundedText(value.privacyPolicy.revision, 40) || !/^v[1-9][0-9]*$/u.test(value.privacyPolicy.revision) ||
       !Array.isArray(value.processors) || value.processors.length > PROCESSOR_INVENTORY_MAX_PROVIDERS ||
       value.processors.some((processor) => !isProcessor(processor)) ||
       !isRecord(value.attestation) || !hasExactKeys(value.attestation, ["verified", "keyId"]) ||
-      value.attestation.verified !== true || value.attestation.keyId !== PROCESSOR_INVENTORY_ATTESTATION_KID) return false;
+      value.attestation.verified !== true) return false;
+  if (value.hostname === PROCESSOR_INVENTORY_HOSTNAME &&
+      value.privacyPolicy.url === PROCESSOR_INVENTORY_POLICY_URL &&
+      value.attestation.keyId === PROCESSOR_INVENTORY_ATTESTATION_KID &&
+      (!hasSource || value.evidenceSource === "grumphya_signed_attestation")) {
+    // Legacy reports did not carry an evidenceSource field.
+  } else if (value.hostname === DEVELOPMENT_SECURITY_INVENTORY_HOSTNAME &&
+      value.privacyPolicy.url === DEVELOPMENT_SECURITY_INVENTORY_POLICY_URL &&
+      value.attestation.keyId === DEVELOPMENT_SECURITY_INVENTORY_KID &&
+      value.evidenceSource === "desarrolloseguro_source_registry" &&
+      value.inventoryStatus === "complete" && value.processors.length === 0) {
+    // The self-domain registry is versioned in this source tree and tied to the built revision.
+  } else return false;
   const ids = value.processors.map((processor) => (processor as ProcessorDisclosure).providerId);
   return new Set(ids).size === ids.length && !ids.some((id, index) => index > 0 && ids[index - 1]! >= id);
 }

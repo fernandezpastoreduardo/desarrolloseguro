@@ -82,9 +82,9 @@ El widget genera la insignia compacta con el logo aprobado y estilos Sass
 incluidos en el propio script. El logo SVG se entrega mediante una URL `blob:`
 para que pueda mostrarse bajo la CSP de Grumphya, que permite imágenes `blob:`
 pero no imágenes externas. La insignia aparece solo después de verificar el
-sello; enlaza a la página pública anterior. Nginx sirve `badge-api.mjs` como
-`application/javascript` para que los navegadores permitan cargarlo como
-módulo.
+sello; enlaza a la página pública anterior. En el sitio de Desarrollo Seguro,
+el helper de verificación se empaqueta dentro de `verificar.js` durante el
+build, de modo que la CSP con hashes y SRI controla un solo script de entrada.
 
 El API permite CORS solo desde `https://grumphya.com` y `https://desarrolloseguro.org`. En la página de Desarrollo Seguro, el navegador realiza una petición same-origin; el servidor acepta esa solicitud con `Sec-Fetch-Site: same-origin` cuando el navegador omite `Origin`. Un origen distinto o una respuesta de red fallida no muestra el sello.
 

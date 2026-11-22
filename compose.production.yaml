@@ -222,6 +222,8 @@ services:
       context: .
       dockerfile: Dockerfile
       target: development-security-worker
+      args:
+        DS_RELEASE_REVISION: ${DEVELOPMENT_SECURITY_RELEASE_REVISION:-}
     restart: unless-stopped
     user: "0:0"
     privileged: false

@@ -54,4 +54,4 @@ for required_file in compose.production.yaml Dockerfile scripts/deploy-developme
 done
 
 cd "$release_dir"
-./scripts/deploy-development-security-analysis.sh
+./scripts/deploy-development-security-analysis.sh "$revision"

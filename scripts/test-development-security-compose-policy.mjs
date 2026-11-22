@@ -114,6 +114,7 @@ assert.match(
 assert.doesNotMatch(api, /development-security-ingress/u);
 assert.doesNotMatch(database, /development-security-ingress/u);
 assert.match(worker, /target:\s*development-security-worker/u);
+assert.match(worker, /DS_RELEASE_REVISION:\s*\$\{DEVELOPMENT_SECURITY_RELEASE_REVISION:-\}/u);
 assert.match(worker, /development_security_worker_database_url/u);
 assert.match(worker, /internal_tls_ca\.crt/u);
 assert.match(worker, /DS_WORKER_DATABASE_TLS_REQUIRED=true/u);
@@ -184,7 +185,8 @@ assert.match(
 );
 assert.match(caddyFragment, /^desarrolloseguro\.org \{/mu);
 assert.match(caddyFragment, /reverse_proxy development-security-web:8080/u);
-assert.match(caddyFragment, /Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'"/u);
+assert.doesNotMatch(caddyFragment, /Content-Security-Policy/u);
+assert.match(nginx, /include \/etc\/nginx\/snippets\/development-security-csp\.conf/u);
 assert.match(caddyFragment, /www\.desarrolloseguro\.org \{/u);
 assert.doesNotMatch(caddyFragment, /api:3001|database|grumphya/iu);
 assert.match(compose, /name: \$\{DEVELOPMENT_SECURITY_POSTGRES_VOLUME:-development-security-postgres-pg19\}/u);
@@ -265,11 +267,8 @@ assert.match(
   /location = \/desarrollo-seguro\/badge-widget\.js \{\s+add_header Cross-Origin-Resource-Policy "cross-origin" always;\s+add_header Cache-Control "no-store" always;\s+try_files \$uri =404;\s+\}/u,
   "only the public badge widget opts into cross-origin embedding under COEP",
 );
-assert.match(
-  nginx,
-  /location = \/desarrollo-seguro\/badge-api\.mjs \{\s+default_type application\/javascript;\s+add_header Cache-Control "no-store" always;\s+try_files \$uri =404;\s+\}/u,
-  "the verification page's ES module dependency uses a browser-executable MIME type",
-);
+assert.doesNotMatch(nginx, /location = \/desarrollo-seguro\/badge-api\.mjs/u,
+  "the verification helper is bundled into the single SRI-pinned entry script");
 assert.match(nginx, /location \^~ \/desarrollo-seguro\/ \{\s+add_header Cache-Control "no-store" always;/u);
 assert.match(nginx, /location \/app\/ \{\s+add_header Cache-Control "no-store" always;\s+try_files \$uri \$uri\/ \/app\/index\.html/u);
 assert.doesNotMatch(nginx, /location \^~ \/app\//u, "hashed asset locations must remain eligible for immutable caching");

@@ -157,6 +157,8 @@ RUN pnpm install --prod --filter @desarrolloseguro/worker... --frozen-lockfile -
 
 FROM node-runtime-base AS development-security-worker
 
+ARG DS_RELEASE_REVISION=
+ENV DS_RELEASE_REVISION=${DS_RELEASE_REVISION}
 ENV NODE_ENV=production
 
 COPY --from=development-security-worker-dependencies --chown=node:node /workspace/node_modules /workspace/node_modules
@@ -186,6 +188,7 @@ FROM nginx:1.30-alpine AS development-security-web
 RUN apk upgrade --no-cache
 
 COPY docker/nginx-development-security.conf /etc/nginx/conf.d/default.conf
+COPY --from=development-security-build /workspace/apps/desarrollo-seguro/web/dist/nginx-security-headers.conf /etc/nginx/snippets/development-security-csp.conf
 COPY --from=development-security-build /workspace/apps/desarrollo-seguro/web/dist /usr/share/nginx/html/app
 COPY --from=development-security-build /workspace/apps/desarrollo-seguro/web/dist/desarrollo-seguro /usr/share/nginx/html/desarrollo-seguro
 

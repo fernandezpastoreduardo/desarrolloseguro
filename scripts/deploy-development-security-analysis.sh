@@ -3,6 +3,12 @@ set -euo pipefail
 
 readonly PROJECT_NAME="desarrollo-seguro"
 readonly COMPOSE_FILE="compose.production.yaml"
+readonly RELEASE_REVISION="${1:-}"
+
+if [[ ! "$RELEASE_REVISION" =~ ^[a-f0-9]{40,64}$ ]]; then
+  printf 'development_security_release_revision_required\n' >&2
+  exit 2
+fi
 
 if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
   printf 'development_security_deploy_requires_root\n' >&2
@@ -21,6 +27,7 @@ export DEVELOPMENT_SECURITY_SECRETS_DIR="/opt/desarrollo-seguro/secrets"
 # full private-audit profile off; the processor auditor gets its own enable flag.
 export COMPOSE_PROFILES=""
 export DEVELOPMENT_SECURITY_AUDIT_ENABLED="false"
+export DEVELOPMENT_SECURITY_RELEASE_REVISION="$RELEASE_REVISION"
 export DEVELOPMENT_SECURITY_PROCESSOR_TRANSPARENCY_ENABLED="true"
 readonly PROCESSOR_AUDIT_SECRETS_DIR="/opt/desarrollo-seguro/audit-secrets"
 for audit_key in audit_jwt_private.pem release_attestation_public.pem; do

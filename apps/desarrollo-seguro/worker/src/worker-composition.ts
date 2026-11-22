@@ -28,6 +28,7 @@ export function createScanWorker(
       expectedSocketUid: configuration.processorAuditorUid,
       expectedSocketGid: configuration.processorAuditorGid,
     }),
+    environment.DS_RELEASE_REVISION ?? "",
   );
   const processor = new ScanJobProcessor(
     store,

@@ -1,6 +1,6 @@
 # Transparencia de proveedores backend
 
-Los informes nuevos de `grumphya.com` incluyen una comprobación de los
+Los informes nuevos de `grumphya.com` y `desarrolloseguro.org` incluyen una comprobación de los
 procesadores que la aplicación activa en sus servicios backend. Esta evidencia
 complementa las solicitudes a terceros que Solistos observa en el navegador:
 una llamada entre servidores no aparece en la pestaña de red del navegador.
@@ -22,6 +22,15 @@ Las declaraciones describen lo que Grumphya publica; el análisis no confirma
 contratos ni prácticas reales de los proveedores. Por eso, una declaración
 como “no se usa para entrenar modelos” se muestra como declaración de
 Grumphya, no como una verificación independiente.
+
+Para `desarrolloseguro.org`, el worker proyecta el registro local y versionado
+`development-security-processor-registry.ts`. El resultado se vincula a la
+revisión de código que construyó la imagen. La página de privacidad explica su
+alcance: integraciones backend que reciben datos de informes o usuarios. Los
+destinos técnicos del análisis y la integración condicional con Grumphya quedan
+fuera de esa lista. El inventario vacío significa que el código no declara
+procesadores externos en ese ámbito; no afirma que no haya proveedores de
+infraestructura ni verifica contratos o prácticas de terceros.
 
 El cambio se aplica a `domain-ethics-v4`. Los informes históricos conservan la
 rúbrica y evidencia con que se generaron. El despliegue requiere configurar el

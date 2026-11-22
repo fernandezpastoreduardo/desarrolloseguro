@@ -16,7 +16,7 @@ const htmlPages = [
   "verificar.html",
   "informe-grumphya-prototipo.html",
 ];
-const publicScripts = ["badge-api.mjs", "badge-widget.js", "verificar.js"];
+const publicScripts = ["badge-widget.js", "verificar.js"];
 const publicAssets = ["assets/desarrollo-seguro-logo-v1.svg"];
 const prototypeStylesPath = resolve(repositoryRoot, "desarrollo-seguro/informe-grumphya-prototipo.scss");
 const badgeWidgetStylesPath = resolve(repositoryRoot, "desarrollo-seguro/badge-widget.scss");
@@ -50,6 +50,14 @@ export async function buildPublicSiteAssets(outputDirectory = defaultOutputDirec
     if (generated === source) throw new Error("public_site_stylesheet_reference_missing");
     await writeFile(join(publicSiteDirectory, page), generated);
   }));
+  const appIndexPath = join(outputDirectory, "index.html");
+  let appIndex = null;
+  try {
+    appIndex = await readFile(appIndexPath, "utf8");
+    await writeFile(appIndexPath, await addScriptIntegrity(appIndex, outputDirectory));
+  } catch (error) {
+    if (!isFileMissing(error)) throw error;
+  }
   await Promise.all(publicScripts.map(async (script) => {
     let source = await readFile(join(repositoryRoot, "desarrollo-seguro", script), "utf8");
     if (script === "badge-widget.js") {
@@ -61,7 +69,12 @@ export async function buildPublicSiteAssets(outputDirectory = defaultOutputDirec
         throw new Error("badge_widget_asset_injection_failed");
       }
     }
+    if (script === "verificar.js") source = await bundleVerifierModule(source);
     await writeFile(join(publicSiteDirectory, script), source);
+  }));
+  await Promise.all(htmlPages.map(async (page) => {
+    const target = join(publicSiteDirectory, page);
+    await writeFile(target, await addScriptIntegrity(await readFile(target, "utf8"), outputDirectory));
   }));
   await Promise.all(publicAssets.map(async (asset) => {
     const source = await readFile(join(repositoryRoot, "desarrollo-seguro", asset));
@@ -69,7 +82,74 @@ export async function buildPublicSiteAssets(outputDirectory = defaultOutputDirec
     await mkdir(dirname(target), { recursive: true });
     await writeFile(target, source);
   }));
+  const scriptHashes = await collectScriptHashes([
+    ...(appIndex === null ? [] : [await readFile(appIndexPath, "utf8")]),
+    ...await Promise.all(htmlPages.map((page) => readFile(join(publicSiteDirectory, page), "utf8"))),
+  ], outputDirectory);
+  const csp = [
+    "default-src 'self'",
+    "base-uri 'self'",
+    "object-src 'none'",
+    "frame-ancestors 'none'",
+    "form-action 'self'",
+    "img-src 'self' data:",
+    "style-src 'self' 'unsafe-inline'",
+    `script-src ${[...scriptHashes].sort((left, right) => left.localeCompare(right, "en")).join(" ")} 'strict-dynamic'`,
+    "connect-src 'self'",
+  ].join("; ");
+  await writeFile(join(outputDirectory, "nginx-security-headers.conf"),
+    `add_header Content-Security-Policy \"${csp}\" always;\n`);
   return stylesheetName;
+}
+
+function isFileMissing(error) {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+}
+
+async function addScriptIntegrity(html, outputDirectory) {
+  const tags = [...html.matchAll(/<script\b([^>]*?)\bsrc=(['"])([^'"]+)\2([^>]*)>/giu)];
+  for (const match of tags.reverse()) {
+    const [tag, before, quote, source, after] = match;
+    const content = await readFile(resolveScriptPath(source, outputDirectory));
+    const integrity = `sha256-${createHash("sha256").update(content).digest("base64")}`;
+    const attributes = `${before}${after}`;
+    const crossOrigin = /\bcrossorigin(?:\s|=|$)/iu.test(attributes) ? "" : ' crossorigin="anonymous"';
+    html = `${html.slice(0, match.index)}<script${attributes} src=${quote}${source}${quote} integrity="${integrity}"${crossOrigin}>${html.slice(match.index + tag.length)}`;
+  }
+  return html;
+}
+
+async function bundleVerifierModule(source) {
+  const importStatement = 'import { verifyReportBadge } from "./badge-api.mjs";';
+  if (!source.includes(importStatement)) throw new Error("verification_module_import_missing");
+  const badgeApi = (await readFile(join(repositoryRoot, "desarrollo-seguro/badge-api.mjs"), "utf8"))
+    .replace(/^export (?=(?:const|async function) )/gmu, "");
+  return source.replace(importStatement, `const verifyReportBadge = (() => {\n${badgeApi}\n  return verifyReportBadge;\n})();`);
+}
+
+async function collectScriptHashes(htmlDocuments, outputDirectory) {
+  const hashes = new Set();
+  for (const html of htmlDocuments) {
+    const sources = [...html.matchAll(/<script\b[^>]*?\bsrc=(['"])([^'"]+)\1[^>]*>/giu)];
+    for (const [, , source] of sources) {
+      const content = await readFile(resolveScriptPath(source, outputDirectory));
+      hashes.add(`'sha256-${createHash("sha256").update(content).digest("base64")}'`);
+    }
+  }
+  if (hashes.size === 0) throw new Error("public_site_script_hashes_missing");
+  return hashes;
+}
+
+function resolveScriptPath(source, outputDirectory) {
+  const url = new URL(source, "https://desarrolloseguro.org");
+  if (url.origin !== "https://desarrolloseguro.org" || url.search || url.hash) {
+    throw new Error("public_site_script_source_invalid");
+  }
+  if (url.pathname.startsWith("/app/")) return join(outputDirectory, url.pathname.slice("/app/".length));
+  if (url.pathname.startsWith("/desarrollo-seguro/")) {
+    return join(outputDirectory, url.pathname.slice(1));
+  }
+  throw new Error("public_site_script_source_invalid");
 }
 
 function getOutputDirectory(argv) {
