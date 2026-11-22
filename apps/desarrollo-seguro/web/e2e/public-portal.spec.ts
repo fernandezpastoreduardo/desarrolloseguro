@@ -106,6 +106,9 @@ test("searches a domain and requests an authorized analysis without third-party 
 test("shows the report when an authorized analysis finishes", async ({ page }) => {
   let statusReads = 0;
   let completedResponseServed = false;
+  await page.route("**/domains/report.example/history", (route) =>
+    route.fulfill({ contentType: "application/json", body: "[]" }),
+  );
   await page.route("**/domains/report.example/status", async (route) => {
     statusReads += 1;
     const state = statusReads >= 2 ? "updating" : "not_scanned";
@@ -133,6 +136,19 @@ test("shows the report when an authorized analysis finishes", async ({ page }) =
         completedAt: "2026-11-11T00:01:00.000Z",
         expiresAt: "2026-11-11T01:01:00.000Z",
         verdict: "fail",
+        globalAssessment: {
+          policyVersion: "mvp-global-v1",
+          status: "review",
+          score: null,
+          weights: { ethics: 50, privacy: 50 },
+          ethicsCoverage: { assessedCriteria: 4, totalCriteria: 8 },
+          privacyCoverage: {
+            assessedCriteria: 1,
+            unknownCriteria: 0,
+            notApplicableCriteria: 4,
+            totalCriteria: 5,
+          },
+        },
         ethicsAssessment: {
           policyVersion: "domain-ethics-v3",
           score: 70,
@@ -157,6 +173,22 @@ test("shows the report when an authorized analysis finishes", async ({ page }) =
           reasons: [],
           interpretation:
             "No confirma conexiones ni scripts dinámicos; el rendimiento mide una respuesta inicial.",
+        },
+        privacyAssessment: {
+          policyVersion: "privacy-v1",
+          score: 100,
+          assessedCriteria: 1,
+          unknownCriteria: 0,
+          notApplicableCriteria: 4,
+          totalCriteria: 5,
+          evidence: { cookieNames: [], providers: [], domains: [] },
+          criteria: [
+            { id: "preference-before-tracking", label: "Actividad no esencial antes de elegir", status: "evaluated", weight: 30, deduction: 0, awarded: 30, confirmedFindings: 0, unknownFindings: 0 },
+            { id: "contextual-excess", label: "Exceso y redundancia contextual", status: "not_applicable", weight: 10, deduction: null, awarded: null, confirmedFindings: 0, unknownFindings: 0 },
+            { id: "choice-parity", label: "Visibilidad de aceptar y rechazar", status: "not_applicable", weight: 20, deduction: null, awarded: null, confirmedFindings: 0, unknownFindings: 0 },
+            { id: "rejection-persistence", label: "Eficacia del rechazo y persistencia", status: "not_applicable", weight: 20, deduction: null, awarded: null, confirmedFindings: 0, unknownFindings: 0 },
+            { id: "vendor-controls", label: "Controles de proveedores", status: "not_applicable", weight: 20, deduction: null, awarded: null, confirmedFindings: 0, unknownFindings: 0 },
+          ],
         },
         scope: ["/"],
         checks: [
@@ -240,10 +272,11 @@ test("shows the report when an authorized analysis finishes", async ({ page }) =
 
   await expect(page.getByRole("heading", { name: "Informe vigente" })).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Resumen y puntuación" }),
+    page.getByRole("heading", { name: "Dimensiones de evaluación" }),
   ).toBeVisible();
+  await expect(page.getByRole("img", { name: "Puntuación global: en revisión" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Ética" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Privacidad" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Privacidad" })).toHaveCount(2);
   await expect(page.getByRole("heading", { name: "Seguridad" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Rendimiento" })).toBeVisible();
   const categoryButtons = page.getByRole("button", { name: "Ver detalle" });
@@ -262,7 +295,7 @@ test("shows the report when an authorized analysis finishes", async ({ page }) =
     securityDialog.locator('.ds-portal__ethics-criteria li[data-status="unknown"] > span').first(),
   ).toHaveText("Sin datos");
   await expect(page.getByText("La conexión protege los datos")).toBeVisible();
-  await expect(page.locator(".ds-portal__score-ring")).toHaveAttribute("data-score-band", "low");
+  await expect(page.locator(".ds-portal__score-ring")).toHaveAttribute("data-score-band", "unknown");
   await expect(page.locator('.ds-portal__category-score-ring[data-score-band="low"]')).toHaveCount(1);
   await expect(page.locator('.ds-portal__category-score-ring[data-score-band="excellent"]')).toHaveCount(2);
   await expect(page.locator(".ds-portal__category-score-ring-value").first()).toHaveCSS(

@@ -6,15 +6,17 @@
 
 ## Propósito y momento
 
-Solistos se ejecuta después del cierre de Beta y antes del MVP. Reconoce con
+Solistos se incorporó después del cierre de Beta y su v1 ya está desplegada.
+Su integración en el MVP parte del runtime, evaluación, persistencia y
+presentación existentes; no reconstruye esas capacidades. Reconoce con
 evidencia positiva los sitios que no cargan tecnologías de seguimiento, aunque
 por ello no necesiten mostrar un panel de consentimiento. También identifica
 patrones observables que perjudiquen privacidad, transparencia, seguridad,
 accesibilidad o rendimiento, tanto en dominios certificados como en los demás.
 
-El estado vigente del requisito aplazado está en la sección Solistos de
-[`wanna-bes.md`](../../wanna-bes.md). La toma de requisitos v1 quedó cerrada
-con las decisiones del desarrollador resumidas en esta especificación.
+La toma de requisitos v1 y las decisiones de integración al MVP quedan
+registradas en esta especificación. Las mejoras aplazadas ajenas a Solistos
+siguen en [`wanna-bes.md`](../../wanna-bes.md).
 
 ## Decisiones confirmadas
 
@@ -39,6 +41,10 @@ con las decisiones del desarrollador resumidas en esta especificación.
 | Automatización | Playwright 1.65.0 y Chromium fijado autorizados para el worker, sujetos a aislamiento, límites y gates del repositorio. |
 | Hosts propios y terceros | El hostname solicitado y su alias `www.<hostname>` son propios; cualquier otro hostname, incluidos los demás subdominios, es tercero. Si se solicita `www`, también tratar el hostname raíz correspondiente como propio. Normalizar a minúsculas y quitar el punto DNS final antes de comparar. |
 | Persistencia de privacidad en producción | El aprovisionamiento de producción debe conceder a `ds_worker` ejecución de `ds_complete_scan_with_privacy(...)`, revocar la función de finalización legacy que no guarda la evaluación, y probar ambos permisos con roles PostgreSQL reales. Así un informe válido y su nota de Privacidad se guardan en la misma transacción y con privilegio mínimo. |
+| Integración en la puntuación del MVP | Combinar la puntuación ética vigente (`domain-ethics-v3`) y `privacy-v1` con peso 50 % cada una y redondear al entero más cercano. Mantener ambas notas y sus criterios visibles por separado. Solo calcular la global cuando ambas evaluaciones tengan score y no haya criterios `unknown`; `not_applicable` no bloquea el cálculo porque ya se excluye del denominador de su dimensión. |
+| Error de cobertura del auditor | Si un error de Chromium, proxy o runtime deja criterios `unknown`, el estado global es «En revisión» y se muestran las dimensiones por separado, sin cifra global combinada. No atribuir el error al dominio ni cambiar la certificación. |
+| Desconocimiento atribuible al sitio | Si la evaluación pudo inspeccionar la interfaz y aun así no identifica un rechazo utilizable/paritario, registrar incumplimiento en Privacidad y penalizar con `privacy-v1`; no convertir la opacidad en `unknown`. |
+| Alcance de certificación | La integración y la puntuación combinada no alteran los gates, estado, concesión ni suspensión del sello; la independencia de certificación acordada para Solistos sigue vigente. |
 
 ## Límites de comportamiento
 
@@ -69,8 +75,23 @@ con las decisiones del desarrollador resumidas en esta especificación.
   método/alcance los bloquee. Diferenciar intento, conexión completada y
   respuesta observada; un intento abortado no acredita que se entregara dato.
 - Si un presupuesto se agota, una regla no es concluyente o el navegador no
-  puede observar un control, marcar la parte afectada `unknown`/`partial`, no
-  inferir ausencia ni penalizarla.
+  puede observar un control por un fallo atribuible al auditor (por ejemplo,
+  caída de Chromium, proxy o runtime), marcar la parte afectada `unknown`/
+  `partial`, sin penalización y con cobertura explícita. Los topes v1 aprobados
+  siguen siendo límites del auditor: lo que quede sin ejecutar al alcanzarlos
+  permanece `unknown`.
+- No clasificar como `unknown` la opacidad del sitio cuando el navegador y sus
+  instrumentos de inspección funcionan y han cubierto la interfaz mostrada. Si
+  en esas condiciones no se identifica una acción utilizable de rechazo en la
+  primera capa, o no se puede comprobar su visibilidad y número de acciones,
+  evaluar el criterio como incumplido y aplicar la penalización versionada.
+  También es incumplimiento confirmado que el sitio oculte, deshabilite o
+  impida usar el rechazo mientras aceptar sí está disponible. Reservar
+  `unknown` para errores o límites del propio auditor que impidan obtener la
+  evidencia, no para ausencia, opacidad o fricción observada en el sitio.
+- Cuando un fallo del auditor deje criterios `unknown`, el estado global del
+  análisis queda `En revisión`; el fallo no se atribuye al dominio ni cambia el
+  estado de certificación.
 - No persistir HTML, texto completo del sitio, capturas, trazas, HAR, cuerpos,
   valores de cookies, identificadores, IP de usuario ni datos de formularios.
   Persistir solo evidencia acotada y necesaria: nombres y dominios observados,
@@ -133,8 +154,16 @@ conformidad WCAG.
 - Una cookie, clave de almacenamiento o solicitud clasificada como no esencial
   antes de elegir queda enumerada en el informe con evidencia reproducible y
   reduce la nota según la regla/peso aplicable.
-- Una coincidencia ambigua, bloqueo técnico, destino no evaluable o presupuesto
-  agotado queda `unknown`/`partial` y no causa penalización confirmada.
+- Una coincidencia ambigua, fallo técnico del auditor, destino no evaluable por
+  el límite de egress aprobado o presupuesto agotado queda `unknown`/`partial`
+  y no causa penalización confirmada.
+- Si el navegador funciona y ha inspeccionado la interfaz de consentimiento,
+  pero no encuentra un rechazo utilizable en primera capa, el criterio de
+  paridad se evalúa como incumplido y penaliza. La opacidad del sitio no se
+  convierte en `unknown`.
+- Si una avería de Chromium, proxy o runtime impide obtener evidencia, la parte
+  afectada queda `unknown` y el resultado global queda «En revisión», sin
+  tratar esa falta de evidencia como un incumplimiento del dominio.
 - Rechazar todo es accesible desde la primera vista con visibilidad equivalente
   y el mismo número de acciones que aceptar todo. La recarga mantiene la elección
   y no revive señales rechazadas; cualquier diferencia observada queda listada.
@@ -261,43 +290,43 @@ fuente/revisión para que pueda corregirse.
 
 ## Secuencia de cambios
 
-El objetivo cubre la fase completa y autoriza ejecutar esta secuencia en cambios
-pequeños y revisables. No desplegar Grumphya ni cambiar su código.
+La implementación operativa de Solistos v1 ya está desplegada. El objetivo de
+integración con el MVP autoriza completar solo las brechas que falten, en
+cambios pequeños y revisables. No desplegar Grumphya ni cambiar su código.
 
-1. Cerrar este documento y el contrato versionado del rubric, umbrales, evidence
-   schema, alcance y límites.
-2. Implementar el browser runner dedicado, contención y broker de egress con
-   límites compartidos; demostrar ataques SSRF, DNS rebinding, redirecciones,
-   métodos y cuotas en laboratorio.
-3. Capturar evidencia de carga inicial y local knowledge matching, con
-   allowlist de datos y procedencia versionada.
-4. Implementar detección del diálogo, conteo de acciones/visibilidad, flujos de
-   aceptar/rechazar, recarga y controles individuales relevantes; probar el
-   recorrido en Chromium real contra un fixture servido por rutas locales y
-   sin red.
-5. Añadir evaluación y persistencia versionadas sin alterar certificación;
-   migrar de forma aditiva y cubrir compatibilidad histórica.
-6. Presentar la nota y los hallazgos por categoría en los informes públicos con
-   la proyección acotada acordada y controles accesibles.
-7. Añadir documentación humana en `doc/`, quitar de `wanna-bes.md` lo ya
-   implementado, pasar SonarQube y las pruebas de laboratorio Lighthouse con los
-   umbrales vigentes y ejecutar los gates CI/deploy autorizados.
+1. Mantener rubric, umbrales, browser runtime, aislamiento, egress, catálogo,
+   evaluación `privacy-v1` y persistencia desplegados; no duplicarlos ni abrir
+   una nueva fase de observación.
+2. Añadir a los contratos/API/UI el score compuesto versionado 50/50,
+   redondeado al entero más cercano,
+   cobertura y estado de revisión, conservando `ethicsAssessment` y
+   `privacyAssessment` como dimensiones independientes y legibles.
+3. En errores propios del auditor con criterios `unknown`, mostrar notas y
+   coberturas por dimensión, estado «En revisión» y ningún score combinado.
+   Con cobertura evaluable, calcular el total solo cuando ambas puntuaciones
+   existan; ningún caso modifica certificación.
+4. Preservar la interpretación de informes históricos que no contienen
+   `privacyAssessment`; no fabricarles una puntuación Solistos ni reutilizar la
+   nota ética como si fuera combinada.
+5. Verificar fórmula, cobertura, estados de revisión y compatibilidad histórica
+   en core/API/UI. Actualizar `doc/`, retirar de `wanna-bes.md` lo implementado,
+   pasar SonarQube, Lighthouse de laboratorio con sus umbrales vigentes y los
+   gates CI/deploy autorizados.
 
 ## Notas del contrato actual para el plan
 
-La inspección del código vigente confirma que el informe persiste resultados
-allowlisted en `ds_check_results`; la API deriva `ethicsAssessment` de esos
-checks, y el portal mantiene su tipo/tabla `REPORT_CATEGORIES` local. La versión
-actual se identifica como `domain-ethics-v3` y describe Privacidad como lectura
-de cookies iniciales sin interacción. La certificación Beta usa su propio
-conjunto de controles.
+La inspección del código vigente confirma que Solistos ya ejecuta Chromium
+aislado, deriva `privacy-v1`, persiste `privacyAssessment` en paralelo con el
+informe y lo muestra en el portal. La API deriva `ethicsAssessment` desde los
+checks del perfil `domain-v3`; el score ético actual se presenta como si fuera
+global. La brecha del MVP es formalizar y exponer el agregado 50/50 sin ocultar
+las dimensiones, así como su estado «En revisión» y la ausencia de global
+combinado durante errores propios del auditor.
 
-Por tanto, el plan deberá añadir una política versionada nueva y una evaluación
-`privacyAssessment` independiente en core/API/contrato público/UI, ampliar
-evidencia y categorías del perfil de escaneo, mantener inmutables los informes
-anteriores y demostrar que los controles nuevos no se incorporan por accidente
-a las puertas del sello. No se debe reutilizar ni renombrar `ethicsAssessment`
-para ocultar la cobertura anterior.
+La certificación Beta usa un conjunto separado de controles. Los cambios del
+agregado deben demostrar que no se incorporan por accidente a las puertas del
+sello. Los informes históricos que carecen de `privacyAssessment` mantienen su
+significado anterior y no reciben una puntuación combinada retroactiva.
 
 El runtime efímero actual mantiene separado el coordinador, el executor
 estático y el broker. El executor/browserless corre con `network none`, 256 MiB,

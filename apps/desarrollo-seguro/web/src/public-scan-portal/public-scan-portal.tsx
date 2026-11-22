@@ -180,6 +180,19 @@ type PublicReport = {
   completedAt: string;
   expiresAt: string;
   verdict: ScanVerdict;
+  globalAssessment: {
+    policyVersion: "mvp-global-v1";
+    status: "scored" | "review" | "not_available";
+    score: number | null;
+    weights: { ethics: 50; privacy: 50 };
+    ethicsCoverage: { assessedCriteria: number; totalCriteria: number };
+    privacyCoverage: {
+      assessedCriteria: number;
+      unknownCriteria: number;
+      notApplicableCriteria: number;
+      totalCriteria: number;
+    } | null;
+  };
   ethicsAssessment: {
     policyVersion: "domain-ethics-v3";
     score: number | null;
@@ -250,6 +263,7 @@ type PublicReportHistoryEntry = {
   completedAt: string;
   expiresAt: string;
   verdict: ScanVerdict;
+  globalAssessment: PublicReport["globalAssessment"];
   score: number | null;
   assessedCriteria: number;
   totalCriteria: number;
@@ -952,16 +966,18 @@ function ReportSummary({
       <section className="ds-portal__ethics" aria-labelledby="ethics-summary-heading">
         <div className="ds-portal__score-lead">
           <div className="ds-portal__score-copy">
-            <p className="ds-portal__eyebrow">Resumen del dominio</p>
-            <h3 id="ethics-summary-heading">Resumen y puntuación</h3>
-            <p className="ds-portal__ethics-score">
-              {report.ethicsAssessment.score === null
-                ? `Sin puntuación: faltan controles observables · ${report.ethicsAssessment.assessedCriteria} de ${report.ethicsAssessment.totalCriteria} criterios evaluados`
-                : `${report.ethicsAssessment.score}/100${report.ethicsAssessment.assessedCriteria < report.ethicsAssessment.totalCriteria ? " · provisional" : ""} · ${report.ethicsAssessment.assessedCriteria} de ${report.ethicsAssessment.totalCriteria} criterios evaluados`}
-            </p>
+            <p className="ds-portal__eyebrow">Puntuación global · MVP 50/50</p>
+            <h3 id="ethics-summary-heading">Dimensiones de evaluación</h3>
+            <p className="ds-portal__ethics-score">{getGlobalScoreSummary(report)}</p>
           </div>
-          <GlobalScoreRing score={report.ethicsAssessment.score} />
+          <GlobalScoreRing score={report.globalAssessment.score} status={report.globalAssessment.status} />
         </div>
+        <p className="ds-portal__ethics-score">
+          <strong>Ética · 50 %</strong><br />
+          {report.ethicsAssessment.score === null
+            ? `Sin nota · ${report.ethicsAssessment.assessedCriteria} de ${report.ethicsAssessment.totalCriteria} criterios evaluados`
+            : `${report.ethicsAssessment.score}/100 · ${report.ethicsAssessment.assessedCriteria} de ${report.ethicsAssessment.totalCriteria} criterios evaluados`}
+        </p>
         <BetaEvaluationCharts criteria={report.ethicsAssessment.criteria} />
         <div className="ds-portal__report-categories">
           {REPORT_CATEGORIES.map((category) => {
@@ -1030,7 +1046,7 @@ function ReportSummary({
       </section>
       {report.privacyAssessment && (
         <section className="ds-portal__privacy" aria-labelledby="privacy-summary-heading">
-          <p className="ds-portal__eyebrow">Dimensión independiente</p>
+          <p className="ds-portal__eyebrow">Dimensión independiente · 50 % de la global</p>
           <h3 id="privacy-summary-heading">Privacidad</h3>
           <p>
             {report.privacyAssessment.score === null
@@ -1120,8 +1136,10 @@ function ReportHistory({
           <li key={entry.id} data-current={entry.id === currentReportId}>
             <a href={`?report=${encodeURIComponent(entry.id)}`}>
               <span>{formatDate(entry.completedAt)}</span>
-              <strong>{entry.score === null ? "Sin puntuación" : `${entry.score}/100`}</strong>
-              <small>{entry.profileVersion} · {getHistoryVerdictLabel(entry.verdict)}</small>
+              <strong>{getHistoryGlobalScoreLabel(entry.globalAssessment)}</strong>
+              <small>
+                {entry.profileVersion} · Ética {entry.score === null ? "sin nota" : `${entry.score}/100`} · {getHistoryVerdictLabel(entry.verdict)}
+              </small>
             </a>
           </li>
         ))}
@@ -1168,16 +1186,18 @@ function useRevealOnView<T extends HTMLElement>() {
   return { ref, isVisible };
 }
 
-function GlobalScoreRing({ score }: { score: number | null }) {
+function GlobalScoreRing({ score, status }: { score: number | null; status: PublicReport["globalAssessment"]["status"] }) {
   const { ref, isVisible } = useRevealOnView<HTMLElement>();
   const value = score ?? 0;
   const radius = 52;
   const circumference = 2 * Math.PI * radius;
   const progress = Math.min(100, Math.max(0, value));
   const accessibleLabel =
-    score === null
-      ? "Puntuación global: sin puntuación"
-      : `Puntuación global: ${score} de 100 puntos`;
+    status === "review"
+      ? "Puntuación global: en revisión"
+      : status === "not_available"
+        ? "Puntuación global: no disponible en este informe"
+        : `Puntuación global: ${score} de 100 puntos`;
 
   return (
     <section
@@ -1564,6 +1584,7 @@ function isPublicReport(value: unknown): value is PublicReport {
     !isOneOf(value.verdict, SCAN_VERDICTS) ||
     !isEthicsAssessment(value.ethicsAssessment) ||
     !isPrivacyAssessment(value.privacyAssessment) ||
+    !isGlobalAssessment(value.globalAssessment) ||
     !isPublicCertification(value.certification) ||
     !Array.isArray(value.checks) ||
     value.checks.length === 0 ||
@@ -1572,6 +1593,11 @@ function isPublicReport(value: unknown): value is PublicReport {
   ) {
     return false;
   }
+  if (!isGlobalAssessmentConsistent(
+    value.globalAssessment as PublicReport["globalAssessment"],
+    value.ethicsAssessment as PublicReport["ethicsAssessment"],
+    value.privacyAssessment as PublicReport["privacyAssessment"],
+  )) return false;
   if (!isScope(value.scope)) return false;
   const scope = value.scope;
   const checkKeys = value.checks.map(
@@ -1625,6 +1651,44 @@ function isPrivacyAssessment(value: unknown): value is NonNullable<PublicReport[
     value.criteria.filter((item) => isRecord(item) && item.status === "not_applicable").length === value.notApplicableCriteria;
 }
 
+function isGlobalAssessment(value: unknown): value is PublicReport["globalAssessment"] {
+  if (!isRecord(value) || value.policyVersion !== "mvp-global-v1" ||
+      !isOneOf(value.status, ["scored", "review", "not_available"] as const) ||
+      (value.score !== null && (!isInteger(value.score) || value.score < 0 || value.score > 100)) ||
+      !isRecord(value.weights) || value.weights.ethics !== 50 || value.weights.privacy !== 50 ||
+      !isRecord(value.ethicsCoverage) || !isInteger(value.ethicsCoverage.assessedCriteria) ||
+      !isInteger(value.ethicsCoverage.totalCriteria) ||
+      !(value.privacyCoverage === null || isRecord(value.privacyCoverage) &&
+        isInteger(value.privacyCoverage.assessedCriteria) &&
+        isInteger(value.privacyCoverage.unknownCriteria) &&
+        isInteger(value.privacyCoverage.notApplicableCriteria) &&
+        isInteger(value.privacyCoverage.totalCriteria))) return false;
+  if (value.status === "scored") return value.score !== null && value.privacyCoverage !== null;
+  return value.score === null;
+}
+
+function isGlobalAssessmentConsistent(
+  global: PublicReport["globalAssessment"],
+  ethics: PublicReport["ethicsAssessment"],
+  privacy: PublicReport["privacyAssessment"],
+): boolean {
+  if (global.ethicsCoverage.assessedCriteria !== ethics.assessedCriteria ||
+      global.ethicsCoverage.totalCriteria !== ethics.totalCriteria) return false;
+  if (privacy === null || privacy === undefined) {
+    return global.status === "not_available" && global.score === null && global.privacyCoverage === null;
+  }
+  const coverage = global.privacyCoverage;
+  if (coverage === null || coverage.assessedCriteria !== privacy.assessedCriteria ||
+      coverage.unknownCriteria !== privacy.unknownCriteria ||
+      coverage.notApplicableCriteria !== privacy.notApplicableCriteria ||
+      coverage.totalCriteria !== privacy.totalCriteria) return false;
+  const complete = ethics.score !== null && ethics.assessedCriteria === ethics.totalCriteria &&
+    privacy.score !== null && privacy.unknownCriteria === 0 &&
+    privacy.assessedCriteria + privacy.notApplicableCriteria === privacy.totalCriteria;
+  if (!complete) return global.status === "review" && global.score === null;
+  return global.status === "scored" && global.score === Math.round((ethics.score! + privacy.score!) / 2);
+}
+
 function isEvidenceNames(value: unknown, maxLength: number): value is string[] {
   return Array.isArray(value) && value.length <= 100 && value.every((item) =>
     typeof item === "string" && item.length > 0 && item.length <= maxLength && isCleanEvidenceText(item),
@@ -1649,6 +1713,7 @@ function isPublicReportHistory(value: unknown): value is PublicReportHistoryEntr
       isIsoTimestamp(entry.completedAt) &&
       isIsoTimestamp(entry.expiresAt) &&
       isOneOf(entry.verdict, SCAN_VERDICTS) &&
+      isGlobalAssessment(entry.globalAssessment) &&
       (entry.score === null || (isInteger(entry.score) && entry.score >= 0 && entry.score <= 100)) &&
       isInteger(entry.assessedCriteria) && entry.assessedCriteria >= 0 &&
       isInteger(entry.totalCriteria) && entry.totalCriteria > 0 &&
@@ -2040,6 +2105,21 @@ function getControlLabel(controlId: string): string {
 
 function getHistoryVerdictLabel(verdict: ScanVerdict): string {
   return VERDICT_LABELS[verdict] ?? "Resultado no concluyente";
+}
+
+function getGlobalScoreSummary(report: PublicReport): string {
+  if (report.globalAssessment.status === "scored") {
+    return `${report.globalAssessment.score}/100 · 50 % Ética + 50 % Privacidad`;
+  }
+  if (report.globalAssessment.status === "review") {
+    return "En revisión · se muestran por separado las notas y la cobertura de cada dimensión";
+  }
+  return "Sin nota global · este informe no incluye una evaluación de Privacidad";
+}
+
+function getHistoryGlobalScoreLabel(assessment: PublicReportHistoryEntry["globalAssessment"]): string {
+  if (assessment.status === "scored") return `Global ${assessment.score}/100`;
+  return assessment.status === "review" ? "En revisión" : "Sin nota global";
 }
 
 function formatEvidenceValue(value: string | number | boolean, key: string): string {

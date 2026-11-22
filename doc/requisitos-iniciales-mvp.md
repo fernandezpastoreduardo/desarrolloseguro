@@ -1,7 +1,7 @@
 # Toma de requisitos inicial — Desarrollo Seguro
 
-> **Estado:** documento inicial de producto, 17 de noviembre de 2026.  
-> **Naturaleza:** decisiones de alcance y comportamiento acordadas en conversación. **No** demuestra que las funcionalidades estén implementadas, que exista una certificación operativa ni que se hayan superado controles.  
+> **Estado:** requisitos acordados, actualizados el 22 de noviembre de 2026.
+> **Naturaleza:** decisiones de alcance y comportamiento acordadas en conversación. **No** demuestra que las funcionalidades estén implementadas, que exista una certificación operativa ni que se hayan superado controles.
 > **Ámbito:** MVP y evolución posterior. Especificaciones técnicas, criterios de aceptación y requisitos normativos concretos deberán desarrollarse antes de implementar cada capacidad.
 
 ## 1. Propósito y principios
@@ -48,6 +48,31 @@ Si una integración desconocida afecta a parte de la evaluación:
 - Una aplicación **previamente certificada** conservará provisionalmente su sello mientras se investiga una integración desconocida, **siempre que no se haya acreditado un incumplimiento eliminatorio**. Si se confirma un incumplimiento crítico que invalida la certificación, el sello deberá suspenderse.
 
 Los criterios exactos para calificar un incumplimiento como eliminatorio y los requisitos de concesión inicial deberán formalizarse por separado.
+
+### 2.5 Solistos v1 y puntuación global del MVP
+
+Solistos v1 ya está desplegada y forma parte del alcance del MVP. El MVP
+reutiliza su navegador aislado, catálogo local, límites, evidencia,
+`privacy-v1`, persistencia y presentación; no crea un segundo análisis de
+consentimiento.
+
+- `domain-ethics-v3` y `privacy-v1` son dimensiones distintas y ambas notas se
+  muestran por separado con su cobertura.
+- La puntuación global `mvp-global-v1` combina Ética 50 % y Privacidad 50 %; se
+  redondea al entero más cercano. La fórmula solo produce una cifra global
+  cuando las dos dimensiones tienen puntuación y no contienen criterios
+  `unknown`. Los criterios `not_applicable` no bloquean el cálculo.
+- Si falta evidencia por un error del auditor, el análisis queda «En revisión»:
+  se conservan y muestran las notas y coberturas por dimensión y se oculta la
+  cifra global combinada hasta resolver el error. No se atribuye el fallo al
+  dominio.
+- Si el auditor funciona y no puede identificar o verificar en la interfaz del
+  sitio un rechazo utilizable con la misma visibilidad y pasos que aceptar,
+  Solistos lo registra como incumplimiento confirmado y aplica la penalización
+  publicada de `privacy-v1`; no lo trata como `unknown` por opacidad.
+- Solistos y la puntuación global no conceden, bloquean ni suspenden el sello.
+- Un informe histórico sin `privacyAssessment` conserva su resultado anterior y
+  no recibe una nota global combinada inventada.
 
 ### 2.3 Investigación de tecnologías desconocidas
 

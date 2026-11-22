@@ -1,4 +1,5 @@
 import { BadRequestException } from "@nestjs/common";
+import { assessPrivacy } from "@desarrolloseguro/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PublicScanService } from "./public-scan.service.js";
 
@@ -29,6 +30,11 @@ describe("PublicScanService", () => {
         id: REPORT_ID,
         hostname: "example.com",
         profileVersion: "controls-v3",
+        globalAssessment: expect.objectContaining({
+          policyVersion: "mvp-global-v1",
+          status: "not_available",
+          score: null,
+        }),
         score: null,
         assessedCriteria: 0,
         totalCriteria: 8,
@@ -501,6 +507,57 @@ describe("PublicScanService", () => {
     });
   });
 
+  it("publishes the equal-weight MVP score only when both dimensions have full coverage", async () => {
+    const controlIds = [
+      "DS-DNS-01", "DS-TLS-01", "DS-TLS-02", "DS-HTTP-01", "DS-HDR-01",
+      "DS-PRIV-04", "DS-PRIV-05", "DS-PRIV-06", "DS-QUAL-02",
+    ];
+    const checks = controlIds.map((controlId) => ({
+      controlId,
+      status: "pass",
+      required: true,
+      severity: "high",
+      observedAt: new Date("2026-11-03T10:00:30.000Z"),
+      targetPath: "/",
+      method: "GET",
+      summary: `${controlId} pass`,
+      limitation: "Observed public control.",
+      evidence: {},
+    }));
+    const privacyAssessment = assessPrivacy({
+      criteria: [
+        "preference-before-tracking", "contextual-excess", "choice-parity",
+        "rejection-persistence", "vendor-controls",
+      ].map((id) => ({ id, status: "evaluated", findings: [] })),
+      evidence: { cookieNames: [], providers: [], domains: [] },
+    });
+    const report = makeReport({ checks, privacyAssessment });
+    const service = new PublicScanService({
+      scanStore: {
+        readPublicDomainSnapshot: vi.fn(),
+        readPublicReport: vi.fn().mockResolvedValue(report),
+      },
+    });
+
+    await expect(service.getReport(REPORT_ID)).resolves.toMatchObject({
+      globalAssessment: {
+        policyVersion: "mvp-global-v1",
+        status: "scored",
+        score: 100,
+        weights: { ethics: 50, privacy: 50 },
+        ethicsCoverage: { assessedCriteria: 8, totalCriteria: 8 },
+        privacyCoverage: {
+          assessedCriteria: 5,
+          unknownCriteria: 0,
+          notApplicableCriteria: 0,
+          totalCriteria: 5,
+        },
+      },
+      ethicsAssessment: { score: 100 },
+      privacyAssessment: { score: 100 },
+    });
+  });
+
   it.each([
     { expiresAt: "2026-11-03T10:00:00.001Z", expectedState: "fresh" },
     { expiresAt: "2026-11-03T10:00:00.000Z", expectedState: "stale" },
@@ -663,6 +720,7 @@ describe("PublicScanService", () => {
         "completedAt",
         "expiresAt",
         "verdict",
+        "globalAssessment",
         "ethicsAssessment",
         "privacyAssessment",
         "betaCertification",

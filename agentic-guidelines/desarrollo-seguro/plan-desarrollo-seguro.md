@@ -56,7 +56,9 @@ La etapa D queda aceptada para el alcance contractual `beta-d-0.2`: el smoke
 autenticado de producción posterior al despliegue `6981d16` verificó las siete
 rutas, 14/14 criterios y `internalScore=100`, manteniendo `externalScore=null`
 y sin alterar certificación, sello ni datos públicos. Una ampliación de
-criterios debe versionar el contrato y repetir la validación; no se puede
-convertir esta puntuación interna en la puntuación global del MVP.
+criterios debe versionar el contrato y repetir la validación. `internalScore`
+permanece separado de la puntuación pública `mvp-global-v1`, que combina
+únicamente `domain-ethics-v3` y `privacy-v1` con peso 50/50; no se debe convertir
+ni sumar el score de D a esa puntuación.
 
 Cada entrega debe incluir pruebas que expresen el contrato, revisión de seguridad y cambios coordinados en [features.md](features.md), [controls-and-evidence.md](controls-and-evidence.md) y [test-plan.md](test-plan.md). Si una puerta falla, el resultado permanece no evaluable y no se publica un `pass`.

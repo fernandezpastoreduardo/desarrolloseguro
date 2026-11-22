@@ -23,6 +23,14 @@ const PUBLIC_REPORT = {
   completedAt: "2026-11-03T07:01:00.000Z",
   expiresAt: "2026-11-03T08:01:00.000Z",
   verdict: "inconclusive",
+  globalAssessment: {
+    policyVersion: "mvp-global-v1",
+    status: "not_available",
+    score: null,
+    weights: { ethics: 50, privacy: 50 },
+    ethicsCoverage: { assessedCriteria: 1, totalCriteria: 8 },
+    privacyCoverage: null,
+  },
   ethicsAssessment: {
     policyVersion: "domain-ethics-v3",
     score: 100,
@@ -57,6 +65,48 @@ const PUBLIC_REPORT = {
       evidence: { hsts: true, nosniff: true, csp: false },
     },
   ],
+};
+const SCORED_PUBLIC_REPORT = {
+  ...PUBLIC_REPORT,
+  globalAssessment: {
+    policyVersion: "mvp-global-v1",
+    status: "scored",
+    score: 90,
+    weights: { ethics: 50, privacy: 50 },
+    ethicsCoverage: { assessedCriteria: 8, totalCriteria: 8 },
+    privacyCoverage: {
+      assessedCriteria: 3,
+      unknownCriteria: 0,
+      notApplicableCriteria: 2,
+      totalCriteria: 5,
+    },
+  },
+  ethicsAssessment: {
+    ...PUBLIC_REPORT.ethicsAssessment,
+    score: 100,
+    assessedCriteria: 8,
+    maturity: "broad",
+    criteria: PUBLIC_REPORT.ethicsAssessment.criteria.map((criterion) => ({
+      ...criterion,
+      status: "pass",
+    })),
+  },
+  privacyAssessment: {
+    policyVersion: "privacy-v1",
+    score: 80,
+    assessedCriteria: 3,
+    unknownCriteria: 0,
+    notApplicableCriteria: 2,
+    totalCriteria: 5,
+    evidence: { cookieNames: [], providers: [], domains: [] },
+    criteria: [
+      { id: "preference-before-tracking", label: "Actividad no esencial antes de elegir", status: "evaluated", weight: 30, deduction: 6, awarded: 24, confirmedFindings: 1, unknownFindings: 0 },
+      { id: "contextual-excess", label: "Exceso y redundancia contextual", status: "not_applicable", weight: 10, deduction: null, awarded: null, confirmedFindings: 0, unknownFindings: 0 },
+      { id: "choice-parity", label: "Visibilidad de aceptar y rechazar", status: "evaluated", weight: 20, deduction: 8, awarded: 12, confirmedFindings: 1, unknownFindings: 0 },
+      { id: "rejection-persistence", label: "Eficacia del rechazo y persistencia", status: "evaluated", weight: 20, deduction: 0, awarded: 20, confirmedFindings: 0, unknownFindings: 0 },
+      { id: "vendor-controls", label: "Controles de proveedores", status: "not_applicable", weight: 20, deduction: null, awarded: null, confirmedFindings: 0, unknownFindings: 0 },
+    ],
+  },
 };
 
 describe("PublicScanPortal", () => {
@@ -220,6 +270,7 @@ describe("PublicScanPortal", () => {
           completedAt: PUBLIC_REPORT.completedAt,
           expiresAt: PUBLIC_REPORT.expiresAt,
           verdict: PUBLIC_REPORT.verdict,
+          globalAssessment: PUBLIC_REPORT.globalAssessment,
           score: PUBLIC_REPORT.ethicsAssessment.score,
           assessedCriteria: PUBLIC_REPORT.ethicsAssessment.assessedCriteria,
           totalCriteria: PUBLIC_REPORT.ethicsAssessment.totalCriteria,
@@ -239,7 +290,7 @@ describe("PublicScanPortal", () => {
     expect(await screen.findByText("Histórico")).toBeVisible();
     expect(screen.getByRole("heading", { name: "Historial de observaciones" })).toBeVisible();
     expect(screen.getByText("1 informe")).toBeVisible();
-    expect(screen.getByRole("heading", { name: "Resumen y puntuación" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Dimensiones de evaluación" })).toBeVisible();
     const categoryButtons = screen.getAllByRole("button", { name: "Ver detalle" });
     expect(categoryButtons).toHaveLength(4);
     await user.click(categoryButtons[2]);
@@ -253,13 +304,12 @@ describe("PublicScanPortal", () => {
     expect(screen.getByText(/no hay evidencia verificable sobre reutilización o venta/i)).toBeVisible();
     await user.click(screen.getByRole("button", { name: "Cerrar detalle" }));
     await user.click(categoryButtons[2]);
-    expect(screen.getByText("100/100 · provisional · 1 de 8 criterios evaluados")).toBeVisible();
+    expect(screen.getByText(/100\/100.*1 de 8 criterios evaluados/u)).toBeVisible();
     expect(screen.getByText(/solo se calcula con los criterios evaluados/i)).toBeVisible();
     expect(screen.getByText("No se detectaron problemas en 1 aspecto evaluado. 7 aspectos aún no tienen datos."))
       .toBeVisible();
     expect(screen.getByText("100/100 provisional · 1 de 4 aspectos evaluados"))
       .toBeVisible();
-    expect(screen.getByText(/provisional · 1 de 8 criterios evaluados/i)).toBeVisible();
     expect(screen.getAllByText(/qué significa:/i)).toHaveLength(4);
     expect(screen.getAllByText("Sin datos suficientes").length).toBeGreaterThan(0);
     expect(screen.getByText(/origen indicado en el registro/i)).toBeVisible();
@@ -267,8 +317,9 @@ describe("PublicScanPortal", () => {
     expect(screen.getByRole("heading", { name: "Ética" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Rendimiento" })).toBeVisible();
     expect(screen.getByRole("region", { name: "Niveles de evaluación" })).toBeVisible();
-    expect(screen.getByRole("img", { name: "Puntuación global: 100 de 100 puntos" })).toBeVisible();
-    expect(document.querySelector(".ds-portal__score-ring")).toHaveAttribute("data-score-band", "excellent");
+    expect(screen.getByRole("img", { name: "Puntuación global: no disponible en este informe" })).toBeVisible();
+    expect(screen.getByText("Sin nota global · este informe no incluye una evaluación de Privacidad")).toBeVisible();
+    expect(document.querySelector(".ds-portal__score-ring")).toHaveAttribute("data-score-band", "unknown");
     expect(document.querySelectorAll('.ds-portal__category-score-ring[data-score-band="excellent"]')).toHaveLength(1);
     expect(screen.getByRole("img", { name: "Ética: sin puntuación; 0 de 2 aspectos evaluados" })).toBeVisible();
     expect(screen.getByRole("img", { name: "Privacidad: sin puntuación; 0 de 1 aspectos evaluados" })).toBeVisible();
@@ -283,7 +334,7 @@ describe("PublicScanPortal", () => {
     expect(screen.getByText(/faltaba.*política de contenido CSP/i)).toBeVisible();
     expect(screen.getByText("Ver evidencias técnicas (1 comprobación)")).toBeVisible();
 
-    const summary = screen.getByRole("heading", { name: "Resumen y puntuación" });
+    const summary = screen.getByRole("heading", { name: "Dimensiones de evaluación" });
     const detail = screen.getByRole("heading", { name: "Alcance observado" });
     expect(
       summary.compareDocumentPosition(detail) & Node.DOCUMENT_POSITION_FOLLOWING,
@@ -296,12 +347,18 @@ describe("PublicScanPortal", () => {
     [89, "good"],
     [90, "excellent"],
   ] as const)("assigns score %s to the %s visual band", async (score, band) => {
+    const ethicsScore = score * 2 - SCORED_PUBLIC_REPORT.privacyAssessment.score;
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
         Response.json({
-          ...PUBLIC_REPORT,
-          ethicsAssessment: { ...PUBLIC_REPORT.ethicsAssessment, score },
+          ...SCORED_PUBLIC_REPORT,
+          globalAssessment: {
+            ...SCORED_PUBLIC_REPORT.globalAssessment,
+            status: "scored",
+            score,
+          },
+          ethicsAssessment: { ...SCORED_PUBLIC_REPORT.ethicsAssessment, score: ethicsScore },
         }),
       ),
     );
@@ -314,6 +371,46 @@ describe("PublicScanPortal", () => {
       "data-score-band",
       band,
     );
+  });
+
+  it("shows separate dimension scores and no combined number while the global score is under review", async () => {
+    const reviewReport = {
+      ...SCORED_PUBLIC_REPORT,
+      globalAssessment: {
+        ...SCORED_PUBLIC_REPORT.globalAssessment,
+        status: "review",
+        score: null,
+        privacyCoverage: {
+          assessedCriteria: 3,
+          unknownCriteria: 1,
+          notApplicableCriteria: 1,
+          totalCriteria: 5,
+        },
+      },
+      privacyAssessment: {
+        ...SCORED_PUBLIC_REPORT.privacyAssessment,
+        unknownCriteria: 1,
+        notApplicableCriteria: 1,
+        criteria: SCORED_PUBLIC_REPORT.privacyAssessment.criteria.map((criterion) =>
+          criterion.id === "contextual-excess"
+            ? { ...criterion, status: "unknown", deduction: null, awarded: null }
+            : criterion.id === "vendor-controls"
+              ? { ...criterion, status: "not_applicable" }
+              : criterion,
+        ),
+      },
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(reviewReport)));
+    window.history.replaceState({}, "", `/?report=${REPORT_ID}`);
+
+    render(<PublicScanPortal />);
+
+    expect(await screen.findByRole("img", { name: "Puntuación global: en revisión" })).toBeVisible();
+    expect(screen.getByText(/en revisión · se muestran por separado/i)).toBeVisible();
+    expect(screen.getByText("Ética · 50 %")).toBeVisible();
+    expect(screen.getByText(/100\/100.*8 de 8 criterios evaluados/iu)).toBeVisible();
+    expect(screen.getByText(/80\/100.*3 de 5 criterios evaluados.*1 desconocidos.*1 no aplican/iu)).toBeVisible();
+    expect(screen.queryByText("90/100 · 50 % Ética + 50 % Privacidad")).toBeNull();
   });
 
   it("lets an authorized user request a fresh analysis when a historical report exists", async () => {
@@ -438,7 +535,7 @@ describe("PublicScanPortal", () => {
 
   it("accepts and labels a transport-v1 report", async () => {
     const transportReport = {
-      ...PUBLIC_REPORT,
+          ...SCORED_PUBLIC_REPORT,
       profileVersion: "transport-v1",
       checks: [
         {
@@ -483,6 +580,10 @@ describe("PublicScanPortal", () => {
           { id: "performance", label: "Rendimiento", status: "unknown", weight: 5 },
         ],
         reasons: ["Cookies conocidas en la respuesta inicial: el control observado presenta fallos."],
+      },
+      globalAssessment: {
+        ...PUBLIC_REPORT.globalAssessment,
+        ethicsCoverage: { assessedCriteria: 2, totalCriteria: 8 },
       },
       checks: [
         {
@@ -533,6 +634,10 @@ describe("PublicScanPortal", () => {
         criteria,
         reasons: ["Hay referencias a rastreadores conocidos.", "La respuesta inicial supera el umbral provisional."],
         interpretation: "No confirma conexiones ni scripts dinámicos; el rendimiento mide una respuesta inicial.",
+      },
+      globalAssessment: {
+        ...PUBLIC_REPORT.globalAssessment,
+        ethicsCoverage: { assessedCriteria: 4, totalCriteria: 8 },
       },
       checks: [
         { ...PUBLIC_REPORT.checks[0], evidence: { finalScheme: "https", hsts: true, nosniff: true, frameProtection: true, referrerPolicy: true, csp: true } },
