@@ -38,6 +38,7 @@ con las decisiones del desarrollador resumidas en esta especificación.
 | Otras categorías | Clasificar hallazgos de seguridad, transparencia, rendimiento y accesibilidad en sus categorías actuales; privacidad/consentimiento alimenta la nueva dimensión. |
 | Automatización | Playwright 1.65.0 y Chromium fijado autorizados para el worker, sujetos a aislamiento, límites y gates del repositorio. |
 | Hosts propios y terceros | El hostname solicitado y su alias `www.<hostname>` son propios; cualquier otro hostname, incluidos los demás subdominios, es tercero. Si se solicita `www`, también tratar el hostname raíz correspondiente como propio. Normalizar a minúsculas y quitar el punto DNS final antes de comparar. |
+| Persistencia de privacidad en producción | El aprovisionamiento de producción debe conceder a `ds_worker` ejecución de `ds_complete_scan_with_privacy(...)`, revocar la función de finalización legacy que no guarda la evaluación, y probar ambos permisos con roles PostgreSQL reales. Así un informe válido y su nota de Privacidad se guardan en la misma transacción y con privilegio mínimo. |
 
 ## Límites de comportamiento
 

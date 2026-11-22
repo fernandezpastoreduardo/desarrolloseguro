@@ -28,6 +28,12 @@ Los flujos usan contextos separados; los controles por proveedor que excedan la
 capacidad disponible quedan `unknown`/`partial` y no se penalizan. Se destruyen
 los contextos al terminar.
 
+El aprovisionamiento de producción concede al rol `ds_worker` permiso de
+ejecutar únicamente la función de finalización que persiste conjuntamente el
+informe y su evaluación de Privacidad. La función legacy que no guarda esa
+evaluación permanece revocada para el worker. La suite PostgreSQL comprueba
+ambos permisos con los roles de runtime.
+
 ## Cómo leer la nota
 
 La nota `Privacidad` es independiente del sello. No concede, bloquea ni
