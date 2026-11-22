@@ -51,6 +51,7 @@ export function validateCompletedReport(status, previousReportId) {
   }
 
   const assessment = report.ethicsAssessment;
+  const processorAssessment = report.processorTransparencyAssessment;
   const tlsMatrix = report.checks.find(({ controlId }) => controlId === "DS-TLS-02")?.evidence;
   const transportCriterion = assessment?.criteria.find(({ id }) => id === "transport-security");
   const tlsMatrixFields = [
@@ -69,11 +70,14 @@ export function validateCompletedReport(status, previousReportId) {
     Boolean(completeTlsMatrix);
   if (
     !assessment ||
+    assessment.policyVersion !== "domain-ethics-v4" ||
     !Number.isInteger(assessment.score) ||
     assessment.score < 0 ||
     assessment.score > 100 ||
-    assessment.assessedCriteria < 6 ||
+    assessment.assessedCriteria !== 8 ||
     assessment.totalCriteria !== 8 ||
+    !processorAssessment ||
+    !["pass", "fail"].includes(processorAssessment.status) ||
     assessment.criteria.find(({ id }) => id === "initial-cookie-risk")?.status ===
       "unknown" ||
     assessment.criteria.find(({ id }) => id === "tracking")?.status === "unknown" ||

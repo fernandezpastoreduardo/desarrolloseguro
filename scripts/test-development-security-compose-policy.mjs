@@ -123,7 +123,7 @@ assert.match(worker, /development-security-audit-runtime:\/run\/development-secu
 assert.match(worker, /DS_PROCESSOR_AUDITOR_SOCKET/u);
 assert.match(worker, /development-security-backend/u);
 assert.doesNotMatch(worker, /docker\.sock|development-security-egress|ports:/u);
-assert.match(processorAuditor, /AUDIT_ENABLED:\s*\$\{DEVELOPMENT_SECURITY_AUDIT_ENABLED:-false\}/u);
+assert.match(processorAuditor, /AUDIT_ENABLED:\s*\$\{DEVELOPMENT_SECURITY_PROCESSOR_TRANSPARENCY_ENABLED:-false\}/u);
 assert.match(processorAuditor, /audit_jwt_private\.pem/u);
 assert.match(processorAuditor, /release_attestation_public\.pem/u);
 assert.match(processorAuditor, /development-security-analysis-egress/u);

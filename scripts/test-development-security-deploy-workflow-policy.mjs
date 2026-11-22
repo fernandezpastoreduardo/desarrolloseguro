@@ -120,6 +120,14 @@ assert.match(deployScript, /export COMPOSE_PROFILES=""/u);
 assert.match(deployScript, /export DEVELOPMENT_SECURITY_AUDIT_ENABLED="false"/u);
 assert.match(deployScript, /RELEASE_REVISION="\$\{1:-\}"/u);
 assert.match(deployScript, /DEVELOPMENT_SECURITY_RELEASE_REVISION="\$RELEASE_REVISION"/u);
+assert.match(deployScript, /export DEVELOPMENT_SECURITY_PROCESSOR_TRANSPARENCY_ENABLED="true"/u);
+assert.match(deployScript, /PROCESSOR_AUDIT_SECRETS_DIR="\/opt\/desarrollo-seguro\/audit-secrets"/u);
+assert.match(deployScript, /install -d -o root -g root -m 0700 "\$PROCESSOR_AUDIT_SECRETS_DIR"/u);
+assert.match(deployScript, /install -o root -g root -m 0400/u);
+assert.match(deployScript, /audit_jwt_private\.pem/u);
+assert.match(deployScript, /release_attestation_public\.pem/u);
+assert.match(deployScript, /export DEVELOPMENT_SECURITY_AUDIT_SECRETS_DIR="\$PROCESSOR_AUDIT_SECRETS_DIR"/u);
+assert.match(deployScript, /172\.30\.0\.1\/32/u);
 assert.match(deployScript, /development_security_badge_issuer_token/u);
 assert.match(deployScript, /scripts\/configure-development-security-egress-firewall\.sh verify/u);
 assert.match(
@@ -129,8 +137,8 @@ assert.match(
 );
 assert.match(
   normalizedDeployScript,
-  /up --detach --no-deps --wait\s+development-security-runtime-coordinator[\s\S]*up --detach --no-deps --wait\s+development-security-api\s+development-security-worker\s+development-security-retention-scheduler\s+development-security-certification-scheduler\s+development-security-web/u,
-  "deployment must wait for the isolated runtime coordinator before starting scanner and scheduler services",
+  /up --detach --no-deps --wait\s+development-security-runtime-coordinator[\s\S]*up --detach --no-deps --wait\s+development-security-processor-auditor[\s\S]*up --detach --no-deps --wait\s+development-security-api\s+development-security-worker\s+development-security-retention-scheduler\s+development-security-certification-scheduler\s+development-security-web/u,
+  "deployment must wait for the isolated runtime coordinator and processor auditor before starting the worker and scheduler services",
 );
 assert.match(
   normalizedDeployScript,

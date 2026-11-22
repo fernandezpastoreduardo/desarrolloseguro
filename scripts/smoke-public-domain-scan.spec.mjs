@@ -28,7 +28,7 @@ function completedStatus() {
     { id: "transport-security", status: "pass" },
     { id: "http-availability", status: "pass" },
     { id: "security-headers", status: "fail" },
-    { id: "third-party-data-use", status: "unknown" },
+    { id: "backend-processor-transparency", status: "pass" },
     { id: "initial-cookie-risk", status: "pass" },
     { id: "tracking", status: "pass" },
     { id: "performance", status: "pass" },
@@ -42,10 +42,16 @@ function completedStatus() {
       completedAt: "2026-11-11T20:00:00.000Z",
       checks,
       ethicsAssessment: {
+        policyVersion: "domain-ethics-v4",
         score: 75,
-        assessedCriteria: 7,
+        assessedCriteria: 8,
         totalCriteria: 8,
         criteria,
+      },
+      processorTransparencyAssessment: {
+        policyVersion: "processor-inventory-v1",
+        status: "pass",
+        reasonCode: "inventory_complete_empty",
       },
     },
   };
@@ -55,13 +61,15 @@ test("bounds the live scan smoke wait to fifteen minutes for the serial queue", 
   assert.equal(SCAN_TIMEOUT_MS, 15 * 60 * 1000);
 });
 
-test("accepts a refreshed domain-v3 report with TLS matrix, tracking and performance observations", () => {
+test("accepts a refreshed report with all eight v4 ethics criteria and a conclusive processor inventory", () => {
   const status = completedStatus();
   const report = validateCompletedReport(
     status,
     "previous-report-id",
   );
   assert.equal(report.ethicsAssessment.score, 75);
+  assert.equal(report.ethicsAssessment.assessedCriteria, 8);
+  assert.equal(report.processorTransparencyAssessment.status, "pass");
   assert.equal(report.checks.length, 9);
 });
 
@@ -87,7 +95,7 @@ test("rejects a reusable admission without a valid existing report", () => {
   );
 });
 
-test("accepts a diagnostic TLS matrix when a legacy version cannot negotiate", () => {
+test("keeps eight-criterion coverage required when TLS has a diagnostic unknown", () => {
   const status = completedStatus();
   const tlsCheck = status.lastReport.checks.find(({ controlId }) => controlId === "DS-TLS-02");
   if (!tlsCheck) throw new Error("tls_fixture_missing");
@@ -102,9 +110,12 @@ test("accepts a diagnostic TLS matrix when a legacy version cannot negotiate", (
   const transportCriterion = status.lastReport.ethicsAssessment.criteria.find(({ id }) => id === "transport-security");
   if (!transportCriterion) throw new Error("transport_criterion_missing");
   transportCriterion.status = "unknown";
-  status.lastReport.ethicsAssessment.assessedCriteria = 6;
+  status.lastReport.ethicsAssessment.assessedCriteria = 7;
 
-  assert.equal(validateCompletedReport(status, "previous-report-id").id, status.lastReport.id);
+  assert.throws(
+    () => validateCompletedReport(status, "previous-report-id"),
+    { message: "public_scan_ethics_assessment_incomplete" },
+  );
 });
 
 test("rejects a TLS unknown without a complete boolean-or-diagnostic matrix", () => {
@@ -117,8 +128,18 @@ test("rejects a TLS unknown without a complete boolean-or-diagnostic matrix", ()
   const transportCriterion = status.lastReport.ethicsAssessment.criteria.find(({ id }) => id === "transport-security");
   if (!transportCriterion) throw new Error("transport_criterion_missing");
   transportCriterion.status = "unknown";
-  status.lastReport.ethicsAssessment.assessedCriteria = 6;
+  status.lastReport.ethicsAssessment.assessedCriteria = 7;
 
+  assert.throws(
+    () => validateCompletedReport(status, "previous-report-id"),
+    { message: "public_scan_ethics_assessment_incomplete" },
+  );
+});
+
+test("rejects an auditor-owned unknown for the backend inventory criterion", () => {
+  const status = completedStatus();
+  status.lastReport.processorTransparencyAssessment.status = "unknown";
+  status.lastReport.ethicsAssessment.assessedCriteria = 7;
   assert.throws(
     () => validateCompletedReport(status, "previous-report-id"),
     { message: "public_scan_ethics_assessment_incomplete" },
