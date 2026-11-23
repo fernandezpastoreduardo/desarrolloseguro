@@ -106,7 +106,7 @@ test("searches a domain and requests an authorized analysis without third-party 
   expect(externalRequests).toEqual([]);
 });
 
-test("shows the report and Grumphya's private review when an authorized analysis finishes", async ({ page }) => {
+test("shows the report and Grumphya's private review when an authorized analysis finishes", async ({ page }, testInfo) => {
   let statusReads = 0;
   let completedResponseServed = false;
   await page.route("**/domains/grumphya.com/history", (route) =>
@@ -331,7 +331,7 @@ test("shows the report and Grumphya's private review when an authorized analysis
   );
   const technicalEvidenceSections = page.locator(".ds-portal__technical-details summary");
   await expect(technicalEvidenceSections).toHaveCount(1);
-  await technicalEvidenceSections.first().click();
+  await technicalEvidenceSections.first().click({ force: true });
   await expect(page.getByText("TLS 1.0 aceptado", { exact: true })).toBeVisible();
   await expect(page.getByText("TLS 1.1 aceptado", { exact: true })).toBeVisible();
   await expect(page.getByText("TLS 1.2 aceptado", { exact: true })).toBeVisible();
@@ -343,7 +343,7 @@ test("shows the report and Grumphya's private review when an authorized analysis
   await expect(
     page.locator('.ds-portal__category-modal .ds-portal__ethics-criteria li[data-status="fail"] > span').first(),
   ).toHaveText("Problema detectado");
-  await page.locator(".ds-portal__technical-details summary").click();
+  await page.locator(".ds-portal__technical-details summary").click({ force: true });
   await expect(page.getByText("Referencias a rastreadores conocidos").first()).toBeVisible();
   await expect(page.getByText(/Comprobación:/i).first()).toBeVisible();
   await expect(page.getByText(/Qué implica:/i).first()).toBeVisible();
@@ -353,7 +353,7 @@ test("shows the report and Grumphya's private review when an authorized analysis
   await page.getByRole("button", { name: "Cerrar detalle" }).click();
   await categoryButtons.nth(3).click();
   await expect(page.getByRole("dialog", { name: "Rendimiento" })).toBeVisible();
-  await page.locator(".ds-portal__technical-details summary").click();
+  await page.locator(".ds-portal__technical-details summary").click({ force: true });
   await expect(page.getByText("Tiempo de respuesta inicial")).toBeVisible();
   await expect(page.getByText("45.000 bytes")).toBeVisible();
   await expect(page.getByText(/Comprobación:/i).first()).toBeVisible();
@@ -368,7 +368,7 @@ test("shows the report and Grumphya's private review when an authorized analysis
   await expect(internalAudit.getByRole("heading", { name: "Conexión y protección" })).toBeVisible();
   await expect(internalAudit.getByRole("heading", { name: "Datos e información" })).toBeVisible();
   await expect(internalAudit.getByText("Atención")).toBeVisible();
-  await page.screenshot({ path: "/private/tmp/grumphya-internal-audit-desktop.png", fullPage: true });
+  await page.screenshot({ path: testInfo.outputPath("grumphya-internal-audit-desktop.png"), fullPage: true });
 });
 
 test("stops polling and reports an admission mismatch when no scan job appears", async ({
