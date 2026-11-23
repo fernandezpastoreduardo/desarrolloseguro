@@ -194,6 +194,7 @@ test("shows the report and Grumphya's private review when an authorized analysis
           ],
         },
         processorTransparencyAssessment: null,
+        publicPolicyTransparencyAssessment: null,
         internalAuditState: "complete",
         internalAuditSummary: {
           policyVersion: "internal-audit-public-v1",
@@ -210,6 +211,7 @@ test("shows the report and Grumphya's private review when an authorized analysis
             status: id === "application.secrets" ? "fail" : id === "ai.disclosure" ? "not_applicable" : "pass",
           })),
         },
+
         scope: ["/"],
         checks: [
           {

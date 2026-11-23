@@ -131,6 +131,10 @@ const MIGRATIONS = [
     version: "038_public_policy_transparency_domain_v4",
     file: "038_public_policy_transparency_domain_v4.sql",
   },
+  {
+    version: "039_public_policy_transparency",
+    file: "039_public_policy_transparency.sql",
+  },
 ] as const;
 
 const MIGRATION_LOCK_ID = 728194032;

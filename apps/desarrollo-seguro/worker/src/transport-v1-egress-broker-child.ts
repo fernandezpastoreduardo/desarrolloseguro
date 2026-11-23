@@ -34,6 +34,8 @@ async function main(): Promise<void> {
     createTransportV1NetworkObserver({
       inspectPage: request.profileVersion === "domain-v1" || request.profileVersion === "domain-v2" || request.profileVersion === "domain-v3" || request.profileVersion === "domain-v4",
       probeTlsVersions: request.profileVersion === "domain-v3" || request.profileVersion === "domain-v4",
+      inspectPublicPolicies: request.profileVersion === "domain-v4",
+
     }),
     request.profileVersion,
   );

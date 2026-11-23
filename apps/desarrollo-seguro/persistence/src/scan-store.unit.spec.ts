@@ -1,5 +1,6 @@
 import type { Pool } from "pg";
 import { describe, expect, it, vi } from "vitest";
+import { assessProcessorTransparency } from "@desarrolloseguro/core";
 import { PostgresScanStore, type ScanRunInput } from "./scan-store.js";
 
 const VALID_REPORT: ScanRunInput = {
@@ -73,6 +74,34 @@ describe("PostgresScanStore unit behavior", () => {
     expect(JSON.stringify(report)).not.toContain("<private response body>");
     expect(JSON.stringify(report)).not.toContain("database-detail");
     expect(query.mock.calls[0][0]).not.toMatch(/SELECT\s+evidence_json/iu);
+  });
+
+  it("reads the bounded public-policy assessment for both public domains and clients", async () => {
+    const assessment = {
+      policyVersion: "public-policy-v1",
+      status: "fail",
+      reasonCode: "access_denied",
+      evidence: {
+        linksFound: 1,
+        pagesInspected: 1,
+        unavailablePages: 0,
+        accessDeniedPages: 1,
+        providerMentions: 0,
+        providersMissingPurpose: 0,
+        categories: [],
+      },
+    };
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rows: [makePublicReportRow({ report_public_policy_transparency: assessment })] })
+      .mockResolvedValueOnce({ rows: [makePublicReportRow({ report_hostname: "grumphya.com", report_public_policy_transparency: assessment })] });
+    const store = new PostgresScanStore(makePool({ query }));
+
+    const report = await store.readPublicReport("8d140e17-68d6-489a-b451-7e87408187ae");
+    expect(report?.publicPolicyTransparencyAssessment).toEqual(assessment);
+    expect(JSON.stringify(report)).not.toContain("https://");
+    const clientReport = await store.readPublicReport("8d140e17-68d6-489a-b451-7e87408187ae");
+    expect(clientReport?.hostname).toBe("grumphya.com");
+    expect(clientReport?.publicPolicyTransparencyAssessment).toEqual(assessment);
   });
 
   it("filters evidence in status snapshots before exposing the report", async () => {
@@ -423,6 +452,55 @@ describe("PostgresScanStore unit behavior", () => {
       privacyAssessment: { score: 100 } as never,
     })).rejects.toThrow("invalid_privacy_assessment");
     expect(query).not.toHaveBeenCalled();
+  });
+
+  it("persists only a validated public-policy assessment through the guarded wrapper", async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [{ ds_complete_scan: "run-id" }] });
+    const store = new PostgresScanStore(makePool({ query }));
+    const publicPolicyTransparencyAssessment = {
+      policyVersion: "public-policy-v1",
+      status: "pass",
+      reasonCode: "disclosure_found",
+      evidence: {
+        linksFound: 2,
+        pagesInspected: 2,
+        unavailablePages: 0,
+        accessDeniedPages: 0,
+        providerMentions: 1,
+        providersMissingPurpose: 0,
+        categories: ["analytics"],
+      },
+    } satisfies import("@desarrolloseguro/core").PublicPolicyTransparencyAssessment;
+
+    await expect(store.completeScan({
+      ...VALID_REPORT,
+      publicPolicyTransparencyAssessment,
+    })).resolves.toBe("run-id");
+
+    expect(query.mock.calls[0]?.[0]).toContain("ds_complete_scan_with_transparency");
+    expect(JSON.parse(query.mock.calls[0]?.[1]?.[12] as string)).toEqual(publicPolicyTransparencyAssessment);
+    expect(JSON.stringify(query.mock.calls[0]?.[1])).not.toContain("https://");
+  });
+
+  it("stores public-policy evidence as separate client context beside inventory evidence", async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [{ ds_complete_scan: "run-id" }] });
+    const store = new PostgresScanStore(makePool({ query }));
+    const assessment = {
+      policyVersion: "public-policy-v1",
+      status: "fail",
+      reasonCode: "policy_link_missing",
+      evidence: { linksFound: 0, pagesInspected: 0, unavailablePages: 0, accessDeniedPages: 0, providerMentions: 0, providersMissingPurpose: 0, categories: [] },
+    } satisfies import("@desarrolloseguro/core").PublicPolicyTransparencyAssessment;
+
+    await expect(store.completeScan({
+      ...VALID_REPORT,
+      hostname: "grumphya.com",
+      publicPolicyTransparencyAssessment: assessment,
+      processorTransparencyAssessment: assessProcessorTransparency({ status: "auditor_error" }),
+    })).resolves.toBe("run-id");
+    expect(query.mock.calls[0]?.[0]).toContain("ds_complete_scan_with_transparency");
+    expect(JSON.parse(query.mock.calls[0]?.[1]?.[10] as string)).toMatchObject({ status: "unknown" });
+    expect(JSON.parse(query.mock.calls[0]?.[1]?.[12] as string)).toEqual(assessment);
   });
 
   it("rejects an unknown profile before writing to the database", async () => {

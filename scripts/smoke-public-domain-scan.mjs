@@ -30,7 +30,8 @@ export function validateCompletedReport(status, previousReportId, hostname = VAL
   }
   if (
     report.profileVersion !== "domain-v4" ||
-    report.scannerVersion !== "domain-v4-network-adapter-1" ||
+    report.scannerVersion !== "domain-v4-network-adapter-2" ||
+
     !Array.isArray(report.checks) ||
     report.checks.length !== 10
   ) {
@@ -54,6 +55,7 @@ export function validateCompletedReport(status, previousReportId, hostname = VAL
 
   const assessment = report.ethicsAssessment;
   const processorAssessment = report.processorTransparencyAssessment;
+  const publicPolicyAssessment = report.publicPolicyTransparencyAssessment;
   const tlsMatrix = report.checks.find(({ controlId }) => controlId === "DS-TLS-02")?.evidence;
   const transportCriterion = assessment?.criteria.find(({ id }) => id === "transport-security");
   const tlsMatrixFields = [
@@ -78,6 +80,8 @@ export function validateCompletedReport(status, previousReportId, hostname = VAL
     assessment.score > 100 ||
     assessment.assessedCriteria !== 8 ||
     assessment.totalCriteria !== 8 ||
+    !publicPolicyAssessment ||
+    publicPolicyAssessment.policyVersion !== "public-policy-v1" ||
     !processorAssessment ||
     !["pass", "fail"].includes(processorAssessment.status) ||
     assessment.criteria.find(({ id }) => id === "initial-cookie-risk")?.status ===

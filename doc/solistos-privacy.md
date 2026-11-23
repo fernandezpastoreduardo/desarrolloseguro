@@ -8,9 +8,8 @@ positiva aunque no muestre un banner. Solistos no emite conclusiones de
 conformidad legal ni modifica el estado del sello.
 
 En la puntuación global del MVP, Privacidad aporta el 50 % y Ética aporta el
-50 %. Ética usa `domain-ethics-v5` en informes nuevos `domain-v4`. Cuando existe
-evaluación privada de procesadores, incluye además evidencia firmada del
-inventario backend. Los informes históricos conservan su rúbrica original.
+50 %. Ética usa `domain-ethics-v5` en informes nuevos `domain-v4`. Para clientes, la valoración de transparencia usa el inventario autenticado; para otros dominios usa la información pública sobre servicios externos. La evaluación pública complementaria y sus límites se explican en [Información pública sobre servicios externos](public-policy-transparency.md). Los informes históricos conservan la rúbrica con la que se generaron.
+
 El resultado se redondea al entero más cercano. Ambas puntuaciones se presentan
 también por separado. Si alguna
 dimensión carece de cobertura suficiente, el estado global queda «En revisión»

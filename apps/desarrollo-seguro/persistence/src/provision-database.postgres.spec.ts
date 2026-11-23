@@ -187,6 +187,7 @@ describePostgres.sequential(
         worker_can_update_state: boolean;
         worker_can_update_hostname: boolean;
         worker_can_execute_completion: boolean;
+        worker_can_execute_public_policy_completion: boolean;
         worker_can_execute_lease_recovery: boolean;
         migrator_can_execute_retention: boolean;
         api_can_execute_retention: boolean;
@@ -202,6 +203,7 @@ describePostgres.sequential(
         reader_can_select: boolean;
         reader_can_select_raw_evidence: boolean;
         reader_can_select_public_evidence: boolean;
+        reader_can_select_public_policy: boolean;
         reader_can_insert: boolean;
       }>(
         `SELECT
@@ -245,6 +247,7 @@ describePostgres.sequential(
          has_column_privilege('ds_worker', 'ds_scan_jobs', 'state', 'UPDATE') AS worker_can_update_state,
          has_column_privilege('ds_worker', 'ds_scan_jobs', 'hostname', 'UPDATE') AS worker_can_update_hostname,
          has_function_privilege('ds_worker', 'public.ds_complete_scan_with_privacy(uuid,uuid,timestamp with time zone,text,timestamp with time zone,text,jsonb,jsonb,jsonb,jsonb)', 'EXECUTE') AS worker_can_execute_completion,
+         has_function_privilege('ds_worker', 'public.ds_complete_scan_with_transparency(uuid,uuid,timestamp with time zone,text,timestamp with time zone,text,jsonb,jsonb,jsonb,jsonb,jsonb,jsonb,jsonb)', 'EXECUTE') AS worker_can_execute_public_policy_completion,
          has_function_privilege('ds_worker', 'public.ds_complete_scan(uuid,uuid,timestamp with time zone,text,timestamp with time zone,text,jsonb,jsonb,jsonb)', 'EXECUTE') AS worker_can_execute_legacy_completion,
          has_function_privilege('ds_worker', 'public.ds_recover_expired_scan_leases(integer)', 'EXECUTE') AS worker_can_execute_lease_recovery,
          has_function_privilege('ds_migrator', 'public.ds_purge_expired_reports(timestamp with time zone)', 'EXECUTE') AS migrator_can_execute_retention,
@@ -268,6 +271,8 @@ describePostgres.sequential(
          has_column_privilege('ds_read', 'public.ds_check_results', 'evidence_json', 'SELECT') AS reader_can_select_raw_evidence,
          has_table_privilege('ds_read', 'public.ds_public_check_results', 'SELECT') AS reader_can_select_public_evidence,
          has_column_privilege('ds_read', 'public.ds_scan_privacy_assessments', 'assessment_json', 'SELECT') AS reader_can_select_privacy_assessments,
+         has_column_privilege('ds_read', 'public.ds_scan_public_policy_transparency', 'assessment_json', 'SELECT') AS reader_can_select_public_policy,
+         has_table_privilege('ds_worker', 'public.ds_scan_public_policy_transparency', 'SELECT') AS worker_can_select_public_policy,
          has_table_privilege('ds_worker', 'public.ds_scan_privacy_assessments', 'SELECT') AS worker_can_select_privacy_assessments,
          has_table_privilege('ds_read', 'ds_scan_runs', 'INSERT') AS reader_can_insert`,
         [TEST_DATABASE_NAME],
@@ -298,6 +303,7 @@ describePostgres.sequential(
         worker_can_update_state: false,
         worker_can_update_hostname: false,
         worker_can_execute_completion: true,
+        worker_can_execute_public_policy_completion: true,
         worker_can_execute_legacy_completion: false,
         worker_can_execute_lease_recovery: true,
         migrator_can_execute_retention: true,
@@ -315,6 +321,8 @@ describePostgres.sequential(
         reader_can_select_raw_evidence: false,
         reader_can_select_public_evidence: true,
         reader_can_select_privacy_assessments: true,
+        reader_can_select_public_policy: true,
+        worker_can_select_public_policy: false,
         worker_can_select_privacy_assessments: false,
         reader_can_insert: false,
       });
@@ -402,7 +410,7 @@ describePostgres.sequential(
       const result = await targetAdminPool?.query(
         "SELECT count(*)::integer AS migration_count FROM public.ds_schema_migrations",
       );
-      expect(result?.rows[0].migration_count).toBe(38);
+      expect(result?.rows[0].migration_count).toBe(39);
 
       const client = await targetAdminPool!.connect();
       try {

@@ -313,8 +313,11 @@ async function applyRuntimeGrants(pool: Pool): Promise<void> {
       ON public.ds_scan_privacy_assessments TO ds_read;
     GRANT SELECT (run_id, assessment_json, created_at)
       ON public.ds_scan_processor_transparency TO ds_read;
+    GRANT SELECT (run_id, assessment_json, created_at)
+      ON public.ds_scan_public_policy_transparency TO ds_read;
     GRANT SELECT (run_id, summary_json, created_at)
       ON public.ds_scan_internal_audit_public_summaries TO ds_read;
+
     GRANT SELECT (hostname, policy_version, state, latest_report_id,
       certified_report_id, latest_assessment_status, latest_assessment,
       state_reason, last_checked_at, activated_at, suspended_at)
@@ -340,7 +343,8 @@ async function applyRuntimeGrants(pool: Pool): Promise<void> {
       ds_renew_scan_lease(uuid, uuid, integer),
       ds_recover_expired_scan_leases(integer),
       ds_complete_scan_with_privacy(uuid, uuid, timestamptz, text, timestamptz, text, jsonb, jsonb, jsonb, jsonb),
-      ds_complete_scan_with_internal_audit_public(uuid, uuid, timestamptz, text, timestamptz, text, jsonb, jsonb, jsonb, jsonb, jsonb, jsonb)
+      ds_complete_scan_with_transparency(uuid, uuid, timestamptz, text,
+        timestamptz, text, jsonb, jsonb, jsonb, jsonb, jsonb, jsonb, jsonb)
       TO ds_worker;
     ALTER DEFAULT PRIVILEGES FOR ROLE ds_migrator IN SCHEMA public
       REVOKE SELECT ON TABLES FROM ds_read;

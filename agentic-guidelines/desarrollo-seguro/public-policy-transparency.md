@@ -1,97 +1,109 @@
 # Transparencia pública sobre servicios externos
 
-## Propósito
+## Objetivo
 
-Dar a las personas una evaluación pública entendible de qué servicios externos
-se observan, qué declara el sitio y qué falta por explicar. La ausencia de
-información pública exigible cuenta como un fallo de transparencia. Un fallo
-técnico del auditor queda en revisión y no se atribuye al dominio.
+Valorar si un sitio identifica públicamente los servicios externos que usa y
+explica sus propósitos y destinatarios. La comprobación promueve transparencia
+comprensible para visitantes; no afirma conocer contratos privados ni prácticas
+que la evidencia pública no permita observar.
 
-## Fuentes y alcance
+## Alcance
 
-- Para `grumphya.com` y `desarrolloseguro.org`, usar el inventario interno
-  autenticado, firmado y vigente descrito en
-  [backend-processor-transparency.md](backend-processor-transparency.md).
-- Para cualquier otro dominio, revisar la portada y seguir sus enlaces HTTPS
-  que identifiquen políticas de privacidad, cookies, condiciones o información
-  legal. Si la política del sitio enlaza a políticas públicas de proveedores,
-  el auditor puede consultarlas también.
-- La base local de proveedores y términos es versionada, revisada y limitada a
-  fuentes con licencia aprobada. Se usa para localizar menciones, no para
-  declarar por sí sola ilegal o engañosa una práctica.
-- La información obtenida de los documentos se distingue de las conexiones y
-  cookies vistas en el navegador. No se ejecuta JavaScript para esta lectura,
-  no se envían formularios y no se presentan secretos ni datos personales.
-- El auditor solo consulta HTTPS por puerto 443, aplica resolución pública
-  fijada a la conexión, valida cada destino y limita redirecciones. No sigue
-  hosts obtenidos de la URL de entrada, solo destinos derivados de enlaces
-  públicos revisados en el documento.
+- Aplicar al perfil público de todos los dominios y mostrar por separado la
+  declaración pública y las señales técnicas observadas. En clientes, el
+  inventario interno autenticado decide `DS-PRIV-04`; la evaluación pública se
+  conserva como contexto visible y no sustituye un inventario ausente o fallido.
+- `domain-ethics-v4` define `DS-PRIV-04` exclusivamente como transparencia del
+  inventario backend autenticado. `domain-ethics-v5` conserva su peso de 10
+  puntos y usa esa evidencia firmada para clientes; para no clientes usa la
+  evidencia de transparencia pública definida aquí. Los informes históricos
+  conservan `v4` y su interpretación.
+- Inspeccionar la respuesta inicial del sitio y seguir únicamente enlaces HTTPS
+  visibles a páginas de privacidad, cookies, condiciones o información legal.
+- No ejecutar formularios, iniciar sesión, aceptar condiciones ni enviar datos
+  personales. Solo se permiten solicitudes GET necesarias para leer estas
+  páginas.
+- No rastrear enlaces dentro de las políticas ni ampliar la búsqueda a otros
+  sitios por palabras clave. Los enlaces de política encontrados en la página
+  inicial son el conjunto máximo de destinos.
+- No guardar cuerpos, textos, URLs completas, consultas, fragmentos, cookies ni
+  datos personales. El informe solo recibe contadores, estados y categorías de
+  información detectadas por el catálogo local versionado.
 
-## Resultado
+## Límites de red y seguridad
 
-- `pass`: hay una política pública accesible y sus declaraciones incluyen los
-  servicios observados o categorías de destinatarios, los fines de uso y las
-  referencias pertinentes a proveedores dentro del alcance comprobado. Una
-  política puede declarar que no hay proveedores externos; el análisis muestra
-  esa declaración como tal y no presume que sea falsa.
-- `fail`: falta la política o información pública exigible; un proveedor
-  observado no aparece en la información publicada; o el sitio que aloja la
-  documentación deniega explícitamente el acceso al auditor (incluye HTTP 403,
-  429 o una página de bloqueo/CAPTCHA). El hallazgo habla de transparencia y no
-  afirma una infracción contractual no observada.
-- `unknown` / «En revisión»: un error técnico del auditor, de DNS/TLS/egress, una
-  respuesta incompleta o el agotamiento de su presupuesto impide terminar la
-  revisión, sin una denegación explícita del sitio. Se omite del cálculo y
-  reduce la cobertura visible.
+- Usar el broker de egreso aislado existente; nunca hacer estas solicitudes
+  desde el worker general ni desde la API.
+- Permitir solo HTTPS público en puerto 443. Validar DNS/IP en cada conexión y
+  redirección; bloquear IP privadas, loopback, link-local, metadatos, gateway,
+  puertos no autorizados y cambios de host no incluidos en los enlaces
+  inicialmente observados.
+- Máximo por análisis: 120 segundos agregados, 300 solicitudes HTTP(S), 20 MiB
+  recibidos, 30 páginas/proveedores relevantes y 8 contextos efímeros. La
+  comprobación de políticas debe respetar esos topes y puede tener topes
+  menores. Al agotarlos, dejar la evidencia pendiente como `unknown` sin
+  penalización.
+- Limitar cada documento a 64 KiB de texto inspeccionable y hasta 3
+  redirecciones, que deben permanecer en el mismo host público.
+- No transmitir a terceros la URL de la página auditada en el `Referer`.
+  Desactivar cookies y credenciales en estas solicitudes.
 
-## Privacidad, seguridad y presupuestos
+## Resultado y clasificación
 
-- Presupuesto inicial del crawler documental en `domain-v4`: máximo 30
-  documentos, 45 solicitudes documentales y 3.500.000 bytes recibidos, con
-  cuatro descargas simultáneas. El presupuesto total de transporte para este
-  perfil es de 120 segundos, 64 solicitudes HTTP(S) y 4 MiB; prevalece el
-  primero que se agote. La auditoría web de Solistos tiene límites distintos y
-  no forma parte de este cambio. El agotamiento sin denegación explícita deja
-  lo pendiente `unknown`, nunca `fail`.
-- No persistir ni mostrar cuerpos HTML, contenido íntegro de políticas, query,
-  fragmentos, credenciales, IP o datos personales.
-- La evidencia persistida contiene solo estados, contadores, booleanos y
-  versión del catálogo. No persiste nombres de proveedores observados ni URL,
-  ruta, host, texto o cuerpo de los documentos.
-- No conservar declaraciones textuales de políticas en el informe. La UI usa
-  una explicación propia y en lenguaje llano para evitar publicar contenido
-  ajeno o atribuir más de lo observado.
+- `pass`: la página inicial y los enlaces pertinentes se pudieron inspeccionar,
+  la declaración incluye información sobre servicios externos y sus
+  propósitos/destinatarios, y las categorías se identificaron dentro del
+  catálogo local.
+- `fail`: la inspección inicial terminó correctamente y no hay enlace público a
+  políticas pertinentes; la política enlazada está ausente, vacía o no informa
+  sobre servicios externos y sus propósitos; o el sitio deniega explícitamente
+  el acceso al contenido (por ejemplo, 403/451, desafío anti-bot o mensaje
+  inequívoco de bloqueo). Se describe como información pública insuficiente o
+  acceso denegado, sin afirmar incumplimientos legales no demostrados.
+- `unknown`: el auditor sufre un error propio (DNS/egreso, TLS, timeout, límite,
+  formato no procesable por una limitación del lector, o fallo del navegador).
+  El informe queda «En revisión» y no atribuye el error al dominio. Una falta de
+  información que el lector pudo comprobar y una denegación explícita no son
+  errores del auditor y se clasifican como `fail`.
+- La evaluación pública de `DS-PRIV-04` debe quedar evaluada (`pass` o `fail`)
+  cuando el lector haya procesado correctamente la página inicial y sus
+  enlaces. Una categoría que el sistema no puede reconocer por una limitación
+  conocida del catálogo o del parser es un error del auditor: se informa como
+  `unknown` hasta corregir esa limitación; nunca se transforma en una
+  afirmación legal sobre el dominio.
+- Una política encontrada no demuestra que sus declaraciones sean verdaderas.
+  El informe distingue lo que el titular declara de las señales observadas.
+  Solo evidencia pública contradictoria y reproducible puede indicar una
+  declaración inconsistente.
+- Un `pass` significa que hay información pública identificable, no certifica
+  legalidad, calidad contractual ni las prácticas internas de proveedores.
 
-## Presentación pública
+## Catálogo y evidencia
 
-- Mostrar dos bloques: «Lo que declara el sitio» y «Lo que observamos desde
-  fuera».
-- Enumerar proveedores/dominios observados cuando la evidencia los incluya.
-- Explicar la consecuencia para las personas en lenguaje llano; no ofrecer una
-  lista de tareas para desarrolladores.
-- Indicar que una declaración es del titular. Solo evidencia observada que la
-  contradiga permite describir una discrepancia; una declaración no prueba que
-  un tercero cumpla sus condiciones.
-- No presentar «Sin conclusión» como estado final. Un hallazgo confirmado es
-  `pass` o `fail`; la única falta de resultado es «En revisión» por error propio
-  de auditoría o por presupuesto agotado.
+- Usar un catálogo local versionado y revisado con frases/categorías para
+  destinatarios, propósitos y denegaciones de acceso. Registrar fuente, URL,
+  fecha, licencia y confianza en el propio catálogo.
+- El texto de baja confianza es indicio, no `fail`; no penaliza sin una señal
+  catalogada y reproducible.
+- Persistir solo el identificador de catálogo, número de enlaces/páginas
+  pertinentes, categorías detectadas y estados agregados. No persistir el texto
+  ni las URLs descubiertas.
 
 ## Criterios de aceptación
 
-1. Solo se siguen enlaces HTTPS públicos a documentos de privacidad, cookies,
-   condiciones o información legal, incluidos enlaces a proveedores hallados
-   en esos documentos, con destinos validados dentro del egress sandbox.
-2. El crawler no acepta un host, URL o ruta arbitrarios del caller por el
-   socket IPC.
-3. La clasificación separa ausencia/denegación explícita de errores propios
-   del auditor y respeta el presupuesto agregado.
-4. La evidencia pública diferencia la declaración del titular de señales
-   observadas y no guarda cuerpos ni datos personales. La política del titular
-   solo se trata como declaración; no se presume cierta ni falsa por sí sola.
-5. Las declaraciones que no coinciden con señales observadas se describen como
-   discrepancias; no se llaman mentiras ni se infiere incumplimiento contractual.
-6. Cada informe conserva la versión de rúbrica y del catálogo que usó; los
-   informes históricos no cambian al actualizar reglas.
-7. Pruebas cubren links maliciosos (SSRF, credenciales, puertos, HTTP, redirect
-   loops), páginas ausentes/bloqueadas, errores de red, catálogos y cobertura
-   parcial, persistencia allowlisted y lenguaje público.
+1. El control diferencia declaración pública encontrada, información ausente,
+   denegación explícita y error propio del auditor.
+2. Los enlaces externos de política se consultan solo desde el broker aislado,
+   con destinos públicos HTTPS validados y los límites indicados.
+3. Ninguna respuesta persiste contenido crudo o URLs externas.
+4. El informe en lenguaje llano explica qué declara el sitio, qué encontró el
+   auditor y qué no puede demostrar.
+5. Tests cubren ausencia, declaración identificada, 403/451, desafío explícito,
+   timeout, redirección a host distinto/privado, límites, respuesta grande y
+   sanitización de evidencia.
+6. `domain-ethics-v5` mantiene los 10 puntos de `DS-PRIV-04`; usa inventario
+   backend autenticado en clientes y evaluación pública en no clientes. No
+   altera `domain-ethics-v4`, sus informes históricos ni el estado de
+   certificación.
+
+La presentación pública separa lo que declara el titular de las señales observadas. Solo una diferencia reproducible permite describir una discrepancia; el contenido de políticas no se publica literalmente.

@@ -193,7 +193,7 @@ describePostgres.sequential(
       const migrationCount = await targetAdminPool?.query(
         "SELECT count(*)::integer AS count FROM public.ds_schema_migrations",
       );
-      expect(migrationCount?.rows[0]?.count).toBe(38);
+      expect(migrationCount?.rows[0]?.count).toBe(39);
     });
 
     it("applies column-scoped runtime grants and does not grant schema ownership to the API", async () => {
@@ -202,8 +202,10 @@ describePostgres.sequential(
         api_cannot_read_evidence: boolean;
         api_can_read_public_evidence: boolean;
         api_can_read_privacy_assessment: boolean;
+        api_can_read_public_policy_assessment: boolean;
         api_cannot_read_privacy_created_at: boolean;
         worker_cannot_read_privacy_assessment: boolean;
+        worker_cannot_read_public_policy_assessment: boolean;
         api_cannot_read_lease_token: boolean;
         api_cannot_select_all_metrics: boolean;
         api_cannot_insert_jobs: boolean;
@@ -227,8 +229,11 @@ describePostgres.sequential(
          has_table_privilege('ds_api', 'public.ds_public_check_results', 'SELECT') AS api_can_read_public_evidence,
          has_column_privilege('ds_api', 'public.ds_scan_privacy_assessments', 'run_id', 'SELECT')
            AND has_column_privilege('ds_api', 'public.ds_scan_privacy_assessments', 'assessment_json', 'SELECT') AS api_can_read_privacy_assessment,
+         has_column_privilege('ds_api', 'public.ds_scan_public_policy_transparency', 'run_id', 'SELECT')
+           AND has_column_privilege('ds_api', 'public.ds_scan_public_policy_transparency', 'assessment_json', 'SELECT') AS api_can_read_public_policy_assessment,
          NOT has_column_privilege('ds_api', 'public.ds_scan_privacy_assessments', 'created_at', 'SELECT') AS api_cannot_read_privacy_created_at,
          NOT has_table_privilege('ds_worker', 'public.ds_scan_privacy_assessments', 'SELECT') AS worker_cannot_read_privacy_assessment,
+         NOT has_table_privilege('ds_worker', 'public.ds_scan_public_policy_transparency', 'SELECT') AS worker_cannot_read_public_policy_assessment,
          NOT has_column_privilege('ds_api', 'public.ds_scan_jobs', 'lease_token', 'SELECT') AS api_cannot_read_lease_token,
          NOT has_table_privilege('ds_api', 'public.ds_scan_metrics', 'SELECT') AS api_cannot_select_all_metrics,
          NOT has_column_privilege('ds_api', 'public.ds_scan_jobs', 'hostname', 'INSERT') AS api_cannot_insert_jobs,
@@ -267,8 +272,10 @@ describePostgres.sequential(
         api_cannot_read_evidence: true,
         api_can_read_public_evidence: true,
         api_can_read_privacy_assessment: true,
+        api_can_read_public_policy_assessment: true,
         api_cannot_read_privacy_created_at: true,
         worker_cannot_read_privacy_assessment: true,
+        worker_cannot_read_public_policy_assessment: true,
         api_cannot_read_lease_token: true,
         api_cannot_select_all_metrics: true,
         api_cannot_insert_jobs: true,
@@ -288,7 +295,7 @@ describePostgres.sequential(
       });
     });
 
-    it("grants the worker only its five lease and report functions", async () => {
+    it("grants the worker only its six lease and report functions", async () => {
       const access = await workerPool?.query<{
         can_claim: boolean;
         can_renew: boolean;
@@ -296,6 +303,7 @@ describePostgres.sequential(
         can_fail: boolean;
         can_complete: boolean;
         can_complete_privacy: boolean;
+        can_complete_public_policy: boolean;
         can_purge_reports: boolean;
         can_read_reports: boolean;
         can_write_reports: boolean;
@@ -309,6 +317,7 @@ describePostgres.sequential(
          has_function_privilege(current_user, 'public.ds_fail_scan(uuid,uuid,text,integer,jsonb)', 'EXECUTE') AS can_fail,
          has_function_privilege(current_user, 'public.ds_complete_scan(uuid,uuid,timestamptz,text,timestamptz,text,jsonb,jsonb,jsonb)', 'EXECUTE') AS can_complete,
          has_function_privilege(current_user, 'public.ds_complete_scan_with_privacy(uuid,uuid,timestamptz,text,timestamptz,text,jsonb,jsonb,jsonb,jsonb)', 'EXECUTE') AS can_complete_privacy,
+         has_function_privilege(current_user, 'public.ds_complete_scan_with_transparency(uuid,uuid,timestamptz,text,timestamptz,text,jsonb,jsonb,jsonb,jsonb,jsonb,jsonb,jsonb)', 'EXECUTE') AS can_complete_public_policy,
          has_function_privilege(current_user, 'public.ds_purge_expired_reports(timestamptz)', 'EXECUTE') AS can_purge_reports,
          has_table_privilege(current_user, 'public.ds_scan_runs', 'SELECT') AS can_read_reports,
          has_table_privilege(current_user, 'public.ds_scan_runs', 'INSERT') AS can_write_reports,
@@ -322,6 +331,7 @@ describePostgres.sequential(
         can_fail: true,
         can_complete: false,
         can_complete_privacy: true,
+        can_complete_public_policy: true,
         can_purge_reports: false,
         can_read_reports: false,
         can_write_reports: false,
@@ -348,7 +358,8 @@ describePostgres.sequential(
            OR has_function_privilege(current_user, 'public.ds_renew_scan_lease(uuid,uuid,integer)', 'EXECUTE')
            OR has_function_privilege(current_user, 'public.ds_recover_expired_scan_leases(integer)', 'EXECUTE')
            OR has_function_privilege(current_user, 'public.ds_fail_scan(uuid,uuid,text,integer,jsonb)', 'EXECUTE')
-           OR has_function_privilege(current_user, 'public.ds_complete_scan(uuid,uuid,timestamptz,text,timestamptz,text,jsonb,jsonb,jsonb)', 'EXECUTE')) AS can_execute_worker_functions,
+           OR has_function_privilege(current_user, 'public.ds_complete_scan(uuid,uuid,timestamptz,text,timestamptz,text,jsonb,jsonb,jsonb)', 'EXECUTE')
+           OR has_function_privilege(current_user, 'public.ds_complete_scan_with_transparency(uuid,uuid,timestamptz,text,timestamptz,text,jsonb,jsonb,jsonb,jsonb,jsonb,jsonb,jsonb)', 'EXECUTE')) AS can_execute_worker_functions,
          has_table_privilege(current_user, 'public.ds_scan_runs', 'SELECT') AS can_read_reports,
          (has_table_privilege(current_user, 'public.ds_scan_runs', 'INSERT')
            OR has_table_privilege(current_user, 'public.ds_scan_runs', 'UPDATE')
@@ -393,7 +404,7 @@ describePostgres.sequential(
       const migrationCount = await targetAdminPool?.query(
         "SELECT count(*)::integer AS count FROM public.ds_schema_migrations",
       );
-      expect(migrationCount?.rows[0]?.count).toBe(38);
+      expect(migrationCount?.rows[0]?.count).toBe(39);
     });
   },
 );

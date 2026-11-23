@@ -27,7 +27,8 @@ const DOCKER_COMMAND_TIMEOUT_MS = 10_000;
 const DOCKER_CLEANUP_COMMAND_TIMEOUT_MS = 3_000;
 const DOCKER_CLEANUP_ATTEMPTS = 3;
 const DOCKER_CLEANUP_RETRY_DELAY_MS = 100;
-const EXECUTOR_COMMAND_TIMEOUT_MS = 38_000;
+const LEGACY_EXECUTOR_COMMAND_TIMEOUT_MS = 38_000;
+const DOMAIN_V3_EXECUTOR_COMMAND_TIMEOUT_MS = 158_000;
 const PRIVACY_BROWSER_COMMAND_TIMEOUT_MS = 125_000;
 const BROKER_STOP_TIMEOUT_MS = 3_000;
 const MAX_DOCKER_COMMAND_OUTPUT_BYTES = 256 * 1024;
@@ -384,7 +385,7 @@ export function createDockerRuntimeSessionFactory(
               executorSignal,
               MAX_EXECUTOR_RESPONSE_BYTES,
               true,
-              EXECUTOR_COMMAND_TIMEOUT_MS,
+              getExecutorCommandTimeoutMs(executorRequest.profileVersion),
               dockerSocketPath,
             );
             try {
@@ -449,6 +450,12 @@ export function createDockerRuntimeSessionFactory(
       };
     },
   };
+}
+
+function getExecutorCommandTimeoutMs(profileVersion: string): number {
+  return profileVersion === "domain-v3"
+    ? DOMAIN_V3_EXECUTOR_COMMAND_TIMEOUT_MS
+    : LEGACY_EXECUTOR_COMMAND_TIMEOUT_MS;
 }
 
 async function initializeBrokerVolume(

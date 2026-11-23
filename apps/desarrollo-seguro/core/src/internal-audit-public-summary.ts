@@ -102,8 +102,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function hasExactKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
-  const actual = Object.keys(value).sort();
-  const expected = [...keys].sort();
+  const compareKeys = (left: string, right: string): number =>
+    left < right ? -1 : left > right ? 1 : 0;
+  const actual = Object.keys(value).sort(compareKeys);
+  const expected = [...keys].sort(compareKeys);
   return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
 }
 

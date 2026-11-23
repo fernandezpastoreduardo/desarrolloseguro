@@ -1,4 +1,4 @@
-import { normalizeHostname, SCAN_FAILURE_CODES, parsePrivacyAssessment, parseScanFailureDiagnostic, type ScanFailureCode, type ScanFailureDiagnostic } from "@desarrolloseguro/core";
+import { normalizeHostname, SCAN_FAILURE_CODES, parsePrivacyAssessment, parsePublicPolicyTransparencyAssessment, parseScanFailureDiagnostic, type ScanFailureCode, type ScanFailureDiagnostic } from "@desarrolloseguro/core";
 import type { ScanCheck, ScanRunInput } from "@desarrolloseguro/persistence";
 import { isNetworkProbeFailureList, type NetworkProbeFailure, type ScanProfileVersion } from "./transport-v1-executor.js";
 import { getTransportBudget } from "./transport-budget.js";
@@ -133,7 +133,7 @@ function parseExecutorResult(
   const completedAt = parseDate(value.completedAt);
   if (
     typeof value.scannerVersion !== "string" ||
-    value.scannerVersion !== getScannerVersion(profileVersion) ||
+    value.scannerVersion !== getExpectedScannerVersion(profileVersion, value.publicPolicyTransparencyAssessment !== undefined) ||
     !isVerdict(value.verdict) ||
     !Array.isArray(value.scope) ||
     value.scope.length !== 1 ||
@@ -166,6 +166,14 @@ function parseExecutorResult(
     if (!privacyAssessment) throw new Error("executor_result_invalid");
     result.privacyAssessment = privacyAssessment;
   }
+  if (value.publicPolicyTransparencyAssessment !== undefined) {
+    if (profileVersion !== "domain-v4" || value.scannerVersion !== "domain-v4-network-adapter-2") {
+      throw new Error("executor_result_invalid");
+    }
+    const assessment = parsePublicPolicyTransparencyAssessment(value.publicPolicyTransparencyAssessment);
+    if (!assessment) throw new Error("executor_result_invalid");
+    result.publicPolicyTransparencyAssessment = assessment;
+  }
   return result;
 }
 
@@ -180,6 +188,12 @@ function getScannerVersion(profileVersion: ScanProfileVersion): string {
   return profileVersion === "domain-v1"
     ? "domain-v1-network-adapter-1"
     : "transport-v1-network-adapter-1";
+}
+
+function getExpectedScannerVersion(profileVersion: ScanProfileVersion, hasPublicPolicyAssessment: boolean): string {
+  return profileVersion === "domain-v4" && hasPublicPolicyAssessment
+    ? "domain-v4-network-adapter-2"
+    : getScannerVersion(profileVersion);
 }
 
 function getExpectedCheckCount(profileVersion: ScanProfileVersion): number {

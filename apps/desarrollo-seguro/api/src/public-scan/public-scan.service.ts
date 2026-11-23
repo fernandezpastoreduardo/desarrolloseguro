@@ -7,8 +7,8 @@ import {
 } from "@nestjs/common";
 import {
   assessDomainEthics,
-  assessDomainEthicsV4,
   assessDomainEthicsV5,
+  assessDomainEthicsV4,
   assessGlobalScore,
   assessBetaCertification,
   toInternalAuditPublicSummary,
@@ -22,6 +22,7 @@ import {
   type GlobalScoreAssessment,
   type PrivacyAssessment,
   type ProcessorTransparencyAssessment,
+  type PublicPolicyTransparencyAssessment,
   type ScanFailureDiagnostic,
 } from "@desarrolloseguro/core";
 import {
@@ -59,6 +60,7 @@ export type PublicReport = {
   ethicsAssessment: DomainEthicsAssessment;
   privacyAssessment: PrivacyAssessment | null;
   processorTransparencyAssessment: ProcessorTransparencyAssessment | null;
+  publicPolicyTransparencyAssessment: PublicPolicyTransparencyAssessment | null;
   betaCertification: ReturnType<typeof assessBetaCertification>;
   certification: PublicBetaCertificationResponse | null;
   internalAuditSummary: InternalAuditPublicSummary | null;
@@ -312,7 +314,11 @@ function toPublicReport(
   internalAuditState: "running" | "review" | "complete" | null | undefined = undefined,
 ): PublicReport {
   const processorTransparencyAssessment = report.processorTransparencyAssessment ?? null;
-  const ethicsAssessment = report.profileVersion === "domain-v4"
+  const publicPolicyTransparencyAssessment = report.publicPolicyTransparencyAssessment ?? null;
+  const ethicsAssessment = report.profileVersion === "domain-v4" &&
+    report.scannerVersion === "domain-v4-network-adapter-2" && publicPolicyTransparencyAssessment
+    ? assessDomainEthicsV5(report.checks, processorTransparencyAssessment, publicPolicyTransparencyAssessment)
+    : report.profileVersion === "domain-v4"
     ? assessDomainEthicsV5(report.checks, processorTransparencyAssessment)
     : processorTransparencyAssessment
       ? assessDomainEthicsV4(report.checks, processorTransparencyAssessment)
@@ -336,6 +342,7 @@ function toPublicReport(
     ethicsAssessment,
     privacyAssessment,
     processorTransparencyAssessment,
+    publicPolicyTransparencyAssessment,
     betaCertification: assessBetaCertification(toBetaObservations(report.checks)),
     certification: toPublicCertification(report.certification),
     internalAuditState: resolvedInternalAuditState,

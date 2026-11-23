@@ -107,7 +107,7 @@ describe("createTransportV1EgressBroker", () => {
     });
     vi.mocked(source.observeTls).mockResolvedValueOnce({
       evidence: { valid: true },
-      requestsCount: 24,
+      requestsCount: 23,
       bytesCount: 4,
     });
     const pollutedEvidence = Object.defineProperty(
@@ -122,7 +122,7 @@ describe("createTransportV1EgressBroker", () => {
     });
     vi.mocked(source.observeHttp).mockResolvedValueOnce({
       evidence: { statusCode: 200 },
-      requestsCount: 1,
+      requestsCount: 301,
       bytesCount: 4,
     });
     const broker = createTransportV1EgressBroker(HOSTNAME, source);
@@ -132,7 +132,7 @@ describe("createTransportV1EgressBroker", () => {
       result: { evidence: {}, requestsCount: 0, bytesCount: 0 },
     });
     await expect(broker(request("tls"), signal)).resolves.toMatchObject({
-      result: { evidence: { valid: true }, requestsCount: 24, bytesCount: 4 },
+      result: { evidence: { valid: true }, requestsCount: 23, bytesCount: 4 },
     });
     await expect(broker(request("headers"), signal)).resolves.toMatchObject({
       result: { evidence: {}, requestsCount: 0, bytesCount: 0 },
@@ -140,8 +140,8 @@ describe("createTransportV1EgressBroker", () => {
     await expect(broker(request("http-head"), signal)).resolves.toMatchObject({
       result: { evidence: {}, requestsCount: 0, bytesCount: 0 },
     });
-    await expect(broker(request("http-get"), signal)).rejects.toThrow(
-      "egress_broker_request_invalid",
-    );
+    await expect(broker(request("http-get"), signal)).resolves.toMatchObject({
+      result: { evidence: { ok: true }, requestsCount: 1, bytesCount: 4 },
+    });
   });
 });
