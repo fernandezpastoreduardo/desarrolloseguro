@@ -1,7 +1,6 @@
 # Catálogo inicial de conocimiento de privacidad v2
 
-> **Estado:** alcance aprobado por el desarrollador; implementación pendiente de
-> completar y verificar en cambios revisables.
+> **Estado:** implementado y verificado en el PR 34; pendiente de integrar.
 > **Fecha de revisión de fuentes:** 23 de noviembre de 2026.
 
 ## Objetivo
@@ -16,15 +15,17 @@ legal.
 La aprobación de incluir Matomo se refiere exclusivamente a reglas de
 identificación locales en el auditor. **No se instalará ni utilizará Matomo como
 analítica de Desarrollo Seguro.** No se añade un SDK, dependencia, script,
-cuenta, cookie, endpoint ni comunicación de Desarrollo Seguro con Matomo. Las
-reglas se compilan dentro del worker y no consultan una fuente externa durante
-un análisis.
+cuenta, cookie, endpoint ni comunicación directa de la aplicación, worker o
+infraestructura de Desarrollo Seguro con Matomo. La página evaluada aún puede
+iniciar solicitudes desde el navegador aislado según la política de egreso ya
+aprobada. Las reglas se compilan dentro del worker y no consultan una fuente
+externa durante un análisis.
 
 ## Alcance aprobado
 
 | Grupo | Proveedores/productos del conjunto inicial |
 | --- | --- |
-| Analítica y medición publicitaria | Google Analytics (reglas actuales), Google Ads / Conversion Linker y Matomo |
+| Analítica y medición publicitaria | Google Analytics (reglas actuales), Google Ads / Conversion Linker y Matomo Cloud |
 | Publicidad y píxeles sociales | Meta Pixel, TikTok Pixel y LinkedIn Insight Tag |
 | Gestión del consentimiento (CMP) | Cookiebot, Didomi, iubenda, OneTrust/CookiePro y Usercentrics |
 
@@ -42,10 +43,10 @@ no catalogadas.
 
 - Las reglas reconocen el destino de Matomo Cloud cuando el host observado lo
   atribuye. El catálogo no inspecciona rutas, nombres de archivo ni parámetros.
-- La instalación On-Premise solo se atribuye cuando publica un host identificable
-  o una señal de cookie corroborada por un host identificable en el mismo flujo.
-  Si usa un proxy first-party o un endpoint renombrado, se conserva como
-  desconocida; no se captura ni compara la ruta para intentar identificarlo.
+- No se intenta identificar genéricamente Matomo On-Premise: cada instalación
+  puede usar un dominio, proxy o endpoint distinto. Sin un host localmente
+  catalogado y corroboración inequívoca, queda sin atribución; no se inspeccionan
+  rutas para detectarla.
 - La auditoría del navegador solo puede describir solicitudes, cookies y
   almacenamiento observados en el cliente. No puede probar a qué servicios
   reenvía datos el servidor On-Premise, verificar contratos ni confirmar el uso
@@ -131,8 +132,8 @@ es una medida de popularidad ni prueba conformidad legal.
    suficiente no produce penalización. Una coincidencia de alta confianza
    requiere las señales corroborantes definidas para ese proveedor.
 7. Una observación sintética Matomo Cloud puede clasificar el host de servicio
-   externo; Matomo On-Premise solo se confirma con host de proveedor
-   identificable; las variantes proxy/renombradas quedan `unknown`.
+   externo; instalaciones Matomo On-Premise con host propio, proxy o endpoint
+   renombrado quedan `unknown`.
 8. Ningún test de catálogo contacta proveedores reales. Los fixtures son
    sintéticos y conservan el aislamiento aprobado para CI.
 9. Los informes históricos se mantienen inmutables y conservan su JSON y nota;
