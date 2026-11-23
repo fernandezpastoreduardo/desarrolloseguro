@@ -105,7 +105,7 @@ export const PRIVACY_KNOWLEDGE_RULES: readonly PrivacyKnowledgeRule[] = [
     },
     ...(provider.id === "google-ads" ? ["_gcl_", "_gac_"] :
       provider.id === "meta-pixel" ? ["_fbp", "_fbc"] :
-      provider.id === "tiktok-pixel" ? ["_ttp", "ttclid"] :
+      provider.id === "tiktok-pixel" ? ["_ttp", "ttcsid_"] :
       provider.id === "linkedin-insight" ? ["li_gc", "lidc", "UserMatchHistory"] :
       provider.id === "matomo-cloud" ? ["_pk_id", "_pk_ses", "_pk_ref", "_pk_hsr"] :
       provider.id === "didomi" ? ["didomi_token", "didomi_dcs", "euconsent-v2"] :
