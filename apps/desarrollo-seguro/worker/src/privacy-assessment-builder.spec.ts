@@ -56,6 +56,22 @@ describe("assessPrivacyObservation", () => {
     expect(result.criteria[0]?.awarded).toBe(30);
   });
 
+  it("lists a confirmed CMP and its preference cookie without scoring it as tracking", () => {
+    const result = assessPrivacyObservation(observation({
+      initial: flow({
+        signalHostsAfterChoice: ["consent.didomi.io"],
+        completedHostsAfterChoice: ["consent.didomi.io"],
+        cookiesAfterChoice: [{ name: "didomi_token", domain: ".grumphya.com", secure: true, httpOnly: false }],
+      }),
+    }));
+
+    expect(result.score).toBe(100);
+    expect(result.criteria[0]?.confirmedFindings).toBe(0);
+    expect(result.criteria[0]?.unknownFindings).toBe(0);
+    expect(result.evidence.providers).toContain("Didomi");
+    expect(result.evidence.cookieNames).toContain("didomi_token");
+  });
+
   it("keeps incomplete capture unknown without erasing confirmed evidence", () => {
     const result = assessPrivacyObservation(observation({
       initial: flow({ status: "unknown", cookieReadComplete: false,
