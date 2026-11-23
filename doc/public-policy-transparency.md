@@ -51,3 +51,9 @@ cookies, credenciales ni `Referer`, solo aceptan HTTPS en el puerto 443 y no
 siguen redirecciones a otro host. El lector limita el tiempo, las solicitudes,
 el volumen de datos y la cantidad de páginas. Al agotar un límite, deja el
 resultado en revisión.
+
+En cada respuesta de página, el lector puede combinar cabeceras, señales
+pasivas y contadores de políticas públicas. El intercambio interno admite hasta
+64 campos de evidencia derivados; conserva límites de tamaño y descarta la
+respuesta si excede el máximo. No transporta ni publica el HTML ni valores de
+cookies.
