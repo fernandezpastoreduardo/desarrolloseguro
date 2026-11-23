@@ -28,7 +28,9 @@ tenían una finalidad explicada en el mismo fragmento de la política.
   pudo procesar el formato. No se penaliza esa comprobación incompleta. Si el
   lector conoce la causa, el informe la resume en lenguaje sencillo. Solo se
   conserva un código técnico de una lista cerrada; nunca se publican errores
-  crudos, direcciones, cabeceras, páginas ni valores de cookies.
+  crudos, direcciones, cabeceras, páginas ni valores de cookies. El resumen y
+  el código se guardan con una lista cerrada validada por la base de datos y
+  aparecen en la evidencia pública del criterio correspondiente.
 
 Los nombres de proveedores y finalidades salen de un catálogo local revisado.
 El catálogo puede no reconocer todas las marcas o expresiones. En ese caso,

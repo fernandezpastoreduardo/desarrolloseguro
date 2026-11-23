@@ -100,6 +100,9 @@ que la evidencia pública no permita observar.
 - Adjuntar el código como evidencia opcional a los controles de la portada que
   dependen de esa sonda. Un fallo del auditor mantiene el control `unknown` y
   la ficha «En revisión»; nunca se convierte en un fallo atribuible al dominio.
+- El contrato del trigger PostgreSQL y la proyección pública deben admitir ese
+  campo enum y el resumen exacto correspondiente. Un campo admitido solo por
+  TypeScript no cuenta como evidencia persistida.
 - El resumen público debe explicar en lenguaje sencillo que el lector tuvo un
   problema y describir la causa acotada cuando exista. La validación de CI debe
   poder distinguir ese diagnóstico de un `unknown` sin explicación.
@@ -120,8 +123,9 @@ que la evidencia pública no permita observar.
    backend autenticado en clientes y evaluación pública en no clientes. No
    altera `domain-ethics-v4`, sus informes históricos ni el estado de
    certificación.
-7. Un fallo de una sonda GET en producción conserva solo un código de error
-   acotado, visible en la evidencia y acompañado por un resumen seguro; no
-   incluye datos del destino ni modifica la clasificación `unknown`.
+7. Un fallo de una sonda GET conserva solo un código de error acotado, visible
+   en la evidencia persistida y acompañada por un resumen seguro; el trigger y
+   la vista pública aceptan y proyectan el mismo contrato. El estado sigue
+   `unknown` y no incluye datos del destino.
 
 La presentación pública separa lo que declara el titular de las señales observadas. Solo una diferencia reproducible permite describir una discrepancia; el contenido de políticas no se publica literalmente.
