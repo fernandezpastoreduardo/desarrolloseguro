@@ -126,3 +126,38 @@ redes abiertas.
 El preflight acepta únicamente entradas de host exactas para esa ACL: IPv4
 `/32` o IPv6 `/128`. Prefijos más amplios, una subnet Docker o una red abierta
 se rechazan aunque sean CIDR válidos.
+
+## Proyección pública ligada a los informes de Grumphya
+
+El servicio `development-security-processor-auditor` conserva el canal Unix de
+`read_processor_transparency` y añade la operación interna
+`read_internal_audit_public_summary`. Esta última ejecuta D-08 con los scopes
+allowlisted de los 14 criterios y responde al worker únicamente con:
+
+```json
+{
+  "policyVersion": "internal-audit-public-v1",
+  "status": "complete | review",
+  "observedAt": "ISO-8601 | null",
+  "criteria": [{ "id": "<uno de los 14 IDs allowlisted>", "status": "pass | fail | unknown | not_applicable" }]
+}
+```
+
+`complete` exige 14 estados concluyentes (se admite `not_applicable`);
+`review` incluye exactamente los 14 IDs con estado `unknown`. Una ejecución
+incompleta o fallida se convierte en `review`; no publica resultados parciales
+ni resultados anteriores. La proyección omite `auditRef`, puntuación, pesos,
+`reasonCode`, `value`, `unit`, `limit`, firmas y envolturas de evidencia.
+
+El worker ejecuta esta operación junto al análisis periódico o bajo demanda de
+`grumphya.com`. Persiste la proyección pública con el informe inmutable mediante
+`ds_complete_scan_with_internal_audit_public`, que valida los 14 IDs/estados y
+solo acepta este dato para `grumphya.com`. API recibe lectura de la proyección;
+el worker no puede escribir directamente en las tablas. El auditor conserva
+las claves y las solicitudes allowlisted, no monta PostgreSQL y entrega al
+worker solo el resumen. La opción completa `internal-audit` sigue siendo un
+comando de una ejecución y no se arranca por defecto.
+
+La ficha presenta el bloque como **En revisión** si el análisis está en curso,
+si el informe ya venció o si la última renovación no pudo completarse. No cambia
+las notas Ética/Privacidad, la nota global, la certificación ni el sello.

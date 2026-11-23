@@ -775,6 +775,7 @@ describe("PublicScanService", () => {
         "privacyAssessment",
         "processorTransparencyAssessment",
         "betaCertification",
+        "internalAuditSummary",
         "certification",
         "scope",
         "checks",

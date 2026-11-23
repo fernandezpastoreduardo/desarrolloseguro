@@ -2,11 +2,19 @@ import { randomUUID } from "node:crypto";
 import { lstat, stat } from "node:fs/promises";
 import { createConnection } from "node:net";
 import { dirname } from "node:path";
-import { assessProcessorTransparency, parseProcessorTransparencyAssessment, type ProcessorTransparencyAssessment } from "@desarrolloseguro/core";
+import {
+  assessProcessorTransparency,
+  parseInternalAuditPublicSummary,
+  parseProcessorTransparencyAssessment,
+  toInternalAuditPublicSummary,
+  type InternalAuditPublicSummary,
+  type ProcessorTransparencyAssessment,
+} from "@desarrolloseguro/core";
 
 const MAX_REQUEST_BYTES = 1_024;
 const MAX_RESPONSE_BYTES = 70 * 1_024;
 const DEFAULT_TIMEOUT_MS = 8_000;
+const INTERNAL_AUDIT_TIMEOUT_MS = 120_000;
 const AUDITOR_ERROR = assessProcessorTransparency({ status: "auditor_error" });
 
 export type ProcessorAuditorClientOptions = {
@@ -29,47 +37,67 @@ export class ProcessorAuditorClient {
   }
 
   async read(signal?: AbortSignal): Promise<ProcessorTransparencyAssessment> {
-    if (signal?.aborted) return AUDITOR_ERROR;
-    try { await this.assertReady(); } catch { return AUDITOR_ERROR; }
+    const value = await this.request("read_processor_transparency", this.timeoutMs, signal);
+    if (!isRecord(value) || !hasExactKeys(value, ["protocolVersion", "requestId", "assessment"]) ||
+        value.protocolVersion !== 1 || typeof value.requestId !== "string") return AUDITOR_ERROR;
+    try {
+      return parseProcessorTransparencyAssessment(value.assessment) ?? AUDITOR_ERROR;
+    } catch {
+      return AUDITOR_ERROR;
+    }
+  }
+
+  async readInternalAuditSummary(signal?: AbortSignal): Promise<InternalAuditPublicSummary> {
+    const value = await this.request("read_internal_audit_public_summary", INTERNAL_AUDIT_TIMEOUT_MS, signal);
+    if (!isRecord(value) || !hasExactKeys(value, ["protocolVersion", "requestId", "internalAuditSummary"]) ||
+        value.protocolVersion !== 1 || typeof value.requestId !== "string") return toInternalAuditPublicSummary(null);
+    return parseInternalAuditPublicSummary(value.internalAuditSummary) ?? toInternalAuditPublicSummary(null);
+  }
+
+  private async request(
+    operation: "read_processor_transparency" | "read_internal_audit_public_summary",
+    timeoutMs: number,
+    signal?: AbortSignal,
+  ): Promise<unknown> {
+    if (signal?.aborted) return null;
+    try { await this.assertReady(); } catch { return null; }
     const requestId = randomUUID();
-    const request = `${JSON.stringify({ protocolVersion: 1, requestId, operation: "read_processor_transparency" })}\n`;
-    if (Buffer.byteLength(request) > MAX_REQUEST_BYTES) return AUDITOR_ERROR;
+    const request = `${JSON.stringify({ protocolVersion: 1, requestId, operation })}\n`;
+    if (Buffer.byteLength(request) > MAX_REQUEST_BYTES) return null;
     return new Promise((resolve) => {
       const socket = createConnection(this.options.socketPath);
       let settled = false;
       let received = 0;
       const chunks: Buffer[] = [];
-      const timer = setTimeout(() => finish(AUDITOR_ERROR), this.timeoutMs);
-      const onAbort = () => finish(AUDITOR_ERROR);
-      const finish = (assessment: ProcessorTransparencyAssessment) => {
+      const timer = setTimeout(() => finish(null), timeoutMs);
+      const onAbort = () => finish(null);
+      const finish = (value: unknown) => {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
         signal?.removeEventListener("abort", onAbort);
         socket.destroy();
-        resolve(assessment);
+        resolve(value);
       };
       signal?.addEventListener("abort", onAbort, { once: true });
       socket.once("connect", () => socket.write(request));
       socket.on("data", (chunk) => {
         const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
         received += buffer.byteLength;
-        if (received > MAX_RESPONSE_BYTES) { finish(AUDITOR_ERROR); return; }
+        if (received > MAX_RESPONSE_BYTES) { finish(null); return; }
         chunks.push(buffer);
       });
-      socket.once("error", () => finish(AUDITOR_ERROR));
+      socket.once("error", () => finish(null));
       socket.once("end", () => {
         if (settled) return;
         const bytes = Buffer.concat(chunks);
         const newline = bytes.indexOf(0x0a);
-        if (newline !== bytes.byteLength - 1 || newline < 1) { finish(AUDITOR_ERROR); return; }
+        if (newline !== bytes.byteLength - 1 || newline < 1) { finish(null); return; }
         try {
           const value: unknown = JSON.parse(bytes.subarray(0, newline).toString("utf8"));
-          if (!isRecord(value) || !hasExactKeys(value, ["protocolVersion", "requestId", "assessment"]) ||
-              value.protocolVersion !== 1 || value.requestId !== requestId) { finish(AUDITOR_ERROR); return; }
-          const assessment = parseProcessorTransparencyAssessment(value.assessment);
-          finish(assessment ?? AUDITOR_ERROR);
-        } catch { finish(AUDITOR_ERROR); }
+          if (!isRecord(value) || value.requestId !== requestId) { finish(null); return; }
+          finish(value);
+        } catch { finish(null); }
       });
       if (signal?.aborted) onAbort();
     });

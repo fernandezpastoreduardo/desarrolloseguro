@@ -323,8 +323,9 @@ test("shows the report when an authorized analysis finishes", async ({ page }) =
   ).toHaveText("Problema detectado");
   await page.locator(".ds-portal__technical-details summary").click();
   await expect(page.getByText("Referencias a rastreadores conocidos").first()).toBeVisible();
-  await expect(page.getByText(/Revisa las referencias detectadas/i)).toBeVisible();
-  await expect(page.getByText(/qué revisar:/i).first()).toBeVisible();
+  await expect(page.getByText(/Comprobación:/i).first()).toBeVisible();
+  await expect(page.getByText(/Qué implica:/i).first()).toBeVisible();
+  await expect(page.getByText(/qué revisar:/i)).toHaveCount(0);
   await expect(page.getByText(/HTML inicial contiene referencias a herramientas de seguimiento conocidas/i))
     .toBeVisible();
   await page.getByRole("button", { name: "Cerrar detalle" }).click();
@@ -333,8 +334,8 @@ test("shows the report when an authorized analysis finishes", async ({ page }) =
   await page.locator(".ds-portal__technical-details summary").click();
   await expect(page.getByText("Tiempo de respuesta inicial")).toBeVisible();
   await expect(page.getByText("45.000 bytes")).toBeVisible();
-  await expect(page.getByText(/qué comprueba:/i).first()).toBeVisible();
-  await expect(page.getByText(/qué significa:/i).first()).toBeVisible();
+  await expect(page.getByText(/Comprobación:/i).first()).toBeVisible();
+  await expect(page.getByText(/Qué implica:/i).first()).toBeVisible();
   await expect(page.locator(".ds-portal__report-takeaway")).toBeVisible();
   await expect(page.getByText("Hay controles observados que no se cumplen")).toBeVisible();
   await page.getByRole("button", { name: "Cerrar detalle" }).click();

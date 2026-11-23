@@ -126,7 +126,7 @@ El motor no se diseñará como un rastreador agresivo ni como una batería indis
 
 ### 4.2 Verificación y prevención de suplantaciones
 
-La ficha oficial será la **referencia autoritativa** y mostrará, como mínimo, el **dominio al que está asignada la certificación**, su estado, la última comprobación y el detalle de resultados publicables.
+La ficha oficial será la **referencia autoritativa** y mostrará, como mínimo, el **dominio al que está asignada la certificación**, su estado, la última comprobación y el detalle de resultados publicables. Para `grumphya.com`, incluye además los 14 estados de la revisión técnica privada, en un bloque separado de las notas públicas; muestra los posibles impactos en lenguaje llano y no publica la nota interna ni métricas técnicas. El comportamiento y sus límites están en [Revisión técnica pública de Grumphya](public-internal-audit-summary.md).
 
 No será suficiente presentar un identificador o una imagen copiados de otra web. El diseño del mecanismo deberá vincular el sello a los dominios autorizados y facilitar la detección de reutilizaciones indebidas. **No puede garantizarse impedir que terceros copien una imagen estática**; por ello la comprobación en la ficha oficial es indispensable.
 
