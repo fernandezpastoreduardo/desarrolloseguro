@@ -514,13 +514,19 @@ describe("sanitizeScanObservations", () => {
   });
 
   it.each([
-    { finalScheme: "https", expectedStatus: "pass" },
-    { finalScheme: "http", expectedStatus: "unknown" },
-    { finalScheme: undefined, expectedStatus: "unknown" },
-  ])(
-    "only accepts a controls-v3 header pass for HTTPS responses ($finalScheme)",
-    ({ finalScheme, expectedStatus }) => {
-      const checks = makeControlsV3Checks(["/"]).map((check) => {
+    { profileVersion: "controls-v3", finalScheme: "https", expectedStatus: "pass" },
+    { profileVersion: "controls-v3", finalScheme: "http", expectedStatus: "unknown" },
+    { profileVersion: "controls-v3", finalScheme: undefined, expectedStatus: "unknown" },
+    { profileVersion: "domain-v4", finalScheme: "https", expectedStatus: "pass" },
+    { profileVersion: "domain-v4", finalScheme: "http", expectedStatus: "unknown" },
+    { profileVersion: "domain-v4", finalScheme: undefined, expectedStatus: "unknown" },
+  ] as const)(
+    "only accepts a $profileVersion header pass for HTTPS responses ($finalScheme)",
+    ({ profileVersion, finalScheme, expectedStatus }) => {
+      const sourceChecks = profileVersion === "controls-v3"
+        ? makeControlsV3Checks(["/"])
+        : makeDomainV4Checks();
+      const checks = sourceChecks.map((check) => {
         if (check.controlId !== "DS-HDR-01") return check;
         return {
           ...check,
@@ -537,14 +543,14 @@ describe("sanitizeScanObservations", () => {
       });
       const result = sanitizeScanObservations(
         MONITORED_HOSTNAME,
-        "controls-v3",
+        profileVersion,
         ["/"],
         checks,
       );
 
-      expect(
-        result.checks.find((check) => check.controlId === "DS-HDR-01")?.status,
-      ).toBe(expectedStatus);
+      const headerCheck = result.checks.find((check) => check.controlId === "DS-HDR-01");
+      expect(headerCheck?.status).toBe(expectedStatus);
+      expect(headerCheck?.evidence.finalScheme).toBe(finalScheme);
     },
   );
 
@@ -553,11 +559,14 @@ describe("sanitizeScanObservations", () => {
     { profileVersion: "controls-v2", statusCode: 501 },
     { profileVersion: "controls-v3", statusCode: 405 },
     { profileVersion: "controls-v3", statusCode: 501 },
+    { profileVersion: "domain-v4", statusCode: 405 },
+    { profileVersion: "domain-v4", statusCode: 501 },
   ])(
     "treats unsupported HEAD status $statusCode as unknown in $profileVersion",
     ({ profileVersion, statusCode }) => {
-      const makeChecks =
-        profileVersion === "controls-v3"
+      const makeChecks = profileVersion === "domain-v4"
+        ? () => makeDomainV4Checks()
+        : profileVersion === "controls-v3"
           ? makeControlsV3Checks
           : makeControlsV2Checks;
       const checks = makeChecks(["/"]).map((check) => {
@@ -1145,6 +1154,66 @@ function makeControlsV3Checks(scope: readonly string[]) {
     if (check.controlId !== "DS-HDR-01") return check;
     return { ...check, evidence: { finalScheme: "https" } };
   });
+}
+
+function makeDomainV4Checks() {
+  const policyEvidence = {
+    inspected: true,
+    privacyPolicyLinksFound: 1,
+    policyLinksFound: 1,
+    sitePrivacyPolicyFetched: true,
+    policyPagesFetched: 1,
+    policyPagesMissing: 0,
+    policyPagesDenied: 0,
+    policyRecipientsMentioned: true,
+    policyPurposesMentioned: true,
+    policyTextBlocked: false,
+    policyProbeFailed: false,
+    policyLanguageCatalogVersion: "public-policy-language-eea-v1",
+  };
+  return [
+    ...makeTransportV1Checks(),
+    {
+      ...makeUnknownCheck("DS-TLS-02", "/", "TLS"),
+      status: "pass",
+      evidence: {
+        tls10Accepted: false,
+        tls11Accepted: false,
+        tls12Accepted: true,
+        tls13Accepted: true,
+      },
+    },
+    {
+      ...makeUnknownCheck("DS-PRIV-05", "/", "GET"),
+      status: "pass",
+      evidence: {
+        inspected: true,
+        cookieCount: 0,
+        insecureCookieCount: 0,
+        catalogMatchCount: 0,
+        consentPromptDetected: false,
+      },
+    },
+    {
+      ...makeUnknownCheck("DS-PRIV-06", "/", "GET"),
+      status: "pass",
+      evidence: {
+        inspected: true,
+        thirdPartyResourceReferences: 0,
+        knownTrackingResourceReferences: 0,
+      },
+    },
+    {
+      ...makeUnknownCheck("DS-QUAL-02", "/", "GET"),
+      status: "pass",
+      evidence: { inspected: true, responseTimeMs: 900, responseBytes: 45_000 },
+    },
+    {
+      ...makeUnknownCheck("DS-PRIV-04", "/", "GET"),
+      status: "pass",
+      evidence: policyEvidence,
+    },
+  ];
 }
 
 function makeTransportV1Checks() {

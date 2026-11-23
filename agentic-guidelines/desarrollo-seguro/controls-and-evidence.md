@@ -149,3 +149,9 @@ No afirmar «certificación oficial», «auditoría independiente», «cumple RG
 En el perfil `domain-v4`, una respuesta de la página puede combinar cabeceras HTTP, señales pasivas de privacidad y datos agregados de las políticas públicas enlazadas. El contrato del broker debe permitir hasta 64 campos derivados por respuesta, tanto en su validación local como en el IPC. Cada campo sigue sujeto a las reglas existentes de nombre, tipo y longitud; se mantienen los límites de bytes, solicitudes y tiempo. No se admiten cuerpos, cabeceras sin filtrar, cookies ni datos personales.
 
 **Aceptación:** una respuesta válida con 33–64 campos derivados atraviesa el broker y el IPC sin convertirse en `broker_failed`; una con más de 64 se rechaza. Los controles de página y política pueden producir evidencia conjunta, y los límites de bytes/solicitudes continúan aplicándose.
+
+### Evidencia HTTPS para cabeceras en `domain-v4`
+
+El core conserva `finalScheme` en la evidencia saneada de `DS-HDR-01` para `domain-v4`, igual que los perfiles anteriores cubiertos por la base de datos. Un resultado de cabeceras solo puede pasar o fallar si la respuesta final fue HTTPS; con esquema HTTP o desconocido queda `unknown`. El perfil `domain-v4` trata la respuesta 405/501 a `HEAD` como no concluyente cuando se confirmó la redirección HTTPS, de forma coherente con la validación SQL.
+
+**Aceptación:** las pruebas del core conservan el esquema HTTPS para `domain-v4`, cambian a `unknown` ante HTTP/esquema ausente y clasifican como `unknown` un `HEAD` no admitido redirigido a HTTPS. La persistencia acepta estos resultados sin relajar sus guardas.
