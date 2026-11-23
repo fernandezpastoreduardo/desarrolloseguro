@@ -47,8 +47,10 @@ auditoría privada:
   cookies/privacidad). El contador de esta capa suele ser `3/3`, aunque una
   categoría pueda estar en `fail`; evaluada no significa aprobada.
 - **Auditoría privada Beta D:** catorce señales técnicas distribuidas en las
-  siete rutas autenticadas. Su `internalScore` y su cobertura no se exponen en
-  la ficha pública ni se suman a la puntuación externa.
+  siete rutas autenticadas. La ficha de Grumphya muestra sus estados agregados
+  y posibles impactos en lenguaje llano, como bloque independiente. El
+  `internalScore`, la cobertura, los valores y los códigos de motivo siguen
+  privados y no se suman a la puntuación externa.
 
 Esta separación evita presentar como una sola cifra controles con distinto
 alcance, evidencia y autorización. El cierre global solo compara las capas en

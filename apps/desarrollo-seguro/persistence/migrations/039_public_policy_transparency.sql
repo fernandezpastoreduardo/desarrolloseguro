@@ -34,7 +34,7 @@ CREATE TRIGGER ds_scan_public_policy_transparency_immutable
   BEFORE UPDATE OR DELETE ON public.ds_scan_public_policy_transparency
   FOR EACH ROW EXECUTE FUNCTION public.ds_reject_report_mutation();
 
-CREATE FUNCTION public.ds_complete_scan_with_public_policy(
+CREATE FUNCTION public.ds_complete_scan_with_transparency(
   p_job_id uuid,
   p_lease_token uuid,
   p_completed_at timestamptz,
@@ -46,6 +46,7 @@ CREATE FUNCTION public.ds_complete_scan_with_public_policy(
   p_metrics_json jsonb,
   p_privacy_assessment_json jsonb,
   p_processor_transparency_json jsonb,
+  p_internal_audit_summary_json jsonb,
   p_public_policy_json jsonb
 ) RETURNS uuid
 LANGUAGE plpgsql
@@ -173,10 +174,11 @@ BEGIN
     RAISE EXCEPTION 'invalid_public_policy_assessment';
   END IF;
 
-  report_id := public.ds_complete_scan_with_processor_transparency(
+  report_id := public.ds_complete_scan_with_internal_audit_public(
     p_job_id, p_lease_token, p_completed_at, p_scanner_version,
     p_started_at, p_verdict, p_scope_json, p_checks_json, p_metrics_json,
-    p_privacy_assessment_json, p_processor_transparency_json
+    p_privacy_assessment_json, p_processor_transparency_json,
+    p_internal_audit_summary_json
   );
   IF p_public_policy_json IS NOT NULL THEN
     INSERT INTO public.ds_scan_public_policy_transparency(run_id, assessment_json)
@@ -188,6 +190,7 @@ $$;
 
 REVOKE ALL ON public.ds_scan_public_policy_transparency FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.ds_public_policy_object_key_count(jsonb) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.ds_complete_scan_with_public_policy(
-  uuid, uuid, timestamptz, text, timestamptz, text, jsonb, jsonb, jsonb, jsonb, jsonb, jsonb
+REVOKE ALL ON FUNCTION public.ds_complete_scan_with_transparency(
+  uuid, uuid, timestamptz, text, timestamptz, text, jsonb, jsonb, jsonb,
+  jsonb, jsonb, jsonb, jsonb
 ) FROM PUBLIC;

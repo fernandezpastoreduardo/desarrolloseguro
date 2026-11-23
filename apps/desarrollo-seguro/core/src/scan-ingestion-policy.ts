@@ -8,6 +8,7 @@ const PROFILE_VERSION_TRANSPORT_V1 = "transport-v1";
 const PROFILE_VERSION_DOMAIN_V1 = "domain-v1";
 const PROFILE_VERSION_DOMAIN_V2 = "domain-v2";
 const PROFILE_VERSION_DOMAIN_V3 = "domain-v3";
+const PROFILE_VERSION_DOMAIN_V4 = "domain-v4";
 type ProfileVersion =
   | typeof PROFILE_VERSION_V1
   | typeof PROFILE_VERSION_V2
@@ -15,7 +16,8 @@ type ProfileVersion =
   | typeof PROFILE_VERSION_TRANSPORT_V1
   | typeof PROFILE_VERSION_DOMAIN_V1
   | typeof PROFILE_VERSION_DOMAIN_V2
-  | typeof PROFILE_VERSION_DOMAIN_V3;
+  | typeof PROFILE_VERSION_DOMAIN_V3
+  | typeof PROFILE_VERSION_DOMAIN_V4;
 const MAX_SCOPE_PATHS = 3;
 const MAX_CHECKS = 32;
 const MAX_EVIDENCE_COUNT = 100_000;
@@ -67,6 +69,7 @@ const TRANSPORT_V1_CONTROLS = [
 const DOMAIN_V1_CONTROLS = [...TRANSPORT_V1_CONTROLS, "DS-PRIV-05"] as const;
 const DOMAIN_V2_CONTROLS = [...DOMAIN_V1_CONTROLS, "DS-PRIV-06", "DS-QUAL-02"] as const;
 const DOMAIN_V3_CONTROLS = [...DOMAIN_V2_CONTROLS, "DS-TLS-02"] as const;
+const DOMAIN_V4_CONTROLS = [...DOMAIN_V3_CONTROLS, "DS-PRIV-04"] as const;
 const CONTROLS: Readonly<Record<string, ControlContract>> = {
   "DS-DNS-01": {
     methodsByPath: { "/": ["DNS"] },
@@ -145,6 +148,23 @@ const CONTROLS: Readonly<Record<string, ControlContract>> = {
       insecureNavigationCount: "count",
     },
   },
+  "DS-PRIV-04": {
+    methodsByPath: pathsFor(READ_METHODS),
+    evidence: {
+      inspected: "boolean",
+      privacyPolicyLinksFound: "count",
+      policyLinksFound: "count",
+      sitePrivacyPolicyFetched: "boolean",
+      policyPagesFetched: "count",
+      policyPagesMissing: "count",
+      policyPagesDenied: "count",
+      policyRecipientsMentioned: "boolean",
+      policyPurposesMentioned: "boolean",
+      policyTextBlocked: "boolean",
+      policyProbeFailed: "boolean",
+      policyLanguageCatalogVersion: ["public-policy-language-eea-v1"],
+    },
+  },
   "DS-PRIV-05": {
     methodsByPath: pathsFor(READ_METHODS),
     evidence: {
@@ -180,7 +200,7 @@ const CONTROLS: Readonly<Record<string, ControlContract>> = {
   },
 };
 const ALL_CONTROL_IDS = Object.keys(CONTROLS).filter(
-  (controlId) => !["DS-PRIV-05", "DS-PRIV-06", "DS-QUAL-02"].includes(controlId),
+  (controlId) => !["DS-PRIV-04", "DS-PRIV-05", "DS-PRIV-06", "DS-QUAL-02"].includes(controlId),
 );
 const PROFILE_CONTROLS: Readonly<Record<ProfileVersion, readonly string[]>> = {
   [PROFILE_VERSION_V1]: ALL_CONTROL_IDS,
@@ -190,6 +210,7 @@ const PROFILE_CONTROLS: Readonly<Record<ProfileVersion, readonly string[]>> = {
   [PROFILE_VERSION_DOMAIN_V1]: DOMAIN_V1_CONTROLS,
   [PROFILE_VERSION_DOMAIN_V2]: DOMAIN_V2_CONTROLS,
   [PROFILE_VERSION_DOMAIN_V3]: DOMAIN_V3_CONTROLS,
+  [PROFILE_VERSION_DOMAIN_V4]: DOMAIN_V4_CONTROLS,
 };
 
 export function sanitizeScanObservations(
@@ -208,7 +229,8 @@ export function sanitizeScanObservations(
     profileVersion === PROFILE_VERSION_TRANSPORT_V1 ||
     profileVersion === PROFILE_VERSION_DOMAIN_V1 ||
     profileVersion === PROFILE_VERSION_DOMAIN_V2 ||
-    profileVersion === PROFILE_VERSION_DOMAIN_V3
+    profileVersion === PROFILE_VERSION_DOMAIN_V3 ||
+    profileVersion === PROFILE_VERSION_DOMAIN_V4
       ? ["/"]
       : allowedPaths;
   const safeScope = sanitizeScope(scope, profilePaths);
@@ -238,7 +260,8 @@ export function sanitizeScanObservations(
     profileVersion === PROFILE_VERSION_TRANSPORT_V1 ||
     profileVersion === PROFILE_VERSION_DOMAIN_V1 ||
     profileVersion === PROFILE_VERSION_DOMAIN_V2 ||
-    profileVersion === PROFILE_VERSION_DOMAIN_V3
+    profileVersion === PROFILE_VERSION_DOMAIN_V3 ||
+    profileVersion === PROFILE_VERSION_DOMAIN_V4
   ) {
     assertCompleteCoverage(safeScope, safeChecks, allowedControlIds);
   }
@@ -254,7 +277,8 @@ function isProfileVersion(value: unknown): value is ProfileVersion {
     value === PROFILE_VERSION_TRANSPORT_V1 ||
     value === PROFILE_VERSION_DOMAIN_V1 ||
     value === PROFILE_VERSION_DOMAIN_V2 ||
-    value === PROFILE_VERSION_DOMAIN_V3
+      value === PROFILE_VERSION_DOMAIN_V3 ||
+      value === PROFILE_VERSION_DOMAIN_V4
   );
 }
 
@@ -522,6 +546,12 @@ const REQUIRED_EVIDENCE: Readonly<Record<string, readonly string[]>> = {
   "DS-PRIV-06": ["inspected", "thirdPartyResourceReferences", "knownTrackingResourceReferences"],
   "DS-QUAL-02": ["inspected", "responseTimeMs", "responseBytes"],
   "DS-PRIV-03": ["mixedContentCount", "insecureNavigationCount"],
+  "DS-PRIV-04": [
+    "inspected", "privacyPolicyLinksFound", "policyLinksFound", "sitePrivacyPolicyFetched",
+    "policyPagesFetched", "policyPagesMissing", "policyPagesDenied",
+    "policyRecipientsMentioned", "policyPurposesMentioned", "policyTextBlocked", "policyProbeFailed",
+    "policyLanguageCatalogVersion",
+  ],
   "DS-QUAL-01": ["documentStatusCode", "failedEssentialResourceCount"],
 };
 
@@ -563,6 +593,16 @@ const CONTROL_FAILURES: Readonly<Record<string, EvidencePredicate>> = {
   "DS-PRIV-02": (evidence) =>
     Number(evidence.insecureCookieCount) > 0 ||
     Number(evidence.thirdPartyCookieCount) > 0,
+  "DS-PRIV-04": (evidence) => evidence.inspected === true && (
+    Number(evidence.privacyPolicyLinksFound) === 0 ||
+    Number(evidence.policyPagesDenied) > 0 ||
+    Number(evidence.policyPagesMissing) > 0 ||
+    evidence.policyTextBlocked === true ||
+    (evidence.sitePrivacyPolicyFetched === true && (
+      evidence.policyRecipientsMentioned !== true || evidence.policyPurposesMentioned !== true
+    )) ||
+    (evidence.sitePrivacyPolicyFetched === false && evidence.policyProbeFailed !== true && Number(evidence.privacyPolicyLinksFound) > 0)
+  ),
   "DS-PRIV-05": (evidence) =>
     Number(evidence.catalogMatchCount) > 0,
   "DS-PRIV-06": (evidence) => Number(evidence.knownTrackingResourceReferences) > 0,
@@ -600,6 +640,16 @@ const CONTROL_PASSES: Readonly<Record<string, EvidencePredicate>> = {
     evidence.inspected === true &&
     evidence.insecureCookieCount === 0 &&
     evidence.thirdPartyCookieCount === 0,
+  "DS-PRIV-04": (evidence) =>
+    evidence.inspected === true &&
+    Number(evidence.privacyPolicyLinksFound) > 0 &&
+    evidence.sitePrivacyPolicyFetched === true &&
+    Number(evidence.policyPagesDenied) === 0 &&
+    Number(evidence.policyPagesMissing) === 0 &&
+    evidence.policyRecipientsMentioned === true &&
+    evidence.policyPurposesMentioned === true &&
+    evidence.policyTextBlocked === false &&
+    evidence.policyProbeFailed === false,
   "DS-PRIV-05": (evidence) =>
     evidence.inspected === true &&
     Number(evidence.catalogMatchCount) === 0,

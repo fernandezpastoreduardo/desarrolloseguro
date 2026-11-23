@@ -124,8 +124,16 @@ const MIGRATIONS = [
     file: "036_self_domain_processor_transparency.sql",
   },
   {
-    version: "037_public_policy_transparency",
-    file: "037_public_policy_transparency.sql",
+    version: "037_public_internal_audit_summary",
+    file: "037_public_internal_audit_summary.sql",
+  },
+  {
+    version: "038_public_policy_transparency_domain_v4",
+    file: "038_public_policy_transparency_domain_v4.sql",
+  },
+  {
+    version: "039_public_policy_transparency",
+    file: "039_public_policy_transparency.sql",
   },
 ] as const;
 

@@ -5,10 +5,7 @@ import type {
   TransportV1ProbeResult,
 } from "./transport-v1-executor.js";
 import type { PinnedTransportErrorCode } from "./pinned-transport-error.js";
-import {
-  MAX_TRANSPORT_BYTES_PER_SCAN,
-  MAX_TRANSPORT_REQUESTS_PER_SCAN,
-} from "./transport-v1-executor-protocol.js";
+import { getTransportBudget } from "./transport-budget.js";
 
 const MAX_BROKER_OPERATIONS = 5;
 const MAX_CONCURRENT_BROKER_OPERATIONS = 2;
@@ -50,8 +47,10 @@ export type TransportV1EgressBroker = (
 export function createTransportV1EgressBroker(
   jobHostnameInput: unknown,
   source: TransportV1ObservationSource,
+  profileVersion = "transport-v1",
 ): TransportV1EgressBroker {
   const jobHostname = normalizeHostname(jobHostnameInput);
+  const budget = getTransportBudget(profileVersion);
   const startedOperations = new Set<TransportV1ProbeOperation>();
   const usedRequestIds = new Set<string>();
   let activeOperations = 0;
@@ -79,12 +78,12 @@ export function createTransportV1EgressBroker(
       if (signal.aborted) {
         return createBrokerResponse(request.requestId, emptyProbeResult());
       }
-      const validatedResult = validateProbeResult(result);
+      const validatedResult = validateProbeResult(result, budget);
       totalRequests += validatedResult.requestsCount;
       totalBytes += validatedResult.bytesCount;
       if (
-        totalRequests > MAX_TRANSPORT_REQUESTS_PER_SCAN ||
-        totalBytes > MAX_TRANSPORT_BYTES_PER_SCAN
+        totalRequests > budget.maxRequests ||
+        totalBytes > budget.maxBytes
       ) {
         budgetExceeded = true;
         return createBrokerResponse(request.requestId, emptyProbeResult());
@@ -168,7 +167,10 @@ async function observeOperation(
   }
 }
 
-function validateProbeResult(input: unknown): TransportV1ProbeResult {
+function validateProbeResult(
+  input: unknown,
+  budget: ReturnType<typeof getTransportBudget>,
+): TransportV1ProbeResult {
   if (
     typeof input !== "object" ||
     input === null ||
@@ -186,10 +188,10 @@ function validateProbeResult(input: unknown): TransportV1ProbeResult {
     !Object.hasOwn(candidate, "bytesCount") ||
     !Number.isSafeInteger(candidate.requestsCount) ||
     (candidate.requestsCount as number) < 0 ||
-    (candidate.requestsCount as number) > MAX_TRANSPORT_REQUESTS_PER_SCAN ||
+    (candidate.requestsCount as number) > budget.maxRequests ||
     !Number.isSafeInteger(candidate.bytesCount) ||
     (candidate.bytesCount as number) < 0 ||
-    (candidate.bytesCount as number) > MAX_TRANSPORT_BYTES_PER_SCAN ||
+    (candidate.bytesCount as number) > budget.maxBytes ||
     (Object.hasOwn(candidate, "errorCode") &&
       (typeof candidate.errorCode !== "string" ||
         !SAFE_PROBE_ERROR_CODES.has(candidate.errorCode as PinnedTransportErrorCode)))

@@ -99,21 +99,24 @@ test("searches a domain and requests an authorized analysis without third-party 
   await expect(page.getByRole("heading", { name: "Aún no hay un informe" })).toBeVisible();
   await page.getByRole("checkbox", { name: /tengo autorización/i }).check();
   await page.getByRole("button", { name: "Solicitar análisis" }).click();
-  await expect(page.getByRole("status")).toHaveText("Solicitud añadida a la cola de análisis.");
+  await expect(page.getByRole("progressbar", { name: "Progreso del análisis" }))
+    .toHaveAttribute("data-phase", "queued");
+  await expect(page.getByRole("progressbar", { name: "Progreso del análisis" }))
+    .toHaveAttribute("aria-valuetext", /La solicitud está en cola/i);
   expect(externalRequests).toEqual([]);
 });
 
-test("shows the report when an authorized analysis finishes", async ({ page }) => {
+test("shows the report and Grumphya's private review when an authorized analysis finishes", async ({ page }, testInfo) => {
   let statusReads = 0;
   let completedResponseServed = false;
-  await page.route("**/domains/report.example/history", (route) =>
+  await page.route("**/domains/grumphya.com/history", (route) =>
     route.fulfill({ contentType: "application/json", body: "[]" }),
   );
-  await page.route("**/domains/report.example/status", async (route) => {
+  await page.route("**/domains/grumphya.com/status", async (route) => {
     statusReads += 1;
     const state = statusReads >= 2 ? "updating" : "not_scanned";
     const response = {
-      hostname: "report.example",
+      hostname: "grumphya.com",
       enrollment: "on_demand",
       state,
       failureCode: null,
@@ -127,7 +130,7 @@ test("shows the report when an authorized analysis finishes", async ({ page }) =
       activeJobId: null,
       lastReport: {
         id: "123e4567-e89b-42d3-a456-426614174000",
-        hostname: "report.example",
+        hostname: "grumphya.com",
         profileVersion: "domain-v3",
         scannerVersion: "scanner-v1",
         vantage: "same_vps",
@@ -165,7 +168,7 @@ test("shows the report when an authorized analysis finishes", async ({ page }) =
               status: "pass",
               weight: 20,
             },
-            { id: "third-party-data-use", label: "Reutilización o venta de datos por terceros", status: "unknown", weight: 10 },
+            { id: "third-party-data-use", label: "Transparencia sobre servicios externos", status: "unknown", weight: 10 },
             { id: "initial-cookie-risk", label: "Cookies conocidas en la respuesta inicial", status: "unknown", weight: 10 },
             { id: "tracking", label: "Rastreadores y mapas de calor", status: "fail", weight: 5 },
             { id: "performance", label: "Rendimiento", status: "pass", weight: 5 },
@@ -192,6 +195,23 @@ test("shows the report when an authorized analysis finishes", async ({ page }) =
         },
         processorTransparencyAssessment: null,
         publicPolicyTransparencyAssessment: null,
+        internalAuditState: "complete",
+        internalAuditSummary: {
+          policyVersion: "internal-audit-public-v1",
+          status: "complete",
+          observedAt: "2026-11-11T00:00:00.000Z",
+          criteria: [
+            "infrastructure.tls", "infrastructure.headers", "infrastructure.network",
+            "application.dependencies", "application.secrets", "authentication.authorization",
+            "quality.e2e", "quality.accessibility", "performance.page_load",
+            "privacy.cookies", "privacy.third_parties", "privacy.consent",
+            "ethics.transparency", "ai.disclosure",
+          ].map((id) => ({
+            id,
+            status: id === "application.secrets" ? "fail" : id === "ai.disclosure" ? "not_applicable" : "pass",
+          })),
+        },
+
         scope: ["/"],
         checks: [
           {
@@ -256,16 +276,19 @@ test("shows the report when an authorized analysis finishes", async ({ page }) =
     route.fulfill({
       status: 202,
       contentType: "application/json",
-      body: JSON.stringify({ hostname: "report.example", state: "queued" }),
+      body: JSON.stringify({ hostname: "grumphya.com", state: "queued" }),
     }),
   );
 
   await page.goto("/");
-  await page.getByRole("textbox", { name: "Dominio que quieres consultar" }).fill("report.example");
+  await page.getByRole("textbox", { name: "Dominio que quieres consultar" }).fill("grumphya.com");
   await page.getByRole("button", { name: "Consultar informe" }).click();
   await page.getByRole("checkbox", { name: /tengo autorización/i }).check();
   await page.getByRole("button", { name: "Solicitar análisis" }).click();
-  await expect(page.getByRole("status")).toHaveText("Solicitud añadida a la cola de análisis.");
+  await expect(page.getByRole("progressbar", { name: "Progreso del análisis" }))
+    .toHaveAttribute("data-phase", "queued");
+  await expect(page.getByRole("progressbar", { name: "Progreso del análisis" }))
+    .toHaveAttribute("aria-valuetext", /La solicitud está en cola/i);
 
   await expect.poll(() => statusReads, { timeout: 10_000 }).toBeGreaterThanOrEqual(2);
   await expect(page.getByRole("progressbar", { name: "Progreso del análisis" }))
@@ -310,7 +333,7 @@ test("shows the report when an authorized analysis finishes", async ({ page }) =
   );
   const technicalEvidenceSections = page.locator(".ds-portal__technical-details summary");
   await expect(technicalEvidenceSections).toHaveCount(1);
-  await technicalEvidenceSections.first().click();
+  await technicalEvidenceSections.first().click({ force: true });
   await expect(page.getByText("TLS 1.0 aceptado", { exact: true })).toBeVisible();
   await expect(page.getByText("TLS 1.1 aceptado", { exact: true })).toBeVisible();
   await expect(page.getByText("TLS 1.2 aceptado", { exact: true })).toBeVisible();
@@ -322,24 +345,32 @@ test("shows the report when an authorized analysis finishes", async ({ page }) =
   await expect(
     page.locator('.ds-portal__category-modal .ds-portal__ethics-criteria li[data-status="fail"] > span').first(),
   ).toHaveText("Problema detectado");
-  await page.locator(".ds-portal__technical-details summary").click();
+  await page.locator(".ds-portal__technical-details summary").click({ force: true });
   await expect(page.getByText("Referencias a rastreadores conocidos").first()).toBeVisible();
-  await expect(page.getByText(/Revisa las referencias detectadas/i)).toBeVisible();
-  await expect(page.getByText(/qué revisar:/i).first()).toBeVisible();
-  await expect(page.getByText(/HTML inicial contiene referencias a herramientas de seguimiento conocidas/i))
+  await expect(page.getByText(/Comprobación:/i).first()).toBeVisible();
+  await expect(page.getByText(/Qué implica:/i).first()).toBeVisible();
+  await expect(page.getByText(/qué revisar:/i)).toHaveCount(0);
+  await expect(page.getByText(/El contenido inicial menciona herramientas de seguimiento conocidas/i))
     .toBeVisible();
   await page.getByRole("button", { name: "Cerrar detalle" }).click();
   await categoryButtons.nth(3).click();
   await expect(page.getByRole("dialog", { name: "Rendimiento" })).toBeVisible();
-  await page.locator(".ds-portal__technical-details summary").click();
+  await page.locator(".ds-portal__technical-details summary").click({ force: true });
   await expect(page.getByText("Tiempo de respuesta inicial")).toBeVisible();
   await expect(page.getByText("45.000 bytes")).toBeVisible();
-  await expect(page.getByText(/qué comprueba:/i).first()).toBeVisible();
-  await expect(page.getByText(/qué significa:/i).first()).toBeVisible();
+  await expect(page.getByText(/Comprobación:/i).first()).toBeVisible();
+  await expect(page.getByText(/Qué implica:/i).first()).toBeVisible();
   await expect(page.locator(".ds-portal__report-takeaway")).toBeVisible();
   await expect(page.getByText("Hay controles observados que no se cumplen")).toBeVisible();
   await page.getByRole("button", { name: "Cerrar detalle" }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
+  const internalAudit = page.getByRole("region", { name: "Lo que ocurre dentro de Grumphya" });
+  await expect(internalAudit).toBeVisible();
+  await expect(internalAudit.locator("li")).toHaveCount(14);
+  await expect(internalAudit.getByRole("heading", { name: "Conexión y protección" })).toBeVisible();
+  await expect(internalAudit.getByRole("heading", { name: "Datos e información" })).toBeVisible();
+  await expect(internalAudit.getByText("Atención")).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("grumphya-internal-audit-desktop.png"), fullPage: true });
 });
 
 test("stops polling and reports an admission mismatch when no scan job appears", async ({

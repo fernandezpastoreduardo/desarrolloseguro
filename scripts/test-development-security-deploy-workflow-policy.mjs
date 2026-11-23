@@ -92,9 +92,17 @@ const domainV3Migration = await readFile(
   "apps/desarrollo-seguro/persistence/migrations/019_domain_v3_tls_version_matrix.sql",
   "utf8",
 );
+const domainV4Migration = await readFile(
+  "apps/desarrollo-seguro/persistence/migrations/038_public_policy_transparency_domain_v4.sql",
+  "utf8",
+);
 assert.match(liveScanSmoke, /VALIDATION_HOSTNAME = process\.env\.DS_SMOKE_HOSTNAME \?\? "grumphya\.com"/u);
-assert.match(liveScanSmoke, /profileVersion !== "domain-v3"/u);
-assert.match(liveScanSmoke, /scannerVersion !== "domain-v3-network-adapter-2"/u);
+assert.match(liveScanSmoke, /profileVersion !== "domain-v4"/u);
+assert.match(liveScanSmoke, /scannerVersion !== "domain-v4-network-adapter-2"/u);
+assert.match(liveScanSmoke, /report\.checks\.length !== 10/u);
+assert.match(liveScanSmoke, /domain-ethics-v5/u);
+assert.match(liveScanSmoke, /publicPolicyTransparencyAssessment/u);
+
 assert.match(liveScanSmoke, /conclusiveChecks\.length < 5/u);
 assert.match(liveScanSmoke, /tls10Accepted/u);
 assert.match(liveScanSmoke, /assessment\.score/u);
@@ -111,6 +119,8 @@ assert.match(domainV2Migration, /DS-QUAL-02/u);
 assert.match(domainV2Migration, /SET profile_version = 'domain-v2'/u);
 assert.match(domainV3Migration, /DS-TLS-02/u);
 assert.match(domainV3Migration, /SET profile_version = 'domain-v3'/u);
+assert.match(domainV4Migration, /DS-PRIV-04/u);
+assert.match(domainV4Migration, /SET profile_version = 'domain-v4'/u);
 assert.doesNotMatch(
   workflow.replace("Verify canonical www redirect and live Grumphya scan", ""),
   /grumphya|caddy reload|compose down/iu,

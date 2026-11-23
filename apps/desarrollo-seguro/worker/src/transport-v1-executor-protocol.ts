@@ -1,14 +1,13 @@
 import { normalizeHostname, SCAN_FAILURE_CODES, parsePrivacyAssessment, parsePublicPolicyTransparencyAssessment, parseScanFailureDiagnostic, type ScanFailureCode, type ScanFailureDiagnostic } from "@desarrolloseguro/core";
 import type { ScanCheck, ScanRunInput } from "@desarrolloseguro/persistence";
 import { isNetworkProbeFailureList, type NetworkProbeFailure, type ScanProfileVersion } from "./transport-v1-executor.js";
+import { getTransportBudget } from "./transport-budget.js";
 
 export const TRANSPORT_V1_EXECUTOR_PROTOCOL_VERSION = 1;
 export const MAX_EXECUTOR_REQUEST_BYTES = 4 * 1024;
 export const MAX_EXECUTOR_RESPONSE_BYTES = 256 * 1024;
-export const MAX_TRANSPORT_REQUESTS_PER_SCAN = 300;
-export const MAX_TRANSPORT_BYTES_PER_SCAN = 20 * 1024 * 1024;
-const LEGACY_TRANSPORT_DURATION_MS = 35_000;
-const DOMAIN_V3_TRANSPORT_DURATION_MS = 158_000;
+export const MAX_TRANSPORT_REQUESTS_PER_SCAN = 24;
+export const MAX_TRANSPORT_BYTES_PER_SCAN = 2 * 1024 * 1024;
 
 export type TransportV1ExecutorRequest = {
   protocolVersion: 1;
@@ -156,14 +155,9 @@ function parseExecutorResult(
     scope: value.scope,
     checks: value.checks.map(parseCheck),
     metrics: {
-      requestsCount: parseCount(value.metrics.requestsCount, MAX_TRANSPORT_REQUESTS_PER_SCAN),
-      bytesCount: parseCount(value.metrics.bytesCount, MAX_TRANSPORT_BYTES_PER_SCAN),
-      durationMs: parseCount(
-        value.metrics.durationMs,
-        profileVersion === "domain-v3"
-          ? DOMAIN_V3_TRANSPORT_DURATION_MS
-          : LEGACY_TRANSPORT_DURATION_MS,
-      ),
+      requestsCount: parseCount(value.metrics.requestsCount, getTransportBudget(profileVersion).maxRequests),
+      bytesCount: parseCount(value.metrics.bytesCount, getTransportBudget(profileVersion).maxBytes),
+      durationMs: parseCount(value.metrics.durationMs, getTransportBudget(profileVersion).maxDurationMs),
       pagesCount: parseCount(value.metrics.pagesCount, 0),
     },
   };
@@ -173,20 +167,23 @@ function parseExecutorResult(
     result.privacyAssessment = privacyAssessment;
   }
   if (value.publicPolicyTransparencyAssessment !== undefined) {
-    if (profileVersion !== "domain-v3") throw new Error("executor_result_invalid");
-    const publicPolicyTransparencyAssessment = parsePublicPolicyTransparencyAssessment(value.publicPolicyTransparencyAssessment);
-    if (!publicPolicyTransparencyAssessment) throw new Error("executor_result_invalid");
-    result.publicPolicyTransparencyAssessment = publicPolicyTransparencyAssessment;
+    if (profileVersion !== "domain-v4" || value.scannerVersion !== "domain-v4-network-adapter-2") {
+      throw new Error("executor_result_invalid");
+    }
+    const assessment = parsePublicPolicyTransparencyAssessment(value.publicPolicyTransparencyAssessment);
+    if (!assessment) throw new Error("executor_result_invalid");
+    result.publicPolicyTransparencyAssessment = assessment;
   }
   return result;
 }
 
 function isScanProfileVersion(value: unknown): value is ScanProfileVersion {
-  return value === "transport-v1" || value === "domain-v1" || value === "domain-v2" || value === "domain-v3";
+  return value === "transport-v1" || value === "domain-v1" || value === "domain-v2" || value === "domain-v3" || value === "domain-v4";
 }
 
 function getScannerVersion(profileVersion: ScanProfileVersion): string {
   if (profileVersion === "domain-v3") return "domain-v3-network-adapter-1";
+  if (profileVersion === "domain-v4") return "domain-v4-network-adapter-1";
   if (profileVersion === "domain-v2") return "domain-v2-network-adapter-1";
   return profileVersion === "domain-v1"
     ? "domain-v1-network-adapter-1"
@@ -194,14 +191,14 @@ function getScannerVersion(profileVersion: ScanProfileVersion): string {
 }
 
 function getExpectedScannerVersion(profileVersion: ScanProfileVersion, hasPublicPolicyAssessment: boolean): string {
-  if (profileVersion === "domain-v3" && hasPublicPolicyAssessment) {
-    return "domain-v3-network-adapter-2";
-  }
-  return getScannerVersion(profileVersion);
+  return profileVersion === "domain-v4" && hasPublicPolicyAssessment
+    ? "domain-v4-network-adapter-2"
+    : getScannerVersion(profileVersion);
 }
 
 function getExpectedCheckCount(profileVersion: ScanProfileVersion): number {
   if (profileVersion === "domain-v3") return 9;
+  if (profileVersion === "domain-v4") return 10;
   if (profileVersion === "domain-v2") return 8;
   return profileVersion === "domain-v1" ? 6 : 5;
 }

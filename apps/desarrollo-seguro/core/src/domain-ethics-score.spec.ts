@@ -43,13 +43,13 @@ describe("assessDomainEthics", () => {
     );
   });
 
-  it("does not infer third-party data selling, cookies, consent or tracking from absent evidence", () => {
+  it("keeps the public transparency criterion under review when the auditor has no evidence", () => {
     const result = assessDomainEthics([]);
 
     expect(result.score).toBeNull();
     expect(result.criteria.find(({ id }) => id === "third-party-data-use")?.status).toBe("unknown");
     expect(result.reasons).toContain(
-      "No hay evidencia verificable sobre reutilización o venta de datos por terceros.",
+      "El auditor no pudo terminar la revisión de la información pública sobre servicios externos.",
     );
   });
 

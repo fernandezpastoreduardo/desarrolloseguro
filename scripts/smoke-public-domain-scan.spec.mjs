@@ -19,6 +19,7 @@ function completedStatus() {
     { controlId: "DS-HTTP-01", status: "pass", summary: "HTTP válido" },
     { controlId: "DS-HTTP-01", status: "pass", summary: "HTTP válido" },
     { controlId: "DS-HDR-01", status: "fail", summary: "Faltan cabeceras" },
+    { controlId: "DS-PRIV-04", status: "pass", summary: "Política pública revisada", evidence: { inspected: true, privacyPolicyLinksFound: 1, policyLinksFound: 1, sitePrivacyPolicyFetched: true, policyPagesFetched: 1, policyPagesMissing: 0, policyPagesDenied: 0, policyRecipientsMentioned: true, policyPurposesMentioned: true, policyTextBlocked: false, policyProbeFailed: false, policyLanguageCatalogVersion: "public-policy-language-eea-v1" } },
     { controlId: "DS-PRIV-05", status: "pass", summary: "Sin cookies conocidas" },
     { controlId: "DS-PRIV-06", status: "pass", summary: "No hay referencias a rastreadores conocidos" },
     { controlId: "DS-QUAL-02", status: "pass", summary: "Respuesta inicial inferior a 2,5 segundos" },
@@ -37,8 +38,8 @@ function completedStatus() {
     hostname: "grumphya.com",
     lastReport: {
       id: "f7490d2d-2976-4a89-a9a7-001690e873ef",
-      profileVersion: "domain-v3",
-      scannerVersion: "domain-v3-network-adapter-2",
+      profileVersion: "domain-v4",
+      scannerVersion: "domain-v4-network-adapter-2",
       completedAt: "2026-11-11T20:00:00.000Z",
       checks,
       ethicsAssessment: {
@@ -76,7 +77,7 @@ test("accepts a refreshed report with all eight v5 ethics criteria and both tran
   assert.equal(report.ethicsAssessment.assessedCriteria, 8);
   assert.equal(report.processorTransparencyAssessment.status, "pass");
   assert.equal(report.publicPolicyTransparencyAssessment.status, "pass");
-  assert.equal(report.checks.length, 9);
+  assert.equal(report.checks.length, 10);
 });
 
 test("requires 100/100 and source-registry evidence for the self-domain report", () => {

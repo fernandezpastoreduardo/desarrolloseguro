@@ -105,3 +105,5 @@ que la evidencia pública no permita observar.
    backend autenticado en clientes y evaluación pública en no clientes. No
    altera `domain-ethics-v4`, sus informes históricos ni el estado de
    certificación.
+
+La presentación pública separa lo que declara el titular de las señales observadas. Solo una diferencia reproducible permite describir una discrepancia; el contenido de políticas no se publica literalmente.

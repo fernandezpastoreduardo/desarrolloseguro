@@ -107,7 +107,7 @@ describe("createTransportV1EgressBroker", () => {
     });
     vi.mocked(source.observeTls).mockResolvedValueOnce({
       evidence: { valid: true },
-      requestsCount: 24,
+      requestsCount: 23,
       bytesCount: 4,
     });
     const pollutedEvidence = Object.defineProperty(
@@ -132,7 +132,7 @@ describe("createTransportV1EgressBroker", () => {
       result: { evidence: {}, requestsCount: 0, bytesCount: 0 },
     });
     await expect(broker(request("tls"), signal)).resolves.toMatchObject({
-      result: { evidence: { valid: true }, requestsCount: 24, bytesCount: 4 },
+      result: { evidence: { valid: true }, requestsCount: 23, bytesCount: 4 },
     });
     await expect(broker(request("headers"), signal)).resolves.toMatchObject({
       result: { evidence: {}, requestsCount: 0, bytesCount: 0 },

@@ -247,7 +247,7 @@ describePostgres.sequential(
          has_column_privilege('ds_worker', 'ds_scan_jobs', 'state', 'UPDATE') AS worker_can_update_state,
          has_column_privilege('ds_worker', 'ds_scan_jobs', 'hostname', 'UPDATE') AS worker_can_update_hostname,
          has_function_privilege('ds_worker', 'public.ds_complete_scan_with_privacy(uuid,uuid,timestamp with time zone,text,timestamp with time zone,text,jsonb,jsonb,jsonb,jsonb)', 'EXECUTE') AS worker_can_execute_completion,
-         has_function_privilege('ds_worker', 'public.ds_complete_scan_with_public_policy(uuid,uuid,timestamp with time zone,text,timestamp with time zone,text,jsonb,jsonb,jsonb,jsonb,jsonb,jsonb)', 'EXECUTE') AS worker_can_execute_public_policy_completion,
+         has_function_privilege('ds_worker', 'public.ds_complete_scan_with_transparency(uuid,uuid,timestamp with time zone,text,timestamp with time zone,text,jsonb,jsonb,jsonb,jsonb,jsonb,jsonb,jsonb)', 'EXECUTE') AS worker_can_execute_public_policy_completion,
          has_function_privilege('ds_worker', 'public.ds_complete_scan(uuid,uuid,timestamp with time zone,text,timestamp with time zone,text,jsonb,jsonb,jsonb)', 'EXECUTE') AS worker_can_execute_legacy_completion,
          has_function_privilege('ds_worker', 'public.ds_recover_expired_scan_leases(integer)', 'EXECUTE') AS worker_can_execute_lease_recovery,
          has_function_privilege('ds_migrator', 'public.ds_purge_expired_reports(timestamp with time zone)', 'EXECUTE') AS migrator_can_execute_retention,
@@ -410,7 +410,7 @@ describePostgres.sequential(
       const result = await targetAdminPool?.query(
         "SELECT count(*)::integer AS migration_count FROM public.ds_schema_migrations",
       );
-      expect(result?.rows[0].migration_count).toBe(37);
+      expect(result?.rows[0].migration_count).toBe(39);
 
       const client = await targetAdminPool!.connect();
       try {

@@ -477,8 +477,8 @@ describe("PostgresScanStore unit behavior", () => {
       publicPolicyTransparencyAssessment,
     })).resolves.toBe("run-id");
 
-    expect(query.mock.calls[0]?.[0]).toContain("ds_complete_scan_with_public_policy");
-    expect(JSON.parse(query.mock.calls[0]?.[1]?.[11] as string)).toEqual(publicPolicyTransparencyAssessment);
+    expect(query.mock.calls[0]?.[0]).toContain("ds_complete_scan_with_transparency");
+    expect(JSON.parse(query.mock.calls[0]?.[1]?.[12] as string)).toEqual(publicPolicyTransparencyAssessment);
     expect(JSON.stringify(query.mock.calls[0]?.[1])).not.toContain("https://");
   });
 
@@ -498,9 +498,9 @@ describe("PostgresScanStore unit behavior", () => {
       publicPolicyTransparencyAssessment: assessment,
       processorTransparencyAssessment: assessProcessorTransparency({ status: "auditor_error" }),
     })).resolves.toBe("run-id");
-    expect(query.mock.calls[0]?.[0]).toContain("ds_complete_scan_with_public_policy");
+    expect(query.mock.calls[0]?.[0]).toContain("ds_complete_scan_with_transparency");
     expect(JSON.parse(query.mock.calls[0]?.[1]?.[10] as string)).toMatchObject({ status: "unknown" });
-    expect(JSON.parse(query.mock.calls[0]?.[1]?.[11] as string)).toEqual(assessment);
+    expect(JSON.parse(query.mock.calls[0]?.[1]?.[12] as string)).toEqual(assessment);
   });
 
   it("rejects an unknown profile before writing to the database", async () => {
@@ -685,6 +685,23 @@ describe("PostgresScanStore unit behavior", () => {
       expect(query).not.toHaveBeenCalled();
     },
   );
+
+  it("persists only the 14-state review projection for a Grumphya report", async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [{ ds_complete_scan: "run-id" }] });
+    const store = new PostgresScanStore(makePool({ query }));
+
+    await store.completeScan({ ...VALID_REPORT, hostname: "grumphya.com" });
+
+    const summary = JSON.parse(query.mock.calls[0][1][11] as string) as {
+      status: string;
+      criteria: Array<{ id: string; status: string }>;
+      [key: string]: unknown;
+    };
+    expect(summary.status).toBe("review");
+    expect(summary.criteria).toHaveLength(14);
+    expect(summary.criteria.every((criterion) => criterion.status === "unknown")).toBe(true);
+    expect(Object.keys(summary).sort()).toEqual(["criteria", "observedAt", "policyVersion", "status"]);
+  });
 
   it("drops TLS expiry metadata because it is outside the evidence contract", async () => {
     const query = vi.fn().mockResolvedValue({

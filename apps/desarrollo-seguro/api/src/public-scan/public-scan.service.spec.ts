@@ -436,6 +436,29 @@ describe("PublicScanService", () => {
     expect(publicReport.checks[0]).toHaveProperty("evidence", { addressClass: "public", aRecordCount: 1 });
   });
 
+  it("returns a running internal-audit state on the current Grumphya report URL", async () => {
+    const report = makeReport({ hostname: "grumphya.com" });
+    const service = new PublicScanService({
+      scanStore: {
+        readPublicReport: vi.fn().mockResolvedValue(report),
+        readPublicDomainSnapshot: vi.fn().mockResolvedValue({
+          hostname: "grumphya.com",
+          enrollment: "monitored",
+          profileVersion: "domain-v3",
+          optedOut: false,
+          activeJobId: REPORT_ID,
+          lastReport: report,
+          lastFailure: null,
+        }),
+      },
+    });
+
+    await expect(service.getReport(REPORT_ID)).resolves.toMatchObject({
+      internalAuditState: "running",
+      internalAuditSummary: { status: "review" },
+    });
+  });
+
   it("adds a Beta assessment using only the supported public controls", async () => {
     const report = makeReport({
       checks: [
@@ -560,6 +583,8 @@ describe("PublicScanService", () => {
   it("uses domain ethics v5 for public policy evidence on non-clients", async () => {
     const report = makeReport({
       hostname: "example.com",
+      profileVersion: "domain-v4",
+      scannerVersion: "domain-v4-network-adapter-2",
       publicPolicyTransparencyAssessment: {
         policyVersion: "public-policy-v1",
         status: "fail",
@@ -700,6 +725,32 @@ describe("PublicScanService", () => {
     });
   });
 
+  it("marks Grumphya's internal audit as running while the latest report is being renewed", async () => {
+    const report = makeReport({ hostname: "grumphya.com" });
+    const service = new PublicScanService({
+      scanStore: {
+        readPublicDomainSnapshot: vi.fn().mockResolvedValue({
+          hostname: "grumphya.com",
+          enrollment: "monitored",
+          profileVersion: "domain-v3",
+          optedOut: false,
+          activeJobId: REPORT_ID,
+          lastReport: report,
+          lastFailure: null,
+        }),
+        readPublicReport: vi.fn(),
+      },
+    });
+
+    const status = await service.getDomainStatus("grumphya.com");
+
+    expect(status.state).toBe("updating");
+    expect(status.lastReport).toMatchObject({
+      internalAuditState: "running",
+      internalAuditSummary: { status: "review" },
+    });
+  });
+
   it("maps status storage errors to a generic service unavailable response", async () => {
     const service = new PublicScanService({
       scanStore: {
@@ -811,6 +862,8 @@ describe("PublicScanService", () => {
         "processorTransparencyAssessment",
         "publicPolicyTransparencyAssessment",
         "betaCertification",
+        "internalAuditState",
+        "internalAuditSummary",
         "certification",
         "scope",
         "checks",

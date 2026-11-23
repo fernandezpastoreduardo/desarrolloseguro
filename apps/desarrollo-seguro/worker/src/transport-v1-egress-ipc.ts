@@ -13,10 +13,8 @@ import type {
   TransportV1ObservationSource,
   TransportV1ProbeResult,
 } from "./transport-v1-executor.js";
-import {
-  MAX_TRANSPORT_BYTES_PER_SCAN,
-  MAX_TRANSPORT_REQUESTS_PER_SCAN,
-} from "./transport-v1-executor-protocol.js";
+import { getTransportBudget } from "./transport-budget.js";
+import type { ScanProfileVersion } from "./transport-v1-executor.js";
 
 const MAX_IPC_REQUEST_BYTES = 4 * 1024;
 const MAX_IPC_RESPONSE_BYTES = 32 * 1024;
@@ -39,13 +37,17 @@ export async function listenTransportV1EgressBroker(
   socketPath: string,
   jobHostnameInput: unknown,
   source: TransportV1ObservationSource,
+  profileVersion: ScanProfileVersion = "transport-v1",
 ): Promise<{ close: () => Promise<void> }> {
   if (process.platform === "win32" || socketPath.length === 0) {
     throw new Error("egress_broker_socket_invalid");
   }
   await assertPrivateSocketDirectory(socketPath);
   const jobHostname = normalizeHostname(jobHostnameInput);
-  const broker = createTransportV1EgressBroker(jobHostname, source);
+  const broker = createTransportV1EgressBroker(jobHostname, source, profileVersion);
+  const timeoutMs = profileVersion === "domain-v4"
+    ? getTransportBudget(profileVersion).maxDurationMs
+    : IPC_TIMEOUT_MS;
   let activeConnections = 0;
   const server = createServer((socket) => {
     if (activeConnections >= MAX_IPC_CONNECTIONS) {
@@ -55,7 +57,7 @@ export async function listenTransportV1EgressBroker(
     activeConnections += 1;
     handleConnection(socket, broker, () => {
       activeConnections -= 1;
-    });
+    }, timeoutMs);
   });
   await listen(server, socketPath);
   try {
@@ -70,17 +72,18 @@ export async function listenTransportV1EgressBroker(
 /** Adapts the fixed probe API to request/response calls over a Unix socket. */
 export function createUnixSocketObservationSource(
   socketPath: string,
+  profileVersion: ScanProfileVersion = "transport-v1",
 ): TransportV1ObservationSource {
   if (process.platform === "win32" || socketPath.length === 0) {
     throw new Error("egress_broker_socket_invalid");
   }
   return {
     sourceKind: "network",
-    observeDns: (hostname, signal) => requestOperation(socketPath, hostname, "dns", signal),
-    observeTls: (hostname, signal) => requestOperation(socketPath, hostname, "tls", signal),
+    observeDns: (hostname, signal) => requestOperation(socketPath, hostname, "dns", signal, profileVersion),
+    observeTls: (hostname, signal) => requestOperation(socketPath, hostname, "tls", signal, profileVersion),
     observeHttp: (hostname, method, signal) =>
-      requestOperation(socketPath, hostname, method === "HEAD" ? "http-head" : "http-get", signal),
-    observeHeaders: (hostname, signal) => requestOperation(socketPath, hostname, "headers", signal),
+      requestOperation(socketPath, hostname, method === "HEAD" ? "http-head" : "http-get", signal, profileVersion),
+    observeHeaders: (hostname, signal) => requestOperation(socketPath, hostname, "headers", signal, profileVersion),
   };
 }
 
@@ -88,11 +91,12 @@ function handleConnection(
   socket: Socket,
   broker: (request: unknown, signal: AbortSignal) => Promise<TransportV1BrokerResponse>,
   onClose: () => void,
+  timeoutMs: number,
 ): void {
   let receivedBytes = 0;
   const chunks: Buffer[] = [];
   const controller = new AbortController();
-  const timeout = setTimeout(() => socket.destroy(), IPC_TIMEOUT_MS);
+  const timeout = setTimeout(() => socket.destroy(), timeoutMs);
   socket.once("close", () => {
     clearTimeout(timeout);
     controller.abort();
@@ -163,7 +167,9 @@ async function requestOperation(
   hostnameInput: string,
   operation: TransportV1ProbeOperation,
   signal: AbortSignal,
+  profileVersion: ScanProfileVersion,
 ): Promise<TransportV1ProbeResult> {
+  const budget = getTransportBudget(profileVersion);
   const hostname = normalizeHostname(hostnameInput);
   const request: TransportV1BrokerRequest = {
     protocolVersion: 1,
@@ -171,7 +177,12 @@ async function requestOperation(
     hostname,
     operation,
   };
-  const response = await exchange(socketPath, request, signal);
+  const response = await exchange(
+    socketPath,
+    request,
+    signal,
+    profileVersion === "domain-v4" ? getTransportBudget(profileVersion).maxDurationMs : IPC_TIMEOUT_MS,
+  );
   if (
     isRecord(response) &&
     Reflect.ownKeys(response).length === 3 &&
@@ -192,10 +203,10 @@ async function requestOperation(
     !isRecord(response.result.evidence) ||
     !Number.isSafeInteger(response.result.requestsCount) ||
     (response.result.requestsCount as number) < 0 ||
-    (response.result.requestsCount as number) > MAX_TRANSPORT_REQUESTS_PER_SCAN ||
+    (response.result.requestsCount as number) > budget.maxRequests ||
     !Number.isSafeInteger(response.result.bytesCount) ||
     (response.result.bytesCount as number) < 0 ||
-    (response.result.bytesCount as number) > MAX_TRANSPORT_BYTES_PER_SCAN ||
+    (response.result.bytesCount as number) > budget.maxBytes ||
     (Object.hasOwn(response.result, "errorCode") &&
       (typeof response.result.errorCode !== "string" ||
         !SAFE_PROBE_ERROR_CODES.has(response.result.errorCode))) ||
@@ -225,13 +236,14 @@ function exchange(
   socketPath: string,
   request: TransportV1BrokerRequest,
   signal: AbortSignal,
+  timeoutMs: number,
 ): Promise<unknown> {
   if (signal.aborted) return Promise.reject(new Error("egress_broker_aborted"));
   return new Promise((resolve, reject) => {
     const socket = createConnection(socketPath);
     let receivedBytes = 0;
     const chunks: Buffer[] = [];
-    const timeout = setTimeout(() => socket.destroy(new Error("egress_broker_timeout")), IPC_TIMEOUT_MS);
+    const timeout = setTimeout(() => socket.destroy(new Error("egress_broker_timeout")), timeoutMs);
     const onAbort = () => socket.destroy(new Error("egress_broker_aborted"));
     signal.addEventListener("abort", onAbort, { once: true });
     const cleanup = () => {

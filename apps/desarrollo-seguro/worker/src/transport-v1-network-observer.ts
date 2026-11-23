@@ -289,6 +289,18 @@ function toPublicPolicyTransportEvidence(
   evidence: import("./public-policy-crawler.js").PublicPolicyEvidence,
 ): TransportV1Evidence {
   return {
+    inspected: evidence.reasonCode !== "auditor_error" && evidence.reasonCode !== "budget_exhausted",
+    privacyPolicyLinksFound: evidence.linksFound,
+    policyLinksFound: evidence.linksFound,
+    sitePrivacyPolicyFetched: evidence.pagesInspected > 0,
+    policyPagesFetched: evidence.pagesInspected,
+    policyPagesMissing: evidence.unavailablePages,
+    policyPagesDenied: evidence.accessDeniedPages,
+    policyRecipientsMentioned: evidence.providers.length > 0,
+    policyPurposesMentioned: evidence.providers.length > 0 && evidence.providers.length === evidence.providersWithPurpose.length,
+    policyTextBlocked: evidence.reasonCode === "access_denied",
+    policyProbeFailed: evidence.reasonCode === "auditor_error" || evidence.reasonCode === "budget_exhausted",
+    policyLanguageCatalogVersion: "public-policy-language-eea-v1",
     publicPolicyLinksFound: evidence.linksFound,
     publicPolicyPagesInspected: evidence.pagesInspected,
     publicPolicyUnavailablePages: evidence.unavailablePages,

@@ -12,15 +12,18 @@ const TRANSPORT_PROFILE_VERSION = "transport-v1";
 const DOMAIN_PROFILE_VERSION = "domain-v1";
 const DOMAIN_PROFILE_VERSION_V2 = "domain-v2";
 const DOMAIN_PROFILE_VERSION_V3 = "domain-v3";
+const DOMAIN_PROFILE_VERSION_V4 = "domain-v4";
 const FIXTURE_SCANNER_VERSION = "transport-v1-fixture-adapter-1";
 const DOMAIN_FIXTURE_SCANNER_VERSION = "domain-v1-fixture-adapter-1";
 const DOMAIN_V2_FIXTURE_SCANNER_VERSION = "domain-v2-fixture-adapter-1";
 const DOMAIN_V3_FIXTURE_SCANNER_VERSION = "domain-v3-fixture-adapter-1";
+const DOMAIN_V4_FIXTURE_SCANNER_VERSION = "domain-v4-fixture-adapter-1";
 const NETWORK_SCANNER_VERSION = "transport-v1-network-adapter-1";
 const DOMAIN_SCANNER_VERSION = "domain-v1-network-adapter-1";
 const DOMAIN_V2_SCANNER_VERSION = "domain-v2-network-adapter-1";
 const DOMAIN_V3_SCANNER_VERSION = "domain-v3-network-adapter-1";
-const DOMAIN_V3_PUBLIC_POLICY_SCANNER_VERSION = "domain-v3-network-adapter-2";
+const DOMAIN_V4_SCANNER_VERSION = "domain-v4-network-adapter-1";
+const DOMAIN_V4_PUBLIC_POLICY_SCANNER_VERSION = "domain-v4-network-adapter-2";
 const MAX_CONCURRENT_NETWORK_PROBES = 2;
 const CHECKS = [
   { controlId: "DS-DNS-01", method: "DNS", severity: "high" },
@@ -91,7 +94,7 @@ export type TransportV1ScanJob = Pick<
   "hostname" | "profileVersion"
 >;
 
-export type ScanProfileVersion = typeof TRANSPORT_PROFILE_VERSION | typeof DOMAIN_PROFILE_VERSION | typeof DOMAIN_PROFILE_VERSION_V2 | typeof DOMAIN_PROFILE_VERSION_V3;
+export type ScanProfileVersion = typeof TRANSPORT_PROFILE_VERSION | typeof DOMAIN_PROFILE_VERSION | typeof DOMAIN_PROFILE_VERSION_V2 | typeof DOMAIN_PROFILE_VERSION_V3 | typeof DOMAIN_PROFILE_VERSION_V4;
 
 /**
  * Observation boundary for the reduced profile. Implementations must return
@@ -169,6 +172,7 @@ export class TransportV1FixtureExecutor {
     appendTlsVersionCheck(candidateChecks, job.profileVersion, observations[1] ?? {}, observedAt);
     appendInitialCookieCheck(candidateChecks, job.profileVersion, observations[4] ?? {}, observedAt);
     appendPassivePageSignalChecks(candidateChecks, job.profileVersion, observations[4] ?? {}, observedAt);
+    appendPublicPolicyCheck(candidateChecks, job.profileVersion, observations[4] ?? {}, observedAt);
 
     const sanitized = sanitizeScanObservations(
       job.hostname,
@@ -211,7 +215,7 @@ export class TransportV1NetworkExecutor {
     }
 
     const startedAt = this.now();
-    const broker = createTransportV1EgressBroker(job.hostname, this.source);
+    const broker = createTransportV1EgressBroker(job.hostname, this.source, job.profileVersion);
     const operations = NETWORK_PROBE_OPERATIONS;
     const observations = operations.map((operation) => async () => {
       const requestId = randomUUID();
@@ -265,6 +269,7 @@ export class TransportV1NetworkExecutor {
       completedAt,
     );
     appendPassivePageSignalChecks(candidateChecks, job.profileVersion, probes[4]?.evidence ?? {}, completedAt);
+    appendPublicPolicyCheck(candidateChecks, job.profileVersion, probes[4]?.evidence ?? {}, completedAt);
     const sanitized = sanitizeScanObservations(
       job.hostname,
       job.profileVersion,
@@ -278,7 +283,7 @@ export class TransportV1NetworkExecutor {
 
     return {
       scannerVersion: publicPolicyTransparencyAssessment
-        ? DOMAIN_V3_PUBLIC_POLICY_SCANNER_VERSION
+        ? DOMAIN_V4_PUBLIC_POLICY_SCANNER_VERSION
         : getScannerVersion(job.profileVersion),
       startedAt,
       completedAt,
@@ -302,7 +307,7 @@ function buildPublicPolicyAssessment(
   profileVersion: ScanProfileVersion,
   headersProbe: TransportV1ProbeResult | undefined,
 ): ReturnType<typeof assessPublicPolicyTransparency> | undefined {
-  if (profileVersion !== DOMAIN_PROFILE_VERSION_V3) return undefined;
+  if (profileVersion !== DOMAIN_PROFILE_VERSION_V4) return undefined;
   const evidence = headersProbe?.evidence ?? {};
   const numericKeys = [
     "publicPolicyLinksFound",
@@ -391,6 +396,7 @@ function appendInitialCookieCheck(
 }
 
 function getScannerVersion(profileVersion: ScanProfileVersion): string {
+  if (profileVersion === DOMAIN_PROFILE_VERSION_V4) return DOMAIN_V4_SCANNER_VERSION;
   if (profileVersion === DOMAIN_PROFILE_VERSION_V3) return DOMAIN_V3_SCANNER_VERSION;
   if (profileVersion === DOMAIN_PROFILE_VERSION_V2) return DOMAIN_V2_SCANNER_VERSION;
   return profileVersion === DOMAIN_PROFILE_VERSION
@@ -399,10 +405,11 @@ function getScannerVersion(profileVersion: ScanProfileVersion): string {
 }
 
 function isSupportedProfile(value: string): value is ScanProfileVersion {
-  return value === TRANSPORT_PROFILE_VERSION || value === DOMAIN_PROFILE_VERSION || value === DOMAIN_PROFILE_VERSION_V2 || value === DOMAIN_PROFILE_VERSION_V3;
+  return value === TRANSPORT_PROFILE_VERSION || value === DOMAIN_PROFILE_VERSION || value === DOMAIN_PROFILE_VERSION_V2 || value === DOMAIN_PROFILE_VERSION_V3 || value === DOMAIN_PROFILE_VERSION_V4;
 }
 
 function getFixtureScannerVersion(profileVersion: ScanProfileVersion): string {
+  if (profileVersion === DOMAIN_PROFILE_VERSION_V4) return DOMAIN_V4_FIXTURE_SCANNER_VERSION;
   if (profileVersion === DOMAIN_PROFILE_VERSION_V3) return DOMAIN_V3_FIXTURE_SCANNER_VERSION;
   if (profileVersion === DOMAIN_PROFILE_VERSION_V2) return DOMAIN_V2_FIXTURE_SCANNER_VERSION;
   return profileVersion === DOMAIN_PROFILE_VERSION ? DOMAIN_FIXTURE_SCANNER_VERSION : FIXTURE_SCANNER_VERSION;
@@ -414,7 +421,7 @@ function appendTlsVersionCheck(
   evidence: TransportV1Evidence,
   observedAt: Date,
 ): void {
-  if (profileVersion !== DOMAIN_PROFILE_VERSION_V3) return;
+  if (profileVersion !== DOMAIN_PROFILE_VERSION_V3 && profileVersion !== DOMAIN_PROFILE_VERSION_V4) return;
   const versionKeys = ["tls10Accepted", "tls11Accepted", "tls12Accepted", "tls13Accepted"] as const;
   const complete = versionKeys.every((key) => typeof evidence[key] === "boolean");
   let status: ScanCheck["status"] = "unknown";
@@ -457,7 +464,7 @@ function appendPassivePageSignalChecks(
   headersEvidence: TransportV1Evidence,
   observedAt: Date,
 ): void {
-  if (profileVersion !== DOMAIN_PROFILE_VERSION_V2 && profileVersion !== DOMAIN_PROFILE_VERSION_V3) return;
+  if (profileVersion !== DOMAIN_PROFILE_VERSION_V2 && profileVersion !== DOMAIN_PROFILE_VERSION_V3 && profileVersion !== DOMAIN_PROFILE_VERSION_V4) return;
 
   const inspected = headersEvidence.inspected === true;
   const trackingEvidence = pickNumericEvidence(headersEvidence, [
@@ -503,6 +510,75 @@ function appendPassivePageSignalChecks(
       evidence: performanceEvidence,
     },
   );
+}
+
+function appendPublicPolicyCheck(
+  checks: ScanCheck[],
+  profileVersion: ScanProfileVersion,
+  sourceEvidence: TransportV1Evidence,
+  observedAt: Date,
+): void {
+  if (profileVersion !== DOMAIN_PROFILE_VERSION_V4) return;
+  const booleanKeys = [
+    "inspected", "sitePrivacyPolicyFetched", "policyRecipientsMentioned",
+    "policyPurposesMentioned", "policyTextBlocked", "policyProbeFailed",
+  ] as const;
+  const countKeys = [
+    "privacyPolicyLinksFound", "policyLinksFound", "policyPagesFetched",
+    "policyPagesMissing", "policyPagesDenied",
+  ] as const;
+  const evidence: TransportV1Evidence = {};
+  for (const key of booleanKeys) {
+    if (typeof sourceEvidence[key] === "boolean") evidence[key] = sourceEvidence[key] as boolean;
+  }
+  for (const key of countKeys) {
+    if (typeof sourceEvidence[key] === "number") evidence[key] = sourceEvidence[key] as number;
+  }
+  if (sourceEvidence.policyLanguageCatalogVersion === "public-policy-language-eea-v1") {
+    evidence.policyLanguageCatalogVersion = sourceEvidence.policyLanguageCatalogVersion;
+  }
+  const complete = booleanKeys.every((key) => typeof evidence[key] === "boolean") &&
+    countKeys.every((key) => typeof evidence[key] === "number") &&
+    evidence.policyLanguageCatalogVersion === "public-policy-language-eea-v1";
+  const inspected = evidence.inspected === true;
+  const confirmedTransparencyFailure = inspected && (
+    evidence.privacyPolicyLinksFound === 0 ||
+    Number(evidence.policyPagesMissing) > 0 ||
+    Number(evidence.policyPagesDenied) > 0 ||
+    evidence.policyTextBlocked === true ||
+    (evidence.sitePrivacyPolicyFetched === false && evidence.policyProbeFailed === false) ||
+    (evidence.sitePrivacyPolicyFetched === true && (
+      evidence.policyRecipientsMentioned === false || evidence.policyPurposesMentioned === false
+    ))
+  );
+  const completeDisclosure = complete && inspected &&
+    Number(evidence.privacyPolicyLinksFound) > 0 &&
+    evidence.sitePrivacyPolicyFetched === true &&
+    Number(evidence.policyPagesMissing) === 0 &&
+    Number(evidence.policyPagesDenied) === 0 &&
+    evidence.policyRecipientsMentioned === true &&
+    evidence.policyPurposesMentioned === true &&
+    evidence.policyTextBlocked === false &&
+    evidence.policyProbeFailed === false;
+  const status: ScanCheck["status"] = confirmedTransparencyFailure
+    ? "fail"
+    : completeDisclosure ? "pass" : "unknown";
+  checks.push({
+    controlId: "DS-PRIV-04",
+    method: "GET",
+    severity: "medium",
+    status,
+    required: true,
+    observedAt,
+    targetPath: "/",
+    summary: status === "pass"
+      ? "Se encontró una política pública accesible con información sobre finalidades y destinatarios."
+      : status === "fail"
+        ? "Falta información pública sobre servicios externos o el acceso a su política fue denegado."
+        : "El auditor no pudo terminar la revisión de la información pública sobre servicios externos.",
+    limitation: "La revisión busca enlaces y expresiones conocidas; no determina por sí sola si una política cumple todos los requisitos legales ni demuestra prácticas internas.",
+    evidence,
+  });
 }
 
 function pickNumericEvidence(

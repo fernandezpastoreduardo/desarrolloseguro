@@ -11,8 +11,7 @@ import {
   type TransportV1ExecutorRequest,
 } from "./transport-v1-executor-protocol.js";
 import type { TransportV1ScanJob } from "./transport-v1-executor.js";
-
-const DEFAULT_EXECUTOR_TIMEOUT_MS = 35_000;
+import { getTransportBudget } from "./transport-budget.js";
 
 export type IsolatedTransportV1ExecutorOptions = {
   entrypoint: string;
@@ -25,11 +24,9 @@ export type IsolatedTransportV1ExecutorOptions = {
  * job ID, or lease token.
  */
 export class IsolatedTransportV1Executor {
-  private readonly timeoutMs: number;
-
   constructor(private readonly options: IsolatedTransportV1ExecutorOptions) {
-    this.timeoutMs = options.timeoutMs ?? DEFAULT_EXECUTOR_TIMEOUT_MS;
-    if (!Number.isSafeInteger(this.timeoutMs) || this.timeoutMs < 1) {
+    if (options.timeoutMs !== undefined &&
+      (!Number.isSafeInteger(options.timeoutMs) || options.timeoutMs < 1)) {
       throw new Error("executor_timeout_invalid");
     }
   }
@@ -41,7 +38,7 @@ export class IsolatedTransportV1Executor {
     Omit<ScanRunInput, "jobId" | "leaseToken" | "hostname" | "profileVersion">
   > {
     if (signal.aborted) return Promise.reject(new Error("request_aborted"));
-    if (job.profileVersion !== "transport-v1" && job.profileVersion !== "domain-v1" && job.profileVersion !== "domain-v2" && job.profileVersion !== "domain-v3") {
+    if (job.profileVersion !== "transport-v1" && job.profileVersion !== "domain-v1" && job.profileVersion !== "domain-v2" && job.profileVersion !== "domain-v3" && job.profileVersion !== "domain-v4") {
       return Promise.reject(new Error("unsupported_scan_profile"));
     }
 
@@ -85,7 +82,8 @@ export class IsolatedTransportV1Executor {
       let settled = false;
       let receivedBytes = 0;
       const responseChunks: Buffer[] = [];
-      const timer = setTimeout(() => finishWithError("executor_timeout"), this.timeoutMs);
+      const timeoutMs = this.options.timeoutMs ?? getTransportBudget(job.profileVersion).maxDurationMs;
+      const timer = setTimeout(() => finishWithError("executor_timeout"), timeoutMs);
       const onAbort = () => finishWithError("request_aborted");
       const cleanup = () => {
         clearTimeout(timer);
