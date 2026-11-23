@@ -638,7 +638,7 @@ describePostgres.sequential("PostgresScanStore", () => {
     expect(snapshot).toMatchObject({
       hostname,
       enrollment: "on_demand",
-      profileVersion: "domain-v3",
+      profileVersion: "domain-v4",
       optedOut: false,
     });
     expect(snapshot?.activeJobId).toBeTruthy();
@@ -879,6 +879,52 @@ describePostgres.sequential("PostgresScanStore", () => {
     expect(report?.checks).toHaveLength(9);
     expect(report?.checks.find(({ controlId }) => controlId === "DS-TLS-02"))
       .toMatchObject({ status: "pass", evidence: { tls10Accepted: false, tls11Accepted: false, tls12Accepted: true, tls13Accepted: true } });
+  });
+
+  it("stores public-policy evidence for domain-v4 without exposing policy URLs or text", async () => {
+    const job = await queueAndClaim("domain-v4");
+    const checks: ScanCheck[] = [
+      ...makeEligibleDomainV3Checks().map((check) => ({
+        ...check,
+        limitation: "Resultado limitado a las rutas públicas declaradas del perfil domain-v4.",
+      })),
+      {
+        ...CHECK,
+        controlId: "DS-PRIV-04",
+        method: "GET",
+        status: "pass",
+        summary: "Comprobación DS-PRIV-04: pass.",
+        limitation: "Resultado limitado a las rutas públicas declaradas del perfil domain-v4.",
+        evidence: {
+          inspected: true,
+          privacyPolicyLinksFound: 1,
+          policyLinksFound: 2,
+          sitePrivacyPolicyFetched: true,
+          policyPagesFetched: 2,
+          policyPagesMissing: 0,
+          policyPagesDenied: 0,
+          policyRecipientsMentioned: true,
+          policyPurposesMentioned: true,
+          policyTextBlocked: false,
+          policyProbeFailed: false,
+          policyLanguageCatalogVersion: "public-policy-language-eea-v1",
+        },
+      },
+    ];
+    const reportId = await completeDirectly(job, ["/"], checks, "pass");
+    const report = await store.readPublicReport(reportId);
+    const policyCheck = report?.checks.find(({ controlId }) => controlId === "DS-PRIV-04");
+
+    expect(report).toMatchObject({ profileVersion: "domain-v4", verdict: "pass" });
+    expect(report?.checks).toHaveLength(10);
+    expect(policyCheck?.status).toBe("pass");
+    expect(policyCheck?.evidence).toMatchObject({
+      privacyPolicyLinksFound: 1,
+      policyPagesFetched: 2,
+      policyLanguageCatalogVersion: "public-policy-language-eea-v1",
+    });
+    expect(JSON.stringify(report)).not.toContain("vendor.example");
+    expect(JSON.stringify(report)).not.toContain("token=private");
   });
 
   it("stores bounded TLS probe diagnostics for an inconclusive domain-v3 check", async () => {

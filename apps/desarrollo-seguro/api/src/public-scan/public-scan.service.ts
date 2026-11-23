@@ -8,6 +8,7 @@ import {
 import {
   assessDomainEthics,
   assessDomainEthicsV4,
+  assessDomainEthicsV5,
   assessGlobalScore,
   assessBetaCertification,
   toInternalAuditPublicSummary,
@@ -61,6 +62,7 @@ export type PublicReport = {
   betaCertification: ReturnType<typeof assessBetaCertification>;
   certification: PublicBetaCertificationResponse | null;
   internalAuditSummary: InternalAuditPublicSummary | null;
+  internalAuditState?: "running" | "review" | "complete" | null;
   scope: string[];
   checks: Array<{
     controlId: string;
@@ -186,7 +188,9 @@ export class PublicScanService {
       activeJobId: isOptedOut ? null : snapshot.activeJobId,
       failureCode: state === "failed" ? snapshot.lastFailure?.code ?? null : null,
       failureDiagnostic: state === "failed" ? snapshot.lastFailure?.diagnostic ?? null : null,
-      lastReport: report ? toPublicReport(report, state !== "fresh") : null,
+      lastReport: report ? toPublicReport(report, report.hostname === "grumphya.com"
+        ? state === "updating" ? "running" : state === "fresh" ? undefined : "review"
+        : null) : null,
       ...(snapshot.hostnameResolution ? { hostnameResolution: snapshot.hostnameResolution } : {}),
       checkedAt: checkedAt.toISOString(),
     };
@@ -202,17 +206,19 @@ export class PublicScanService {
       if (!report) {
         throw new NotFoundException("development_security_report_not_found");
       }
-      let reviewInternalAudit = false;
+      let internalAuditState: "running" | "review" | "complete" | null = null;
       if (report.hostname === "grumphya.com") {
         const snapshot = await this.store.scanStore.readPublicDomainSnapshot("grumphya.com");
-        reviewInternalAudit = Boolean(snapshot?.lastReport?.id === report.id && (
-          snapshot.activeJobId !== null ||
-          snapshot.lastReport.expiresAt.getTime() <= Date.now() ||
-          snapshot.lastFailure !== null && snapshot.lastFailure !== undefined &&
-            snapshot.lastFailure.failedAt > snapshot.lastReport.completedAt
-        ));
+        const isLatest = snapshot?.lastReport?.id === report.id;
+        const hasNewerFailure = Boolean(snapshot?.lastFailure && snapshot.lastReport &&
+          snapshot.lastFailure.failedAt > snapshot.lastReport.completedAt);
+        internalAuditState = isLatest && snapshot?.activeJobId !== null
+          ? "running"
+          : isLatest && snapshot && (snapshot.lastReport!.expiresAt.getTime() <= Date.now() || hasNewerFailure)
+            ? "review"
+            : report.internalAuditSummary?.status === "complete" ? "complete" : "review";
       }
-      return toPublicReport(report, reviewInternalAudit);
+      return toPublicReport(report, internalAuditState);
     } catch (error) {
       if (error instanceof NotFoundException) throw error;
       this.logger.error(PUBLIC_SCAN_READ_FAILED);
@@ -301,12 +307,20 @@ function getPublicState(
   return report.expiresAt.getTime() > now.getTime() ? "fresh" : "stale";
 }
 
-function toPublicReport(report: PublicScanReport, reviewInternalAudit = false): PublicReport {
+function toPublicReport(
+  report: PublicScanReport,
+  internalAuditState: "running" | "review" | "complete" | null | undefined = undefined,
+): PublicReport {
   const processorTransparencyAssessment = report.processorTransparencyAssessment ?? null;
-  const ethicsAssessment = processorTransparencyAssessment
-    ? assessDomainEthicsV4(report.checks, processorTransparencyAssessment)
-    : assessDomainEthics(report.checks);
+  const ethicsAssessment = report.profileVersion === "domain-v4"
+    ? assessDomainEthicsV5(report.checks, processorTransparencyAssessment)
+    : processorTransparencyAssessment
+      ? assessDomainEthicsV4(report.checks, processorTransparencyAssessment)
+      : assessDomainEthics(report.checks);
   const privacyAssessment = report.privacyAssessment ?? null;
+  const resolvedInternalAuditState = report.hostname !== "grumphya.com"
+    ? null
+    : internalAuditState ?? (report.internalAuditSummary?.status === "complete" ? "complete" : "review");
   return {
     id: report.id,
     hostname: report.hostname,
@@ -324,8 +338,9 @@ function toPublicReport(report: PublicScanReport, reviewInternalAudit = false): 
     processorTransparencyAssessment,
     betaCertification: assessBetaCertification(toBetaObservations(report.checks)),
     certification: toPublicCertification(report.certification),
+    internalAuditState: resolvedInternalAuditState,
     internalAuditSummary: report.hostname === "grumphya.com"
-      ? reviewInternalAudit || !report.internalAuditSummary
+      ? resolvedInternalAuditState !== "complete" || !report.internalAuditSummary
         ? toInternalAuditPublicSummary(null)
         : report.internalAuditSummary
       : null,

@@ -7,7 +7,7 @@ la fecha, la caducidad, el veredicto, la puntuación ética provisional y el
 estado de certificación beta.
 
 El endpoint solo devuelve informes de dominios no excluidos y de los perfiles
-externos `domain-v1`, `domain-v2` o `domain-v3`. No expone evidencias, HTML,
+externos `domain-v1`, `domain-v2`, `domain-v3` o `domain-v4`. No expone evidencias, HTML,
 cabeceras, cookies, direcciones IP, métricas internas ni diagnósticos. Mantiene
 `Cache-Control: no-store` porque el historial puede cambiar al completarse una
 auditoría.

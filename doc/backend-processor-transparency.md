@@ -36,7 +36,8 @@ El informe guarda esta evaluación junto a la evidencia del análisis. La base d
 datos exige que exista para `desarrolloseguro.org` y `grumphya.com` y rechaza
 evaluaciones de procesadores adjuntas a otros dominios.
 
-El cambio se aplica a `domain-ethics-v4`. Los informes históricos conservan la
+La evaluación de inventario se incorpora a `domain-ethics-v5` para informes
+`domain-v4`. Los informes históricos conservan la
 rúbrica y evidencia con que se generaron. El despliegue requiere configurar el
 auditor y sus claves de acuerdo con
 [la guía operativa](../agentic-guidelines/desarrollo-seguro/operations.md#auditor-aislado-de-procesadores-backend).

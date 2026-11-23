@@ -29,10 +29,10 @@ export function validateCompletedReport(status, previousReportId, hostname = VAL
     throw new Error("public_scan_report_not_refreshed");
   }
   if (
-    report.profileVersion !== "domain-v3" ||
-    report.scannerVersion !== "domain-v3-network-adapter-1" ||
+    report.profileVersion !== "domain-v4" ||
+    report.scannerVersion !== "domain-v4-network-adapter-1" ||
     !Array.isArray(report.checks) ||
-    report.checks.length !== 9
+    report.checks.length !== 10
   ) {
     throw new Error("public_scan_profile_or_coverage_invalid");
   }
@@ -72,7 +72,7 @@ export function validateCompletedReport(status, previousReportId, hostname = VAL
     Boolean(completeTlsMatrix);
   if (
     !assessment ||
-    assessment.policyVersion !== "domain-ethics-v4" ||
+    assessment.policyVersion !== "domain-ethics-v5" ||
     !Number.isInteger(assessment.score) ||
     assessment.score < 0 ||
     assessment.score > 100 ||

@@ -30,6 +30,7 @@ const PROFILE_VERSIONS = [
   "domain-v1",
   "domain-v2",
   "domain-v3",
+  "domain-v4",
 ] as const;
 const CHECK_STATUSES = ["pass", "fail", "unknown", "not_applicable"] as const;
 const ENROLLMENTS = ["monitored", "on_demand"] as const;
@@ -279,7 +280,7 @@ export class PostgresScanStore implements ScanJobStore {
         AND certification.certified_report_id = reports.id
        WHERE reports.id = $2 AND reports.hostname = $3
          AND reports.expires_at > now()
-         AND reports.profile_version IN ('domain-v1', 'domain-v2', 'domain-v3')
+         AND reports.profile_version IN ('domain-v1', 'domain-v2', 'domain-v3', 'domain-v4')
        RETURNING token_hash`,
       [record.tokenHash, record.reportId, record.hostname, record.expiresAt],
     );
@@ -292,7 +293,7 @@ export class PostgresScanStore implements ScanJobStore {
        FROM (
          SELECT id, hostname, profile_version, expires_at
          FROM public.ds_scan_runs
-         WHERE hostname = $1 AND profile_version IN ('domain-v1', 'domain-v2', 'domain-v3')
+         WHERE hostname = $1 AND profile_version IN ('domain-v1', 'domain-v2', 'domain-v3', 'domain-v4')
          ORDER BY completed_at DESC LIMIT 1
        ) AS reports
        INNER JOIN public.ds_public_check_results AS checks ON checks.run_id = reports.id
@@ -483,7 +484,7 @@ export class PostgresScanStore implements ScanJobStore {
        ${PUBLIC_PROCESSOR_TRANSPARENCY_LATERAL}
        ${PUBLIC_INTERNAL_AUDIT_LATERAL}
        WHERE reports.hostname = $1
-         AND reports.profile_version IN ('domain-v1', 'domain-v2', 'domain-v3')
+         AND reports.profile_version IN ('domain-v1', 'domain-v2', 'domain-v3', 'domain-v4')
          AND domains.opted_out_at IS NULL
        ORDER BY reports.completed_at DESC
        LIMIT $2`,

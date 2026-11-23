@@ -1,4 +1,6 @@
 import { request as defaultHttpsRequest } from "node:https";
+import { parse } from "parse5";
+import type { DefaultTreeAdapterMap } from "parse5";
 import type { ClientRequest, IncomingMessage } from "node:http";
 import type { RequestOptions } from "node:https";
 import type { LookupFunction } from "node:net";
@@ -9,8 +11,10 @@ import {
   normalizeHostname,
 } from "@desarrolloseguro/core";
 import type { SecurityHeaderEvidence } from "@desarrolloseguro/core";
+import { extractPublicPolicyLinks } from "./public-policy-link-extractor.js";
 import { inspectPassivePageSignals } from "./passive-page-signals.js";
 import type { PassivePageSignalInput } from "./passive-page-signals.js";
+import { PUBLIC_POLICY_LANGUAGE_CATALOG } from "./data/public-policy-language-catalog.js";
 import {
   createEgressAuthorizedLookup,
   createEgressDestinationAuthorizer,
@@ -25,6 +29,7 @@ const HTTPS_PORT = 443;
 const MAX_REDIRECTS = 3;
 const MAX_RESPONSE_BYTES = 64 * 1024;
 const REQUEST_TIMEOUT_MS = 10_000;
+const PUBLIC_POLICY_REQUEST_TIMEOUT_MS = 5_000;
 const REDIRECT_STATUS_CODES = new Set([301, 302, 303, 307, 308]);
 const PERMANENT_REDIRECT_STATUS_CODES = new Set([301, 308]);
 const GRUMPHYA_HOSTNAMES = new Set(["grumphya.com", "www.grumphya.com"]);
@@ -56,12 +61,30 @@ export type PinnedHttpsResult = {
   tlsProtocol: "TLSv1" | "TLSv1.1" | "TLSv1.2" | "TLSv1.3" | undefined;
   securityHeaders: SecurityHeaderEvidence | null;
   passivePageSignals?: ReturnType<typeof inspectPassivePageSignals>;
+  publicPolicyLinks?: ReturnType<typeof extractPublicPolicyLinks>;
   requestsCount: number;
   bytesCount: number;
   redirectStatusCode: number | null;
   redirectFromHostname: string | null;
   redirectToHostname: string | null;
   canonicalHostname: string | null;
+};
+
+export type PinnedPublicPolicyDocumentInput = {
+  hostname: string;
+  path: string;
+  signal: AbortSignal;
+};
+
+export type PinnedPublicPolicyDocumentResult = {
+  statusCode: number;
+  recipientsMentioned: boolean;
+  purposesMentioned: boolean;
+  textBlocked: boolean;
+  inspectedText: boolean;
+  discoveredPolicyLinks: ReturnType<typeof extractPublicPolicyLinks>;
+  requestsCount: number;
+  bytesCount: number;
 };
 
 export type HttpsRequestFactory = (
@@ -167,6 +190,9 @@ export async function requestPinnedHttps(
         ...(result.passivePageSignals
           ? { passivePageSignals: result.passivePageSignals }
           : {}),
+        ...(result.publicPolicyLinks
+          ? { publicPolicyLinks: result.publicPolicyLinks }
+          : {}),
         requestsCount,
         bytesCount,
         redirectStatusCode: getGrumphyaHostnameChange(redirectHops)?.statusCode ?? null,
@@ -210,6 +236,79 @@ export async function requestPinnedHttps(
   }
 }
 
+/** Fetches one discovered HTTPS policy document and returns only text signals. */
+export async function requestPinnedPublicPolicyDocument(
+  input: PinnedPublicPolicyDocumentInput,
+  dependencies: PinnedHttpsDependencies = {},
+): Promise<PinnedPublicPolicyDocumentResult> {
+  const hostname = normalizeHostname(input.hostname);
+  let currentPath = validatePublicPolicyPath(input.path);
+  if (input.signal.aborted) throw new PinnedTransportError("request_aborted", 0, 0);
+
+  const lookupFactory = dependencies.lookupFactory ?? ((targetHostname: string, port: number) =>
+    createEgressAuthorizedLookup(
+      targetHostname,
+      port,
+      createEgressDestinationAuthorizer(targetHostname),
+    ));
+  const requestFactory = dependencies.requestFactory ?? defaultHttpsRequest;
+  const startedAt = Date.now();
+  let requestsCount = 0;
+  let bytesCount = 0;
+
+  for (let redirectCount = 0; ; redirectCount += 1) {
+    const remainingMs = PUBLIC_POLICY_REQUEST_TIMEOUT_MS - (Date.now() - startedAt);
+    if (remainingMs <= 0) {
+      throw new PinnedTransportError("request_timeout", requestsCount, bytesCount);
+    }
+
+    let result: MakeRequestResult;
+    try {
+      result = await makeRequest({
+        hostname,
+        path: currentPath,
+        method: "GET",
+        signal: input.signal,
+        timeoutMs: remainingMs,
+        lookup: lookupFactory(hostname, HTTPS_PORT),
+        requestFactory,
+        ca: dependencies.ca,
+        inspectPage: false,
+        inspectPolicyDocument: true,
+        discoverPolicyLinks: true,
+        tlsVersion: undefined,
+        allowUntrustedCertificate: false,
+      });
+    } catch (error) {
+      throw includeTransportMetrics(error, requestsCount, bytesCount, "https_request_failed");
+    }
+
+    requestsCount += 1;
+    bytesCount += result.bytesCount;
+    if (!REDIRECT_STATUS_CODES.has(result.statusCode)) {
+      const signals = result.publicPolicyTextSignals;
+      return {
+        statusCode: result.statusCode,
+        recipientsMentioned: signals?.recipientsMentioned ?? false,
+        purposesMentioned: signals?.purposesMentioned ?? false,
+        textBlocked: signals?.textBlocked ?? false,
+        inspectedText: signals?.inspectedText ?? false,
+        discoveredPolicyLinks: result.publicPolicyLinks ?? [],
+        requestsCount,
+        bytesCount,
+      };
+    }
+    if (redirectCount >= MAX_REDIRECTS) {
+      throw new PinnedTransportError("redirect_limit_exceeded", requestsCount, bytesCount);
+    }
+    try {
+      currentPath = validateSameHostPolicyRedirect(result.location, hostname, currentPath);
+    } catch {
+      throw new PinnedTransportError("redirect_origin_not_allowlisted", requestsCount, bytesCount);
+    }
+  }
+}
+
 type MakeRequestInput = {
   hostname: string;
   path: string;
@@ -220,6 +319,8 @@ type MakeRequestInput = {
   requestFactory: HttpsRequestFactory;
   ca: string | undefined;
   inspectPage: boolean;
+  inspectPolicyDocument?: boolean;
+  discoverPolicyLinks?: boolean;
   tlsVersion: PinnedHttpsRequest["tlsVersion"];
   allowUntrustedCertificate: boolean;
 };
@@ -233,7 +334,99 @@ type MakeRequestResult = {
   securityHeaders: SecurityHeaderEvidence | null;
   bytesCount: number;
   passivePageSignals?: ReturnType<typeof inspectPassivePageSignals>;
+  publicPolicyLinks?: ReturnType<typeof extractPublicPolicyLinks>;
+  publicPolicyTextSignals?: PublicPolicyTextSignals;
 };
+
+type PublicPolicyTextSignals = {
+  recipientsMentioned: boolean;
+  purposesMentioned: boolean;
+  textBlocked: boolean;
+  inspectedText: boolean;
+};
+
+function inspectPublicPolicyText(input: string, isHtml: boolean): PublicPolicyTextSignals {
+  const normalizedText = (isHtml ? extractVisibleText(input) : input)
+    .replace(/[\s\S]/gu, (character) => {
+      const code = character.codePointAt(0) ?? 0;
+      return code <= 0x1f || code === 0x7f ? " " : character;
+    })
+    .replace(/\s+/gu, " ")
+    .toLowerCase();
+  return {
+    recipientsMentioned: includesCatalogSignal(normalizedText, PUBLIC_POLICY_LANGUAGE_CATALOG.recipients),
+    purposesMentioned: includesCatalogSignal(normalizedText, PUBLIC_POLICY_LANGUAGE_CATALOG.purposes),
+    textBlocked: includesCatalogSignal(normalizedText, PUBLIC_POLICY_LANGUAGE_CATALOG.accessDenial),
+    inspectedText: normalizedText.length > 0,
+  };
+}
+
+function includesCatalogSignal(text: string, terms: readonly string[]): boolean {
+  return terms.some((term) => text.includes(term.toLowerCase()));
+}
+
+function extractVisibleText(html: string): string {
+  const root = parse(html);
+  const pending: DefaultTreeAdapterMap["node"][] = [root];
+  let text = "";
+  let visitedNodes = 0;
+  while (pending.length > 0 && text.length < MAX_RESPONSE_BYTES) {
+    const current = pending.pop();
+    if (!current) continue;
+    visitedNodes += 1;
+    if (visitedNodes > 50_000) return "";
+    if ("tagName" in current && ["script", "style", "noscript", "template"].includes(current.tagName)) continue;
+    if (current.nodeName === "#text" && "value" in current) {
+      text += ` ${current.value}`;
+    } else if ("childNodes" in current) {
+      pending.push(...current.childNodes);
+    }
+  }
+  return text.slice(0, MAX_RESPONSE_BYTES);
+}
+
+function validatePublicPolicyPath(input: string): string {
+  if (typeof input !== "string" || input.length > 512 || !input.startsWith("/") || input.startsWith("//") ||
+    /[?#\\\s]/u.test(input) || containsControlCharacter(input) || /%(?:2f|5c|0[0-9a-f]|1[0-9a-f]|7f)/iu.test(input)) {
+    throw new PinnedTransportError("transport_failed", 0, 0);
+  }
+  let url: URL;
+  try {
+    url = new URL(input, "https://policy.invalid/");
+  } catch {
+    throw new PinnedTransportError("transport_failed", 0, 0);
+  }
+  if (url.hostname !== "policy.invalid" || url.pathname !== input || /(?:^|\/)\.{1,2}(?:\/|$)/u.test(input)) {
+    throw new PinnedTransportError("transport_failed", 0, 0);
+  }
+  return input;
+}
+
+function containsControlCharacter(value: string): boolean {
+  return Array.from(value).some((character) => {
+    const code = character.codePointAt(0) ?? 0;
+    return code <= 0x1f || code === 0x7f;
+  });
+}
+
+function validateSameHostPolicyRedirect(
+  location: string | undefined,
+  hostname: string,
+  currentPath: string,
+): string {
+  if (!location || location.length > 2_048) throw new Error("unsafe_policy_redirect");
+  let target: URL;
+  try {
+    target = new URL(location, `https://${hostname}${currentPath}`);
+  } catch {
+    throw new Error("unsafe_policy_redirect");
+  }
+  if (target.protocol !== "https:" || target.hostname !== hostname || target.port !== "" ||
+    target.username || target.password) {
+    throw new Error("unsafe_policy_redirect");
+  }
+  return validatePublicPolicyPath(target.pathname);
+}
 
 function makeRequest(input: MakeRequestInput): Promise<MakeRequestResult> {
   return new Promise((resolve, reject) => {
@@ -241,6 +434,7 @@ function makeRequest(input: MakeRequestInput): Promise<MakeRequestResult> {
     let receivedBytes = 0;
     const responseTimeStartedAt = Date.now();
     let htmlChunks: Buffer[] = [];
+    let policyDocumentChunks: Buffer[] = [];
     let requestStarted = false;
     let request: ClientRequest | undefined;
     const timeoutHolder: { timer?: NodeJS.Timeout } = {};
@@ -301,11 +495,15 @@ function makeRequest(input: MakeRequestInput): Promise<MakeRequestResult> {
         }
         const contentType = getSingleHeader(response, "content-type") ?? "";
         const isHtml = /^text\/html(?:\s*;|$)/iu.test(contentType);
+        const isText = isHtml || /^text\/plain(?:\s*;|$)/iu.test(contentType);
         const setCookieHeaders = getSetCookieHeaders(response);
         response.on("data", (chunk: Buffer | string) => {
           receivedBytes += Buffer.byteLength(chunk);
           if (input.inspectPage && input.method === "GET" && isHtml) {
             htmlChunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+          }
+          if (input.inspectPolicyDocument && input.method === "GET" && isText) {
+            policyDocumentChunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
           }
           if (receivedBytes > MAX_RESPONSE_BYTES) {
             response.destroy();
@@ -322,6 +520,7 @@ function makeRequest(input: MakeRequestInput): Promise<MakeRequestResult> {
           }
           input.signal.removeEventListener("abort", abortRequest);
           let passivePageSignals: ReturnType<typeof inspectPassivePageSignals> | undefined;
+          let publicPolicyLinks: ReturnType<typeof extractPublicPolicyLinks> | undefined;
           if (input.inspectPage && input.method === "GET") {
             const html = Buffer.concat(htmlChunks).toString("utf8");
             const pageInput: PassivePageSignalInput = {
@@ -336,7 +535,18 @@ function makeRequest(input: MakeRequestInput): Promise<MakeRequestResult> {
               complete: true,
             };
             passivePageSignals = inspectPassivePageSignals(pageInput);
+            publicPolicyLinks = extractPublicPolicyLinks(input.hostname, html);
             htmlChunks = [];
+          }
+          let publicPolicyTextSignals: PublicPolicyTextSignals | undefined;
+          let policyLinks: ReturnType<typeof extractPublicPolicyLinks> | undefined;
+          if (input.inspectPolicyDocument && input.method === "GET" && isText) {
+            const text = Buffer.concat(policyDocumentChunks).toString("utf8");
+            publicPolicyTextSignals = inspectPublicPolicyText(text, isHtml);
+            if (input.discoverPolicyLinks && isHtml) {
+              policyLinks = extractPublicPolicyLinks(input.hostname, text);
+            }
+            policyDocumentChunks = [];
           }
           resolve({
             statusCode,
@@ -350,6 +560,9 @@ function makeRequest(input: MakeRequestInput): Promise<MakeRequestResult> {
             ).evidence,
             bytesCount: getReceivedBytesCount(socket, receivedBytes),
             ...(passivePageSignals ? { passivePageSignals } : {}),
+            ...(publicPolicyLinks ? { publicPolicyLinks } : {}),
+            ...(publicPolicyTextSignals ? { publicPolicyTextSignals } : {}),
+            ...(policyLinks ? { publicPolicyLinks: policyLinks } : {}),
           });
         });
         response.resume();
