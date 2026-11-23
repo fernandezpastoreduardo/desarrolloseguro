@@ -995,13 +995,23 @@ describePostgres.sequential("PostgresScanStore", () => {
           ...check,
           limitation: "Resultado limitado a las rutas públicas declaradas del perfil domain-v4.",
         };
-        if (check.controlId !== "DS-HDR-01") return base;
-        return {
-          ...base,
-          status: "unknown" as const,
-          summary: "El lector no pudo completar esta comprobación: no se pudo completar la conexión.",
-          evidence: { finalScheme: "https", probeErrorCode: "connection_failed" },
-        };
+        if (check.controlId === "DS-HDR-01") {
+          return {
+            ...base,
+            status: "unknown" as const,
+            summary: "El lector no pudo completar esta comprobación: no se pudo completar la conexión.",
+            evidence: { finalScheme: "https", probeErrorCode: "connection_failed" },
+          };
+        }
+        if (check.controlId === "DS-PRIV-05") {
+          return {
+            ...base,
+            status: "unknown" as const,
+            summary: "El lector no pudo completar esta comprobación: se agotó el tiempo de espera.",
+            evidence: { ...check.evidence, probeErrorCode: "request_timeout" },
+          };
+        }
+        return base;
       }),
       {
         ...CHECK,
@@ -1035,6 +1045,12 @@ describePostgres.sequential("PostgresScanStore", () => {
         status: "unknown",
         summary: "El lector no pudo completar esta comprobación: no se pudo completar la conexión.",
         evidence: { probeErrorCode: "connection_failed" },
+      });
+    expect(report?.checks.find(({ controlId }) => controlId === "DS-PRIV-05"))
+      .toMatchObject({
+        status: "unknown",
+        summary: "El lector no pudo completar esta comprobación: se agotó el tiempo de espera.",
+        evidence: { probeErrorCode: "request_timeout" },
       });
 
     const invalidJob = await queueAndClaim("domain-v4");
