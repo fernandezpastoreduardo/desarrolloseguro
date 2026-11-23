@@ -2,8 +2,8 @@
 
 ## Propósito
 
-Aplicar la semántica ya aprobada de `domain-ethics-v4` al dominio de la propia
-entidad. Los informes de `desarrolloseguro.org` no deben volver a `domain-ethics-v3`
+Mantener la evaluación firmada del inventario backend dentro de la rúbrica vigente
+`domain-ethics-v5` para el dominio de la propia entidad. Los informes de `desarrolloseguro.org` no deben volver a `domain-ethics-v3`
 ni dejar `third-party-data-use` como `unknown` solo porque el lector aislado
 existente está limitado a Grumphya.
 
@@ -78,7 +78,7 @@ allowlist del inventario.
 ## Criterios de aceptación
 
 1. Los análisis actuales y periódicos de `desarrolloseguro.org` usan
-   `domain-ethics-v4` con 8/8 criterios éticos concluyentes.
+   `domain-ethics-v5` con 8/8 criterios éticos concluyentes.
 2. `backend-processor-transparency` refleja exactamente el registro de
    integraciones activas del release y se presenta como evidencia declarada
    por Desarrollo Seguro. La persistencia acepta esta evaluación únicamente

@@ -12,7 +12,7 @@ export type EthicsCriterion = {
 };
 
 export type DomainEthicsAssessment = {
-  policyVersion: "domain-ethics-v3" | "domain-ethics-v4";
+  policyVersion: "domain-ethics-v3" | "domain-ethics-v4" | "domain-ethics-v5";
   score: number | null;
   assessedCriteria: number;
   totalCriteria: number;
@@ -63,7 +63,21 @@ export function assessDomainEthicsV4(
     maturity: assessed.length < 4 ? "preliminary" : assessed.length < criteria.length ? "partial" : "broad",
     criteria,
     reasons,
-    interpretation: "Indicador provisional basado en señales públicas de DNS, TLS, HTTP, cabeceras, cookies, referencias del HTML inicial, rendimiento de respuesta e inventario backend firmado. Las declaraciones de privacidad se atribuyen al titular; la observación de navegador y los procesadores backend son evidencias separadas. No verifica contratos ni prácticas de los proveedores, y no es una certificación.",
+    interpretation: "Esta nota resume señales observadas en la página y en la información que publica su titular. Comparamos lo publicado con las conexiones y servicios que pudimos revisar. No podemos comprobar contratos privados ni todas las prácticas de esos servicios.",
+  };
+}
+
+export function assessDomainEthicsV5(
+  checks: unknown,
+  processorTransparency: import("./processor-inventory.js").ProcessorTransparencyAssessment | null,
+): DomainEthicsAssessment {
+  const assessment = processorTransparency
+    ? assessDomainEthicsV4(checks, processorTransparency)
+    : assessDomainEthics(checks);
+  return {
+    ...assessment,
+    policyVersion: "domain-ethics-v5",
+    interpretation: "Ética no es una opinión moral: resume la transparencia del sitio y señales públicas sobre prácticas que pueden afectar a las personas. Las declaraciones del titular se distinguen de lo observado por el auditor; no se afirman como hechos las prácticas internas de proveedores. La falta de información pública exigible se penaliza y un error técnico del auditor deja el punto en revisión.",
   };
 }
 
@@ -72,17 +86,15 @@ const CRITERIA = [
   { id: "transport-security", label: "Seguridad del transporte TLS", weight: 25, controls: ["DS-TLS-01", "DS-TLS-02"] },
   { id: "http-availability", label: "Respuesta HTTP", weight: 15, controls: ["DS-HTTP-01"] },
   { id: "security-headers", label: "Cabeceras de seguridad", weight: 20, controls: ["DS-HDR-01"] },
-  { id: "third-party-data-use", label: "Reutilización o venta de datos por terceros", weight: 10, controls: ["DS-PRIV-04"] },
+  { id: "third-party-data-use", label: "Transparencia sobre servicios externos", weight: 10, controls: ["DS-PRIV-04"] },
   { id: "initial-cookie-risk", label: "Cookies conocidas en la respuesta inicial", weight: 10, controls: ["DS-PRIV-05"] },
   { id: "tracking", label: "Rastreadores y mapas de calor", weight: 5, controls: ["DS-PRIV-06"] },
   { id: "performance", label: "Rendimiento", weight: 5, controls: ["DS-QUAL-02"] },
 ] as const;
 
-const UNVERIFIED_THIRD_PARTY_REASON =
-  "No hay evidencia verificable sobre reutilización o venta de datos por terceros.";
 const UNKNOWN_REASONS: Record<string, string> = {
   "transport-security": "No se han comprobado todas las versiones de TLS incluidas en este criterio.",
-  "third-party-data-use": UNVERIFIED_THIRD_PARTY_REASON,
+  "third-party-data-use": "El auditor no pudo terminar la revisión de la información pública sobre servicios externos.",
   "initial-cookie-risk": "No se pudo inspeccionar la respuesta inicial; no se ha evaluado el comportamiento posterior del consentimiento.",
   tracking: "No se midieron conexiones ni scripts ejecutados; la comprobación se limita a referencias del HTML inicial.",
   performance: "No se midieron el tiempo y el tamaño de la respuesta inicial.",
@@ -116,7 +128,7 @@ export function assessDomainEthics(checks: unknown): DomainEthicsAssessment {
     maturity: assessed.length < 4 ? "preliminary" : assessed.length < criteria.length ? "partial" : "broad",
     criteria,
     reasons,
-    interpretation: "Indicador provisional basado en señales públicas de DNS, TLS, HTTP, cabeceras, cookies, referencias del HTML inicial a rastreadores conocidos y una medición de respuesta. No evalúa el consentimiento real, las prácticas de datos de terceros, conexiones o scripts dinámicos, ni la experiencia completa de rendimiento; no es una certificación.",
+    interpretation: "Ética no es una opinión moral: resume la transparencia del sitio y señales públicas sobre prácticas que pueden afectar a las personas. Las declaraciones del titular se distinguen de lo observado por el auditor; no se afirman como hechos las prácticas internas de proveedores. La falta de información pública exigible se penaliza y un error técnico del auditor deja el punto en revisión.",
   };
 }
 

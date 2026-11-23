@@ -32,7 +32,7 @@ async function main(): Promise<void> {
     }
     const request = parseTransportV1ExecutorRequest(input);
     const result = await new TransportV1NetworkExecutor(
-      createUnixSocketObservationSource(EGRESS_BROKER_SOCKET),
+      createUnixSocketObservationSource(EGRESS_BROKER_SOCKET, request.profileVersion),
     ).execute(
       {
         hostname: request.hostname,

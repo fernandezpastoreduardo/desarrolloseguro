@@ -4,6 +4,7 @@ const PUBLIC_EVIDENCE_FIELDS: Readonly<Record<string, readonly string[]>> = {
   "DS-DNS-01": ["addressClass", "aRecordCount", "aaaaRecordCount"],
   "DS-TLS-01": ["protocol", "certificateValid", "hostnameMatches"],
   "DS-TLS-02": ["tls10Accepted", "tls11Accepted", "tls12Accepted", "tls13Accepted", "tls10ProbeError", "tls11ProbeError", "tls12ProbeError", "tls13ProbeError"],
+  "DS-PRIV-04": ["inspected", "privacyPolicyLinksFound", "policyLinksFound", "sitePrivacyPolicyFetched", "policyPagesFetched", "policyPagesMissing", "policyPagesDenied", "policyRecipientsMentioned", "policyPurposesMentioned", "policyTextBlocked", "policyProbeFailed", "policyLanguageCatalogVersion"],
   "DS-HTTP-01": ["statusCode", "redirectedToHttps", "finalScheme", "requestedHostname", "finalHostname", "canonicalHostname", "redirectStatusCode", "redirectFromHostname", "redirectToHostname"],
   "DS-HDR-01": ["finalScheme", "hsts", "nosniff", "frameProtection", "referrerPolicy", "csp"],
   "DS-PRIV-05": ["inspected", "cookieCount", "insecureCookieCount", "catalogMatchCount", "consentPromptDetected"],
@@ -22,6 +23,7 @@ const PUBLIC_EVIDENCE_ENUMS: Readonly<Record<string, readonly string[]>> = {
   addressClass: ["public", "private", "reserved", "unresolved"],
   protocol: ["TLSv1.2", "TLSv1.3"],
   finalScheme: ["http", "https"],
+  policyLanguageCatalogVersion: ["public-policy-language-eea-v1"],
   requestedHostname: ["grumphya.com", "www.grumphya.com"],
   finalHostname: ["grumphya.com", "www.grumphya.com"],
   canonicalHostname: ["grumphya.com", "www.grumphya.com"],
@@ -36,6 +38,8 @@ const PUBLIC_EVIDENCE_BOOLEANS = new Set([
   "certificateValid", "hostnameMatches", "tls10Accepted", "tls11Accepted",
   "tls12Accepted", "tls13Accepted", "redirectedToHttps", "hsts", "nosniff",
   "frameProtection", "referrerPolicy", "csp", "inspected", "consentPromptDetected",
+  "sitePrivacyPolicyFetched", "policyRecipientsMentioned", "policyPurposesMentioned",
+  "policyTextBlocked", "policyProbeFailed",
 ]);
 
 export function projectPublicEvidence(

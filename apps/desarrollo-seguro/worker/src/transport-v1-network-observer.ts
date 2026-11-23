@@ -12,10 +12,14 @@ import {
   type HttpRequestFactory,
 } from "./pinned-http-upgrade.js";
 import {
+  requestPinnedPublicPolicyDocument,
   requestPinnedHttps,
   type HttpsRequestFactory,
   type PinnedHttpsResult,
+  type PinnedPublicPolicyDocumentResult,
 } from "./pinned-https-transport.js";
+import type { PublicPolicyLink } from "./public-policy-link-extractor.js";
+import { PUBLIC_POLICY_LANGUAGE_CATALOG } from "./data/public-policy-language-catalog.js";
 import {
   PinnedTransportError,
   safeTransportErrorCode,
@@ -27,6 +31,10 @@ import type {
 } from "./transport-v1-executor.js";
 
 const ROOT_PATHS = ["/"] as const;
+const MAX_POLICY_DOCUMENTS = 30;
+const MAX_POLICY_REQUESTS = 45;
+const MAX_POLICY_BYTES = 3_500_000;
+const MAX_CONCURRENT_POLICY_REQUESTS = 4;
 const TLS_VERSION_PROBES = [
   { tlsVersion: "TLSv1", evidenceKey: "tls10Accepted", errorKey: "tls10ProbeError" },
   { tlsVersion: "TLSv1.1", evidenceKey: "tls11Accepted", errorKey: "tls11ProbeError" },
@@ -199,8 +207,8 @@ export function createTransportV1NetworkObserver(
     },
     async observeHeaders(hostname, signal) {
       return collectProbe(
-        () =>
-          requestPinnedHttps(
+        async () => {
+          const result = await requestPinnedHttps(
             {
               hostname,
               allowGrumphyaAliasRedirects: isGrumphyaHostname(hostname),
@@ -215,21 +223,208 @@ export function createTransportV1NetworkObserver(
               lookupFactory,
               requestFactory: dependencies.httpsRequestFactory,
             },
-          ),
-        (result) => ({
+          );
+          if (!dependencies.inspectPage || !result.publicPolicyLinks) {
+            return { result, policyAudit: null as PublicPolicyAudit | null };
+          }
+          const policyAudit = await auditPublicPolicyLinks(
+            hostname,
+            result.publicPolicyLinks,
+            signal,
+            {
+              lookupFactory,
+              requestFactory: dependencies.httpsRequestFactory,
+              ca: dependencies.httpsCa,
+            },
+          );
+          return { result, policyAudit };
+        },
+        ({ result, policyAudit }) => ({
           evidence: {
             finalScheme: "https",
             ...(result.tlsAuthorized ? (result.securityHeaders ?? {}) : {}),
             ...(result.tlsAuthorized && result.passivePageSignals
               ? toPassivePageEvidence(result.passivePageSignals)
               : {}),
+            ...(policyAudit ? toPublicPolicyEvidence(policyAudit) : {}),
           } satisfies TransportV1Evidence,
-          requestsCount: result.requestsCount,
-          bytesCount: result.bytesCount,
+          requestsCount: result.requestsCount + (policyAudit?.requestsCount ?? 0),
+          bytesCount: result.bytesCount + (policyAudit?.bytesCount ?? 0),
         }),
       );
     },
   };
+}
+
+type PublicPolicyAudit = {
+  privacyPolicyLinksFound: number;
+  policyLinksFound: number;
+  sitePrivacyPolicyFetched: boolean;
+  policyPagesFetched: number;
+  policyPagesDenied: number;
+  policyPagesMissing: number;
+  policyRecipientsMentioned: boolean;
+  policyPurposesMentioned: boolean;
+  policyTextBlocked: boolean;
+  policyProbeFailed: boolean;
+    policyLanguageCatalogVersion: typeof PUBLIC_POLICY_LANGUAGE_CATALOG.version;
+  requestsCount: number;
+  bytesCount: number;
+};
+
+type PolicyRequestDependencies = {
+  lookupFactory: (hostname: string, port: number) => LookupFunction;
+  requestFactory: HttpsRequestFactory | undefined;
+  ca: string | undefined;
+};
+
+async function auditPublicPolicyLinks(
+  auditedHostname: string,
+  initialLinks: readonly PublicPolicyLink[],
+  signal: AbortSignal,
+  dependencies: PolicyRequestDependencies,
+): Promise<PublicPolicyAudit> {
+  const queue = [...initialLinks];
+  const queuedKeys = new Set(queue.map(policyLinkKey));
+  const fetchedKeys = new Set<string>();
+  const result: PublicPolicyAudit = {
+    privacyPolicyLinksFound: 0,
+    policyLinksFound: 0,
+    sitePrivacyPolicyFetched: false,
+    policyPagesFetched: 0,
+    policyPagesDenied: 0,
+    policyPagesMissing: 0,
+    policyRecipientsMentioned: false,
+    policyPurposesMentioned: false,
+    policyTextBlocked: false,
+    policyProbeFailed: false,
+    policyLanguageCatalogVersion: PUBLIC_POLICY_LANGUAGE_CATALOG.version,
+    requestsCount: 0,
+    bytesCount: 0,
+  };
+  for (const link of queue) {
+    if (isPrivacyPolicyLink(link)) result.privacyPolicyLinksFound += 1;
+  }
+  result.policyLinksFound = queue.length;
+
+  let nextIndex = 0;
+  while (nextIndex < queue.length && fetchedKeys.size < MAX_POLICY_DOCUMENTS && !signal.aborted) {
+    if (result.requestsCount >= MAX_POLICY_REQUESTS || result.bytesCount >= MAX_POLICY_BYTES) {
+      result.policyProbeFailed = true;
+      break;
+    }
+    const batch = queue.slice(nextIndex, nextIndex + MAX_CONCURRENT_POLICY_REQUESTS);
+    nextIndex += batch.length;
+    const observations = await Promise.all(batch.map(async (link) => {
+      const key = policyLinkKey(link);
+      if (fetchedKeys.has(key)) return { link, observation: null, requestsCount: 0, bytesCount: 0 };
+      fetchedKeys.add(key);
+      try {
+        const observation = await requestPinnedPublicPolicyDocument(
+          { hostname: link.hostname, path: link.path, signal },
+          {
+            ca: dependencies.ca,
+            lookupFactory: dependencies.lookupFactory,
+            requestFactory: dependencies.requestFactory,
+          },
+        );
+        return { link, observation, requestsCount: observation.requestsCount, bytesCount: observation.bytesCount };
+      } catch (error) {
+        return {
+          link,
+          observation: null,
+          requestsCount: error instanceof PinnedTransportError ? error.requestsCount : 0,
+          bytesCount: error instanceof PinnedTransportError ? error.bytesCount : 0,
+        };
+      }
+    }));
+
+    for (const item of observations) {
+      result.requestsCount += item.requestsCount;
+      result.bytesCount += item.bytesCount;
+      if (!item.observation) {
+        result.policyProbeFailed = true;
+        continue;
+      }
+      applyPolicyDocumentObservation(result, auditedHostname, item.link, item.observation);
+      for (const discovered of item.observation.discoveredPolicyLinks) {
+        const key = policyLinkKey(discovered);
+        if (queuedKeys.has(key) || queue.length >= MAX_POLICY_DOCUMENTS) continue;
+        queuedKeys.add(key);
+        queue.push(discovered);
+        result.policyLinksFound += 1;
+        if (isPrivacyPolicyLink(discovered)) result.privacyPolicyLinksFound += 1;
+      }
+    }
+  }
+
+  if (signal.aborted || (nextIndex < queue.length && fetchedKeys.size >= MAX_POLICY_DOCUMENTS)) {
+    result.policyProbeFailed = true;
+  }
+  return result;
+}
+
+function applyPolicyDocumentObservation(
+  result: PublicPolicyAudit,
+  auditedHostname: string,
+  link: PublicPolicyLink,
+  observation: PinnedPublicPolicyDocumentResult,
+): void {
+  const statusCode = observation.statusCode;
+  const sitePrivacyPolicy = areSameAuditSite(auditedHostname, link.hostname) &&
+    (link.kind === "privacy" || link.kind === "cookies");
+  if (statusCode === 403 || statusCode === 429) {
+    result.policyPagesDenied += 1;
+    result.policyTextBlocked = true;
+    return;
+  }
+  if (statusCode >= 400 && statusCode < 500) {
+    result.policyPagesMissing += 1;
+    return;
+  }
+  if (statusCode < 200 || statusCode >= 300 || !observation.inspectedText) {
+    result.policyProbeFailed = true;
+    return;
+  }
+  result.policyPagesFetched += 1;
+  if (sitePrivacyPolicy) result.sitePrivacyPolicyFetched = true;
+  if (sitePrivacyPolicy) {
+    result.policyRecipientsMentioned ||= observation.recipientsMentioned;
+    result.policyPurposesMentioned ||= observation.purposesMentioned;
+  }
+  result.policyTextBlocked ||= observation.textBlocked;
+}
+
+function toPublicPolicyEvidence(audit: PublicPolicyAudit): TransportV1Evidence {
+  return {
+    privacyPolicyLinksFound: audit.privacyPolicyLinksFound,
+    policyLinksFound: audit.policyLinksFound,
+    sitePrivacyPolicyFetched: audit.sitePrivacyPolicyFetched,
+    policyPagesFetched: audit.policyPagesFetched,
+    policyPagesDenied: audit.policyPagesDenied,
+    policyPagesMissing: audit.policyPagesMissing,
+    policyRecipientsMentioned: audit.policyRecipientsMentioned,
+    policyPurposesMentioned: audit.policyPurposesMentioned,
+    policyTextBlocked: audit.policyTextBlocked,
+    policyProbeFailed: audit.policyProbeFailed,
+    policyLanguageCatalogVersion: audit.policyLanguageCatalogVersion,
+  };
+}
+
+function isPrivacyPolicyLink(link: PublicPolicyLink): boolean {
+  return link.kind === "privacy" || link.kind === "cookies";
+}
+
+function areSameAuditSite(first: string, second: string): boolean {
+  return withoutWww(first) === withoutWww(second);
+}
+
+function withoutWww(hostname: string): string {
+  return hostname.startsWith("www.") ? hostname.slice(4) : hostname;
+}
+
+function policyLinkKey(link: PublicPolicyLink): string {
+  return `${link.hostname}${link.path}`;
 }
 
 function isGrumphyaHostname(hostname: string): boolean {

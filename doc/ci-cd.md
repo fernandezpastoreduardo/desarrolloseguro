@@ -24,7 +24,7 @@ de egress exacta confirmada `172.30.0.1/32`. El inventario conserva scope
 `privacy`; la operación adicional ejecuta las siete rutas D allowlisted con
 scopes acotados y devuelve solo los 14 estados públicos, nunca el informe
 privado ni su puntuación. La prueba de despliegue requiere
-un informe `domain-ethics-v4` con 8/8 criterios éticos evaluados y falla si el
+un informe `domain-ethics-v5` con 8/8 criterios éticos evaluados y falla si el
 inventario queda `unknown` por un error propio del auditor. Una falta de
 divulgación o inventario incompleto de Grumphya es un hallazgo concluyente,
 no un fallo de observabilidad.
@@ -32,7 +32,7 @@ La sonda manual de egress y su procedimiento están en
 [internal-audit-egress-runbook.md](internal-audit-egress-runbook.md); no forman
 parte de CI ni consumen minutos de GitHub.
 
-Después del deploy, el workflow comprueba que `www.desarrolloseguro.org` redirige a `https://desarrolloseguro.org/` sin exponer puertos internos y solicita análisis autorizados de `grumphya.com` y `desarrolloseguro.org`. Ambos informes deben usar `domain-v3`, incluir nueve comprobaciones, al menos cinco observaciones concluyentes y una matriz TLS 1.0–1.3 completa (cada versión debe aportar aceptación booleana o un código de sonda acotado). También se exige `domain-ethics-v4` con ocho criterios concluyentes e inventario backend sin errores propios del auditor. El informe propio debe acreditar 100/100 en Ética, Privacidad y Global, con el registro versionado del release como evidencia de procesadores. Si la política Beta devuelve `queued` o `running`, el smoke espera hasta 15 minutos para acomodar la cola global serializada y registra cada 30 segundos el estado del trabajo; si devuelve `cached` o `rate_limited`, valida que el informe público existente satisface los mismos criterios. Un `unknown` de transporte es válido cuando conserva la matriz diagnóstica TLS; no se confunde una versión que no pudo negociar con una ausencia de evidencia. Si el análisis termina con error, el worker conserva solo la fase, categoría operativa y códigos de las pruebas de red fallidas; el smoke los imprime en la línea de error. No se almacenan mensajes, rutas, salida de Docker ni contenido del dominio.
+Después del deploy, el workflow comprueba que `www.desarrolloseguro.org` redirige a `https://desarrolloseguro.org/` sin exponer puertos internos y solicita análisis autorizados de `grumphya.com` y `desarrolloseguro.org`. Ambos informes deben usar `domain-v4`, incluir diez comprobaciones, al menos cinco observaciones concluyentes y una matriz TLS 1.0–1.3 completa (cada versión debe aportar aceptación booleana o un código de sonda acotado). También se exige `domain-ethics-v5` con ocho criterios concluyentes e inventario backend sin errores propios del auditor. El informe propio debe acreditar 100/100 en Ética, Privacidad y Global, con el registro versionado del release como evidencia de procesadores. Si la política Beta devuelve `queued` o `running`, el smoke espera hasta 15 minutos para acomodar la cola global serializada y registra cada 30 segundos el estado del trabajo; si devuelve `cached` o `rate_limited`, valida que el informe público existente satisface los mismos criterios. Un `unknown` de transporte es válido cuando conserva la matriz diagnóstica TLS; no se confunde una versión que no pudo negociar con una ausencia de evidencia. Si el análisis termina con error, el worker conserva solo la fase, categoría operativa y códigos de las pruebas de red fallidas; el smoke los imprime en la línea de error. No se almacenan mensajes, rutas, salida de Docker ni contenido del dominio.
 
 El worker también escribe una línea JSON `scan_job_error` cuando una excepción impide completar el trabajo. Su `code` pertenece a una lista fija (`scan_run_insert_failed`, `scan_profile_controls_incomplete`, `worker_processing_failed`, entre otros) y nunca contiene el mensaje de la excepción, hostname, identificadores ni rutas. En una incidencia, estas líneas se consultan con `docker logs` del servicio worker para distinguir un fallo de persistencia de una expiración posterior del lease; no se debe interpretar `worker_lease_expired` como la causa raíz sin esa categoría previa.
 
@@ -50,3 +50,13 @@ pnpm ci:verify
 ```
 
 El paso PostgreSQL usa una base efímera del workflow. Los resultados de CI describen el commit probado; solo un job `Deploy Desarrollo Seguro` finalizado con éxito acredita que el gateway publicó ese commit y que respondieron la web y la API.
+
+
+El perfil `domain-v4` añade la comprobación de transparencia de las políticas
+públicas (`DS-PRIV-04`). El worker sigue enlaces públicos HTTPS a documentos de
+privacidad, cookies, condiciones e información legal, incluidos los de
+proveedores enlazados por esas páginas, con DNS/IP fijados y límites por perfil.
+La ausencia de información exigible o la denegación explícita es un fallo de
+transparencia; los fallos propios de red o del auditor quedan en revisión. La
+evidencia persistida contiene solo contadores, estados y la versión del catálogo
+local. Véase [transparencia de políticas públicas](transparencia-politicas-publicas.md).

@@ -264,6 +264,76 @@ describe("sanitizeScanObservations", () => {
     expect(weakTlsResult.checks.find(({ controlId }) => controlId === "DS-TLS-02")?.status).toBe("fail");
   });
 
+  it("scores public-policy transparency as fail only with observed missing information and keeps auditor failures unknown", () => {
+    const existingChecks = [
+      ...makeTransportV1Checks(),
+      {
+        ...makeUnknownCheck("DS-TLS-02", "/", "TLS"),
+        status: "pass",
+        evidence: {
+          tls10Accepted: false,
+          tls11Accepted: false,
+          tls12Accepted: true,
+          tls13Accepted: true,
+        },
+      },
+      {
+        ...makeUnknownCheck("DS-PRIV-05", "/", "GET"),
+        status: "pass",
+        evidence: { inspected: true, cookieCount: 0, insecureCookieCount: 0, catalogMatchCount: 0, consentPromptDetected: false },
+      },
+      {
+        ...makeUnknownCheck("DS-PRIV-06", "/", "GET"),
+        status: "pass",
+        evidence: { inspected: true, thirdPartyResourceReferences: 0, knownTrackingResourceReferences: 0 },
+      },
+      {
+        ...makeUnknownCheck("DS-QUAL-02", "/", "GET"),
+        status: "pass",
+        evidence: { inspected: true, responseTimeMs: 900, responseBytes: 45_000 },
+      },
+    ];
+    const policyEvidence = {
+      inspected: true,
+      privacyPolicyLinksFound: 1,
+      policyLinksFound: 1,
+      sitePrivacyPolicyFetched: true,
+      policyPagesFetched: 1,
+      policyPagesMissing: 0,
+      policyPagesDenied: 0,
+      policyRecipientsMentioned: true,
+      policyPurposesMentioned: true,
+      policyTextBlocked: false,
+      policyProbeFailed: false,
+      policyLanguageCatalogVersion: "public-policy-language-eea-v1",
+    };
+    const accepted = sanitizeScanObservations(MONITORED_HOSTNAME, "domain-v4", ["/"], [
+      ...existingChecks,
+      { ...makeUnknownCheck("DS-PRIV-04", "/", "GET"), status: "pass", evidence: policyEvidence },
+    ]);
+    expect(accepted.checks).toHaveLength(10);
+    expect(accepted.checks.find(({ controlId }) => controlId === "DS-PRIV-04")?.status).toBe("pass");
+
+    const missingPolicy = sanitizeScanObservations(MONITORED_HOSTNAME, "domain-v4", ["/"], [
+      ...existingChecks,
+      {
+        ...makeUnknownCheck("DS-PRIV-04", "/", "GET"),
+        status: "fail",
+        evidence: { ...policyEvidence, privacyPolicyLinksFound: 0, policyLinksFound: 0, sitePrivacyPolicyFetched: false },
+      },
+    ]);
+    expect(missingPolicy.checks.find(({ controlId }) => controlId === "DS-PRIV-04")?.status).toBe("fail");
+
+    const auditorError = sanitizeScanObservations(MONITORED_HOSTNAME, "domain-v4", ["/"], [
+      ...existingChecks,
+      {
+        ...makeUnknownCheck("DS-PRIV-04", "/", "GET"),
+        evidence: { ...policyEvidence, inspected: false, policyProbeFailed: true },
+      },
+    ]);
+    expect(auditorError.checks.find(({ controlId }) => controlId === "DS-PRIV-04")?.status).toBe("unknown");
+  });
+
   it("retains safe TLS probe failure categories to explain incomplete results", () => {
     const checks = [
       ...makeTransportV1Checks(),

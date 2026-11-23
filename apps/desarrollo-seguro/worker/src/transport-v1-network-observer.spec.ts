@@ -2,6 +2,7 @@ import { EventEmitter } from "node:events";
 import type { ClientRequest, IncomingMessage } from "node:http";
 import type { LookupAddress } from "node:dns";
 import { Socket } from "node:net";
+import type { LookupFunction } from "node:net";
 import type { RequestOptions as HttpsOptions } from "node:https";
 import { TLSSocket } from "node:tls";
 import { describe, expect, it, vi } from "vitest";
@@ -329,6 +330,193 @@ describe("createTransportV1NetworkObserver", () => {
     });
     expect(JSON.stringify(result)).not.toContain("secret-cookie-value");
     expect(JSON.stringify(result)).not.toContain("_ga");
+  });
+
+  it("follows bounded public policy links and returns only aggregate text evidence", async () => {
+    const requested: string[] = [];
+    const pages = new Map<string, { statusCode: number; body: string }>([
+      [`${HOSTNAME}/`, {
+        statusCode: 200,
+        body: '<a href="/politica-de-privacidad?campaign=secret#vendors">Política de privacidad</a><a href="https://vendor.example.com/privacy?token=private">Privacy policy</a>',
+      }],
+      [`${HOSTNAME}/politica-de-privacidad`, {
+        statusCode: 200,
+        body: "<p>Destinatarios y finalidades del tratamiento.</p>",
+      }],
+      ["vendor.example.com/privacy", {
+        statusCode: 200,
+        body: "<p>Recipients and purposes of processing.</p>",
+      }],
+    ]);
+    const requestFactory: HttpsRequestFactory = vi.fn((options, callback) => {
+      const request = new EventEmitter();
+      Object.assign(request, {
+        end() {
+          const key = `${String(options.hostname)}${String(options.path)}`;
+          requested.push(key);
+          const page = pages.get(key) ?? { statusCode: 404, body: "Not found" };
+          callback(responseWith(page.statusCode, { "content-type": "text/html; charset=utf-8" }, page.body));
+          return this;
+        },
+        destroy() { return this; },
+      });
+      return request as unknown as ClientRequest;
+    });
+    const observer = createTransportV1NetworkObserver({
+      inspectPage: true,
+      lookupFactory: () => vi.fn(),
+      httpsRequestFactory: requestFactory,
+    });
+
+    const result = await observer.observeHeaders(HOSTNAME, new AbortController().signal);
+
+    expect(result.evidence).toMatchObject({
+      privacyPolicyLinksFound: 2,
+      policyLinksFound: 2,
+      sitePrivacyPolicyFetched: true,
+      policyPagesFetched: 2,
+      policyPagesDenied: 0,
+      policyPagesMissing: 0,
+      policyRecipientsMentioned: true,
+      policyPurposesMentioned: true,
+      policyTextBlocked: false,
+      policyProbeFailed: false,
+      policyLanguageCatalogVersion: expect.any(String),
+    });
+    expect(requested).toEqual([
+      `${HOSTNAME}/`,
+      `${HOSTNAME}/politica-de-privacidad`,
+      "vendor.example.com/privacy",
+    ]);
+    const publicResult = JSON.stringify(result);
+    expect(publicResult).not.toContain("vendor.example.com");
+    expect(publicResult).not.toContain("politica-de-privacidad");
+    expect(publicResult).not.toContain("campaign=secret");
+    expect(publicResult).not.toContain("token=private");
+    expect(publicResult).not.toContain("Destinatarios");
+    expect(publicResult).not.toContain("Recipients and purposes of processing.");
+  });
+
+  it.each([403, 429])("records explicit HTTP %s policy denial without treating it as a probe error", async (statusCode) => {
+    const requestFactory: HttpsRequestFactory = vi.fn((options, callback) => {
+      const request = new EventEmitter();
+      Object.assign(request, {
+        end() {
+          const isRoot = options.path === "/";
+          callback(responseWith(isRoot ? 200 : statusCode,
+            isRoot ? { "content-type": "text/html" } : {},
+            isRoot ? '<a href="https://vendor.example.com/privacy">Privacy policy</a>' : "Access denied"));
+          return this;
+        },
+        destroy() { return this; },
+      });
+      return request as unknown as ClientRequest;
+    });
+    const observer = createTransportV1NetworkObserver({ inspectPage: true, lookupFactory: () => vi.fn(), httpsRequestFactory: requestFactory });
+
+    const result = await observer.observeHeaders(HOSTNAME, new AbortController().signal);
+
+    expect(result.evidence).toMatchObject({
+      policyLinksFound: 1,
+      policyPagesDenied: 1,
+      policyPagesMissing: 0,
+      policyTextBlocked: true,
+      policyProbeFailed: false,
+    });
+  });
+
+  it("distinguishes definitive missing policy pages from transient server failures", async () => {
+    const requestFactory: HttpsRequestFactory = vi.fn((options, callback) => {
+      const request = new EventEmitter();
+      Object.assign(request, {
+        end() {
+          const isRoot = options.path === "/";
+          callback(responseWith(isRoot ? 200 : options.path === "/privacy" ? 404 : 503,
+            isRoot ? { "content-type": "text/html" } : {},
+            isRoot ? '<a href="/privacy">Privacy policy</a><a href="/legal">Legal notice</a>' : ""));
+          return this;
+        },
+        destroy() { return this; },
+      });
+      return request as unknown as ClientRequest;
+    });
+    const observer = createTransportV1NetworkObserver({ inspectPage: true, lookupFactory: () => vi.fn(), httpsRequestFactory: requestFactory });
+
+    const result = await observer.observeHeaders(HOSTNAME, new AbortController().signal);
+
+    expect(result.evidence).toMatchObject({
+      privacyPolicyLinksFound: 1,
+      policyLinksFound: 2,
+      policyPagesMissing: 1,
+      policyProbeFailed: true,
+    });
+  });
+
+  it("does not follow a policy redirect to another host", async () => {
+    const requested: string[] = [];
+    const requestFactory: HttpsRequestFactory = vi.fn((options, callback) => {
+      const request = new EventEmitter();
+      Object.assign(request, {
+        end() {
+          requested.push(`${String(options.hostname)}${String(options.path)}`);
+          const isRoot = options.path === "/";
+          callback(responseWith(isRoot ? 200 : 302,
+            isRoot ? { "content-type": "text/html" } : { location: "https://attacker.example/privacy" },
+            isRoot ? '<a href="https://vendor.example.com/privacy">Privacy policy</a>' : ""));
+          return this;
+        },
+        destroy() { return this; },
+      });
+      return request as unknown as ClientRequest;
+    });
+    const observer = createTransportV1NetworkObserver({ inspectPage: true, lookupFactory: () => vi.fn(), httpsRequestFactory: requestFactory });
+
+    const result = await observer.observeHeaders(HOSTNAME, new AbortController().signal);
+
+    expect(result.evidence).toMatchObject({ policyProbeFailed: true, policyPagesDenied: 0 });
+    expect(requested).toEqual([`${HOSTNAME}/`, "vendor.example.com/privacy"]);
+    expect(JSON.stringify(result)).not.toContain("attacker.example");
+  });
+
+  it("rejects a discovered host resolving to a private address before any request is sent", async () => {
+    const successfulLookups: string[] = [];
+    const requestFactory: HttpsRequestFactory = vi.fn((options, callback) => {
+      const request = new EventEmitter();
+      Object.assign(request, {
+        end() {
+          const hostname = String(options.hostname);
+          const lookup = options.lookup as LookupFunction | undefined;
+          if (!lookup) throw new Error("missing lookup");
+          lookup(hostname, { all: false }, (error) => {
+            if (error) {
+              request.emit("error", error);
+              return;
+            }
+            successfulLookups.push(hostname);
+            const isRoot = options.path === "/";
+            callback(responseWith(200,
+              isRoot ? { "content-type": "text/html" } : { "content-type": "text/html" },
+              isRoot ? '<a href="https://private.example.net/privacy">Privacy policy</a>' : "Recipients purposes"));
+          });
+          return this;
+        },
+        destroy() { return this; },
+      });
+      return request as unknown as ClientRequest;
+    });
+    const observer = createTransportV1NetworkObserver({
+      inspectPage: true,
+      httpsRequestFactory: requestFactory,
+      dnsResolver: vi.fn(async (hostname: string) => hostname === HOSTNAME
+        ? PUBLIC_ADDRESSES
+        : [{ address: "192.168.1.7", family: 4 }]),
+    });
+
+    const result = await observer.observeHeaders(HOSTNAME, new AbortController().signal);
+
+    expect(successfulLookups).toEqual([HOSTNAME]);
+    expect(result.evidence).toMatchObject({ policyProbeFailed: true, policyPagesFetched: 0 });
+    expect(JSON.stringify(result)).not.toContain("192.168.1.7");
   });
 
   it("does not infer HTTPS header evidence from an unauthorized TLS response", async () => {

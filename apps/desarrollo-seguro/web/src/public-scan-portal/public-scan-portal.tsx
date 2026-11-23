@@ -15,12 +15,12 @@ const INVALID_DOMAIN_MESSAGE =
 const NO_REPORT_MESSAGE =
   "Todavía no hay un informe completo guardado para este dominio.";
 const UPDATING_WITHOUT_REPORT_MESSAGE =
-  "Hay una actualización en curso. Vuelve a consultar dentro de un momento.";
+  "Hay una revisión en curso. Puede tardar unos minutos; vuelve a consultar para ver el resultado cuando termine.";
 const UNAVAILABLE_DOMAIN_MESSAGE =
   "Este dominio no está disponible para consulta pública.";
 const ANALYSIS_REQUEST_MESSAGES: Record<string, string> = {
-  queued: "Solicitud añadida a la cola de análisis.",
-  running: "El análisis de este dominio ya está en curso.",
+  queued: "La solicitud está en cola. El análisis empezará cuando haya un turno disponible.",
+  running: "Estamos comprobando el dominio. Puede tardar unos minutos; te avisaremos cuando el informe esté listo.",
   cached: "Ya hay un informe reciente disponible. Vuelve a consultar el dominio.",
   rate_limited: "La solicitud está limitada temporalmente. Inténtalo más tarde.",
   capacity_reached: "La cola de análisis está completa. Inténtalo más tarde.",
@@ -76,6 +76,7 @@ const PROFILE_VERSIONS = [
   "domain-v1",
   "domain-v2",
   "domain-v3",
+  "domain-v4",
 ] as const;
 const SCAN_VERDICTS = ["pass", "fail", "inconclusive"] as const;
 const SCAN_TRIGGERS = ["scheduled", "requested"] as const;
@@ -86,36 +87,37 @@ const PUBLIC_SCOPE_PATHS = ["/", "/precios", "/informe"] as const;
 const MAX_REPORT_CHECKS = 32;
 
 const REPORT_CATEGORIES = [
-  { id: "ethics", label: "Ética", description: "Separa las referencias visibles a rastreadores del inventario de procesadores backend cuando está disponible. Las declaraciones de privacidad se atribuyen al titular y no se contrastan con contratos.", criteria: ["third-party-data-use", "backend-processor-transparency", "tracking"], controls: ["DS-PRIV-06"] },
-  { id: "privacy", label: "Privacidad", description: "Observa la portada, prueba aceptar y rechazar si hay controles y comprueba si se conserva el rechazo tras recargar. No navega a otras páginas.", criteria: ["initial-cookie-risk"], controls: ["DS-PRIV-05"] },
-  { id: "security", label: "Seguridad", description: "Revisa que el dominio responda, use una conexión cifrada y envíe protecciones básicas al navegador.", criteria: ["dns-integrity", "transport-security", "http-availability", "security-headers"], controls: ["DS-DNS-01", "DS-TLS-01", "DS-TLS-02", "DS-HTTP-01", "DS-HDR-01"] },
-  { id: "performance", label: "Rendimiento", description: "Mide cuánto tarda y cuánto pesa la respuesta de portada. No representa toda la experiencia desde otros dispositivos o páginas.", criteria: ["performance"], controls: ["DS-QUAL-02"] },
+  { id: "ethics", label: "Ética", description: "Valora la transparencia sobre servicios externos y otras prácticas que pueden afectar a las personas. Separa lo que el sitio declara de lo que el análisis observa.", criteria: ["third-party-data-use", "backend-processor-transparency", "tracking"], controls: ["DS-PRIV-06"] },
+  { id: "privacy", label: "Privacidad", description: "Comprueba qué datos guarda la página, si se conecta con otros servicios y si respeta la opción de rechazarlos. Después vuelve a cargarla para comprobar que la elección se mantiene.", criteria: ["initial-cookie-risk"], controls: ["DS-PRIV-05"] },
+  { id: "security", label: "Seguridad", description: "Comprueba que el dominio se encuentre, que la conexión proteja la información y que el navegador reciba barreras frente a algunos ataques.", criteria: ["dns-integrity", "transport-security", "http-availability", "security-headers"], controls: ["DS-DNS-01", "DS-TLS-01", "DS-TLS-02", "DS-HTTP-01", "DS-HDR-01"] },
+  { id: "performance", label: "Rendimiento", description: "Mide cuánto tarda y cuánto ocupa la respuesta inicial. Es una medición puntual: otras páginas, dispositivos y conexiones pueden dar resultados distintos.", criteria: ["performance"], controls: ["DS-QUAL-02"] },
 ] as const;
 const BETA_EVALUATION_LEVELS = [
   { id: "observed", label: "Observado", statuses: ["pass"] },
   { id: "not-observed", label: "No observado", statuses: ["fail"] },
-  { id: "inconclusive", label: "Sin conclusión", statuses: ["unknown", "not_applicable"] },
+  { id: "review", label: "En revisión", statuses: ["unknown"] },
+  { id: "not-applicable", label: "No aplica", statuses: ["not_applicable"] },
 ] as const;
 const CRITERION_EXPLANATIONS: Record<string, string> = {
-  "dns-integrity": "Comprueba que el nombre del dominio lleva a una dirección pública. No confirma quién es su titular.",
-  "transport-security": "Comprueba el certificado y qué versiones de TLS acepta la conexión para proteger los datos en tránsito.",
-  "http-availability": "Comprueba si la portada responde y si las visitas terminan en una conexión HTTPS cifrada.",
-  "security-headers": "Revisa indicaciones que el sitio envía al navegador para reducir algunos tipos de ataque.",
-  "third-party-data-use": "La respuesta técnica no permite verificar contratos ni prácticas de reutilización de datos.",
-  "backend-processor-transparency": "Compara el inventario autenticado de procesadores backend con lo que Grumphya declara en su política de privacidad. Las declaraciones se atribuyen al titular; no se verifica si los proveedores cumplen esas condiciones.",
-  "initial-cookie-risk": "Cuenta cookies y coincidencias conocidas en la primera respuesta; no evalúa el consentimiento posterior.",
-  tracking: "Cuenta referencias del HTML inicial a una lista local de rastreadores conocidos; no confirma conexiones ni ejecuta scripts.",
-  performance: "Mide el tiempo y tamaño de una única respuesta GET inicial. No mide la experiencia completa de una persona ni métricas Core Web Vitals.",
+  "dns-integrity": "Comprobamos que el dominio se encuentre en Internet. Esto no confirma quién es su titular.",
+  "transport-security": "Revisamos si la conexión cifra la información y si su certificado corresponde a este sitio.",
+  "http-availability": "Comprobamos si la página principal responde y si termina en una conexión cifrada.",
+  "security-headers": "Revisamos instrucciones que ayudan al navegador a proteger a quienes visitan el sitio.",
+  "third-party-data-use": "Buscamos información pública sobre qué servicios externos participan y qué explican sobre el uso de datos.",
+  "backend-processor-transparency": "Comparamos los servicios que el titular declara con su lista interna de sistemas activos. No podemos comprobar aquí si cada proveedor cumple lo declarado.",
+  "initial-cookie-risk": "Revisamos los datos que la página guarda en el navegador al abrirla. Esta comprobación no cubre lo que ocurre después.",
+  tracking: "Buscamos en el contenido inicial referencias a herramientas de seguimiento conocidas. Esto no confirma que se conecten o se ejecuten.",
+  performance: "Medimos cuánto tarda y cuánto ocupa la primera respuesta. No representa toda la experiencia de uso.",
 };
 const CRITERION_FAIL_MEANINGS: Record<string, string> = {
-  "dns-integrity": "No se confirmó una resolución pública adecuada para el dominio.",
-  "transport-security": "El certificado o la versión de cifrado no superó las comprobaciones; esto puede afectar a la conexión segura.",
-  "http-availability": "La portada no respondió según lo esperado o se observó una conexión insegura.",
-  "security-headers": "Falta al menos una protección que el navegador puede usar frente a ciertos ataques.",
-  "third-party-data-use": "No hay fuentes suficientes para concluir sobre el uso de datos por terceros.",
-  "initial-cookie-risk": "Se encontró una cookie cuyo nombre coincide con una categoría de analítica o marketing; esto requiere revisar su finalidad, pero no prueba por sí solo un incumplimiento.",
-  tracking: "El HTML inicial contiene referencias a herramientas de seguimiento conocidas; la prueba no confirma que se hayan conectado o ejecutado.",
-  performance: "La respuesta inicial fue lenta en esta medición puntual; esto puede afectar a la carga, pero no representa la experiencia completa.",
+  "dns-integrity": "No pudimos encontrar la dirección pública del dominio.",
+  "transport-security": "La conexión o su certificado no superó una de las comprobaciones de protección.",
+  "http-availability": "La página principal no respondió como se esperaba o no terminó en una conexión cifrada.",
+  "security-headers": "Falta al menos una indicación que ayuda al navegador a proteger la visita.",
+  "third-party-data-use": "Falta información pública necesaria sobre los servicios externos o el acceso a esa información fue denegado.",
+  "initial-cookie-risk": "El nombre de un dato guardado coincide con los que suelen usar herramientas de análisis o publicidad. Esto no basta por sí solo para confirmar un incumplimiento.",
+  tracking: "El contenido inicial menciona herramientas de seguimiento conocidas, pero esta prueba no confirma que se conecten o se ejecuten.",
+  performance: "La primera respuesta tardó más de lo esperado en esta medición puntual.",
 };
 const EVIDENCE_LABELS: Record<string, string> = {
   addressClass: "Tipo de dirección", aRecordCount: "Direcciones IPv4 encontradas", aaaaRecordCount: "Direcciones IPv6 encontradas",
@@ -128,6 +130,7 @@ const EVIDENCE_LABELS: Record<string, string> = {
   csp: "Política que restringe contenido cargado (CSP)", inspected: "Respuesta inspeccionada", cookieCount: "Cookies en la primera respuesta",
   insecureCookieCount: "Cookies sin atributo Secure", catalogMatchCount: "Coincidencias con cookies conocidas", consentPromptDetected: "Aviso de consentimiento detectado",
   thirdPartyResourceReferences: "Referencias a recursos de terceros en el HTML", knownTrackingResourceReferences: "Referencias a rastreadores conocidos",
+  policyLanguageCatalogVersion: "Catálogo local de información pública",
   responseTimeMs: "Tiempo de respuesta inicial", responseBytes: "Tamaño recibido de la página",
 };
 
@@ -223,7 +226,7 @@ type PublicReport = {
     } | null;
   };
   ethicsAssessment: {
-    policyVersion: "domain-ethics-v3" | "domain-ethics-v4";
+    policyVersion: "domain-ethics-v3" | "domain-ethics-v4" | "domain-ethics-v5";
     score: number | null;
     assessedCriteria: number;
     totalCriteria: number;
@@ -258,6 +261,7 @@ type PublicReport = {
   } | null;
   processorTransparencyAssessment: PublicProcessorTransparencyAssessment | null;
   internalAuditSummary?: InternalAuditPublicSummary | null;
+  internalAuditState?: "running" | "review" | "complete" | null;
   certification: {
     policyVersion: "beta-0.1";
     state: "pending" | "active" | "suspended";
@@ -312,7 +316,7 @@ const STATE_LABELS: Record<string, string> = {
 const VERDICT_LABELS: Record<string, string> = {
   pass: "Controles observados aprobados",
   fail: "Hay controles observados que no se cumplen",
-  inconclusive: "Resultado no concluyente",
+  inconclusive: "En revisión · el análisis no pudo completar todas las comprobaciones",
 };
 
 export function PublicScanPortal() {
@@ -410,7 +414,7 @@ export function PublicScanPortal() {
         if (payload.state === "updating") {
           announceScanPhase(
             "running",
-            "Análisis en curso. Se avisará cuando el informe esté disponible.",
+            "La comprobación del dominio está en curso. Te avisaremos cuando el informe esté listo.",
           );
         }
         if (
@@ -601,7 +605,7 @@ export function PublicScanPortal() {
       }
       announceScanPhase(
         "queued",
-        "Análisis en cola. Se avisará cuando comience.",
+        "Tu solicitud está en cola. Te avisaremos cuando empiece la comprobación.",
       );
       setAnalysisRequestState(payload.state);
     } catch {
@@ -675,7 +679,8 @@ export function PublicScanPortal() {
               aria-invalid={domainInputInvalid}
             />
             <button type="submit" disabled={state === "loading"}>
-              {state === "loading" ? "Consultando…" : SEARCH_BUTTON_TEXT}
+              {state === "loading" && <span className="ds-portal__spinner" aria-hidden="true" />}
+              {state === "loading" ? "Consultando el informe…" : SEARCH_BUTTON_TEXT}
             </button>
           </div>
           <span id="ds-portal-help" className="ds-portal__help">
@@ -799,8 +804,7 @@ function DomainResult({
         )}
         {status.state === "updating" && (
           <p className="ds-portal__disclaimer">
-            Esta página no se actualiza automáticamente. Vuelve a consultar para
-            ver si el informe ya está listo.
+            La revisión sigue en curso. Puede tardar unos minutos; vuelve a consultar para ver el resultado cuando termine.
           </p>
         )}
       </section>
@@ -874,6 +878,7 @@ function AnalysisRequestPanel({
   onRequest: () => void;
 }) {
   if (requestState !== null) {
+    if (["loading", "queued", "running"].includes(requestState)) return null;
     if (isRetryableAnalysisRequestState(requestState)) {
       return (
         <div className="ds-portal__analysis-status">
@@ -936,11 +941,13 @@ function ReportResult({ report, history }: { report: PublicReport; history: Publ
   );
 }
 
-function ScanProgress({ phase }: { phase: "queued" | "running" }) {
+function ScanProgress({ phase }: { phase: "submitting" | "queued" | "running" }) {
   const description =
-    phase === "queued"
-      ? "Análisis en cola. El porcentaje de progreso no está disponible."
-      : "Análisis en curso. El porcentaje de progreso no está disponible.";
+    phase === "submitting"
+      ? "Estamos registrando la solicitud. Puede tardar unos segundos."
+      : phase === "queued"
+        ? "La solicitud está en cola y empezará cuando haya un turno disponible."
+        : "Estamos comprobando el dominio. Puede tardar unos minutos; no hay un porcentaje fiable porque cada prueba tarda distinto.";
 
   return (
     <div
@@ -948,12 +955,16 @@ function ScanProgress({ phase }: { phase: "queued" | "running" }) {
       role="progressbar"
       aria-label="Progreso del análisis"
       aria-valuetext={description}
+      aria-busy="true"
       data-phase={phase}
     >
-      <span className="ds-portal__scan-progress-track" aria-hidden="true">
-        <span className="ds-portal__scan-progress-indicator" />
-      </span>
+      <span className="ds-portal__spinner" aria-hidden="true" />
       <span className="ds-portal__scan-progress-label">{description}</span>
+      {(phase === "queued" || phase === "running") && (
+        <span className="ds-portal__scan-progress-track" aria-hidden="true">
+          <span className="ds-portal__scan-progress-indicator" />
+        </span>
+      )}
     </div>
   );
 }
@@ -964,6 +975,7 @@ function isScanInProgress(
 ): boolean {
   return (
     status?.state === "updating" ||
+    requestState === "loading" ||
     requestState === "queued" ||
     requestState === "running"
   );
@@ -972,7 +984,8 @@ function isScanInProgress(
 function getScanProgressPhase(
   status: DomainStatus | null,
   requestState: AnalysisRequestState | null,
-): "queued" | "running" {
+): "submitting" | "queued" | "running" {
+  if (requestState === "loading") return "submitting";
   if (status?.state === "updating" || requestState === "running") {
     return "running";
   }
@@ -996,15 +1009,15 @@ function ReportSummary({
       <CertificationStatus certification={report.certification} />
       <section className="ds-portal__ethics" aria-labelledby="ethics-summary-heading">
         <div className="ds-portal__score-lead">
-          <div className="ds-portal__score-copy">
-            <p className="ds-portal__eyebrow">Puntuación global · MVP 50/50</p>
+        <div className="ds-portal__score-copy">
+            <p className="ds-portal__eyebrow">Resultado de la evaluación</p>
             <h3 id="ethics-summary-heading">Dimensiones de evaluación</h3>
             <p className="ds-portal__ethics-score">{getGlobalScoreSummary(report)}</p>
           </div>
           <GlobalScoreRing score={report.globalAssessment.score} status={report.globalAssessment.status} />
         </div>
-        <p className="ds-portal__ethics-score">
-          <strong>Ética · 50 %</strong><br />
+      <p className="ds-portal__ethics-score">
+          <strong>Ética</strong><br />
           {report.ethicsAssessment.score === null
             ? `Sin nota · ${report.ethicsAssessment.assessedCriteria} de ${report.ethicsAssessment.totalCriteria} criterios evaluados`
             : `${report.ethicsAssessment.score}/100 · ${report.ethicsAssessment.assessedCriteria} de ${report.ethicsAssessment.totalCriteria} criterios evaluados`}
@@ -1077,7 +1090,7 @@ function ReportSummary({
         {report.processorTransparencyAssessment && (
           <section className="ds-portal__processors" aria-labelledby="processor-transparency-heading">
             <h3 id="processor-transparency-heading">
-              Procesadores backend de {(report.processorTransparencyAssessment.inventory?.hostname ?? report.hostname) === "desarrolloseguro.org" ? "Desarrollo Seguro" : "Grumphya"}
+            Servicios externos declarados por {(report.processorTransparencyAssessment.inventory?.hostname ?? report.hostname) === "desarrolloseguro.org" ? "Desarrollo Seguro" : "Grumphya"}
             </h3>
             <p>
               {getProcessorTransparencySummary(report.processorTransparencyAssessment)}
@@ -1085,8 +1098,7 @@ function ReportSummary({
             {report.processorTransparencyAssessment.inventory && (
               <>
                 <p className="ds-portal__processors-meta">
-                  Política versión {report.processorTransparencyAssessment.inventory.privacyPolicy.revision} ·
-                  inventario observado {report.processorTransparencyAssessment.inventory.observedAt}
+                  Información revisada el {formatDate(report.processorTransparencyAssessment.inventory.observedAt)}.
                 </p>
                 {report.processorTransparencyAssessment.inventory.processors.length > 0 ? (
                   <ul className="ds-portal__processor-list">
@@ -1125,20 +1137,28 @@ function ReportSummary({
                 ) : (
                   <p>El inventario completo no encontró procesadores backend externos activos en el registro cubierto.</p>
                 )}
-                <p>
-                  Estas son declaraciones publicadas por Grumphya. El análisis compara la lista con su política y no verifica contratos ni el cumplimiento de esas condiciones por parte de los proveedores.
-                </p>
+                <div className="ds-portal__processor-evidence-note">
+                  <h4>Lo que declara el sitio</h4>
+                  <p>Esta lista procede de la información publicada por {report.processorTransparencyAssessment.inventory.hostname === "desarrolloseguro.org" ? "Desarrollo Seguro" : "Grumphya"}. El análisis comprueba que incluya los servicios identificados; no confirma que cada proveedor cumpla lo declarado.</p>
+                  <h4>Lo que observamos desde fuera</h4>
+                  <p>Las conexiones y páginas descritas en el informe muestran señales visibles durante la revisión. No permiten conocer todo lo que cada proveedor hace con la información recibida.</p>
+                </div>
               </>
             )}
           </section>
         )}
       </section>
       {report.hostname === "grumphya.com" && (
-        <InternalAuditSummary summary={report.internalAuditSummary ?? null} />
+        <InternalAuditSummary
+          summary={report.internalAuditSummary ?? null}
+          state={report.internalAuditState ?? (state === "updating"
+            ? "running"
+            : report.internalAuditSummary?.status === "complete" ? "complete" : "review")}
+        />
       )}
       {report.privacyAssessment && (
         <section className="ds-portal__privacy" aria-labelledby="privacy-summary-heading">
-          <p className="ds-portal__eyebrow">Dimensión independiente · 50 % de la global</p>
+          <p className="ds-portal__eyebrow">Nota independiente</p>
           <h3 id="privacy-summary-heading">Privacidad</h3>
           <p>
             {report.privacyAssessment.score === null
@@ -1155,7 +1175,7 @@ function ReportSummary({
       <div className="ds-portal__verdict" data-verdict={report.verdict}>
         <span>{isCurrent ? "Vigente" : "Histórico"}</span>
         <strong>
-          {VERDICT_LABELS[report.verdict] ?? "Resultado no concluyente"}
+          {VERDICT_LABELS[report.verdict] ?? "En revisión"}
         </strong>
       </div>
       <dl className="ds-portal__metadata">
@@ -1189,11 +1209,9 @@ function ReportSummary({
       </p>
       <section className="ds-portal__report-method" aria-labelledby="report-method-heading">
         <p className="ds-portal__eyebrow">Notas de lectura</p>
-        <h3 id="report-method-heading">Cómo interpretar esta ficha</h3>
+        <h3 id="report-method-heading">Cómo se calcula esta nota</h3>
         <p className="ds-portal__score-method">
-          La puntuación solo se calcula con los criterios evaluados. Los que no
-          tienen evidencia quedan como desconocidos y no suman ni restan; una
-          puntuación alta con pocos datos no significa que el sitio esté libre de problemas.
+          La nota global combina por igual Ética y Privacidad. Las categorías describen aspectos distintos que pueden afectar a las personas; no son una opinión moral. Ética valora lo que el sitio explica sobre sus prácticas y los indicios públicos observados. Si falta información que debería ser pública, se señala como falta de transparencia. Si falla una comprobación técnica del auditor, el resultado queda en revisión. Una nota alta no garantiza que nunca vaya a ocurrir un problema.
         </p>
         <p className="ds-portal__report-takeaway">{getReportTakeaway(report.ethicsAssessment.criteria)}</p>
         <p>{report.ethicsAssessment.interpretation}</p>
@@ -1206,42 +1224,67 @@ const INTERNAL_AUDIT_COPY: Record<InternalAuditCriterionId, { label: string; pas
   "infrastructure.tls": { label: "Conexión protegida", pass: "La conexión observada protege la información durante el envío.", fail: "Una conexión débil podría dejar la información expuesta o permitir que se altere durante el envío." },
   "infrastructure.headers": { label: "Protecciones del navegador", pass: "La respuesta incluye las protecciones del navegador comprobadas.", fail: "El navegador podría carecer de barreras que ayudan a frenar algunos ataques." },
   "infrastructure.network": { label: "Acceso a servicios", pass: "Los servicios comprobados responden dentro del alcance previsto.", fail: "Podrían quedar accesibles servicios que deberían permanecer restringidos." },
-  "application.dependencies": { label: "Componentes de software", pass: "Los componentes revisados no presentan alertas dentro del alcance de esta comprobación.", fail: "Un componente con riesgos conocidos podría afectar al funcionamiento o la protección de la aplicación." },
-  "application.secrets": { label: "Protección de credenciales", pass: "La comprobación no encontró credenciales expuestas en el artefacto revisado.", fail: "Una credencial expuesta podría permitir el acceso no autorizado a servicios o información." },
-  "authentication.authorization": { label: "Acceso a cuentas y funciones", pass: "Las pruebas comprobaron que las funciones revisadas respetan los permisos previstos.", fail: "Una persona podría acceder a información o funciones que no le corresponden." },
+  "application.dependencies": { label: "Programas que usa la aplicación", pass: "Los programas revisados no muestran señales de riesgo conocidas en esta comprobación.", fail: "Un programa con riesgos conocidos podría afectar al funcionamiento o a la protección de la aplicación." },
+  "application.secrets": { label: "Protección de claves de acceso", pass: "La revisión no encontró claves de acceso expuestas en los archivos de la aplicación.", fail: "Una clave expuesta podría permitir el acceso sin autorización a servicios o información." },
+  "authentication.authorization": { label: "Acceso a cuentas y funciones", pass: "Las pruebas comprobaron que cada función revisada respeta quién puede usarla.", fail: "Una persona podría acceder a información o funciones que no le corresponden." },
   "quality.e2e": { label: "Recorridos principales", pass: "Las tareas principales comprobadas se completaron correctamente.", fail: "Algunas tareas importantes podrían no completarse como se espera." },
   "quality.accessibility": { label: "Accesibilidad", pass: "Las comprobaciones de accesibilidad cubiertas no encontraron barreras críticas.", fail: "Algunas personas podrían encontrar barreras para utilizar la aplicación." },
   "performance.page_load": { label: "Rapidez de carga y respuesta", pass: "La aplicación respondió dentro de los límites comprobados.", fail: "La aplicación podría tardar en mostrar contenido o responder a una acción." },
   "privacy.cookies": { label: "Datos guardados en el navegador", pass: "La comprobación no encontró almacenamiento de seguimiento no permitido.", fail: "Podrían guardarse datos de seguimiento o preferencias de forma no esperada." },
-  "privacy.third_parties": { label: "Conexiones con otros servicios", pass: "Las conexiones externas observadas coinciden con el alcance declarado.", fail: "Podría compartirse información con servicios externos de forma no esperada." },
+  "privacy.third_parties": { label: "Conexiones con otros servicios", pass: "Los servicios externos observados coinciden con la información publicada por Grumphya.", fail: "Podría compartirse información con servicios externos de forma no esperada." },
   "privacy.consent": { label: "Elección de privacidad", pass: "Las preferencias de privacidad comprobadas se respetaron.", fail: "La elección de privacidad podría no respetarse correctamente." },
-  "ethics.transparency": { label: "Información sobre servicios externos", pass: "La información publicada cubre los servicios externos revisados.", fail: "Las personas podrían no saber qué servicios participan o para qué se usan." },
-  "ai.disclosure": { label: "Uso de inteligencia artificial", pass: "La información sobre el uso de inteligencia artificial está presente en el alcance revisado.", fail: "Podría faltar información sobre la participación de sistemas de inteligencia artificial." },
+  "ethics.transparency": { label: "Información sobre servicios externos", pass: "La información publicada incluye los servicios externos revisados.", fail: "Las personas podrían no saber qué servicios participan o para qué se usan." },
+  "ai.disclosure": { label: "Información sobre inteligencia artificial", pass: "La información revisada explica dónde participa la inteligencia artificial.", fail: "Podría faltar información sobre el uso de inteligencia artificial." },
 };
 
-function InternalAuditSummary({ summary }: { summary: InternalAuditPublicSummary | null }) {
-  const ids = Object.keys(INTERNAL_AUDIT_COPY) as InternalAuditCriterionId[];
-  const review = summary === null || summary.status === "review";
+const INTERNAL_AUDIT_GROUPS: Array<{ title: string; criteria: InternalAuditCriterionId[] }> = [
+  { title: "Conexión y protección", criteria: ["infrastructure.tls", "infrastructure.headers", "infrastructure.network"] },
+  { title: "Aplicación y acceso", criteria: ["application.dependencies", "application.secrets", "authentication.authorization"] },
+  { title: "Uso y experiencia", criteria: ["quality.e2e", "quality.accessibility", "performance.page_load"] },
+  { title: "Datos e información", criteria: ["privacy.cookies", "privacy.third_parties", "privacy.consent", "ethics.transparency", "ai.disclosure"] },
+];
+
+function InternalAuditSummary({
+  summary,
+  state,
+}: {
+  summary: InternalAuditPublicSummary | null;
+  state: "running" | "review" | "complete";
+}) {
+  const running = state === "running";
+  const complete = state === "complete" && summary?.status === "complete";
+  const review = !running && !complete;
   const states = new Map(summary?.criteria.map((criterion) => [criterion.id, criterion.status]));
   return (
-    <section className="ds-portal__internal-audit" aria-labelledby="internal-audit-heading" data-status={review ? "review" : "complete"}>
-      <p className="ds-portal__eyebrow">Revisión técnica independiente</p>
-      <h3 id="internal-audit-heading">14 aspectos de Grumphya</h3>
-      <p>Resume comprobaciones técnicas de la aplicación. No forma parte de la puntuación Ética o Privacidad y no garantiza la ausencia total de riesgos.</p>
-      <p className="ds-portal__internal-audit-status" role="status">
-        {review
-          ? "En revisión · la comprobación privada se está actualizando o no dispone de un resultado vigente."
-          : `Revisión completada el ${formatDate(summary.observedAt!)}.`}
+    <section className="ds-portal__internal-audit" aria-labelledby="internal-audit-heading" data-status={running ? "running" : review ? "review" : "complete"} aria-busy={running}>
+      <p className="ds-portal__eyebrow">Transparencia sobre la aplicación</p>
+      <h3 id="internal-audit-heading">Lo que ocurre dentro de Grumphya</h3>
+      <p>Grumphya ha decidido permitir una revisión de aspectos internos de su aplicación y compartir los resultados. Así puedes conocer más sobre cómo funciona y se protege. Estas comprobaciones amplían la información visible desde fuera; no cambian las notas de Ética o Privacidad ni garantizan que no vaya a haber problemas.</p>
+      <p className="ds-portal__internal-audit-status" role="status" aria-live="polite" aria-atomic="true">
+        {running
+          ? <><span className="ds-portal__spinner" aria-hidden="true" />El informe se está actualizando. Estos resultados aparecerán cuando termine.</>
+          : review
+            ? "En revisión · todavía no hay un resultado vigente para mostrar."
+            : summary?.observedAt
+              ? `Revisión completada el ${formatDate(summary.observedAt)}.`
+              : "Revisión completada; la fecha no está disponible."}
       </p>
-      <ol className="ds-portal__internal-audit-list">
-        {ids.map((id) => {
+      <div className="ds-portal__internal-audit-groups">
+        {INTERNAL_AUDIT_GROUPS.map((group, index) => (
+          <section className="ds-portal__internal-audit-group" key={group.title} aria-labelledby={`internal-audit-group-${index}`}>
+            <h4 id={`internal-audit-group-${index}`}>{group.title}</h4>
+            <ul className="ds-portal__internal-audit-list">
+              {group.criteria.map((id) => {
           const status = review ? "unknown" : states.get(id) ?? "unknown";
           const copy = INTERNAL_AUDIT_COPY[id];
-          const label = status === "pass" ? "Correcto" : status === "fail" ? "Atención" : status === "not_applicable" ? "No aplica" : "En revisión";
-          const description = status === "pass" ? copy.pass : status === "fail" ? copy.fail : status === "not_applicable" ? "Este aspecto no aplica a la configuración observada en esta revisión." : "Este aspecto se está comprobando; todavía no hay un resultado vigente que mostrar.";
-          return <li key={id} data-status={status}><div><strong>{copy.label}</strong><p>{description}</p></div><span>{label}</span></li>;
+                const label = status === "pass" ? "Correcto" : status === "fail" ? "Atención" : status === "not_applicable" ? "No aplica" : running ? "Pendiente" : "En revisión";
+                const description = status === "pass" ? copy.pass : status === "fail" ? copy.fail : status === "not_applicable" ? "Este aspecto no corresponde a la configuración observada." : running ? "El resultado estará disponible cuando termine la revisión." : "Todavía no hay un resultado vigente para este aspecto.";
+                return <li key={id} data-status={status}><div><strong>{copy.label}</strong><p>{description}</p></div><span className="ds-portal__internal-audit-state" data-status={status}>{label}</span></li>;
         })}
-      </ol>
+            </ul>
+          </section>
+        ))}
+      </div>
     </section>
   );
 }
@@ -1719,6 +1762,8 @@ function isPublicReport(value: unknown): value is PublicReport {
     !isPrivacyAssessment(value.privacyAssessment) ||
     !isProcessorTransparencyAssessment(value.processorTransparencyAssessment) ||
     !isInternalAuditPublicSummary(value.internalAuditSummary) ||
+    value.internalAuditState !== undefined && value.internalAuditState !== null &&
+      !isOneOf(value.internalAuditState, ["running", "review", "complete"] as const) ||
     value.internalAuditSummary != null && value.hostname !== "grumphya.com" ||
     !isGlobalAssessment(value.globalAssessment) ||
     !isPublicCertification(value.certification) ||
@@ -1730,7 +1775,7 @@ function isPublicReport(value: unknown): value is PublicReport {
     return false;
   }
   const hasProcessorAssessment = value.processorTransparencyAssessment !== null;
-  if (hasProcessorAssessment !== (value.ethicsAssessment.policyVersion === "domain-ethics-v4") ||
+  if (hasProcessorAssessment !== (["domain-ethics-v4", "domain-ethics-v5"].includes(value.ethicsAssessment.policyVersion)) ||
       hasProcessorAssessment && value.hostname !== "grumphya.com") return false;
   if (!isGlobalAssessmentConsistent(
     value.globalAssessment as PublicReport["globalAssessment"],
@@ -1897,7 +1942,7 @@ function isPublicCertification(value: unknown): value is PublicReport["certifica
 function isEthicsAssessment(value: unknown): value is PublicReport["ethicsAssessment"] {
   if (!isRecord(value)) return false;
   if (
-    !isOneOf(value.policyVersion, ["domain-ethics-v3", "domain-ethics-v4"] as const) ||
+    !isOneOf(value.policyVersion, ["domain-ethics-v3", "domain-ethics-v4", "domain-ethics-v5"] as const) ||
     (value.score !== null && (!isInteger(value.score) || value.score < 0 || value.score > 100)) ||
     !isInteger(value.assessedCriteria) || value.assessedCriteria < 0 ||
     !isInteger(value.totalCriteria) || value.totalCriteria <= 0 ||
@@ -2171,20 +2216,20 @@ function getReportTakeaway(criteria: Array<{ status: string }>): string {
     return `Se detectaron problemas en ${problems} de ${assessed.length} aspectos evaluados. Revisa los detalles por categoría.`;
   }
   if (unknown > 0) {
-    return `No se detectaron problemas en ${assessed.length} aspecto${assessed.length === 1 ? "" : "s"} evaluado${assessed.length === 1 ? "" : "s"}. ${unknown} aspecto${unknown === 1 ? "" : "s"} aún no tienen datos.`;
+    return `No se detectaron problemas en ${assessed.length} aspecto${assessed.length === 1 ? "" : "s"} evaluado${assessed.length === 1 ? "" : "s"}. ${unknown} aspecto${unknown === 1 ? "" : "s"} quedó${unknown === 1 ? "" : "n"} en revisión porque el análisis no pudo completar esa comprobación.`;
   }
   return `No se detectaron problemas en los ${assessed.length} aspectos evaluados.`;
 }
 
 function getCriterionOutcome(criterionId: string, status: string): string {
-  if (status === "unknown") return "No hay datos suficientes para confirmar si este punto está bien o necesita cambios.";
+  if (status === "unknown") return "El análisis no pudo completar esta comprobación por un error técnico del auditor. Queda en revisión y no cuenta como un incumplimiento del dominio.";
   if (status === "fail") return CRITERION_FAIL_MEANINGS[criterionId] ?? "La comprobación encontró una condición que conviene revisar.";
   const outcomes: Record<string, string> = {
     "dns-integrity": "El dominio resolvió a direcciones públicas durante esta comprobación; esto no confirma quién lo controla.",
     "transport-security": "La conexión superó las comprobaciones de TLS incluidas en este informe.",
     "http-availability": "La portada respondió según lo esperado y usó una conexión segura en esta comprobación.",
     "security-headers": "Las protecciones comprobadas estaban presentes en la respuesta observada.",
-    "third-party-data-use": "No se ha podido confirmar el uso que terceros hacen de los datos.",
+    "third-party-data-use": "Esta comprobación valora la información pública sobre el uso de datos por servicios externos. No confirma por sí sola sus prácticas internas.",
     "initial-cookie-risk": "No se reconocieron cookies con riesgo en la primera respuesta observada.",
     tracking: "No se encontraron referencias conocidas a rastreadores en el HTML inicial; no se ejecutaron scripts.",
     performance: "La respuesta inicial quedó dentro del umbral orientativo de esta comprobación; no representa la experiencia completa.",
@@ -2249,6 +2294,28 @@ function getCriterionEvidenceSummary(criterionId: string, checks: PublicCheck[])
         ? `La respuesta ${observed}; faltaba${missing.length === 1 ? "" : "n"} ${missing.join(", ")}.`
         : `La respuesta incluía las ${present.length} protecciones comprobadas: ${present.join(", " )}.`;
     }
+    case "third-party-data-use": {
+      const inspected = flag("inspected");
+      const privacyLinks = number("privacyPolicyLinksFound");
+      const pagesFetched = number("policyPagesFetched");
+      const missingPages = number("policyPagesMissing");
+      const deniedPages = number("policyPagesDenied");
+      const recipients = flag("policyRecipientsMentioned");
+      const purposes = flag("policyPurposesMentioned");
+      const blocked = flag("policyTextBlocked");
+      if (inspected === null) break;
+      if (privacyLinks === 0) return "No se encontró un enlace a la política de privacidad del sitio.";
+      if (deniedPages !== null && deniedPages > 0 || blocked === true) {
+        return "El sitio que publica la política denegó el acceso al auditor.";
+      }
+      if (missingPages !== null && missingPages > 0) {
+        return `No se pudo abrir ${missingPages} enlace${missingPages === 1 ? "" : "s"} a información pública.`;
+      }
+      if (pagesFetched !== null && pagesFetched > 0) {
+        return `Se revisaron ${pagesFetched} documento${pagesFetched === 1 ? "" : "s"} público${pagesFetched === 1 ? "" : "s"}; ${recipients ? "se encontró información sobre destinatarios" : "no se encontró información sobre destinatarios"} y ${purposes ? "sobre finalidades" : "sobre finalidades no se encontró información"}.`;
+      }
+      break;
+    }
     case "initial-cookie-risk": {
       const count = number("cookieCount");
       const matches = number("catalogMatchCount");
@@ -2293,25 +2360,25 @@ function getProcessorTransparencySummary(
   assessment: PublicProcessorTransparencyAssessment,
 ): string {
   if (assessment.reasonCode === "auditor_error") {
-    return "El auditor no pudo verificar el inventario backend por un error propio; este resultado queda sin evaluar.";
+    return "No pudimos completar esta comprobación por un error técnico de nuestro sistema. Queda en revisión y no cuenta como un incumplimiento del dominio.";
   }
   if (assessment.reasonCode === "endpoint_missing") {
-    return "El dominio no ofrece el inventario autenticado de procesadores backend que requiere esta comprobación.";
+    return "No está disponible la información pública necesaria para comprobar qué servicios externos participan y para qué. Esto se considera una falta de transparencia.";
   }
   if (assessment.reasonCode === "inventory_incomplete") {
-    return "Grumphya declara que el inventario no incluye todos los procesadores backend activos.";
+    return "Grumphya declara que su lista no incluye todos los servicios externos que utiliza.";
   }
   if (assessment.reasonCode === "processor_not_disclosed") {
-    return "Hay uno o más procesadores backend activos que no aparecen declarados en la política de privacidad.";
+    return "Hay servicios externos activos que no aparecen en la información publicada.";
   }
   if (assessment.reasonCode === "inventory_complete_empty") {
     return assessment.inventory?.hostname === "desarrolloseguro.org"
-      ? "Desarrollo Seguro declara, en un registro versionado ligado a esta revisión, que no hay procesadores backend externos activos dentro del alcance descrito. El inventario no verifica proveedores de infraestructura ni sus contratos."
-      : "El inventario completo no encontró procesadores backend externos activos en el registro de producción cubierto.";
+      ? "Desarrollo Seguro declara que no usa servicios externos para procesar datos dentro del alcance revisado. Esta comprobación no incluye a los proveedores de infraestructura."
+      : "La revisión interna no encontró servicios externos activos en los sistemas de producción cubiertos.";
   }
   return assessment.inventory?.hostname === "desarrolloseguro.org"
-    ? "Desarrollo Seguro declara que el inventario backend está completo; los proveedores incluidos aparecen en la política de privacidad."
-    : "Grumphya declara que el inventario backend está completo; los proveedores incluidos aparecen en su política de privacidad.";
+    ? "Desarrollo Seguro declara que la lista de servicios externos está completa y los servicios incluidos aparecen en su política de privacidad."
+    : "Grumphya declara que la lista de servicios externos está completa y los servicios incluidos aparecen en su política de privacidad.";
 }
 
 function formatByteCount(value: number): string {
@@ -2325,7 +2392,8 @@ function getCriterionDisplayLabel(criterionId: string, fallback: string): string
     "transport-security": "La conexión protege los datos",
     "http-availability": "La página responde de forma segura",
     "security-headers": "El navegador recibe protecciones",
-    "third-party-data-use": "Uso de datos por servicios externos",
+    "third-party-data-use": "Transparencia sobre servicios externos",
+    "backend-processor-transparency": "Servicios externos declarados por el titular",
     "initial-cookie-risk": "Cookies potencialmente no esenciales",
     tracking: "Rastreadores conocidos en la página",
     performance: "Rapidez de la respuesta inicial",
@@ -2340,6 +2408,7 @@ function getControlLabel(controlId: string): string {
     "DS-TLS-02": "Versiones de conexión segura",
     "DS-HTTP-01": "Respuesta de la página",
     "DS-HDR-01": "Protecciones del navegador",
+    "DS-PRIV-04": "Información pública sobre servicios externos",
     "DS-PRIV-05": "Cookies de la primera respuesta",
     "DS-PRIV-06": "Referencias a rastreadores conocidos",
     "DS-QUAL-02": "Tiempo y tamaño de respuesta",
@@ -2348,12 +2417,12 @@ function getControlLabel(controlId: string): string {
 }
 
 function getHistoryVerdictLabel(verdict: ScanVerdict): string {
-  return VERDICT_LABELS[verdict] ?? "Resultado no concluyente";
+  return VERDICT_LABELS[verdict] ?? "En revisión";
 }
 
 function getGlobalScoreSummary(report: PublicReport): string {
   if (report.globalAssessment.status === "scored") {
-    return `${report.globalAssessment.score}/100 · 50 % Ética + 50 % Privacidad`;
+    return `${report.globalAssessment.score}/100`;
   }
   if (report.globalAssessment.status === "review") {
     return "En revisión · se muestran por separado las notas y la cobertura de cada dimensión";
@@ -2417,7 +2486,7 @@ function getScanFailureMessage(code: ScanFailureCode | null): string {
 }
 
 function getAnalysisRequestMessage(state: AnalysisRequestState): string {
-  if (state === "loading") return "Registrando la solicitud…";
+  if (state === "loading") return "Estamos registrando la solicitud. Puede tardar unos segundos.";
   return ANALYSIS_REQUEST_MESSAGES[state] ?? GENERIC_ERROR;
 }
 

@@ -25,7 +25,8 @@ export function parseTransportV1EgressBrokerStartupRequest(
     (request.profileVersion !== "transport-v1" &&
       request.profileVersion !== "domain-v1" &&
       request.profileVersion !== "domain-v2" &&
-      request.profileVersion !== "domain-v3")
+      request.profileVersion !== "domain-v3" &&
+      request.profileVersion !== "domain-v4")
   ) {
     throw new Error("egress_broker_startup_invalid");
   }
