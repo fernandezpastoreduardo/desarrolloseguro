@@ -77,4 +77,51 @@ export const PRIVACY_KNOWLEDGE_RULES: readonly PrivacyKnowledgeRule[] = [
     confidence: "high",
     knownFalsePositives: ["The cookie name requires a same-flow Google Analytics host corroboration."],
   },
+  ...[
+    { id: "google-ads", provider: "Google Ads / Conversion Linker", category: "advertising", host: "googleadservices.com", source: "https://support.google.com/tagmanager/answer/7549390?hl=en", license: "Google support documentation; factual identifiers only; no redistribution license stated" },
+    { id: "meta-pixel", provider: "Meta Pixel", category: "social", host: "facebook.com", source: "https://developers.facebook.com/documentation/meta-pixel", license: "Meta developer documentation; factual identifiers only; no redistribution license stated" },
+    { id: "tiktok-pixel", provider: "TikTok Pixel", category: "social", host: "analytics.tiktok.com", source: "https://ads.tiktok.com/help/article/using-cookies-with-tiktok-pixel", license: "TikTok business documentation; factual identifiers only; no redistribution license stated" },
+    { id: "linkedin-insight", provider: "LinkedIn Insight Tag", category: "social", host: "linkedin.com", source: "https://www.business.linkedin.com/advertise/ads/insight-tag", license: "LinkedIn business documentation; factual identifiers only; no redistribution license stated" },
+    { id: "matomo-cloud", provider: "Matomo", category: "analytics", host: "matomo.cloud", source: "https://matomo.org/faq/reports/check-matomo-is-tracking/", license: "Matomo vendor documentation; factual identifiers only; no redistribution license stated" },
+    { id: "cookiebot", provider: "Cookiebot", category: "consent", host: "cookiebot.com", source: "https://support.cookiebot.com/hc/en-us/articles/5007079527580-Understanding-the-scan-report", license: "Cookiebot support documentation; factual identifiers only; no redistribution license stated" },
+    { id: "didomi", provider: "Didomi", category: "consent", host: "didomi.io", source: "https://developers.didomi.io/cmp/web-sdk/consent-notice/cookies", license: "Didomi developer documentation; factual identifiers only; no redistribution license stated" },
+    { id: "iubenda", provider: "iubenda", category: "consent", host: "iubenda.com", source: "https://www.iubenda.com/en/help/1177-cookie-solution-getting-started/", license: "iubenda support documentation; factual identifiers only; no redistribution license stated" },
+    { id: "onetrust", provider: "OneTrust / CookiePro", category: "consent", host: "cookielaw.org", source: "https://docs.onetrust.com/en/consent--preferences/cookie-consent/managing-cookie-scripts-cookie-blocking-and-technical-implementation/onetrust-cookies", license: "OneTrust documentation; factual identifiers only; no redistribution license stated" },
+    { id: "usercentrics", provider: "Usercentrics", category: "consent", host: "usercentrics.eu", source: "https://usercentrics.com/docs/browser-ui-implementation", license: "Usercentrics documentation; factual identifiers only; no redistribution license stated" },
+  ].flatMap((provider) => [
+    {
+      ruleId: `${provider.id}-request-host-v2`,
+      datasetVersion: "privacy-knowledge-v2",
+      signalType: "request_host" as const,
+      pattern: provider.host,
+      match: "prefix" as const,
+      category: provider.category as PrivacyKnowledgeRule["category"],
+      provider: provider.provider,
+      providerHostnames: [provider.host],
+      purpose: provider.category === "consent" ? "Gestión de preferencias de consentimiento." : "Solicitud a un host documentado del proveedor.",
+      source: { url: provider.source, revision: "reviewed-2026-11-23", license: provider.license, reviewedAt: "2026-11-23" },
+      confidence: "high" as const,
+      knownFalsePositives: ["The host identifies a provider destination, not the data received, onward sharing, or contractual practice."],
+    },
+    ...(provider.id === "google-ads" ? ["_gcl_", "_gac_"] :
+      provider.id === "meta-pixel" ? ["_fbp", "_fbc"] :
+      provider.id === "tiktok-pixel" ? ["_ttp", "ttcsid_"] :
+      provider.id === "linkedin-insight" ? ["li_gc", "lidc", "UserMatchHistory"] :
+      provider.id === "matomo-cloud" ? ["_pk_id", "_pk_ses", "_pk_ref", "_pk_hsr"] :
+      provider.id === "didomi" ? ["didomi_token", "didomi_dcs", "euconsent-v2"] :
+      provider.id === "onetrust" ? ["OptanonConsent", "OptanonAlertBoxClosed"] : []).map((name) => ({
+      ruleId: `${provider.id}-cookie-${name.replace(/[^a-z0-9]/giu, "-").toLowerCase()}-v2`,
+      datasetVersion: "privacy-knowledge-v2",
+      signalType: "cookie_name" as const,
+      pattern: name,
+      match: name.endsWith("_") ? "prefix" as const : "exact" as const,
+      category: provider.category as PrivacyKnowledgeRule["category"],
+      provider: provider.provider,
+      providerHostnames: [provider.host],
+      purpose: provider.category === "consent" ? "Preferencia o estado de consentimiento." : "Identificador técnico documentado por el proveedor.",
+      source: { url: provider.source, revision: "reviewed-2026-11-23", license: provider.license, reviewedAt: "2026-11-23" },
+      confidence: "high" as const,
+      knownFalsePositives: ["A cookie-name match requires a same-flow request to a documented provider host."],
+    })),
+  ]),
 ];

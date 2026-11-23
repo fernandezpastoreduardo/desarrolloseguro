@@ -97,11 +97,25 @@ La API de producción lee solo el identificador del informe y `assessment_json`
 de la tabla dedicada a esta evaluación. El worker no recibe permiso de lectura
 sobre esa tabla y la fecha interna de persistencia no se expone.
 
-La versión inicial del catálogo tiene cuatro reglas de Google Analytics
-basadas en documentación de Google Developers y conserva su fuente, licencia,
-fecha y nivel de confianza. No se consultan catálogos remotos durante cada
-análisis. Una declaración de “interés legítimo” se registra como texto
-observado, no como validación jurídica.
+El catálogo local v2 conserva las reglas originales de Google Analytics y
+añade señales observables para Google Ads/Conversion Linker, Meta Pixel, TikTok
+Pixel, LinkedIn Insight Tag, Matomo Cloud y los CMP Cookiebot, Didomi, iubenda,
+OneTrust/CookiePro y Usercentrics. Cada regla conserva la URL, la fecha de
+revisión, la licencia declarada, la confianza y los falsos positivos conocidos.
+No se consultan catálogos remotos durante cada análisis.
+
+Incluir Matomo significa únicamente reconocer señales del sitio auditado. No
+instalamos Matomo ni añadimos SDK, cookies, cuentas, endpoints ni telemetría a
+Desarrollo Seguro. Matomo Cloud se reconoce por su host observado; una cookie
+first-party solo se atribuye si ese mismo flujo también contactó un host de
+Matomo verificable. Las instalaciones On-Premise ocultas tras un proxy propio o
+un endpoint renombrado quedan sin atribución, porque no inspeccionamos rutas.
+La navegación aislada sigue pudiendo contactar destinos que la página analizada
+solicite por sí misma bajo el presupuesto de red publicado; este catálogo no
+añade solicitudes. Una señal CMP se enumera como proveedor de consentimiento,
+pero no cuenta como seguimiento, exceso ni incumplimiento por su sola presencia.
+Una declaración de “interés legítimo” se registra como texto observado, no como
+validación jurídica.
 
 El alcance se limita a la portada y a señales catalogadas. No demuestra ausencia
 total de seguimiento, conducta en otras rutas, en todas las regiones o en

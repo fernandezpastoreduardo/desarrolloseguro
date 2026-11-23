@@ -37,8 +37,8 @@ describe("local privacy knowledge base", () => {
   it("uses the reviewed local Analytics catalog and its recorded source metadata", () => {
     expect(PRIVACY_KNOWLEDGE_RULES.length).toBeGreaterThan(0);
     expect(PRIVACY_KNOWLEDGE_RULES.every((rule) =>
-      rule.source.url.startsWith("https://") && rule.source.license.includes("CC-BY-4.0") &&
-      rule.source.reviewedAt === "2026-11-21" && rule.confidence === "high",
+      rule.source.url.startsWith("https://") && rule.source.license.length > 10 &&
+      /^2026-11-\d{2}$/u.test(rule.source.reviewedAt) && rule.confidence === "high",
     )).toBe(true);
     expect(PRIVACY_KNOWLEDGE_RULES.some((rule) => rule.source.license.includes("NC"))).toBe(false);
   });
@@ -107,5 +107,34 @@ describe("local privacy knowledge base", () => {
 
     expect(match?.classification).toBe("confirmed");
     expect(JSON.stringify(match)).not.toContain("secret");
+  });
+
+  it("recognizes Matomo Cloud only from its observed host and records no request path", () => {
+    const [match] = matchPrivacySignal({
+      signalType: "request_host",
+      value: "eu.matomo.cloud",
+      observedHostname: "eu.matomo.cloud",
+    }, PRIVACY_KNOWLEDGE_RULES);
+
+    expect(match?.provider).toBe("Matomo");
+    expect(match?.classification).toBe("confirmed");
+    expect(JSON.stringify(match)).not.toMatch(/matomo\.(?:js|php)/u);
+  });
+
+  it("requires a same-flow Matomo Cloud host to attribute a first-party Matomo cookie", () => {
+    const signal: PrivacyObservedSignal = {
+      signalType: "cookie_name",
+      value: "_pk_id",
+      observedHostname: "site.example",
+    };
+    const [unknown] = matchPrivacySignal(signal, PRIVACY_KNOWLEDGE_RULES);
+    const [confirmed] = matchPrivacySignal({
+      ...signal,
+      corroboratingHostnames: ["eu.matomo.cloud"],
+    }, PRIVACY_KNOWLEDGE_RULES);
+
+    expect(unknown?.classification).toBe("unknown");
+    expect(confirmed?.provider).toBe("Matomo");
+    expect(confirmed?.classification).toBe("confirmed");
   });
 });
