@@ -103,6 +103,8 @@ que la evidencia pública no permita observar.
 - El contrato del trigger PostgreSQL y la proyección pública deben admitir ese
   campo enum y el resumen exacto correspondiente. Un campo admitido solo por
   TypeScript no cuenta como evidencia persistida.
+- El resumen diagnóstico también debe tener prioridad sobre los resúmenes
+  especializados, incluido el criterio de cookies `DS-PRIV-05`.
 - El resumen público debe explicar en lenguaje sencillo que el lector tuvo un
   problema y describir la causa acotada cuando exista. La validación de CI debe
   poder distinguir ese diagnóstico de un `unknown` sin explicación.
