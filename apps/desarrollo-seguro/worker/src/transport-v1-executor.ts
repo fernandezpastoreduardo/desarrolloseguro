@@ -270,6 +270,14 @@ export class TransportV1NetworkExecutor {
     );
     appendPassivePageSignalChecks(candidateChecks, job.profileVersion, probes[4]?.evidence ?? {}, completedAt);
     appendPublicPolicyCheck(candidateChecks, job.profileVersion, probes[4]?.evidence ?? {}, completedAt);
+    const pageProbeError = probes[4]?.errorCode;
+    if (pageProbeError) {
+      for (const check of candidateChecks) {
+        if (["DS-HDR-01", "DS-PRIV-04", "DS-PRIV-05", "DS-PRIV-06", "DS-QUAL-02"].includes(check.controlId)) {
+          check.evidence.probeErrorCode = pageProbeError;
+        }
+      }
+    }
     const sanitized = sanitizeScanObservations(
       job.hostname,
       job.profileVersion,
@@ -533,6 +541,9 @@ function appendPublicPolicyCheck(
   }
   for (const key of countKeys) {
     if (typeof sourceEvidence[key] === "number") evidence[key] = sourceEvidence[key] as number;
+  }
+  if (typeof sourceEvidence.probeErrorCode === "string") {
+    evidence.probeErrorCode = sourceEvidence.probeErrorCode;
   }
   if (sourceEvidence.policyLanguageCatalogVersion === "public-policy-language-eea-v1") {
     evidence.policyLanguageCatalogVersion = sourceEvidence.policyLanguageCatalogVersion;

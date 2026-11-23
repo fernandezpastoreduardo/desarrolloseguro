@@ -319,6 +319,50 @@ describe("TransportV1FixtureExecutor", () => {
       .toMatchObject({ status: "unknown", evidence: { inspected: false } });
   });
 
+  it("preserves only a safe headers-probe error code across page-dependent checks", async () => {
+    const source: TransportV1ObservationSource = {
+      sourceKind: "network",
+      observeDns: vi.fn().mockResolvedValue({
+        evidence: { addressClass: "public", aRecordCount: 1, aaaaRecordCount: 0 },
+        requestsCount: 0,
+        bytesCount: 0,
+      }),
+      observeTls: vi.fn().mockResolvedValue({
+        evidence: { protocol: "TLSv1.3", certificateValid: true, hostnameMatches: true },
+        requestsCount: 1,
+        bytesCount: 1,
+      }),
+      observeHttp: vi.fn().mockResolvedValue({
+        evidence: { statusCode: 200, redirectedToHttps: true, finalScheme: "https" },
+        requestsCount: 1,
+        bytesCount: 1,
+      }),
+      observeHeaders: vi.fn().mockResolvedValue({
+        evidence: {},
+        requestsCount: 1,
+        bytesCount: 11_263,
+        errorCode: "request_timeout",
+      }),
+    };
+
+    const result = await new TransportV1NetworkExecutor(source).execute(
+      { ...JOB, profileVersion: "domain-v4" },
+      new AbortController().signal,
+    );
+
+    for (const controlId of ["DS-HDR-01", "DS-PRIV-04", "DS-PRIV-05", "DS-PRIV-06", "DS-QUAL-02"]) {
+      expect(result.checks.find((check) => check.controlId === controlId)).toMatchObject({
+        status: "unknown",
+        evidence: { probeErrorCode: "request_timeout" },
+        summary: "El lector no pudo completar esta comprobación: se agotó el tiempo de espera.",
+      });
+    }
+    expect(result.publicPolicyTransparencyAssessment).toMatchObject({
+      status: "unknown",
+      reasonCode: "auditor_error",
+    });
+  });
+
   it("limits a network executor to two concurrent probes", async () => {
     let active = 0;
     let maxActive = 0;
