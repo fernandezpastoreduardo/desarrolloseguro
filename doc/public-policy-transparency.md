@@ -56,4 +56,5 @@ En cada respuesta de página, el lector puede combinar cabeceras, señales
 pasivas y contadores de políticas públicas. El intercambio interno admite hasta
 64 campos de evidencia derivados; conserva límites de tamaño y descarta la
 respuesta si excede el máximo. No transporta ni publica el HTML ni valores de
-cookies.
+cookies. La evaluación de cabeceras conserva además el esquema de la respuesta:
+solo una respuesta final HTTPS puede dar por comprobado ese control.
