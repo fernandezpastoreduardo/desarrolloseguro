@@ -987,6 +987,70 @@ describePostgres.sequential("PostgresScanStore", () => {
     expect(JSON.stringify(report)).not.toContain("token=private");
   });
 
+  it("persists and publicly projects bounded page-probe diagnostics for domain-v4", async () => {
+    const job = await queueAndClaim("domain-v4");
+    const checks = [
+      ...makeEligibleDomainV3Checks().map((check) => {
+        const base = {
+          ...check,
+          limitation: "Resultado limitado a las rutas públicas declaradas del perfil domain-v4.",
+        };
+        if (check.controlId !== "DS-HDR-01") return base;
+        return {
+          ...base,
+          status: "unknown" as const,
+          summary: "El lector no pudo completar esta comprobación: no se pudo completar la conexión.",
+          evidence: { finalScheme: "https", probeErrorCode: "connection_failed" },
+        };
+      }),
+      {
+        ...CHECK,
+        controlId: "DS-PRIV-04",
+        method: "GET",
+        status: "pass" as const,
+        summary: "Comprobación DS-PRIV-04: pass.",
+        limitation: "Resultado limitado a las rutas públicas declaradas del perfil domain-v4.",
+        evidence: {
+          inspected: true,
+          privacyPolicyLinksFound: 1,
+          policyLinksFound: 1,
+          sitePrivacyPolicyFetched: true,
+          policyPagesFetched: 1,
+          policyPagesMissing: 0,
+          policyPagesDenied: 0,
+          policyRecipientsMentioned: true,
+          policyPurposesMentioned: true,
+          policyTextBlocked: false,
+          policyProbeFailed: false,
+          policyLanguageCatalogVersion: "public-policy-language-eea-v1",
+        },
+      },
+    ];
+
+    const reportId = await completeDirectly(job, ["/"], checks, "inconclusive");
+    const report = await store.readPublicReport(reportId);
+
+    expect(report?.checks.find(({ controlId }) => controlId === "DS-HDR-01"))
+      .toMatchObject({
+        status: "unknown",
+        summary: "El lector no pudo completar esta comprobación: no se pudo completar la conexión.",
+        evidence: { probeErrorCode: "connection_failed" },
+      });
+
+    const invalidJob = await queueAndClaim("domain-v4");
+    const invalidChecks = checks.map((check) =>
+      check.controlId === "DS-HDR-01"
+        ? {
+            ...check,
+            summary: "El lector no pudo completar esta comprobación: la prueba no pudo completarse.",
+            evidence: { finalScheme: "https", probeErrorCode: "unexpected_value" },
+          }
+        : check,
+    );
+    await expect(completeDirectly(invalidJob, ["/"], invalidChecks, "inconclusive"))
+      .rejects.toThrow("scan_evidence_invalid");
+  });
+
   it("stores bounded TLS probe diagnostics for an inconclusive domain-v3 check", async () => {
     const job = await queueAndClaim("domain-v3");
     const checks = [
