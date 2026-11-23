@@ -4,12 +4,12 @@ const PUBLIC_EVIDENCE_FIELDS: Readonly<Record<string, readonly string[]>> = {
   "DS-DNS-01": ["addressClass", "aRecordCount", "aaaaRecordCount"],
   "DS-TLS-01": ["protocol", "certificateValid", "hostnameMatches"],
   "DS-TLS-02": ["tls10Accepted", "tls11Accepted", "tls12Accepted", "tls13Accepted", "tls10ProbeError", "tls11ProbeError", "tls12ProbeError", "tls13ProbeError"],
-  "DS-PRIV-04": ["inspected", "privacyPolicyLinksFound", "policyLinksFound", "sitePrivacyPolicyFetched", "policyPagesFetched", "policyPagesMissing", "policyPagesDenied", "policyRecipientsMentioned", "policyPurposesMentioned", "policyTextBlocked", "policyProbeFailed", "policyLanguageCatalogVersion"],
+  "DS-PRIV-04": ["inspected", "privacyPolicyLinksFound", "policyLinksFound", "sitePrivacyPolicyFetched", "policyPagesFetched", "policyPagesMissing", "policyPagesDenied", "policyRecipientsMentioned", "policyPurposesMentioned", "policyTextBlocked", "policyProbeFailed", "policyLanguageCatalogVersion", "probeErrorCode"],
   "DS-HTTP-01": ["statusCode", "redirectedToHttps", "finalScheme", "requestedHostname", "finalHostname", "canonicalHostname", "redirectStatusCode", "redirectFromHostname", "redirectToHostname"],
-  "DS-HDR-01": ["finalScheme", "hsts", "nosniff", "frameProtection", "referrerPolicy", "csp"],
-  "DS-PRIV-05": ["inspected", "cookieCount", "insecureCookieCount", "catalogMatchCount", "consentPromptDetected"],
-  "DS-PRIV-06": ["inspected", "thirdPartyResourceReferences", "knownTrackingResourceReferences"],
-  "DS-QUAL-02": ["inspected", "responseTimeMs", "responseBytes"],
+  "DS-HDR-01": ["finalScheme", "hsts", "nosniff", "frameProtection", "referrerPolicy", "csp", "probeErrorCode"],
+  "DS-PRIV-05": ["inspected", "cookieCount", "insecureCookieCount", "catalogMatchCount", "consentPromptDetected", "probeErrorCode"],
+  "DS-PRIV-06": ["inspected", "thirdPartyResourceReferences", "knownTrackingResourceReferences", "probeErrorCode"],
+  "DS-QUAL-02": ["inspected", "responseTimeMs", "responseBytes", "probeErrorCode"],
 };
 
 export const TLS_PROBE_ERROR_CODES = [
@@ -33,6 +33,7 @@ const PUBLIC_EVIDENCE_ENUMS: Readonly<Record<string, readonly string[]>> = {
   tls11ProbeError: TLS_PROBE_ERROR_CODES,
   tls12ProbeError: TLS_PROBE_ERROR_CODES,
   tls13ProbeError: TLS_PROBE_ERROR_CODES,
+  probeErrorCode: TLS_PROBE_ERROR_CODES,
 };
 const PUBLIC_EVIDENCE_BOOLEANS = new Set([
   "certificateValid", "hostnameMatches", "tls10Accepted", "tls11Accepted",

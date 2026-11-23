@@ -89,6 +89,21 @@ que la evidencia pública no permita observar.
   pertinentes, categorías detectadas y estados agregados. No persistir el texto
   ni las URLs descubiertas.
 
+## Diagnóstico acotado del auditor
+
+- Cuando una sonda de página falla, conservar únicamente el código de error
+  seguro de la lista cerrada del transporte (`dns_resolution_failed`,
+  `connection_failed`, `request_timeout`, `response_size_limit_exceeded`,
+  `tls_certificate_invalid`, `tls_handshake_failed`, `broker_failed` y los
+  demás códigos ya admitidos por el broker). No guardar el texto de excepciones,
+  direcciones, URLs, cabeceras, cuerpos ni contenido de cookies.
+- Adjuntar el código como evidencia opcional a los controles de la portada que
+  dependen de esa sonda. Un fallo del auditor mantiene el control `unknown` y
+  la ficha «En revisión»; nunca se convierte en un fallo atribuible al dominio.
+- El resumen público debe explicar en lenguaje sencillo que el lector tuvo un
+  problema y describir la causa acotada cuando exista. La validación de CI debe
+  poder distinguir ese diagnóstico de un `unknown` sin explicación.
+
 ## Criterios de aceptación
 
 1. El control diferencia declaración pública encontrada, información ausente,
@@ -105,5 +120,8 @@ que la evidencia pública no permita observar.
    backend autenticado en clientes y evaluación pública en no clientes. No
    altera `domain-ethics-v4`, sus informes históricos ni el estado de
    certificación.
+7. Un fallo de una sonda GET en producción conserva solo un código de error
+   acotado, visible en la evidencia y acompañado por un resumen seguro; no
+   incluye datos del destino ni modifica la clasificación `unknown`.
 
 La presentación pública separa lo que declara el titular de las señales observadas. Solo una diferencia reproducible permite describir una discrepancia; el contenido de políticas no se publica literalmente.

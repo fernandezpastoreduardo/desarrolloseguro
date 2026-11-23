@@ -25,7 +25,10 @@ tenían una finalidad explicada en el mismo fragmento de la política.
   enlace publicado no pudo abrirse. Es un hallazgo de transparencia, no una
   conclusión legal automática.
 - **En revisión:** el lector tuvo un error técnico propio, agotó un límite o no
-  pudo procesar el formato. No se penaliza esa comprobación incompleta.
+  pudo procesar el formato. No se penaliza esa comprobación incompleta. Si el
+  lector conoce la causa, el informe la resume en lenguaje sencillo. Solo se
+  conserva un código técnico de una lista cerrada; nunca se publican errores
+  crudos, direcciones, cabeceras, páginas ni valores de cookies.
 
 Los nombres de proveedores y finalidades salen de un catálogo local revisado.
 El catálogo puede no reconocer todas las marcas o expresiones. En ese caso,

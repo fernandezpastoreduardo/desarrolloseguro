@@ -328,10 +328,20 @@ describe("sanitizeScanObservations", () => {
       ...existingChecks,
       {
         ...makeUnknownCheck("DS-PRIV-04", "/", "GET"),
-        evidence: { ...policyEvidence, inspected: false, policyProbeFailed: true },
+        evidence: {
+          ...policyEvidence,
+          inspected: false,
+          policyProbeFailed: true,
+          probeErrorCode: "request_timeout",
+        },
       },
     ]);
-    expect(auditorError.checks.find(({ controlId }) => controlId === "DS-PRIV-04")?.status).toBe("unknown");
+    expect(auditorError.checks.find(({ controlId }) => controlId === "DS-PRIV-04"))
+      .toMatchObject({
+        status: "unknown",
+        evidence: { probeErrorCode: "request_timeout" },
+        summary: "El lector no pudo completar esta comprobación: se agotó el tiempo de espera.",
+      });
   });
 
   it("retains safe TLS probe failure categories to explain incomplete results", () => {

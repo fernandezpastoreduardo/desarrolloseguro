@@ -123,6 +123,7 @@ const CONTROLS: Readonly<Record<string, ControlContract>> = {
       frameProtection: "boolean",
       referrerPolicy: "boolean",
       csp: "boolean",
+      probeErrorCode: TLS_PROBE_ERROR_CODES,
     },
   },
   "DS-PRIV-01": {
@@ -163,6 +164,7 @@ const CONTROLS: Readonly<Record<string, ControlContract>> = {
       policyTextBlocked: "boolean",
       policyProbeFailed: "boolean",
       policyLanguageCatalogVersion: ["public-policy-language-eea-v1"],
+      probeErrorCode: TLS_PROBE_ERROR_CODES,
     },
   },
   "DS-PRIV-05": {
@@ -173,6 +175,7 @@ const CONTROLS: Readonly<Record<string, ControlContract>> = {
       insecureCookieCount: "count",
       catalogMatchCount: "count",
       consentPromptDetected: "boolean",
+      probeErrorCode: TLS_PROBE_ERROR_CODES,
     },
   },
   "DS-PRIV-06": {
@@ -181,6 +184,7 @@ const CONTROLS: Readonly<Record<string, ControlContract>> = {
       inspected: "boolean",
       thirdPartyResourceReferences: "count",
       knownTrackingResourceReferences: "count",
+      probeErrorCode: TLS_PROBE_ERROR_CODES,
     },
   },
   "DS-QUAL-02": {
@@ -189,6 +193,7 @@ const CONTROLS: Readonly<Record<string, ControlContract>> = {
       inspected: "boolean",
       responseTimeMs: "count",
       responseBytes: "count",
+      probeErrorCode: TLS_PROBE_ERROR_CODES,
     },
   },
   "DS-QUAL-01": {
@@ -412,6 +417,9 @@ function getSafeCheckSummary(
   status: string,
   evidence: Record<string, SafeEvidenceValue>,
 ): string {
+  if (status === "unknown" && typeof evidence.probeErrorCode === "string") {
+    return `El lector no pudo completar esta comprobación: ${getTlsProbeErrorLabel(evidence.probeErrorCode)}.`;
+  }
   if (controlId === "DS-TLS-02") {
     const tlsVersions = [
       "tls10Accepted",
