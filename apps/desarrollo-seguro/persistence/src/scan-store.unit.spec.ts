@@ -608,6 +608,23 @@ describe("PostgresScanStore unit behavior", () => {
     },
   );
 
+  it("persists only the 14-state review projection for a Grumphya report", async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [{ ds_complete_scan: "run-id" }] });
+    const store = new PostgresScanStore(makePool({ query }));
+
+    await store.completeScan({ ...VALID_REPORT, hostname: "grumphya.com" });
+
+    const summary = JSON.parse(query.mock.calls[0][1][11] as string) as {
+      status: string;
+      criteria: Array<{ id: string; status: string }>;
+      [key: string]: unknown;
+    };
+    expect(summary.status).toBe("review");
+    expect(summary.criteria).toHaveLength(14);
+    expect(summary.criteria.every((criterion) => criterion.status === "unknown")).toBe(true);
+    expect(Object.keys(summary).sort()).toEqual(["criteria", "observedAt", "policyVersion", "status"]);
+  });
+
   it("drops TLS expiry metadata because it is outside the evidence contract", async () => {
     const query = vi.fn().mockResolvedValue({
       rows: [{ ds_complete_scan: "run-id" }],

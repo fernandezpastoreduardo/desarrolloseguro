@@ -195,3 +195,18 @@ calidad y privacidad siguen parciales y ética sin evidencia. El perfil se
 apagó al terminar y no se activó ninguna certificación ni se modificó
 Grumphya.
 
+
+
+## Proyección de los criterios privados a la ficha
+
+La ejecución manual one-shot D sigue disponible bajo el perfil Compose
+`internal-audit`, que permanece separado de la base de datos. Para el ciclo de
+informes de Grumphya, el servicio aislado del `processor-auditor` ahora permite
+la operación local `read_internal_audit_public_summary`: ejecuta las siete
+lecturas D con scopes allowlisted y devuelve al worker solo el identificador,
+estado y fecha de los 14 criterios. El worker liga esta proyección inmutable al
+informe usando una función PostgreSQL acotada; no guarda el informe interno,
+las métricas, los códigos de motivo ni los valores. La ficha muestra los
+estados con explicación llana en una sección separada; si falta cobertura,
+vence la evidencia o la renovación falla, muestra «En revisión». Esta
+proyección no modifica notas ni certificación.

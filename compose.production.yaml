@@ -321,7 +321,7 @@ services:
       AUDIT_TECHNICAL_AUTH_ALLOWED_KIDS: ${AUDIT_TECHNICAL_AUTH_ALLOWED_KIDS:-ds-auditor-2026}
       AUDIT_ALLOWED_NETWORKS: ${AUDIT_ALLOWED_NETWORKS:-}
       AUDIT_RELEASE_ATTESTATION_KID: ${AUDIT_RELEASE_ATTESTATION_KID:-grumphya-release-2026}
-      AUDIT_SCOPES: privacy
+      AUDIT_SCOPES: infrastructure,application,authentication,quality,privacy,ethics,ai
     volumes:
       - development-security-audit-runtime:/run/development-security-audit
       - ${DEVELOPMENT_SECURITY_AUDIT_SECRETS_DIR:-./.audit-secrets}:/run/audit-input:ro

@@ -10,6 +10,8 @@ import {
   assessDomainEthicsV4,
   assessGlobalScore,
   assessBetaCertification,
+  toInternalAuditPublicSummary,
+  type InternalAuditPublicSummary,
   normalizeHostname,
   projectPublicEvidence,
   type BetaControlId,
@@ -58,6 +60,7 @@ export type PublicReport = {
   processorTransparencyAssessment: ProcessorTransparencyAssessment | null;
   betaCertification: ReturnType<typeof assessBetaCertification>;
   certification: PublicBetaCertificationResponse | null;
+  internalAuditSummary: InternalAuditPublicSummary | null;
   scope: string[];
   checks: Array<{
     controlId: string;
@@ -183,7 +186,7 @@ export class PublicScanService {
       activeJobId: isOptedOut ? null : snapshot.activeJobId,
       failureCode: state === "failed" ? snapshot.lastFailure?.code ?? null : null,
       failureDiagnostic: state === "failed" ? snapshot.lastFailure?.diagnostic ?? null : null,
-      lastReport: report ? toPublicReport(report) : null,
+      lastReport: report ? toPublicReport(report, state !== "fresh") : null,
       ...(snapshot.hostnameResolution ? { hostnameResolution: snapshot.hostnameResolution } : {}),
       checkedAt: checkedAt.toISOString(),
     };
@@ -199,7 +202,17 @@ export class PublicScanService {
       if (!report) {
         throw new NotFoundException("development_security_report_not_found");
       }
-      return toPublicReport(report);
+      let reviewInternalAudit = false;
+      if (report.hostname === "grumphya.com") {
+        const snapshot = await this.store.scanStore.readPublicDomainSnapshot("grumphya.com");
+        reviewInternalAudit = Boolean(snapshot?.lastReport?.id === report.id && (
+          snapshot.activeJobId !== null ||
+          snapshot.lastReport.expiresAt.getTime() <= Date.now() ||
+          snapshot.lastFailure !== null && snapshot.lastFailure !== undefined &&
+            snapshot.lastFailure.failedAt > snapshot.lastReport.completedAt
+        ));
+      }
+      return toPublicReport(report, reviewInternalAudit);
     } catch (error) {
       if (error instanceof NotFoundException) throw error;
       this.logger.error(PUBLIC_SCAN_READ_FAILED);
@@ -288,7 +301,7 @@ function getPublicState(
   return report.expiresAt.getTime() > now.getTime() ? "fresh" : "stale";
 }
 
-function toPublicReport(report: PublicScanReport): PublicReport {
+function toPublicReport(report: PublicScanReport, reviewInternalAudit = false): PublicReport {
   const processorTransparencyAssessment = report.processorTransparencyAssessment ?? null;
   const ethicsAssessment = processorTransparencyAssessment
     ? assessDomainEthicsV4(report.checks, processorTransparencyAssessment)
@@ -311,6 +324,11 @@ function toPublicReport(report: PublicScanReport): PublicReport {
     processorTransparencyAssessment,
     betaCertification: assessBetaCertification(toBetaObservations(report.checks)),
     certification: toPublicCertification(report.certification),
+    internalAuditSummary: report.hostname === "grumphya.com"
+      ? reviewInternalAudit || !report.internalAuditSummary
+        ? toInternalAuditPublicSummary(null)
+        : report.internalAuditSummary
+      : null,
     scope: report.scope,
     checks: report.checks.map((check) => ({
       controlId: check.controlId,

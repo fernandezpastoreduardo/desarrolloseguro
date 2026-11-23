@@ -209,6 +209,43 @@ describe("PublicScanPortal", () => {
     expect(screen.getByRole("heading", { name: /Informe/ })).toBeVisible();
   });
 
+  it("shows the separate plain-language block for Grumphya's 14 private criteria", async () => {
+    const ids = [
+      "infrastructure.tls", "infrastructure.headers", "infrastructure.network",
+      "application.dependencies", "application.secrets", "authentication.authorization",
+      "quality.e2e", "quality.accessibility", "performance.page_load",
+      "privacy.cookies", "privacy.third_parties", "privacy.consent",
+      "ethics.transparency", "ai.disclosure",
+    ];
+    const report = {
+      ...PUBLIC_REPORT,
+      hostname: "grumphya.com",
+      internalAuditSummary: {
+        policyVersion: "internal-audit-public-v1",
+        status: "complete",
+        observedAt: "2026-11-03T10:00:00.000Z",
+        criteria: ids.map((id) => ({ id, status: id === "application.secrets" ? "fail" : "pass" })),
+      },
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({
+      hostname: "grumphya.com", enrollment: "monitored", state: "fresh",
+      failureCode: null, activeJobId: null, lastReport: report,
+      checkedAt: "2026-11-03T10:01:00.000Z",
+    })));
+    const user = userEvent.setup();
+    render(<PublicScanPortal />);
+    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "grumphya.com");
+    await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
+
+    expect(await screen.findByRole("heading", { name: "14 aspectos de Grumphya" })).toBeVisible();
+    expect(screen.getByText("Protección de credenciales")).toBeVisible();
+    expect(screen.getByText(/Una credencial expuesta podría permitir/i)).toBeVisible();
+    expect(screen.getByText(/Revisión completada el/i)).toBeVisible();
+    expect(screen.queryByText(/Qué revisar/i)).not.toBeInTheDocument();
+    const auditSection = screen.getByRole("region", { name: "14 aspectos de Grumphya" });
+    expect(auditSection.querySelectorAll("li")).toHaveLength(14);
+  });
+
   it("shows verified backend providers and attributes treatment statements to Grumphya", async () => {
     const report = {
       ...PUBLIC_REPORT,
@@ -376,7 +413,7 @@ describe("PublicScanPortal", () => {
       .toBeVisible();
     expect(screen.getByText("100/100 provisional · 1 de 4 aspectos evaluados"))
       .toBeVisible();
-    expect(screen.getAllByText(/qué significa:/i)).toHaveLength(4);
+    expect(screen.getAllByText(/qué implica:/i)).toHaveLength(4);
     expect(screen.getAllByText("Sin datos suficientes").length).toBeGreaterThan(0);
     expect(screen.getByText(/origen indicado en el registro/i)).toBeVisible();
     expect(screen.getByRole("heading", { name: "Privacidad" })).toBeVisible();

@@ -107,16 +107,6 @@ const CRITERION_EXPLANATIONS: Record<string, string> = {
   tracking: "Cuenta referencias del HTML inicial a una lista local de rastreadores conocidos; no confirma conexiones ni ejecuta scripts.",
   performance: "Mide el tiempo y tamaño de una única respuesta GET inicial. No mide la experiencia completa de una persona ni métricas Core Web Vitals.",
 };
-const CRITERION_RECOMMENDATIONS: Record<string, string> = {
-  "dns-integrity": "Revisa los registros DNS y confirma que apuntan a los servicios previstos.",
-  "transport-security": "Revisa el certificado y desactiva las versiones de TLS antiguas.",
-  "http-availability": "Comprueba que la portada responde y redirige las visitas a HTTPS.",
-  "security-headers": "Revisa las protecciones que faltan, en especial la política de contenido y la conexión segura persistente.",
-  "third-party-data-use": "Consulta las políticas y contratos de los proveedores; esta comprobación técnica no puede confirmar cómo tratan los datos.",
-  "initial-cookie-risk": "Comprueba la finalidad de las cookies y que las no esenciales esperan al consentimiento cuando sea necesario.",
-  tracking: "Revisa las referencias detectadas y confirma que cada herramienta se carga con la información y el consentimiento adecuados.",
-  performance: "Mide la página completa en distintos dispositivos antes de decidir qué optimizar.",
-};
 const CRITERION_FAIL_MEANINGS: Record<string, string> = {
   "dns-integrity": "No se confirmó una resolución pública adecuada para el dominio.",
   "transport-security": "El certificado o la versión de cifrado no superó las comprobaciones; esto puede afectar a la conexión segura.",
@@ -196,6 +186,18 @@ type PublicProcessorTransparencyAssessment = {
     evidenceSource?: "grumphya_signed_attestation" | "desarrolloseguro_source_registry";
   } | null;
 };
+type InternalAuditCriterionId =
+  | "infrastructure.tls" | "infrastructure.headers" | "infrastructure.network"
+  | "application.dependencies" | "application.secrets" | "authentication.authorization"
+  | "quality.e2e" | "quality.accessibility" | "performance.page_load"
+  | "privacy.cookies" | "privacy.third_parties" | "privacy.consent"
+  | "ethics.transparency" | "ai.disclosure";
+type InternalAuditPublicSummary = {
+  policyVersion: "internal-audit-public-v1";
+  status: "complete" | "review";
+  observedAt: string | null;
+  criteria: Array<{ id: InternalAuditCriterionId; status: CheckStatus }>;
+};
 type PublicReport = {
   id: string;
   hostname: string;
@@ -255,6 +257,7 @@ type PublicReport = {
     }>;
   } | null;
   processorTransparencyAssessment: PublicProcessorTransparencyAssessment | null;
+  internalAuditSummary?: InternalAuditPublicSummary | null;
   certification: {
     policyVersion: "beta-0.1";
     state: "pending" | "active" | "suspended";
@@ -1130,6 +1133,9 @@ function ReportSummary({
           </section>
         )}
       </section>
+      {report.hostname === "grumphya.com" && (
+        <InternalAuditSummary summary={report.internalAuditSummary ?? null} />
+      )}
       {report.privacyAssessment && (
         <section className="ds-portal__privacy" aria-labelledby="privacy-summary-heading">
           <p className="ds-portal__eyebrow">Dimensión independiente · 50 % de la global</p>
@@ -1193,6 +1199,50 @@ function ReportSummary({
         <p>{report.ethicsAssessment.interpretation}</p>
       </section>
     </>
+  );
+}
+
+const INTERNAL_AUDIT_COPY: Record<InternalAuditCriterionId, { label: string; pass: string; fail: string }> = {
+  "infrastructure.tls": { label: "Conexión protegida", pass: "La conexión observada protege la información durante el envío.", fail: "Una conexión débil podría dejar la información expuesta o permitir que se altere durante el envío." },
+  "infrastructure.headers": { label: "Protecciones del navegador", pass: "La respuesta incluye las protecciones del navegador comprobadas.", fail: "El navegador podría carecer de barreras que ayudan a frenar algunos ataques." },
+  "infrastructure.network": { label: "Acceso a servicios", pass: "Los servicios comprobados responden dentro del alcance previsto.", fail: "Podrían quedar accesibles servicios que deberían permanecer restringidos." },
+  "application.dependencies": { label: "Componentes de software", pass: "Los componentes revisados no presentan alertas dentro del alcance de esta comprobación.", fail: "Un componente con riesgos conocidos podría afectar al funcionamiento o la protección de la aplicación." },
+  "application.secrets": { label: "Protección de credenciales", pass: "La comprobación no encontró credenciales expuestas en el artefacto revisado.", fail: "Una credencial expuesta podría permitir el acceso no autorizado a servicios o información." },
+  "authentication.authorization": { label: "Acceso a cuentas y funciones", pass: "Las pruebas comprobaron que las funciones revisadas respetan los permisos previstos.", fail: "Una persona podría acceder a información o funciones que no le corresponden." },
+  "quality.e2e": { label: "Recorridos principales", pass: "Las tareas principales comprobadas se completaron correctamente.", fail: "Algunas tareas importantes podrían no completarse como se espera." },
+  "quality.accessibility": { label: "Accesibilidad", pass: "Las comprobaciones de accesibilidad cubiertas no encontraron barreras críticas.", fail: "Algunas personas podrían encontrar barreras para utilizar la aplicación." },
+  "performance.page_load": { label: "Rapidez de carga y respuesta", pass: "La aplicación respondió dentro de los límites comprobados.", fail: "La aplicación podría tardar en mostrar contenido o responder a una acción." },
+  "privacy.cookies": { label: "Datos guardados en el navegador", pass: "La comprobación no encontró almacenamiento de seguimiento no permitido.", fail: "Podrían guardarse datos de seguimiento o preferencias de forma no esperada." },
+  "privacy.third_parties": { label: "Conexiones con otros servicios", pass: "Las conexiones externas observadas coinciden con el alcance declarado.", fail: "Podría compartirse información con servicios externos de forma no esperada." },
+  "privacy.consent": { label: "Elección de privacidad", pass: "Las preferencias de privacidad comprobadas se respetaron.", fail: "La elección de privacidad podría no respetarse correctamente." },
+  "ethics.transparency": { label: "Información sobre servicios externos", pass: "La información publicada cubre los servicios externos revisados.", fail: "Las personas podrían no saber qué servicios participan o para qué se usan." },
+  "ai.disclosure": { label: "Uso de inteligencia artificial", pass: "La información sobre el uso de inteligencia artificial está presente en el alcance revisado.", fail: "Podría faltar información sobre la participación de sistemas de inteligencia artificial." },
+};
+
+function InternalAuditSummary({ summary }: { summary: InternalAuditPublicSummary | null }) {
+  const ids = Object.keys(INTERNAL_AUDIT_COPY) as InternalAuditCriterionId[];
+  const review = summary === null || summary.status === "review";
+  const states = new Map(summary?.criteria.map((criterion) => [criterion.id, criterion.status]));
+  return (
+    <section className="ds-portal__internal-audit" aria-labelledby="internal-audit-heading" data-status={review ? "review" : "complete"}>
+      <p className="ds-portal__eyebrow">Revisión técnica independiente</p>
+      <h3 id="internal-audit-heading">14 aspectos de Grumphya</h3>
+      <p>Resume comprobaciones técnicas de la aplicación. No forma parte de la puntuación Ética o Privacidad y no garantiza la ausencia total de riesgos.</p>
+      <p className="ds-portal__internal-audit-status" role="status">
+        {review
+          ? "En revisión · la comprobación privada se está actualizando o no dispone de un resultado vigente."
+          : `Revisión completada el ${formatDate(summary.observedAt!)}.`}
+      </p>
+      <ol className="ds-portal__internal-audit-list">
+        {ids.map((id) => {
+          const status = review ? "unknown" : states.get(id) ?? "unknown";
+          const copy = INTERNAL_AUDIT_COPY[id];
+          const label = status === "pass" ? "Correcto" : status === "fail" ? "Atención" : status === "not_applicable" ? "No aplica" : "En revisión";
+          const description = status === "pass" ? copy.pass : status === "fail" ? copy.fail : status === "not_applicable" ? "Este aspecto no aplica a la configuración observada en esta revisión." : "Este aspecto se está comprobando; todavía no hay un resultado vigente que mostrar.";
+          return <li key={id} data-status={status}><div><strong>{copy.label}</strong><p>{description}</p></div><span>{label}</span></li>;
+        })}
+      </ol>
+    </section>
   );
 }
 
@@ -1542,12 +1592,9 @@ function CategoryDetailsModal({
               <li key={criterion.id} data-status={criterion.status}>
                 <div>
                   <strong>{getCriterionDisplayLabel(criterion.id, criterion.label)}</strong>
-                  <p><b>Qué comprueba:</b> {CRITERION_EXPLANATIONS[criterion.id]}</p>
-                  <p><b>Qué significa:</b> {getCriterionOutcome(criterion.id, criterion.status)}</p>
+                  <p><b>Comprobación:</b> {CRITERION_EXPLANATIONS[criterion.id]}</p>
+                  <p><b>Qué implica:</b> {getCriterionOutcome(criterion.id, criterion.status)}</p>
                   <p className="ds-portal__criterion-evidence"><b>Dato observado:</b> {getCriterionEvidenceSummary(criterion.id, checks)}</p>
-                  {criterion.status !== "pass" && (
-                    <p><b>Qué revisar:</b> {CRITERION_RECOMMENDATIONS[criterion.id]}</p>
-                  )}
                 </div>
                 <span>{getCheckStatusLabel(criterion.status)}</span>
               </li>
@@ -1671,6 +1718,8 @@ function isPublicReport(value: unknown): value is PublicReport {
     !isEthicsAssessment(value.ethicsAssessment) ||
     !isPrivacyAssessment(value.privacyAssessment) ||
     !isProcessorTransparencyAssessment(value.processorTransparencyAssessment) ||
+    !isInternalAuditPublicSummary(value.internalAuditSummary) ||
+    value.internalAuditSummary != null && value.hostname !== "grumphya.com" ||
     !isGlobalAssessment(value.globalAssessment) ||
     !isPublicCertification(value.certification) ||
     !Array.isArray(value.checks) ||
@@ -1712,6 +1761,27 @@ function isPublicReport(value: unknown): value is PublicReport {
     return false;
   }
   return true;
+}
+
+function isInternalAuditPublicSummary(value: unknown): value is InternalAuditPublicSummary | null | undefined {
+  if (value === undefined || value === null) return true;
+  const ids: InternalAuditCriterionId[] = [
+    "infrastructure.tls", "infrastructure.headers", "infrastructure.network",
+    "application.dependencies", "application.secrets", "authentication.authorization",
+    "quality.e2e", "quality.accessibility", "performance.page_load",
+    "privacy.cookies", "privacy.third_parties", "privacy.consent",
+    "ethics.transparency", "ai.disclosure",
+  ];
+  if (!isRecord(value) || value.policyVersion !== "internal-audit-public-v1" ||
+      !isOneOf(value.status, ["complete", "review"] as const) ||
+      !(value.observedAt === null || isIsoTimestamp(value.observedAt)) ||
+      !Array.isArray(value.criteria) || value.criteria.length !== ids.length) return false;
+  const criteria = value.criteria;
+  if (!criteria.every((item, index) => isRecord(item) && item.id === ids[index] &&
+      isOneOf(item.status, CHECK_STATUSES))) return false;
+  return value.status === "complete"
+    ? value.observedAt !== null && criteria.every((item) => isRecord(item) && item.status !== "unknown")
+    : criteria.every((item) => isRecord(item) && item.status === "unknown");
 }
 
 function isPrivacyAssessment(value: unknown): value is NonNullable<PublicReport["privacyAssessment"]> | null | undefined {

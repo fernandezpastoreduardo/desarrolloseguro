@@ -33,6 +33,7 @@ export class ProcessorAuditorScanExecutor implements ScanExecutor {
     }
     if (job.hostname !== "grumphya.com") return result;
     const processorTransparencyAssessment = await this.auditor.read(signal);
-    return { ...result, processorTransparencyAssessment };
+    const internalAuditSummary = await this.auditor.readInternalAuditSummary(signal);
+    return { ...result, processorTransparencyAssessment, internalAuditSummary };
   }
 }
