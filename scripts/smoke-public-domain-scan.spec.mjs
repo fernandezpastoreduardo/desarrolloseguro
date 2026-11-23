@@ -38,11 +38,11 @@ function completedStatus() {
     lastReport: {
       id: "f7490d2d-2976-4a89-a9a7-001690e873ef",
       profileVersion: "domain-v3",
-      scannerVersion: "domain-v3-network-adapter-1",
+      scannerVersion: "domain-v3-network-adapter-2",
       completedAt: "2026-11-11T20:00:00.000Z",
       checks,
       ethicsAssessment: {
-        policyVersion: "domain-ethics-v4",
+        policyVersion: "domain-ethics-v5",
         score: 75,
         assessedCriteria: 8,
         totalCriteria: 8,
@@ -53,6 +53,11 @@ function completedStatus() {
         status: "pass",
         reasonCode: "inventory_complete_empty",
       },
+      publicPolicyTransparencyAssessment: {
+        policyVersion: "public-policy-v1",
+        status: "pass",
+        reasonCode: "disclosure_found",
+      },
     },
   };
 }
@@ -61,7 +66,7 @@ test("bounds the live scan smoke wait to fifteen minutes for the serial queue", 
   assert.equal(SCAN_TIMEOUT_MS, 15 * 60 * 1000);
 });
 
-test("accepts a refreshed report with all eight v4 ethics criteria and a conclusive processor inventory", () => {
+test("accepts a refreshed report with all eight v5 ethics criteria and both transparency assessments", () => {
   const status = completedStatus();
   const report = validateCompletedReport(
     status,
@@ -70,6 +75,7 @@ test("accepts a refreshed report with all eight v4 ethics criteria and a conclus
   assert.equal(report.ethicsAssessment.score, 75);
   assert.equal(report.ethicsAssessment.assessedCriteria, 8);
   assert.equal(report.processorTransparencyAssessment.status, "pass");
+  assert.equal(report.publicPolicyTransparencyAssessment.status, "pass");
   assert.equal(report.checks.length, 9);
 });
 

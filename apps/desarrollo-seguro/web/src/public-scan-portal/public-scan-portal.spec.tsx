@@ -51,6 +51,7 @@ const PUBLIC_REPORT = {
     interpretation: "Indicador provisional de DNS, TLS, HTTP, cabeceras y cookies conocidas en la respuesta inicial. No evalúa el consentimiento real, las prácticas de datos de terceros, los rastreadores dinámicos ni el rendimiento; no es una certificación.",
   },
   processorTransparencyAssessment: null,
+  publicPolicyTransparencyAssessment: null,
   scope: ["/"],
   checks: [
     {
@@ -272,6 +273,63 @@ describe("PublicScanPortal", () => {
     expect(screen.getByText("No se usa para entrenar modelos.")).toBeVisible();
     expect(screen.getByRole("link", { name: "Ver política de privacidad de Grumphya" }))
       .toHaveAttribute("href", "https://grumphya.com/politica-de-privacidad#openai-api");
+  });
+
+  it("shows the v5 public service transparency criterion in Ethics with its evidence", async () => {
+    const criteria = PUBLIC_REPORT.ethicsAssessment.criteria.map((criterion) => criterion.id === "third-party-data-use"
+      ? { id: "external-service-transparency", label: "Información pública sobre servicios externos", status: "pass", weight: 10 }
+      : { ...criterion, status: "pass" });
+    const report = {
+      ...PUBLIC_REPORT,
+      profileVersion: "domain-v3",
+      ethicsAssessment: {
+        ...PUBLIC_REPORT.ethicsAssessment,
+        policyVersion: "domain-ethics-v5",
+        score: 100,
+        assessedCriteria: 8,
+        maturity: "broad",
+        criteria,
+        reasons: [],
+      },
+      globalAssessment: {
+        ...SCORED_PUBLIC_REPORT.globalAssessment,
+        ethicsCoverage: { assessedCriteria: 8, totalCriteria: 8 },
+      },
+      privacyAssessment: SCORED_PUBLIC_REPORT.privacyAssessment,
+      publicPolicyTransparencyAssessment: {
+        policyVersion: "public-policy-v1",
+        status: "pass",
+        reasonCode: "disclosure_found",
+        evidence: {
+          linksFound: 2,
+          pagesInspected: 2,
+          unavailablePages: 0,
+          accessDeniedPages: 0,
+          providerMentions: 3,
+          providersMissingPurpose: 0,
+          categories: ["analytics"],
+        },
+      },
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({
+      hostname: "example.com",
+      enrollment: "on_demand",
+      state: "fresh",
+      failureCode: null,
+      activeJobId: null,
+      lastReport: report,
+      checkedAt: "2026-11-03T10:01:00.000Z",
+    })));
+    const user = userEvent.setup();
+
+    render(<PublicScanPortal />);
+    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "example.com");
+    await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
+
+    expect(await screen.findByText(/8 de 8 criterios evaluados/u)).toBeVisible();
+    await user.click(screen.getAllByRole("button", { name: "Ver detalle" })[0]);
+    expect(screen.getByText("Información pública sobre servicios externos")).toBeVisible();
+    expect(screen.getByText(/se encontraron 2 enlaces relacionados y se consultaron 2 páginas; se reconocieron 3 proveedores, 0 sin finalidad indicada/i)).toBeVisible();
   });
 
   it("stops after one poll when an accepted request has no active job", async () => {

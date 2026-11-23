@@ -86,7 +86,7 @@ const PUBLIC_SCOPE_PATHS = ["/", "/precios", "/informe"] as const;
 const MAX_REPORT_CHECKS = 32;
 
 const REPORT_CATEGORIES = [
-  { id: "ethics", label: "Ética", description: "Separa las referencias visibles a rastreadores del inventario de procesadores backend cuando está disponible. Las declaraciones de privacidad se atribuyen al titular y no se contrastan con contratos.", criteria: ["third-party-data-use", "backend-processor-transparency", "tracking"], controls: ["DS-PRIV-06"] },
+  { id: "ethics", label: "Ética", description: "Valora señales públicas de seguimiento e información sobre servicios externos. En clientes, puede contrastar la política con un inventario autenticado de procesadores backend; las declaraciones no verifican contratos ni prácticas internas.", criteria: ["third-party-data-use", "external-service-transparency", "backend-processor-transparency", "tracking"], controls: ["DS-PRIV-06"] },
   { id: "privacy", label: "Privacidad", description: "Observa la portada, prueba aceptar y rechazar si hay controles y comprueba si se conserva el rechazo tras recargar. No navega a otras páginas.", criteria: ["initial-cookie-risk"], controls: ["DS-PRIV-05"] },
   { id: "security", label: "Seguridad", description: "Revisa que el dominio responda, use una conexión cifrada y envíe protecciones básicas al navegador.", criteria: ["dns-integrity", "transport-security", "http-availability", "security-headers"], controls: ["DS-DNS-01", "DS-TLS-01", "DS-TLS-02", "DS-HTTP-01", "DS-HDR-01"] },
   { id: "performance", label: "Rendimiento", description: "Mide cuánto tarda y cuánto pesa la respuesta de portada. No representa toda la experiencia desde otros dispositivos o páginas.", criteria: ["performance"], controls: ["DS-QUAL-02"] },
@@ -102,6 +102,7 @@ const CRITERION_EXPLANATIONS: Record<string, string> = {
   "http-availability": "Comprueba si la portada responde y si las visitas terminan en una conexión HTTPS cifrada.",
   "security-headers": "Revisa indicaciones que el sitio envía al navegador para reducir algunos tipos de ataque.",
   "third-party-data-use": "La respuesta técnica no permite verificar contratos ni prácticas de reutilización de datos.",
+  "external-service-transparency": "Consulta la información pública sobre servicios externos, sus proveedores y sus finalidades. No confirma contratos ni prácticas internas.",
   "backend-processor-transparency": "Compara el inventario autenticado de procesadores backend con lo que Grumphya declara en su política de privacidad. Las declaraciones se atribuyen al titular; no se verifica si los proveedores cumplen esas condiciones.",
   "initial-cookie-risk": "Cuenta cookies y coincidencias conocidas en la primera respuesta; no evalúa el consentimiento posterior.",
   tracking: "Cuenta referencias del HTML inicial a una lista local de rastreadores conocidos; no confirma conexiones ni ejecuta scripts.",
@@ -113,6 +114,7 @@ const CRITERION_RECOMMENDATIONS: Record<string, string> = {
   "http-availability": "Comprueba que la portada responde y redirige las visitas a HTTPS.",
   "security-headers": "Revisa las protecciones que faltan, en especial la política de contenido y la conexión segura persistente.",
   "third-party-data-use": "Consulta las políticas y contratos de los proveedores; esta comprobación técnica no puede confirmar cómo tratan los datos.",
+  "external-service-transparency": "Consulta el resumen de páginas y proveedores que aparece en este informe. La valoración refleja la información pública encontrada.",
   "initial-cookie-risk": "Comprueba la finalidad de las cookies y que las no esenciales esperan al consentimiento cuando sea necesario.",
   tracking: "Revisa las referencias detectadas y confirma que cada herramienta se carga con la información y el consentimiento adecuados.",
   performance: "Mide la página completa en distintos dispositivos antes de decidir qué optimizar.",
@@ -123,6 +125,7 @@ const CRITERION_FAIL_MEANINGS: Record<string, string> = {
   "http-availability": "La portada no respondió según lo esperado o se observó una conexión insegura.",
   "security-headers": "Falta al menos una protección que el navegador puede usar frente a ciertos ataques.",
   "third-party-data-use": "No hay fuentes suficientes para concluir sobre el uso de datos por terceros.",
+  "external-service-transparency": "La información pública sobre servicios externos no se pudo localizar, consultar o relacionar con sus finalidades.",
   "initial-cookie-risk": "Se encontró una cookie cuyo nombre coincide con una categoría de analítica o marketing; esto requiere revisar su finalidad, pero no prueba por sí solo un incumplimiento.",
   tracking: "El HTML inicial contiene referencias a herramientas de seguimiento conocidas; la prueba no confirma que se hayan conectado o ejecutado.",
   performance: "La respuesta inicial fue lenta en esta medición puntual; esto puede afectar a la carga, pero no representa la experiencia completa.",
@@ -196,6 +199,20 @@ type PublicProcessorTransparencyAssessment = {
     evidenceSource?: "grumphya_signed_attestation" | "desarrolloseguro_source_registry";
   } | null;
 };
+type PublicPolicyTransparencyAssessment = {
+  policyVersion: "public-policy-v1";
+  status: "pass" | "fail" | "unknown";
+  reasonCode: "disclosure_found" | "policy_link_missing" | "policy_content_missing" | "policy_page_unavailable" | "service_purpose_missing" | "access_denied" | "auditor_error" | "budget_exhausted";
+  evidence: {
+    linksFound: number;
+    pagesInspected: number;
+    unavailablePages: number;
+    accessDeniedPages: number;
+    providerMentions: number;
+    providersMissingPurpose: number;
+    categories: Array<"analytics" | "advertising" | "social" | "consent" | "other">;
+  };
+};
 type PublicReport = {
   id: string;
   hostname: string;
@@ -221,7 +238,7 @@ type PublicReport = {
     } | null;
   };
   ethicsAssessment: {
-    policyVersion: "domain-ethics-v3" | "domain-ethics-v4";
+    policyVersion: "domain-ethics-v3" | "domain-ethics-v4" | "domain-ethics-v5";
     score: number | null;
     assessedCriteria: number;
     totalCriteria: number;
@@ -255,6 +272,7 @@ type PublicReport = {
     }>;
   } | null;
   processorTransparencyAssessment: PublicProcessorTransparencyAssessment | null;
+  publicPolicyTransparencyAssessment: PublicPolicyTransparencyAssessment | null;
   certification: {
     policyVersion: "beta-0.1";
     state: "pending" | "active" | "suspended";
@@ -1061,6 +1079,7 @@ function ReportSummary({
               category={activeCategory}
               criteria={activeCriteria}
               checks={activeChecks}
+              publicPolicyAssessment={report.publicPolicyTransparencyAssessment}
               detailsId={`report-category-details-${activeCategory.id}`}
               onClose={() => setActiveCategoryId(null)}
             />
@@ -1127,6 +1146,25 @@ function ReportSummary({
                 </p>
               </>
             )}
+          </section>
+        )}
+        {report.publicPolicyTransparencyAssessment && (
+          <section className="ds-portal__public-policy" aria-labelledby="public-policy-transparency-heading">
+            <h3 id="public-policy-transparency-heading">Qué cuenta la política sobre servicios externos</h3>
+            <p>{getPublicPolicyTransparencySummary(report.publicPolicyTransparencyAssessment)}</p>
+            <dl>
+              <div><dt>Enlaces relacionados encontrados</dt><dd>{report.publicPolicyTransparencyAssessment.evidence.linksFound}</dd></div>
+              <div><dt>Páginas consultadas</dt><dd>{report.publicPolicyTransparencyAssessment.evidence.pagesInspected}</dd></div>
+              <div><dt>Páginas no disponibles</dt><dd>{report.publicPolicyTransparencyAssessment.evidence.unavailablePages + report.publicPolicyTransparencyAssessment.evidence.accessDeniedPages}</dd></div>
+              <div><dt>Proveedores reconocidos en la información</dt><dd>{report.publicPolicyTransparencyAssessment.evidence.providerMentions}</dd></div>
+              <div><dt>Sin finalidad explicada</dt><dd>{report.publicPolicyTransparencyAssessment.evidence.providersMissingPurpose}</dd></div>
+            </dl>
+            {report.publicPolicyTransparencyAssessment.evidence.categories.length > 0 && (
+              <p><strong>Temas identificados:</strong> {report.publicPolicyTransparencyAssessment.evidence.categories.map(getPublicPolicyCategoryLabel).join(", ")}.</p>
+            )}
+            <p className="ds-portal__public-policy-note">
+              Esto resume la información publicada por el sitio. El análisis no puede comprobar contratos privados ni confirmar cómo actúan los proveedores.
+            </p>
           </section>
         )}
       </section>
@@ -1475,12 +1513,14 @@ function CategoryDetailsModal({
   category,
   criteria,
   checks,
+  publicPolicyAssessment,
   detailsId,
   onClose,
 }: {
   category: ReportCategory;
   criteria: PublicEthicsCriterion[];
   checks: PublicReport["checks"];
+  publicPolicyAssessment: PublicPolicyTransparencyAssessment | null;
   detailsId: string;
   onClose: () => void;
 }) {
@@ -1544,7 +1584,7 @@ function CategoryDetailsModal({
                   <strong>{getCriterionDisplayLabel(criterion.id, criterion.label)}</strong>
                   <p><b>Qué comprueba:</b> {CRITERION_EXPLANATIONS[criterion.id]}</p>
                   <p><b>Qué significa:</b> {getCriterionOutcome(criterion.id, criterion.status)}</p>
-                  <p className="ds-portal__criterion-evidence"><b>Dato observado:</b> {getCriterionEvidenceSummary(criterion.id, checks)}</p>
+                  <p className="ds-portal__criterion-evidence"><b>Dato observado:</b> {getCriterionEvidenceSummary(criterion.id, checks, publicPolicyAssessment)}</p>
                   {criterion.status !== "pass" && (
                     <p><b>Qué revisar:</b> {CRITERION_RECOMMENDATIONS[criterion.id]}</p>
                   )}
@@ -1671,6 +1711,7 @@ function isPublicReport(value: unknown): value is PublicReport {
     !isEthicsAssessment(value.ethicsAssessment) ||
     !isPrivacyAssessment(value.privacyAssessment) ||
     !isProcessorTransparencyAssessment(value.processorTransparencyAssessment) ||
+    !isPublicPolicyTransparencyAssessment(value.publicPolicyTransparencyAssessment) ||
     !isGlobalAssessment(value.globalAssessment) ||
     !isPublicCertification(value.certification) ||
     !Array.isArray(value.checks) ||
@@ -1681,8 +1722,11 @@ function isPublicReport(value: unknown): value is PublicReport {
     return false;
   }
   const hasProcessorAssessment = value.processorTransparencyAssessment !== null;
-  if (hasProcessorAssessment !== (value.ethicsAssessment.policyVersion === "domain-ethics-v4") ||
-      hasProcessorAssessment && value.hostname !== "grumphya.com") return false;
+  const hasPublicPolicyAssessment = value.publicPolicyTransparencyAssessment !== null;
+  if ((value.ethicsAssessment.policyVersion === "domain-ethics-v3" && (hasProcessorAssessment || hasPublicPolicyAssessment)) ||
+      (value.ethicsAssessment.policyVersion === "domain-ethics-v4" && (!hasProcessorAssessment || hasPublicPolicyAssessment)) ||
+      (value.ethicsAssessment.policyVersion === "domain-ethics-v5" && !hasPublicPolicyAssessment) ||
+      hasProcessorAssessment && value.hostname !== "grumphya.com" && value.hostname !== "desarrolloseguro.org") return false;
   if (!isGlobalAssessmentConsistent(
     value.globalAssessment as PublicReport["globalAssessment"],
     value.ethicsAssessment as PublicReport["ethicsAssessment"],
@@ -1827,7 +1871,7 @@ function isPublicCertification(value: unknown): value is PublicReport["certifica
 function isEthicsAssessment(value: unknown): value is PublicReport["ethicsAssessment"] {
   if (!isRecord(value)) return false;
   if (
-    !isOneOf(value.policyVersion, ["domain-ethics-v3", "domain-ethics-v4"] as const) ||
+    !isOneOf(value.policyVersion, ["domain-ethics-v3", "domain-ethics-v4", "domain-ethics-v5"] as const) ||
     (value.score !== null && (!isInteger(value.score) || value.score < 0 || value.score > 100)) ||
     !isInteger(value.assessedCriteria) || value.assessedCriteria < 0 ||
     !isInteger(value.totalCriteria) || value.totalCriteria <= 0 ||
@@ -1849,6 +1893,36 @@ function isEthicsAssessment(value: unknown): value is PublicReport["ethicsAssess
   return assessedCount === value.assessedCriteria &&
     ((value.assessedCriteria === 0 && value.score === null) ||
       (value.assessedCriteria > 0 && value.score !== null));
+}
+
+function isPublicPolicyTransparencyAssessment(value: unknown): value is PublicPolicyTransparencyAssessment | null {
+  if (value === null) return true;
+  if (!isRecord(value) || value.policyVersion !== "public-policy-v1" ||
+      !isOneOf(value.status, ["pass", "fail", "unknown"] as const) ||
+      !isOneOf(value.reasonCode, [
+        "disclosure_found", "policy_link_missing", "policy_content_missing",
+        "policy_page_unavailable", "service_purpose_missing", "access_denied",
+        "auditor_error", "budget_exhausted",
+      ] as const) || !isRecord(value.evidence)) return false;
+  const evidence = value.evidence;
+  if (!isInteger(evidence.linksFound) || evidence.linksFound < 0 || evidence.linksFound > 30 ||
+      !isInteger(evidence.pagesInspected) || evidence.pagesInspected < 0 || evidence.pagesInspected > 30 ||
+      !isInteger(evidence.unavailablePages) || evidence.unavailablePages < 0 || evidence.unavailablePages > 30 ||
+      !isInteger(evidence.accessDeniedPages) || evidence.accessDeniedPages < 0 || evidence.accessDeniedPages > 30 ||
+      !isInteger(evidence.providerMentions) || evidence.providerMentions < 0 || evidence.providerMentions > 300 ||
+      !isInteger(evidence.providersMissingPurpose) || evidence.providersMissingPurpose < 0 || evidence.providersMissingPurpose > 30 || evidence.providersMissingPurpose > evidence.providerMentions ||
+      !Array.isArray(evidence.categories) || evidence.categories.length > 5 ||
+      !evidence.categories.every((category) => isOneOf(category, ["analytics", "advertising", "social", "consent", "other"] as const)) ||
+      new Set(evidence.categories).size !== evidence.categories.length) return false;
+  if (value.reasonCode === "auditor_error" || value.reasonCode === "budget_exhausted") {
+    return value.status === "unknown" && evidence.unavailablePages === 0 && evidence.accessDeniedPages === 0;
+  }
+  if (value.reasonCode === "access_denied") return value.status === "fail" && evidence.accessDeniedPages > 0;
+  if (value.reasonCode === "policy_page_unavailable") return value.status === "fail" && evidence.unavailablePages > 0;
+  if (value.reasonCode === "policy_link_missing") return value.status === "fail" && evidence.linksFound === 0;
+  if (value.reasonCode === "policy_content_missing") return value.status === "fail" && evidence.linksFound > 0 && evidence.pagesInspected === 0;
+  if (value.reasonCode === "service_purpose_missing") return value.status === "fail" && evidence.pagesInspected > 0 && (evidence.providerMentions === 0 || evidence.providersMissingPurpose > 0 || evidence.categories.length === 0);
+  return value.status === "pass" && evidence.linksFound > 0 && evidence.pagesInspected > 0 && evidence.providerMentions > 0 && evidence.providersMissingPurpose === 0 && evidence.categories.length > 0;
 }
 
 function isProcessorTransparencyAssessment(value: unknown): value is PublicProcessorTransparencyAssessment | null {
@@ -2115,6 +2189,7 @@ function getCriterionOutcome(criterionId: string, status: string): string {
     "http-availability": "La portada respondió según lo esperado y usó una conexión segura en esta comprobación.",
     "security-headers": "Las protecciones comprobadas estaban presentes en la respuesta observada.",
     "third-party-data-use": "No se ha podido confirmar el uso que terceros hacen de los datos.",
+    "external-service-transparency": "La nota refleja si se encontró información pública sobre los servicios externos y sus finalidades; no certifica que esas declaraciones sean ciertas.",
     "initial-cookie-risk": "No se reconocieron cookies con riesgo en la primera respuesta observada.",
     tracking: "No se encontraron referencias conocidas a rastreadores en el HTML inicial; no se ejecutaron scripts.",
     performance: "La respuesta inicial quedó dentro del umbral orientativo de esta comprobación; no representa la experiencia completa.",
@@ -2122,7 +2197,15 @@ function getCriterionOutcome(criterionId: string, status: string): string {
   return outcomes[criterionId] ?? "La comprobación no detectó un problema en este punto.";
 }
 
-function getCriterionEvidenceSummary(criterionId: string, checks: PublicCheck[]): string {
+function getCriterionEvidenceSummary(
+  criterionId: string,
+  checks: PublicCheck[],
+  publicPolicyAssessment: PublicPolicyTransparencyAssessment | null = null,
+): string {
+  if (criterionId === "external-service-transparency" && publicPolicyAssessment) {
+    const evidence = publicPolicyAssessment.evidence;
+    return `Se encontraron ${evidence.linksFound} enlaces relacionados y se consultaron ${evidence.pagesInspected} páginas; se reconocieron ${evidence.providerMentions} proveedores, ${evidence.providersMissingPurpose} sin finalidad indicada.`;
+  }
   const evidence = checks
     .filter((check) => getCriterionControlIds(criterionId).includes(check.controlId))
     .map((check) => check.evidence);
@@ -2211,6 +2294,7 @@ function getCriterionControlIds(criterionId: string): readonly string[] {
     "http-availability": ["DS-HTTP-01"],
     "security-headers": ["DS-HDR-01"],
     "third-party-data-use": ["DS-PRIV-04"],
+    "external-service-transparency": [],
     "backend-processor-transparency": [],
     "initial-cookie-risk": ["DS-PRIV-05"],
     tracking: ["DS-PRIV-06"],
@@ -2244,6 +2328,40 @@ function getProcessorTransparencySummary(
     : "Grumphya declara que el inventario backend está completo; los proveedores incluidos aparecen en su política de privacidad.";
 }
 
+function getPublicPolicyTransparencySummary(
+  assessment: PublicPolicyTransparencyAssessment,
+): string {
+  switch (assessment.reasonCode) {
+    case "disclosure_found":
+      return "La política enlazada explica servicios externos y sus finalidades. Esto refleja lo que declara el sitio; no confirma prácticas internas.";
+    case "policy_link_missing":
+      return "No encontramos un enlace público a información sobre los servicios externos del sitio.";
+    case "policy_content_missing":
+      return "Encontramos un enlace relacionado, pero no pudimos leer su contenido.";
+    case "policy_page_unavailable":
+      return "Una o más páginas enlazadas no estaban disponibles al consultarlas.";
+    case "service_purpose_missing":
+      return "La información consultada no permite identificar proveedores externos y para qué se usan.";
+    case "access_denied":
+      return "El sitio o la página enlazada impidió consultar esta información pública.";
+    case "auditor_error":
+      return "Un error técnico del auditor impidió completar la comprobación; el resultado queda en revisión.";
+    case "budget_exhausted":
+      return "La comprobación alcanzó su límite de tiempo o solicitudes; el criterio queda en revisión.";
+  }
+}
+
+function getPublicPolicyCategoryLabel(category: PublicPolicyTransparencyAssessment["evidence"]["categories"][number]): string {
+  const labels: Record<typeof category, string> = {
+    analytics: "medición de uso",
+    advertising: "publicidad",
+    social: "redes sociales",
+    consent: "preferencias de privacidad",
+    other: "otros servicios",
+  };
+  return labels[category];
+}
+
 function formatByteCount(value: number): string {
   if (value < 1_000) return `${value} bytes`;
   return `${(value / 1_000).toFixed(1)} kB`;
@@ -2256,6 +2374,7 @@ function getCriterionDisplayLabel(criterionId: string, fallback: string): string
     "http-availability": "La página responde de forma segura",
     "security-headers": "El navegador recibe protecciones",
     "third-party-data-use": "Uso de datos por servicios externos",
+    "external-service-transparency": "Información pública sobre servicios externos",
     "initial-cookie-risk": "Cookies potencialmente no esenciales",
     tracking: "Rastreadores conocidos en la página",
     performance: "Rapidez de la respuesta inicial",

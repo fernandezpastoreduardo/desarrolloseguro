@@ -1,3 +1,6 @@
+import type { ProcessorTransparencyAssessment } from "./processor-inventory.js";
+import { parsePublicPolicyTransparencyAssessment } from "./public-policy-assessment.js";
+
 export type EthicsCheck = {
   controlId: string;
   status: "pass" | "fail" | "unknown" | "not_applicable";
@@ -12,7 +15,7 @@ export type EthicsCriterion = {
 };
 
 export type DomainEthicsAssessment = {
-  policyVersion: "domain-ethics-v3" | "domain-ethics-v4";
+  policyVersion: "domain-ethics-v3" | "domain-ethics-v4" | "domain-ethics-v5";
   score: number | null;
   assessedCriteria: number;
   totalCriteria: number;
@@ -65,6 +68,79 @@ export function assessDomainEthicsV4(
     reasons,
     interpretation: "Indicador provisional basado en señales públicas de DNS, TLS, HTTP, cabeceras, cookies, referencias del HTML inicial, rendimiento de respuesta e inventario backend firmado. Las declaraciones de privacidad se atribuyen al titular; la observación de navegador y los procesadores backend son evidencias separadas. No verifica contratos ni prácticas de los proveedores, y no es una certificación.",
   };
+}
+
+/**
+ * Scores the same eight criteria as v3/v4 while sourcing DS-PRIV-04 from the
+ * authenticated backend inventory when supplied, otherwise from public policy
+ * evidence. Historical v3/v4 assessments remain unchanged.
+ */
+export function assessDomainEthicsV5(
+  checks: unknown,
+  processorTransparency: ProcessorTransparencyAssessment | null,
+  publicPolicyInput: unknown,
+): DomainEthicsAssessment {
+  const base = assessDomainEthics(checks);
+  const publicPolicy = processorTransparency
+    ? null
+    : parsePublicPolicyTransparencyAssessment(publicPolicyInput);
+  const transparencyStatus = processorTransparency?.status ?? publicPolicy?.status ?? "unknown";
+  const transparencyReason = getV5TransparencyReason(processorTransparency, publicPolicy);
+  const criteria = base.criteria.map((criterion): EthicsCriterion => criterion.id === "third-party-data-use"
+    ? {
+        id: "external-service-transparency",
+        label: "Información pública sobre servicios externos",
+        weight: 10,
+        status: transparencyStatus,
+      }
+    : criterion);
+  const assessed = criteria.filter(({ status }) => status !== "unknown");
+  const assessedWeight = assessed.reduce((sum, criterion) => sum + criterion.weight, 0);
+  const passedWeight = assessed.filter(({ status }) => status === "pass")
+    .reduce((sum, criterion) => sum + criterion.weight, 0);
+  const reasons = criteria.flatMap((criterion) => {
+    if (criterion.id === "external-service-transparency") {
+      return criterion.status === "pass" ? [] : [transparencyReason];
+    }
+    if (criterion.status === "fail") return [`${criterion.label}: el control observado presenta fallos.`];
+    if (criterion.status === "unknown") return UNKNOWN_REASONS[criterion.id] ? [UNKNOWN_REASONS[criterion.id]] : [];
+    return [];
+  });
+
+  return {
+    policyVersion: "domain-ethics-v5",
+    score: assessedWeight === 0 ? null : Math.round((passedWeight / assessedWeight) * 100),
+    assessedCriteria: assessed.length,
+    totalCriteria: criteria.length,
+    maturity: assessed.length < 4 ? "preliminary" : assessed.length < criteria.length ? "partial" : "broad",
+    criteria,
+    reasons,
+    interpretation: "Indicador provisional basado en señales técnicas públicas y evidencia de transparencia de servicios externos. En clientes se usa el inventario backend autenticado; para otros dominios se comprueba la información publicada sobre servicios y propósitos. Las declaraciones se atribuyen a su titular y no verifican contratos ni prácticas internas; no es una certificación.",
+  };
+}
+
+function getV5TransparencyReason(
+  processorTransparency: ProcessorTransparencyAssessment | null,
+  publicPolicy: ReturnType<typeof parsePublicPolicyTransparencyAssessment>,
+): string {
+  if (processorTransparency) {
+    if (processorTransparency.reasonCode === "auditor_error") return "El auditor no pudo verificar el inventario de procesadores backend.";
+    if (processorTransparency.reasonCode === "endpoint_missing") return "El dominio no ofrece el inventario autenticado de procesadores backend.";
+    if (processorTransparency.reasonCode === "inventory_incomplete") return "El dominio declara que su inventario de procesadores backend está incompleto.";
+    if (processorTransparency.reasonCode === "processor_not_disclosed") return "Hay procesadores backend activos que no aparecen declarados en la política de privacidad.";
+    return "No hay evidencia verificable del inventario backend.";
+  }
+  switch (publicPolicy?.reasonCode) {
+    case "policy_link_missing": return "No se encontró una política pública que explique los servicios externos.";
+    case "policy_content_missing": return "No se pudo leer el contenido de la política enlazada.";
+    case "policy_page_unavailable": return "Una política enlazada no está disponible (404, 410 o error del servidor).";
+    case "service_purpose_missing": return "La información pública no explica qué servicios externos se usan ni para qué.";
+    case "access_denied": return "El sitio impidió consultar información pública sobre sus servicios externos.";
+    case "auditor_error": return "Un error del auditor impidió comprobar la información pública sobre servicios externos.";
+    case "budget_exhausted": return "El auditor alcanzó el límite aprobado para consultar políticas; el resultado queda sin evaluar.";
+    case "disclosure_found": return "La información pública sobre servicios externos está disponible.";
+    default: return "El auditor no generó una evaluación válida de la política pública.";
+  }
 }
 
 const CRITERIA = [

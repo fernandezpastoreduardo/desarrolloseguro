@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { assessDomainEthics, assessDomainEthicsV4 } from "./domain-ethics-score.js";
+import { assessDomainEthics, assessDomainEthicsV4, assessDomainEthicsV5 } from "./domain-ethics-score.js";
 import { assessProcessorTransparency, type ProcessorTransparencyAssessment } from "./processor-inventory.js";
+import { assessPublicPolicyTransparency } from "./public-policy-assessment.js";
 
 const check = (controlId: string, status: "pass" | "fail" | "unknown") => ({
   controlId,
@@ -146,5 +147,78 @@ describe("assessDomainEthics", () => {
     expect(fail.criteria.find(({ id }) => id === "backend-processor-transparency")?.status).toBe("fail");
     expect(fail.reasons).toContain("Grumphya declara que su inventario de procesadores backend está incompleto.");
     expect(assessDomainEthics(allPublicControlsPass).policyVersion).toBe("domain-ethics-v3");
+  });
+
+  it("scores public disclosures for non-clients while preserving the DS-PRIV-04 weight", () => {
+    const allPublicControlsPass = [
+      check("DS-DNS-01", "pass"), check("DS-TLS-01", "pass"), check("DS-TLS-02", "pass"),
+      check("DS-HTTP-01", "pass"), check("DS-HDR-01", "pass"), check("DS-PRIV-05", "pass"),
+      check("DS-PRIV-06", "pass"), check("DS-QUAL-02", "pass"),
+    ];
+    const disclosure = assessPublicPolicyTransparency({
+      linksFound: 2,
+      pagesInspected: 2,
+      unavailablePages: 0,
+      accessDeniedPages: 0,
+      providerMentions: 3,
+      providersMissingPurpose: 0,
+      categories: ["analytics", "other"],
+    });
+    const missingDisclosure = assessPublicPolicyTransparency({
+      linksFound: 1,
+      pagesInspected: 1,
+      unavailablePages: 0,
+      accessDeniedPages: 0,
+      providerMentions: 0,
+      providersMissingPurpose: 0,
+      categories: [],
+    });
+
+    expect(assessDomainEthicsV5(allPublicControlsPass, null, disclosure)).toMatchObject({
+      policyVersion: "domain-ethics-v5",
+      score: 100,
+      assessedCriteria: 8,
+      totalCriteria: 8,
+      criteria: expect.arrayContaining([
+        expect.objectContaining({ id: "external-service-transparency", weight: 10, status: "pass" }),
+      ]),
+    });
+    expect(assessDomainEthicsV5(allPublicControlsPass, null, missingDisclosure)).toMatchObject({
+      score: 90,
+      criteria: expect.arrayContaining([
+        expect.objectContaining({ id: "external-service-transparency", status: "fail" }),
+      ]),
+      reasons: expect.arrayContaining([
+        "La información pública no explica qué servicios externos se usan ni para qué.",
+      ]),
+    });
+  });
+
+  it("prefers authenticated backend evidence and leaves auditor errors in review", () => {
+    const allPublicControlsPass = [
+      check("DS-DNS-01", "pass"), check("DS-TLS-01", "pass"), check("DS-TLS-02", "pass"),
+      check("DS-HTTP-01", "pass"), check("DS-HDR-01", "pass"), check("DS-PRIV-05", "pass"),
+      check("DS-PRIV-06", "pass"), check("DS-QUAL-02", "pass"),
+    ];
+    const backendError = assessProcessorTransparency({ status: "auditor_error" });
+    const publicPass = assessPublicPolicyTransparency({
+      linksFound: 2,
+      pagesInspected: 2,
+      unavailablePages: 0,
+      accessDeniedPages: 0,
+      providerMentions: 3,
+      providersMissingPurpose: 0,
+      categories: ["analytics"],
+    });
+
+    const assessment = assessDomainEthicsV5(allPublicControlsPass, backendError, publicPass);
+    expect(assessment).toMatchObject({
+      policyVersion: "domain-ethics-v5",
+      score: 100,
+      assessedCriteria: 7,
+    });
+    expect(assessment.criteria.find(({ id }) => id === "external-service-transparency")?.status).toBe("unknown");
+    expect(assessment.reasons).toContain("El auditor no pudo verificar el inventario de procesadores backend.");
+    expect(assessDomainEthicsV4(allPublicControlsPass, backendError).policyVersion).toBe("domain-ethics-v4");
   });
 });

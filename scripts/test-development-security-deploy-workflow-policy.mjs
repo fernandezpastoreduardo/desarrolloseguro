@@ -94,7 +94,7 @@ const domainV3Migration = await readFile(
 );
 assert.match(liveScanSmoke, /VALIDATION_HOSTNAME = process\.env\.DS_SMOKE_HOSTNAME \?\? "grumphya\.com"/u);
 assert.match(liveScanSmoke, /profileVersion !== "domain-v3"/u);
-assert.match(liveScanSmoke, /scannerVersion !== "domain-v3-network-adapter-1"/u);
+assert.match(liveScanSmoke, /scannerVersion !== "domain-v3-network-adapter-2"/u);
 assert.match(liveScanSmoke, /conclusiveChecks\.length < 5/u);
 assert.match(liveScanSmoke, /tls10Accepted/u);
 assert.match(liveScanSmoke, /assessment\.score/u);

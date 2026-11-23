@@ -25,6 +25,13 @@ import type {
   TransportV1ObservationSource,
   TransportV1ProbeResult,
 } from "./transport-v1-executor.js";
+import {
+  collectPublicPolicyEvidence,
+  PUBLIC_POLICY_CRAWL_LIMITS,
+  type PublicPolicyFetchDocument,
+} from "./public-policy-crawler.js";
+import { createPublicPolicyHttpsFetcher } from "./public-policy-https-fetcher.js";
+import { classifyPublicPolicyHtml } from "./public-policy-classifier.js";
 
 const ROOT_PATHS = ["/"] as const;
 const TLS_VERSION_PROBES = [
@@ -41,7 +48,9 @@ export type TransportV1NetworkObserverDependencies = {
   httpsRequestFactory?: HttpsRequestFactory;
   httpsCa?: string;
   inspectPage?: boolean;
+  inspectPublicPolicies?: boolean;
   probeTlsVersions?: boolean;
+  publicPolicyFetchDocument?: PublicPolicyFetchDocument;
 };
 
 /**
@@ -60,6 +69,10 @@ export function createTransportV1NetworkObserver(
         port,
         createEgressDestinationAuthorizer(hostname, dependencies.dnsResolver),
       ));
+  const policyFetcher = dependencies.publicPolicyFetchDocument ?? createPublicPolicyHttpsFetcher({
+    dnsResolver: dependencies.dnsResolver,
+    requestFactory: dependencies.httpsRequestFactory,
+  });
   return {
     sourceKind: "network",
     async observeDns(hostname, signal) {
@@ -199,8 +212,9 @@ export function createTransportV1NetworkObserver(
     },
     async observeHeaders(hostname, signal) {
       return collectProbe(
-        () =>
-          requestPinnedHttps(
+        async () => {
+          const observationStartedAt = Date.now();
+          const page = await requestPinnedHttps(
             {
               hostname,
               allowGrumphyaAliasRedirects: isGrumphyaHostname(hostname),
@@ -209,23 +223,42 @@ export function createTransportV1NetworkObserver(
               allowedPaths: ROOT_PATHS,
               signal,
               inspectPage: dependencies.inspectPage === true,
+              capturePublicPolicyLinks: dependencies.inspectPublicPolicies === true,
             },
             {
               ca: dependencies.httpsCa,
               lookupFactory,
               requestFactory: dependencies.httpsRequestFactory,
             },
-          ),
-        (result) => ({
+          );
+          if (!dependencies.inspectPublicPolicies) return { page };
+          const policy = await collectPublicPolicyEvidence({
+            hostname,
+            links: page.publicPolicyLinks ?? [],
+            initialStatusCode: page.tlsAuthorized ? page.statusCode : 200,
+            initialPageInspectable: page.tlsAuthorized && page.publicPolicyPageInspectable === true,
+            signal,
+            fetchDocument: policyFetcher,
+            classifyHtml: classifyPublicPolicyHtml,
+            budget: {
+              durationMs: Math.max(0, PUBLIC_POLICY_CRAWL_LIMITS.durationMs - (Date.now() - observationStartedAt)),
+              requests: Math.max(0, PUBLIC_POLICY_CRAWL_LIMITS.requests - page.requestsCount),
+              bytes: Math.max(0, PUBLIC_POLICY_CRAWL_LIMITS.bytes - page.bytesCount),
+            },
+          });
+          return { page, policy };
+        },
+        ({ page, policy }) => ({
           evidence: {
             finalScheme: "https",
-            ...(result.tlsAuthorized ? (result.securityHeaders ?? {}) : {}),
-            ...(result.tlsAuthorized && result.passivePageSignals
-              ? toPassivePageEvidence(result.passivePageSignals)
+            ...(page.tlsAuthorized ? (page.securityHeaders ?? {}) : {}),
+            ...(page.tlsAuthorized && page.passivePageSignals
+              ? toPassivePageEvidence(page.passivePageSignals)
               : {}),
+            ...(policy ? toPublicPolicyTransportEvidence(policy) : {}),
           } satisfies TransportV1Evidence,
-          requestsCount: result.requestsCount,
-          bytesCount: result.bytesCount,
+          requestsCount: page.requestsCount + (policy?.requestsCount ?? 0),
+          bytesCount: page.bytesCount + (policy?.bytesCount ?? 0),
         }),
       );
     },
@@ -249,6 +282,22 @@ function toPassivePageEvidence(
     catalogMatchCount: signals.catalogMatchCount,
     responseTimeMs: signals.responseTimeMs,
     responseBytes: signals.responseBytes,
+  };
+}
+
+function toPublicPolicyTransportEvidence(
+  evidence: import("./public-policy-crawler.js").PublicPolicyEvidence,
+): TransportV1Evidence {
+  return {
+    publicPolicyLinksFound: evidence.linksFound,
+    publicPolicyPagesInspected: evidence.pagesInspected,
+    publicPolicyUnavailablePages: evidence.unavailablePages,
+    publicPolicyAccessDeniedPages: evidence.accessDeniedPages,
+    publicPolicyProviderMentions: evidence.providers.length,
+    publicPolicyProvidersMissingPurpose: evidence.providers.length - evidence.providersWithPurpose.length,
+    publicPolicyCategories: evidence.categories.join(","),
+    publicPolicyAuditorError: evidence.reasonCode === "auditor_error",
+    publicPolicyBudgetExhausted: evidence.reasonCode === "budget_exhausted",
   };
 }
 

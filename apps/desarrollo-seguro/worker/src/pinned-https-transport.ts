@@ -20,6 +20,8 @@ import {
   PinnedTransportError,
   safeTransportErrorCode,
 } from "./pinned-transport-error.js";
+import { extractPublicPolicyLinks } from "./public-policy-link-extractor.js";
+import type { PublicPolicyLink } from "./public-policy-link-extractor.js";
 
 const HTTPS_PORT = 443;
 const MAX_REDIRECTS = 3;
@@ -40,6 +42,7 @@ export type PinnedHttpsRequest = {
   allowedPaths: readonly string[];
   signal: AbortSignal;
   inspectPage?: boolean;
+  capturePublicPolicyLinks?: boolean;
   tlsVersion?: "TLSv1" | "TLSv1.1" | "TLSv1.2" | "TLSv1.3";
   allowUntrustedCertificate?: boolean;
   timeoutMs?: number;
@@ -56,6 +59,8 @@ export type PinnedHttpsResult = {
   tlsProtocol: "TLSv1" | "TLSv1.1" | "TLSv1.2" | "TLSv1.3" | undefined;
   securityHeaders: SecurityHeaderEvidence | null;
   passivePageSignals?: ReturnType<typeof inspectPassivePageSignals>;
+  publicPolicyPageInspectable?: boolean;
+  publicPolicyLinks?: PublicPolicyLink[];
   requestsCount: number;
   bytesCount: number;
   redirectStatusCode: number | null;
@@ -139,6 +144,7 @@ export async function requestPinnedHttps(
         requestFactory,
         ca: dependencies.ca,
         inspectPage: input.inspectPage === true,
+        capturePublicPolicyLinks: input.capturePublicPolicyLinks === true,
         tlsVersion: input.tlsVersion,
         allowUntrustedCertificate: input.allowUntrustedCertificate === true,
       });
@@ -167,6 +173,12 @@ export async function requestPinnedHttps(
         ...(result.passivePageSignals
           ? { passivePageSignals: result.passivePageSignals }
           : {}),
+        ...(result.publicPolicyPageInspectable === undefined
+          ? {}
+          : { publicPolicyPageInspectable: result.publicPolicyPageInspectable }),
+        ...(result.publicPolicyLinks === undefined
+          ? {}
+          : { publicPolicyLinks: result.publicPolicyLinks }),
         requestsCount,
         bytesCount,
         redirectStatusCode: getGrumphyaHostnameChange(redirectHops)?.statusCode ?? null,
@@ -220,6 +232,7 @@ type MakeRequestInput = {
   requestFactory: HttpsRequestFactory;
   ca: string | undefined;
   inspectPage: boolean;
+  capturePublicPolicyLinks: boolean;
   tlsVersion: PinnedHttpsRequest["tlsVersion"];
   allowUntrustedCertificate: boolean;
 };
@@ -233,6 +246,8 @@ type MakeRequestResult = {
   securityHeaders: SecurityHeaderEvidence | null;
   bytesCount: number;
   passivePageSignals?: ReturnType<typeof inspectPassivePageSignals>;
+  publicPolicyPageInspectable?: boolean;
+  publicPolicyLinks?: PublicPolicyLink[];
 };
 
 function makeRequest(input: MakeRequestInput): Promise<MakeRequestResult> {
@@ -304,10 +319,11 @@ function makeRequest(input: MakeRequestInput): Promise<MakeRequestResult> {
         const setCookieHeaders = getSetCookieHeaders(response);
         response.on("data", (chunk: Buffer | string) => {
           receivedBytes += Buffer.byteLength(chunk);
-          if (input.inspectPage && input.method === "GET" && isHtml) {
+          if ((input.inspectPage || input.capturePublicPolicyLinks) && input.method === "GET" && isHtml) {
             htmlChunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
           }
-          if (receivedBytes > MAX_RESPONSE_BYTES) {
+          const responseByteLimit = input.capturePublicPolicyLinks ? 256 * 1024 : MAX_RESPONSE_BYTES;
+          if (receivedBytes > responseByteLimit) {
             response.destroy();
             request?.destroy();
             finishWithError("response_size_limit_exceeded");
@@ -322,20 +338,27 @@ function makeRequest(input: MakeRequestInput): Promise<MakeRequestResult> {
           }
           input.signal.removeEventListener("abort", abortRequest);
           let passivePageSignals: ReturnType<typeof inspectPassivePageSignals> | undefined;
-          if (input.inspectPage && input.method === "GET") {
+          let publicPolicyPageInspectable: boolean | undefined;
+          let publicPolicyLinks: PublicPolicyLink[] | undefined;
+          if ((input.inspectPage || input.capturePublicPolicyLinks) && input.method === "GET") {
             const html = Buffer.concat(htmlChunks).toString("utf8");
-            const pageInput: PassivePageSignalInput = {
-              hostname: input.hostname,
-              html,
-              setCookieHeaders,
-              responseTimeMs: Math.max(
-                0,
-                Date.now() - responseTimeStartedAt,
-              ),
-              responseBytes: receivedBytes,
-              complete: true,
-            };
-            passivePageSignals = inspectPassivePageSignals(pageInput);
+            if (input.inspectPage) {
+              const pageInput: PassivePageSignalInput = {
+                hostname: input.hostname,
+                html,
+                setCookieHeaders,
+                responseTimeMs: Math.max(0, Date.now() - responseTimeStartedAt),
+                responseBytes: receivedBytes,
+                complete: true,
+              };
+              passivePageSignals = inspectPassivePageSignals(pageInput);
+            }
+            if (input.capturePublicPolicyLinks) {
+              publicPolicyPageInspectable = isHtml;
+              publicPolicyLinks = isHtml
+                ? extractPublicPolicyLinks(input.hostname, html)
+                : [];
+            }
             htmlChunks = [];
           }
           resolve({
@@ -350,6 +373,10 @@ function makeRequest(input: MakeRequestInput): Promise<MakeRequestResult> {
             ).evidence,
             bytesCount: getReceivedBytesCount(socket, receivedBytes),
             ...(passivePageSignals ? { passivePageSignals } : {}),
+            ...(publicPolicyPageInspectable === undefined
+              ? {}
+              : { publicPolicyPageInspectable }),
+            ...(publicPolicyLinks === undefined ? {} : { publicPolicyLinks }),
           });
         });
         response.resume();

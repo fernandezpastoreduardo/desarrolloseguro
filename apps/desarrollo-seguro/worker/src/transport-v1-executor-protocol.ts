@@ -1,13 +1,14 @@
-import { normalizeHostname, SCAN_FAILURE_CODES, parsePrivacyAssessment, parseScanFailureDiagnostic, type ScanFailureCode, type ScanFailureDiagnostic } from "@desarrolloseguro/core";
+import { normalizeHostname, SCAN_FAILURE_CODES, parsePrivacyAssessment, parsePublicPolicyTransparencyAssessment, parseScanFailureDiagnostic, type ScanFailureCode, type ScanFailureDiagnostic } from "@desarrolloseguro/core";
 import type { ScanCheck, ScanRunInput } from "@desarrolloseguro/persistence";
 import { isNetworkProbeFailureList, type NetworkProbeFailure, type ScanProfileVersion } from "./transport-v1-executor.js";
 
 export const TRANSPORT_V1_EXECUTOR_PROTOCOL_VERSION = 1;
 export const MAX_EXECUTOR_REQUEST_BYTES = 4 * 1024;
 export const MAX_EXECUTOR_RESPONSE_BYTES = 256 * 1024;
-export const MAX_TRANSPORT_REQUESTS_PER_SCAN = 24;
-export const MAX_TRANSPORT_BYTES_PER_SCAN = 2 * 1024 * 1024;
-const MAX_TRANSPORT_DURATION_MS = 35_000;
+export const MAX_TRANSPORT_REQUESTS_PER_SCAN = 300;
+export const MAX_TRANSPORT_BYTES_PER_SCAN = 20 * 1024 * 1024;
+const LEGACY_TRANSPORT_DURATION_MS = 35_000;
+const DOMAIN_V3_TRANSPORT_DURATION_MS = 158_000;
 
 export type TransportV1ExecutorRequest = {
   protocolVersion: 1;
@@ -133,7 +134,7 @@ function parseExecutorResult(
   const completedAt = parseDate(value.completedAt);
   if (
     typeof value.scannerVersion !== "string" ||
-    value.scannerVersion !== getScannerVersion(profileVersion) ||
+    value.scannerVersion !== getExpectedScannerVersion(profileVersion, value.publicPolicyTransparencyAssessment !== undefined) ||
     !isVerdict(value.verdict) ||
     !Array.isArray(value.scope) ||
     value.scope.length !== 1 ||
@@ -157,7 +158,12 @@ function parseExecutorResult(
     metrics: {
       requestsCount: parseCount(value.metrics.requestsCount, MAX_TRANSPORT_REQUESTS_PER_SCAN),
       bytesCount: parseCount(value.metrics.bytesCount, MAX_TRANSPORT_BYTES_PER_SCAN),
-      durationMs: parseCount(value.metrics.durationMs, MAX_TRANSPORT_DURATION_MS),
+      durationMs: parseCount(
+        value.metrics.durationMs,
+        profileVersion === "domain-v3"
+          ? DOMAIN_V3_TRANSPORT_DURATION_MS
+          : LEGACY_TRANSPORT_DURATION_MS,
+      ),
       pagesCount: parseCount(value.metrics.pagesCount, 0),
     },
   };
@@ -165,6 +171,12 @@ function parseExecutorResult(
     const privacyAssessment = parsePrivacyAssessment(value.privacyAssessment);
     if (!privacyAssessment) throw new Error("executor_result_invalid");
     result.privacyAssessment = privacyAssessment;
+  }
+  if (value.publicPolicyTransparencyAssessment !== undefined) {
+    if (profileVersion !== "domain-v3") throw new Error("executor_result_invalid");
+    const publicPolicyTransparencyAssessment = parsePublicPolicyTransparencyAssessment(value.publicPolicyTransparencyAssessment);
+    if (!publicPolicyTransparencyAssessment) throw new Error("executor_result_invalid");
+    result.publicPolicyTransparencyAssessment = publicPolicyTransparencyAssessment;
   }
   return result;
 }
@@ -179,6 +191,13 @@ function getScannerVersion(profileVersion: ScanProfileVersion): string {
   return profileVersion === "domain-v1"
     ? "domain-v1-network-adapter-1"
     : "transport-v1-network-adapter-1";
+}
+
+function getExpectedScannerVersion(profileVersion: ScanProfileVersion, hasPublicPolicyAssessment: boolean): string {
+  if (profileVersion === "domain-v3" && hasPublicPolicyAssessment) {
+    return "domain-v3-network-adapter-2";
+  }
+  return getScannerVersion(profileVersion);
 }
 
 function getExpectedCheckCount(profileVersion: ScanProfileVersion): number {

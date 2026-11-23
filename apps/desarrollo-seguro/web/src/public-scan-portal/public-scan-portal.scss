@@ -643,6 +643,56 @@ $ds-space-block: 40px;
   font-weight: 750;
 }
 
+.ds-portal__public-policy {
+  margin: $ds-space-block 0 0;
+  border: 1px solid var(--ds-line);
+  border-left: 4px solid var(--ds-accent-strong);
+  border-radius: $ds-radius;
+  padding: $ds-space-block;
+  color: var(--ds-ink);
+  background: var(--ds-paper);
+}
+
+.ds-portal__public-policy h3 {
+  margin: 0 0 $ds-space-small;
+  font-size: clamp(1.25rem, 2.2vw, 1.65rem);
+}
+
+.ds-portal__public-policy p,
+.ds-portal__public-policy dt,
+.ds-portal__public-policy dd {
+  color: var(--ds-muted);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.ds-portal__public-policy dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: $ds-space;
+  margin: $ds-space 0;
+}
+
+.ds-portal__public-policy dl div {
+  border-top: 1px solid var(--ds-line);
+  padding-top: $ds-space-small;
+}
+
+.ds-portal__public-policy dt {
+  font-size: 0.9rem;
+}
+
+.ds-portal__public-policy dd {
+  margin: 0;
+  color: var(--ds-ink);
+  font-size: 1.25rem;
+  font-weight: 750;
+}
+
+.ds-portal__public-policy-note {
+  font-size: 0.9rem;
+}
+
 .ds-portal__ethics h3 {
   margin: $ds-space-min 0 $ds-space-small;
   font-size: clamp(1.65rem, 3vw, 2.35rem);

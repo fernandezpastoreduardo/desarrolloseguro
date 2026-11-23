@@ -557,6 +557,41 @@ describe("PublicScanService", () => {
     expect(JSON.stringify(result)).not.toContain("signature");
   });
 
+  it("uses domain ethics v5 for public policy evidence on non-clients", async () => {
+    const report = makeReport({
+      hostname: "example.com",
+      publicPolicyTransparencyAssessment: {
+        policyVersion: "public-policy-v1",
+        status: "fail",
+        reasonCode: "policy_link_missing",
+        evidence: {
+          linksFound: 0,
+          pagesInspected: 0,
+          unavailablePages: 0,
+          accessDeniedPages: 0,
+          providerMentions: 0,
+          providersMissingPurpose: 0,
+          categories: [],
+        },
+      },
+    });
+    const service = new PublicScanService({
+      scanStore: {
+        readPublicDomainSnapshot: vi.fn(),
+        readPublicReport: vi.fn().mockResolvedValue(report),
+      },
+    });
+
+    const result = await service.getReport(REPORT_ID);
+
+    expect(result.ethicsAssessment.policyVersion).toBe("domain-ethics-v5");
+    expect(result.ethicsAssessment.criteria).toContainEqual(expect.objectContaining({
+      id: "external-service-transparency",
+      status: "fail",
+      weight: 10,
+    }));
+  });
+
   it("publishes the equal-weight MVP score only when both dimensions have full coverage", async () => {
     const controlIds = [
       "DS-DNS-01", "DS-TLS-01", "DS-TLS-02", "DS-HTTP-01", "DS-HDR-01",
@@ -774,6 +809,7 @@ describe("PublicScanService", () => {
         "ethicsAssessment",
         "privacyAssessment",
         "processorTransparencyAssessment",
+        "publicPolicyTransparencyAssessment",
         "betaCertification",
         "certification",
         "scope",
@@ -868,6 +904,7 @@ function makeReport(overrides: Record<string, unknown> = {}) {
     verdict: "inconclusive",
     scope: ["/"],
     processorTransparencyAssessment: null,
+    publicPolicyTransparencyAssessment: null,
     checks: [
       {
         controlId: "DS-HDR-01",

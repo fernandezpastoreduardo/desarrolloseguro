@@ -123,6 +123,10 @@ const MIGRATIONS = [
     version: "036_self_domain_processor_transparency",
     file: "036_self_domain_processor_transparency.sql",
   },
+  {
+    version: "037_public_policy_transparency",
+    file: "037_public_policy_transparency.sql",
+  },
 ] as const;
 
 const MIGRATION_LOCK_ID = 728194032;

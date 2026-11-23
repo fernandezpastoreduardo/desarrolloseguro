@@ -63,6 +63,20 @@ describePostgres.sequential("PostgresScanStore", () => {
       processors: [],
       now: new Date(),
     });
+    const publicPolicyTransparencyAssessment = {
+      policyVersion: "public-policy-v1",
+      status: "pass",
+      reasonCode: "disclosure_found",
+      evidence: {
+        linksFound: 1,
+        pagesInspected: 1,
+        unavailablePages: 0,
+        accessDeniedPages: 0,
+        providerMentions: 1,
+        providersMissingPurpose: 0,
+        categories: ["analytics"],
+      },
+    } satisfies import("@desarrolloseguro/core").PublicPolicyTransparencyAssessment;
 
     const reportId = await store.completeScan({
       jobId: job.id,
@@ -77,11 +91,57 @@ describePostgres.sequential("PostgresScanStore", () => {
       checks: makeEligibleDomainV3Checks(),
       metrics: { requestsCount: 0, bytesCount: 0, durationMs: 1, pagesCount: 0 },
       processorTransparencyAssessment,
+      publicPolicyTransparencyAssessment,
     });
 
     const report = await store.readPublicReport(reportId);
     expect(report?.hostname).toBe(hostname);
     expect(report?.processorTransparencyAssessment).toEqual(processorTransparencyAssessment);
+    expect(report?.publicPolicyTransparencyAssessment).toEqual(publicPolicyTransparencyAssessment);
+  });
+
+  it("persists public-policy evidence atomically with a non-client report", async () => {
+    const hostname = "policy.example.net";
+    await store.ensureDomain(hostname, "on_demand", "domain-v3");
+    await store.ensureFreshScan({ hostname, profileVersion: "domain-v3", trigger: "requested" });
+    const job = await store.claimNextScan(new Date(), TEST_LEASE_MS);
+    if (!job) throw new Error("expected_claimed_public_policy_scan");
+    const assessment = {
+      policyVersion: "public-policy-v1",
+      status: "pass",
+      reasonCode: "disclosure_found",
+      evidence: {
+        linksFound: 2,
+        pagesInspected: 2,
+        unavailablePages: 0,
+        accessDeniedPages: 0,
+        providerMentions: 2,
+        providersMissingPurpose: 0,
+        categories: ["analytics", "advertising"],
+      },
+    } satisfies import("@desarrolloseguro/core").PublicPolicyTransparencyAssessment;
+    const reportId = await store.completeScan({
+      jobId: job.id,
+      leaseToken: job.leaseToken,
+      hostname,
+      profileVersion: "domain-v3",
+      scannerVersion: TEST_SCANNER,
+      startedAt: new Date(Date.now() - 1_000),
+      completedAt: new Date(),
+      verdict: "pass",
+      scope: ["/"],
+      checks: makeEligibleDomainV3Checks(),
+      metrics: { requestsCount: 0, bytesCount: 0, durationMs: 1, pagesCount: 0 },
+      publicPolicyTransparencyAssessment: assessment,
+    });
+
+    const report = await store.readPublicReport(reportId);
+    expect(report?.publicPolicyTransparencyAssessment).toEqual(assessment);
+    const persisted = await pool.query<{ assessment_json: unknown }>(
+      "SELECT assessment_json FROM ds_scan_public_policy_transparency WHERE run_id = $1",
+      [reportId],
+    );
+    expect(persisted.rows[0]?.assessment_json).toEqual(assessment);
   });
 
   it("keeps domain enrollment stable when on-demand requests repeat", async () => {

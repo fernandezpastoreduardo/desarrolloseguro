@@ -191,6 +191,7 @@ test("shows the report when an authorized analysis finishes", async ({ page }) =
           ],
         },
         processorTransparencyAssessment: null,
+        publicPolicyTransparencyAssessment: null,
         scope: ["/"],
         checks: [
           {

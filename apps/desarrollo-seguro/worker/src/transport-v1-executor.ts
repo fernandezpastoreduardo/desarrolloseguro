@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import {
+  assessPublicPolicyTransparency,
   evaluateVerdict,
   sanitizeScanObservations,
 } from "@desarrolloseguro/core";
@@ -19,6 +20,7 @@ const NETWORK_SCANNER_VERSION = "transport-v1-network-adapter-1";
 const DOMAIN_SCANNER_VERSION = "domain-v1-network-adapter-1";
 const DOMAIN_V2_SCANNER_VERSION = "domain-v2-network-adapter-1";
 const DOMAIN_V3_SCANNER_VERSION = "domain-v3-network-adapter-1";
+const DOMAIN_V3_PUBLIC_POLICY_SCANNER_VERSION = "domain-v3-network-adapter-2";
 const MAX_CONCURRENT_NETWORK_PROBES = 2;
 const CHECKS = [
   { controlId: "DS-DNS-01", method: "DNS", severity: "high" },
@@ -269,14 +271,23 @@ export class TransportV1NetworkExecutor {
       ["/"],
       candidateChecks,
     );
+    const publicPolicyTransparencyAssessment = buildPublicPolicyAssessment(
+      job.profileVersion,
+      probes[4],
+    );
 
     return {
-      scannerVersion: getScannerVersion(job.profileVersion),
+      scannerVersion: publicPolicyTransparencyAssessment
+        ? DOMAIN_V3_PUBLIC_POLICY_SCANNER_VERSION
+        : getScannerVersion(job.profileVersion),
       startedAt,
       completedAt,
       verdict: evaluateVerdict(sanitized.checks),
       scope: sanitized.scope,
       checks: sanitized.checks,
+      ...(publicPolicyTransparencyAssessment
+        ? { publicPolicyTransparencyAssessment }
+        : {}),
       metrics: {
         requestsCount: probes.reduce((sum, probe) => sum + (probe?.requestsCount ?? 0), 0),
         bytesCount: probes.reduce((sum, probe) => sum + (probe?.bytesCount ?? 0), 0),
@@ -285,6 +296,49 @@ export class TransportV1NetworkExecutor {
       },
     };
   }
+}
+
+function buildPublicPolicyAssessment(
+  profileVersion: ScanProfileVersion,
+  headersProbe: TransportV1ProbeResult | undefined,
+): ReturnType<typeof assessPublicPolicyTransparency> | undefined {
+  if (profileVersion !== DOMAIN_PROFILE_VERSION_V3) return undefined;
+  const evidence = headersProbe?.evidence ?? {};
+  const numericKeys = [
+    "publicPolicyLinksFound",
+    "publicPolicyPagesInspected",
+    "publicPolicyUnavailablePages",
+    "publicPolicyAccessDeniedPages",
+    "publicPolicyProviderMentions",
+    "publicPolicyProvidersMissingPurpose",
+  ] as const;
+  if (numericKeys.some((key) => typeof evidence[key] !== "number")) {
+    return assessPublicPolicyTransparency({
+      linksFound: 0,
+      pagesInspected: 0,
+      unavailablePages: 0,
+      accessDeniedPages: 0,
+      providerMentions: 0,
+      providersMissingPurpose: 0,
+      categories: [],
+      auditorError: true,
+    });
+  }
+  const rawCategories = evidence.publicPolicyCategories;
+  const categories = typeof rawCategories === "string" && rawCategories.length > 0
+    ? rawCategories.split(",")
+    : [];
+  return assessPublicPolicyTransparency({
+    linksFound: evidence.publicPolicyLinksFound as number,
+    pagesInspected: evidence.publicPolicyPagesInspected as number,
+    unavailablePages: evidence.publicPolicyUnavailablePages as number,
+    accessDeniedPages: evidence.publicPolicyAccessDeniedPages as number,
+    providerMentions: evidence.publicPolicyProviderMentions as number,
+    providersMissingPurpose: evidence.publicPolicyProvidersMissingPurpose as number,
+    categories,
+    auditorError: evidence.publicPolicyAuditorError === true || Boolean(headersProbe?.errorCode),
+    budgetExhausted: evidence.publicPolicyBudgetExhausted === true,
+  });
 }
 
 function appendInitialCookieCheck(

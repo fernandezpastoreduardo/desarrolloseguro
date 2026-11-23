@@ -8,9 +8,13 @@ positiva aunque no muestre un banner. Solistos no emite conclusiones de
 conformidad legal ni modifica el estado del sello.
 
 En la puntuación global del MVP, Privacidad aporta el 50 % y Ética aporta el
-50 %. Ética usa `domain-ethics-v3` si el informe no incluye evaluación de
-procesadores backend y `domain-ethics-v4` cuando la incluye, según la
-[especificación de transparencia backend](../agentic-guidelines/desarrollo-seguro/backend-processor-transparency.md).
+50 %. Los informes conservan la versión de Ética con la que se generaron:
+`domain-ethics-v3` y `domain-ethics-v4` son históricas; `domain-ethics-v5`
+añade una comprobación de políticas públicas. Para clientes, el criterio de
+transparencia backend usa el inventario autenticado; para otros dominios usa
+la información pública sobre servicios externos. La evaluación pública
+complementaria y sus límites se explican en
+[Información pública sobre servicios externos](public-policy-transparency.md).
 El resultado se redondea al entero más cercano. Ambas puntuaciones se presentan
 también por separado. Si alguna
 dimensión carece de cobertura suficiente, el estado global queda «En revisión»

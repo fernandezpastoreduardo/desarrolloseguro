@@ -331,6 +331,47 @@ describe("createTransportV1NetworkObserver", () => {
     expect(JSON.stringify(result)).not.toContain("_ga");
   });
 
+  it("follows only discovered policy links and returns bounded classification evidence", async () => {
+    const policyBody = "Google Analytics se utiliza para analítica y medición de audiencia.";
+    const fetchPolicy = vi.fn().mockResolvedValue({
+      statusCode: 200,
+      contentType: "text/html; charset=utf-8",
+      html: `<p>${policyBody}</p>`,
+      requestsCount: 1,
+      bytesCount: Buffer.byteLength(policyBody),
+      redirectCount: 0,
+    });
+    const observer = createTransportV1NetworkObserver({
+      lookupFactory: () => vi.fn(),
+      httpsRequestFactory: httpsFactory(
+        { "content-type": "text/html; charset=utf-8" },
+        '<a href="/politica-de-privacidad?campaign=secret#tracking">Privacidad</a>',
+      ),
+      inspectPublicPolicies: true,
+      publicPolicyFetchDocument: fetchPolicy,
+    });
+
+    const result = await observer.observeHeaders(HOSTNAME, new AbortController().signal);
+
+    expect(fetchPolicy).toHaveBeenCalledWith(expect.objectContaining({
+      method: "GET",
+      hostname: HOSTNAME,
+      path: "/politica-de-privacidad",
+    }));
+    expect(result.evidence).toMatchObject({
+      publicPolicyLinksFound: 1,
+      publicPolicyPagesInspected: 1,
+      publicPolicyProviderMentions: 1,
+      publicPolicyProvidersMissingPurpose: 0,
+      publicPolicyCategories: "analytics",
+      publicPolicyAuditorError: false,
+      publicPolicyBudgetExhausted: false,
+    });
+    expect(JSON.stringify(result)).not.toContain(policyBody);
+    expect(JSON.stringify(result)).not.toContain("campaign=secret");
+    expect(JSON.stringify(result)).not.toContain("tracking");
+  });
+
   it("does not infer HTTPS header evidence from an unauthorized TLS response", async () => {
     const factory = vi.fn((_options: HttpsOptions, callback) => {
       const socket = Object.create(TLSSocket.prototype) as TLSSocket;

@@ -7,6 +7,7 @@ import {
 } from "@nestjs/common";
 import {
   assessDomainEthics,
+  assessDomainEthicsV5,
   assessDomainEthicsV4,
   assessGlobalScore,
   assessBetaCertification,
@@ -19,6 +20,7 @@ import {
   type GlobalScoreAssessment,
   type PrivacyAssessment,
   type ProcessorTransparencyAssessment,
+  type PublicPolicyTransparencyAssessment,
   type ScanFailureDiagnostic,
 } from "@desarrolloseguro/core";
 import {
@@ -56,6 +58,7 @@ export type PublicReport = {
   ethicsAssessment: DomainEthicsAssessment;
   privacyAssessment: PrivacyAssessment | null;
   processorTransparencyAssessment: ProcessorTransparencyAssessment | null;
+  publicPolicyTransparencyAssessment: PublicPolicyTransparencyAssessment | null;
   betaCertification: ReturnType<typeof assessBetaCertification>;
   certification: PublicBetaCertificationResponse | null;
   scope: string[];
@@ -290,9 +293,12 @@ function getPublicState(
 
 function toPublicReport(report: PublicScanReport): PublicReport {
   const processorTransparencyAssessment = report.processorTransparencyAssessment ?? null;
-  const ethicsAssessment = processorTransparencyAssessment
-    ? assessDomainEthicsV4(report.checks, processorTransparencyAssessment)
-    : assessDomainEthics(report.checks);
+  const publicPolicyTransparencyAssessment = report.publicPolicyTransparencyAssessment ?? null;
+  const ethicsAssessment = publicPolicyTransparencyAssessment
+    ? assessDomainEthicsV5(report.checks, processorTransparencyAssessment, publicPolicyTransparencyAssessment)
+    : processorTransparencyAssessment
+      ? assessDomainEthicsV4(report.checks, processorTransparencyAssessment)
+      : assessDomainEthics(report.checks);
   const privacyAssessment = report.privacyAssessment ?? null;
   return {
     id: report.id,
@@ -309,6 +315,7 @@ function toPublicReport(report: PublicScanReport): PublicReport {
     ethicsAssessment,
     privacyAssessment,
     processorTransparencyAssessment,
+    publicPolicyTransparencyAssessment,
     betaCertification: assessBetaCertification(toBetaObservations(report.checks)),
     certification: toPublicCertification(report.certification),
     scope: report.scope,
