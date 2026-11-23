@@ -144,4 +144,20 @@ describe("createTransportV1EgressBroker", () => {
       result: { evidence: { ok: true }, requestsCount: 1, bytesCount: 4 },
     });
   });
+
+  it("rejects evidence with more than 64 fields", async () => {
+    const source = makeSource();
+    vi.mocked(source.observeDns).mockResolvedValueOnce({
+      evidence: Object.fromEntries(
+        Array.from({ length: 65 }, (_, index) => [`field${index}`, index]),
+      ),
+      requestsCount: 0,
+      bytesCount: 0,
+    });
+    const broker = createTransportV1EgressBroker(HOSTNAME, source);
+
+    await expect(broker(request("dns"), new AbortController().signal)).resolves.toMatchObject({
+      result: { evidence: {}, requestsCount: 0, bytesCount: 0 },
+    });
+  });
 });

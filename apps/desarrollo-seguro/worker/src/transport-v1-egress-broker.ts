@@ -6,6 +6,7 @@ import type {
 } from "./transport-v1-executor.js";
 import type { PinnedTransportErrorCode } from "./pinned-transport-error.js";
 import { getTransportBudget } from "./transport-budget.js";
+import { MAX_TRANSPORT_EVIDENCE_FIELDS } from "./transport-v1-evidence-contract.js";
 
 const MAX_BROKER_OPERATIONS = 5;
 const MAX_CONCURRENT_BROKER_OPERATIONS = 2;
@@ -219,7 +220,7 @@ function validateEvidence(input: unknown): TransportV1Evidence {
     throw createBrokerRequestError();
   }
   const candidate = input as Record<string, unknown>;
-  if (Reflect.ownKeys(candidate).length > 32) {
+  if (Reflect.ownKeys(candidate).length > MAX_TRANSPORT_EVIDENCE_FIELDS) {
     throw createBrokerRequestError();
   }
 

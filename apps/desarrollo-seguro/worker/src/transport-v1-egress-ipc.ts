@@ -14,6 +14,7 @@ import type {
   TransportV1ProbeResult,
 } from "./transport-v1-executor.js";
 import { getTransportBudget } from "./transport-budget.js";
+import { MAX_TRANSPORT_EVIDENCE_FIELDS } from "./transport-v1-evidence-contract.js";
 import type { ScanProfileVersion } from "./transport-v1-executor.js";
 
 const MAX_IPC_REQUEST_BYTES = 4 * 1024;
@@ -210,7 +211,7 @@ async function requestOperation(
     (Object.hasOwn(response.result, "errorCode") &&
       (typeof response.result.errorCode !== "string" ||
         !SAFE_PROBE_ERROR_CODES.has(response.result.errorCode))) ||
-    Object.keys(response.result.evidence).length > 32 ||
+    Object.keys(response.result.evidence).length > MAX_TRANSPORT_EVIDENCE_FIELDS ||
     Object.entries(response.result.evidence).some(
       ([key, value]) =>
         key.length > 64 ||

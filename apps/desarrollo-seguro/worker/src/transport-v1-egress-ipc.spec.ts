@@ -121,6 +121,30 @@ describe("transport-v1 egress IPC", () => {
     }
   });
 
+  it("preserves combined page and policy evidence with up to 64 bounded fields", async () => {
+    const path = await socketPath();
+    const evidence = Object.fromEntries(
+      Array.from({ length: 64 }, (_, index) => [`field${index}`, index]),
+    );
+    const source = makeSource();
+    vi.mocked(source.observeHeaders).mockResolvedValueOnce({
+      evidence,
+      requestsCount: 1,
+      bytesCount: 12,
+    });
+    const broker = await listenTransportV1EgressBroker(path, HOSTNAME, source);
+    try {
+      await expect(
+        createUnixSocketObservationSource(path).observeHeaders(
+          HOSTNAME,
+          new AbortController().signal,
+        ),
+      ).resolves.toMatchObject({ evidence });
+    } finally {
+      await broker.close();
+    }
+  });
+
   it("preserves safe probe error categories across the Unix socket", async () => {
     const path = await socketPath();
     const source: TransportV1ObservationSource = {
