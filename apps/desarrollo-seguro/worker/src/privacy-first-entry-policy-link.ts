@@ -6,6 +6,8 @@ export type FirstEntryPolicyLinkDiscovery = {
   consentComponentDetected: boolean | null;
   consentComponentLink: FirstEntryPolicyLink | null;
   consentComponentDocumentAccess: "accessible" | "unavailable" | "not_checked" | "unknown";
+  informationNoticeLink?: FirstEntryPolicyLink | null;
+  informationNoticeDocumentAccess?: "accessible" | "unavailable" | "not_checked" | "unknown";
   footerLink: FirstEntryPolicyLink | null;
   footerLinkDocumentAccess: "accessible" | "unavailable" | "not_checked" | "unknown";
 };
@@ -123,11 +125,23 @@ export async function inspectFirstEntryPolicyLinks(
         }
         return false;
       })?.link ?? null;
+      const informationNoticeLink = promptDetected === false ? links.find(({ anchor }) => {
+        let current: Element | null = anchor;
+        let depth = 0;
+        while (current && current !== document.body && depth < 10) {
+          if (mark(current) || current.getAttribute("role") === "dialog" || current.getAttribute("aria-modal") === "true") return true;
+          current = current.parentElement;
+          depth += 1;
+        }
+        return false;
+      })?.link ?? null : null;
       return {
         status: promptDetected === true && visibleControls.length > 0 && !consentRoot ? "unknown" as const : "evaluated" as const,
         consentComponentDetected: promptDetected === true ? consentRoot !== null : promptDetected === false ? false : null,
         consentComponentLink: consentLink,
         consentComponentDocumentAccess: "not_checked" as const,
+        informationNoticeLink,
+        informationNoticeDocumentAccess: "not_checked" as const,
         footerLink,
         footerLinkDocumentAccess: "not_checked" as const,
       };
@@ -174,6 +188,8 @@ function isDiscovery(value: unknown): value is FirstEntryPolicyLinkDiscovery {
     (candidate.consentComponentDetected === true || candidate.consentComponentDetected === false || candidate.consentComponentDetected === null) &&
     (candidate.consentComponentLink === null || isLink(candidate.consentComponentLink)) &&
     isDocumentAccess(candidate.consentComponentDocumentAccess) &&
+    (candidate.informationNoticeLink === undefined || candidate.informationNoticeLink === null || isLink(candidate.informationNoticeLink)) &&
+    (candidate.informationNoticeDocumentAccess === undefined || isDocumentAccess(candidate.informationNoticeDocumentAccess)) &&
     (candidate.footerLink === null || isLink(candidate.footerLink)) &&
     isDocumentAccess(candidate.footerLinkDocumentAccess);
 }
@@ -188,7 +204,7 @@ function isLink(value: unknown): value is FirstEntryPolicyLink {
 }
 
 function unknownDiscovery(consentPromptDetected: boolean | null): FirstEntryPolicyLinkDiscovery {
-  return { status: "unknown", consentComponentDetected: consentPromptDetected === false ? false : null, consentComponentLink: null, consentComponentDocumentAccess: "unknown", footerLink: null, footerLinkDocumentAccess: "unknown" };
+  return { status: "unknown", consentComponentDetected: consentPromptDetected === false ? false : null, consentComponentLink: null, consentComponentDocumentAccess: "unknown", informationNoticeLink: null, informationNoticeDocumentAccess: "unknown", footerLink: null, footerLinkDocumentAccess: "unknown" };
 }
 
 function hasUnsafeUrlCharacter(value: string): boolean {

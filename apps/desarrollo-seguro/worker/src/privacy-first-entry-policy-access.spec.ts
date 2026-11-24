@@ -55,6 +55,26 @@ describe("first-entry policy access from browser evidence", () => {
     });
   });
 
+  it("passes the privacy link in a non-consent informational notice with a clean cookie inventory", () => {
+    const clean = observation();
+    expect(assessFirstEntryPolicyAccessObservation({
+      ...clean,
+      initial: {
+        ...clean.initial,
+        firstEntryPolicyLinks: {
+          ...clean.initial.firstEntryPolicyLinks,
+          informationNoticeLink: link,
+          informationNoticeDocumentAccess: "accessible",
+        },
+      },
+    })).toMatchObject({
+      status: "pass",
+      reasonCode: "information_notice_link_accessible_without_consent",
+      linkLocation: "information_notice",
+      thirdPartyCookieDetected: false,
+    });
+  });
+
   it("does not pass the footer exception when a third-party cookie is observed", () => {
     const clean = observation();
     const result = assessFirstEntryPolicyAccessObservation({

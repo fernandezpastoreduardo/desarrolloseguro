@@ -56,6 +56,15 @@ describe("visible policy link placement", () => {
     expect(result).toMatchObject({ status: "evaluated", consentComponentDetected: false, consentComponentLink: null, footerLink: { path: "/footer-privacy" } });
   });
 
+  it("finds the policy link inside an informational cookie notice without consent controls", async () => {
+    const result = await inspectFirstEntryPolicyLinks(makePage({ prompt: false, consentLink: true, footerLink: false }) as never, false);
+    expect(result).toMatchObject({
+      status: "evaluated",
+      consentComponentDetected: false,
+      informationNoticeLink: { hostname: "example.org", path: "/privacy", kind: "privacy" },
+    });
+  });
+
   it("keeps a detected consent interface with an unidentifiable component unknown", async () => {
     const result = await inspectFirstEntryPolicyLinks({ locator: () => { throw new Error("DOM unavailable"); } } as never, true);
     expect(result).toMatchObject({ status: "unknown", consentComponentDetected: null });

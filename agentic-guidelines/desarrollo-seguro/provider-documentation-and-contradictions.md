@@ -26,6 +26,11 @@ legal vigente acrediten.
 - Cuando se compruebe que no hay cookies de terceros ni solicitud de
   consentimiento, el enlace del footer puede satisfacer el acceso a la
   documentación.
+- Un aviso informativo que comunica que no se usan cookies no técnicas y
+  muestra un enlace operativo a la política no es una solicitud de
+  consentimiento. Se registra como enlace visible de primera entrada y pasa
+  si el inventario completo confirma que no hay cookies de terceros; no se
+  exige un botón de rechazo ni se registra un incumplimiento por su ausencia.
 - Seguir el enlace visible y registrar el documento y la evidencia de acceso.
 - En el primer estado visible, identificar el componente de consentimiento por
   sus controles de aceptar/rechazar/configurar y comprobar dentro de ese mismo
@@ -208,6 +213,11 @@ Criterios verificables:
   los hallazgos; un parser intermedio no puede descartarla silenciosamente.
 - Cada informe público expone la versión inmutable del catálogo que utilizó,
   para identificar las fuentes y hechos vigentes en esa auditoría.
+- Un destino tercero cuya solicitud HTTP se completó durante el flujo se
+  incorpora al informe y al catálogo con un identificador estable de dominio.
+  Si no hay atribución oficial, se muestra como destino sin proveedor atribuido
+  y conserva `source_not_localized`; no se descarta ni se convierte el dominio
+  en nombre de una empresa. Intentos no completados permanecen diferenciados.
 - La inspección de enlaces iniciales funciona dentro del contexto serializado
   del navegador: el callback de `evaluateAll` recibe todos sus parámetros y no
   depende de cierres del proceso Node. Una excepción del auditor no puede
@@ -216,8 +226,11 @@ Criterios verificables:
 - Un aviso de consentimiento con enlace solo en el footer no pasa; el enlace en
   el propio aviso sí se sigue y se audita.
 - Sin cookies de terceros ni solicitud de consentimiento, se acepta el enlace
-  pertinente del footer. Las solicitudes de red a proveedores, por sí solas,
-  se evalúan aparte y no invalidan esta excepción.
+  pertinente del footer o de un aviso informativo de primera entrada. Las
+  solicitudes de red a proveedores, por sí solas, se evalúan aparte y no
+  invalidan esta excepción. El caso conocido de Grumphya, con aviso
+  informativo, enlace a privacidad y sin cookies no técnicas, debe pasar esta
+  comprobación sin exigir controles de rechazo.
 - Una petición backend/API/SMTP del flujo puede catalogar al proveedor aunque
   no deje cookies de terceros.
 - Un proveedor nuevo reconocido por una referencia explícita del sitio o un

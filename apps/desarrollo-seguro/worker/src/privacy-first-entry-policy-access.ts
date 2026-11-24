@@ -19,8 +19,10 @@ export function assessFirstEntryPolicyAccessObservation(
       thirdPartyCookieDetected: null,
       nonEssentialThirdPartyStorageDetected: null,
       consentComponentLink: null,
+      informationNoticeLink: null,
       footerLink: null,
       componentLinkDocumentAccess: "unknown",
+      informationNoticeDocumentAccess: "unknown",
       footerLinkDocumentAccess: "unknown",
       auditorError: true,
     });
@@ -40,8 +42,10 @@ export function assessFirstEntryPolicyAccessObservation(
     thirdPartyCookieDetected,
     nonEssentialThirdPartyStorageDetected: detectNonEssentialThirdPartyStorage(observation, initial),
     consentComponentLink: links.consentComponentLink,
+    informationNoticeLink: links.informationNoticeLink ?? null,
     footerLink: links.footerLink,
     componentLinkDocumentAccess: links.consentComponentDocumentAccess,
+    informationNoticeDocumentAccess: links.informationNoticeDocumentAccess,
     footerLinkDocumentAccess: links.footerLinkDocumentAccess,
     auditorError: links.status === "unknown",
   });

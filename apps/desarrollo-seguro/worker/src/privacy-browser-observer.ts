@@ -154,7 +154,7 @@ const UNKNOWN_FLOW: PrivacyBrowserFlowObservation = {
   storageKeysAfterChoice: [],
   cookieReadComplete: false,
   storageReadComplete: false,
-  firstEntryPolicyLinks: { status: "unknown", consentComponentDetected: null, consentComponentLink: null, consentComponentDocumentAccess: "unknown", footerLink: null, footerLinkDocumentAccess: "unknown" },
+  firstEntryPolicyLinks: { status: "unknown", consentComponentDetected: null, consentComponentLink: null, consentComponentDocumentAccess: "unknown", informationNoticeLink: null, informationNoticeDocumentAccess: "unknown", footerLink: null, footerLinkDocumentAccess: "unknown" },
   phaseEvidence: {
     beforeChoice: null,
     choiceActionAtMs: null,
@@ -357,7 +357,9 @@ async function runFlow(
         firstEntryPolicyLinks,
         phaseEvidence: { ...EMPTY_PHASE_EVIDENCE, beforeChoice: firstLayerSnapshot },
       }, timeline, ledger, flowHosts, completedHosts);
-      const relevantLink = hasConsentControls ? firstEntryPolicyLinks.consentComponentLink : firstEntryPolicyLinks.footerLink;
+      const relevantLink = hasConsentControls
+        ? firstEntryPolicyLinks.consentComponentLink
+        : firstEntryPolicyLinks.informationNoticeLink ?? firstEntryPolicyLinks.footerLink;
       const documentAccess = firstEntryPolicyLinks.status === "unknown"
         ? "unknown"
         : await verifyFirstEntryPolicyDocument(page, relevantLink);
@@ -367,7 +369,9 @@ async function runFlow(
           ...firstEntryPolicyLinks,
           ...(hasConsentControls
             ? { consentComponentDocumentAccess: documentAccess }
-            : { footerLinkDocumentAccess: documentAccess }),
+            : firstEntryPolicyLinks.informationNoticeLink
+              ? { informationNoticeDocumentAccess: documentAccess }
+              : { footerLinkDocumentAccess: documentAccess }),
         },
       };
     }

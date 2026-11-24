@@ -64,6 +64,15 @@ export type ProviderLegalFinding = {
   supportingEvidence: Partial<Record<ProviderLegalElementId, string[]>>;
 };
 
+export type ProviderDocumentationSourceReceipt = {
+  documentId: string;
+  title: string;
+  url: string;
+  status: "seeded" | "fetched" | "unavailable" | "failed" | "not_localized";
+  sha256: string | null;
+  checkedAt: string;
+};
+
 export type ProviderDocumentationContradiction = {
   providerId: string;
   status: "contradiction_confirmed" | "consistent" | "not_comparable" | "source_not_located" | "source_unavailable";
@@ -84,11 +93,12 @@ export type ProviderDocumentationContradiction = {
     legalFinding?: ProviderLegalFinding;
     legalMappingStatus?: "not_available" | "elements_not_satisfied";
   }>;
+  sourceEvidence?: ProviderDocumentationSourceReceipt[];
 };
 
 /** Validates contradiction data before it crosses a report or persistence boundary. */
 export function parseProviderDocumentationContradiction(value: unknown): ProviderDocumentationContradiction | null {
-  if (!isRecord(value) || !exactKeys(value, ["providerId", "status", "reasonCode", "comparisons"]) ||
+  if (!isRecord(value) || !exactKeys(value, ["providerId", "status", "reasonCode", "comparisons"], ["sourceEvidence"]) ||
       typeof value.providerId !== "string" || !PROVIDER_ID.test(value.providerId) ||
       !["contradiction_confirmed", "consistent", "not_comparable", "source_not_located", "source_unavailable"].includes(String(value.status)) ||
       !["opposing_explicit_statements", "matching_explicit_statements", "site_statement_missing", "provider_fact_missing", "official_source_not_located", "official_source_unavailable"].includes(String(value.reasonCode)) ||
@@ -117,12 +127,32 @@ export function parseProviderDocumentationContradiction(value: unknown): Provide
       ...(entry.legalMappingStatus ? { legalMappingStatus: entry.legalMappingStatus as "not_available" | "elements_not_satisfied" } : {}),
     });
   }
+  const sourceEvidence = value.sourceEvidence === undefined ? undefined : parseSourceEvidence(value.sourceEvidence);
+  if (value.sourceEvidence !== undefined && !sourceEvidence) return null;
   return {
     providerId: value.providerId,
     status: value.status as ProviderDocumentationContradiction["status"],
     reasonCode: value.reasonCode as ProviderDocumentationContradiction["reasonCode"],
     comparisons,
+    ...(sourceEvidence ? { sourceEvidence } : {}),
   };
+}
+
+function parseSourceEvidence(value: unknown): ProviderDocumentationSourceReceipt[] | null {
+  if (!Array.isArray(value) || value.length > 50) return null;
+  const output: ProviderDocumentationSourceReceipt[] = [];
+  const seen = new Set<string>();
+  for (const entry of value) {
+    if (!isRecord(entry) || !exactKeys(entry, ["documentId", "title", "url", "status", "sha256", "checkedAt"]) ||
+        typeof entry.documentId !== "string" || !/^[a-z0-9][a-z0-9_-]{0,95}$/u.test(entry.documentId) || seen.has(entry.documentId) ||
+        !bounded(entry.title, 1, 240) || !isValidHttpsUrl(entry.url) ||
+        !["seeded", "fetched", "unavailable", "failed", "not_localized"].includes(String(entry.status)) ||
+        !(entry.sha256 === null || typeof entry.sha256 === "string" && /^[a-f0-9]{64}$/u.test(entry.sha256)) ||
+        !isIsoDateTime(String(entry.checkedAt))) return null;
+    seen.add(entry.documentId);
+    output.push(entry as ProviderDocumentationSourceReceipt);
+  }
+  return output;
 }
 
 /**
@@ -444,8 +474,10 @@ function bounded(value: unknown, minimum: number, maximum: number): value is str
   return typeof value === "string" && value.trim().length >= minimum && value.length <= maximum;
 }
 
-function exactKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
-  return Reflect.ownKeys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
+function exactKeys(value: Record<string, unknown>, keys: readonly string[], optional: readonly string[] = []): boolean {
+  const allowed = [...keys, ...optional];
+  return keys.every((key) => Object.hasOwn(value, key)) &&
+    Reflect.ownKeys(value).every((key) => typeof key === "string" && allowed.includes(key));
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

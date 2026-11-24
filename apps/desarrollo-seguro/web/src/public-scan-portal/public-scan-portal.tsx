@@ -221,6 +221,7 @@ type PublicServiceComparison = {
   providerDocumentation?: Array<{
     providerId: string;
     status: "contradiction_confirmed" | "consistent" | "not_comparable" | "source_not_located" | "source_unavailable";
+    sourceEvidence?: Array<{ documentId: string; title: string; url: string; status: "seeded" | "fetched" | "unavailable" | "failed" | "not_localized"; sha256: string | null; checkedAt: string }>;
     comparisons: Array<{
       factId: string;
       siteStatement: { title: string; url: string; excerpt: string };
@@ -1300,7 +1301,7 @@ function PublicServiceComparisonSection({ comparison, observedDomains, catalogVe
         <ul className="ds-portal__public-service-list">
           {comparison.items.map((item) => {
             const info = PUBLIC_SERVICE_PROVIDER_INFO[item.providerId] ?? null;
-            const label = info?.displayName ?? item.providerId;
+            const label = info?.displayName ?? (item.providerId.startsWith("dst_") ? "Destino externo sin proveedor atribuido" : item.providerId);
             const stateLabel = item.observation === "observed_and_declared"
               ? "Correcto · observado y explicado"
               : item.observation === "observed"
@@ -1365,10 +1366,27 @@ function PublicServiceComparisonSection({ comparison, observedDomains, catalogVe
           ))}
         </article>
       ))}
+      {comparison.providerDocumentation?.filter(({ status }) => status === "source_not_located" || status === "source_unavailable" || status === "not_comparable").map((finding) => (
+        <article className="ds-portal__provider-contradiction" key={`documentation-${finding.providerId}`}>
+          <h4>{PUBLIC_SERVICE_PROVIDER_INFO[finding.providerId]?.displayName ?? (finding.providerId.startsWith("dst_") ? "Destino externo sin proveedor atribuido" : finding.providerId)}: documentación oficial</h4>
+          {finding.status === "source_not_located" && <p>No se localizó documentación oficial con las fuentes permitidas. Esto no demuestra que el proveedor carezca de documentación.</p>}
+          {finding.status === "source_unavailable" && <p>La documentación oficial localizada no pudo recuperarse; se conserva su enlace y estado técnico.</p>}
+          {finding.status === "not_comparable" && <p>Hay documentación oficial catalogada, pero no se pudo comparar con una declaración explícita equivalente del sitio.</p>}
+          {finding.sourceEvidence && finding.sourceEvidence.length > 0 && (
+            <ul>{finding.sourceEvidence.map((source) => (
+              <li key={source.documentId}>
+                <a href={source.url} target="_blank" rel="noopener noreferrer">{source.title}</a>
+                {` · ${source.status} · ${source.checkedAt}`}
+                {source.sha256 ? ` · SHA-256 ${source.sha256}` : ""}
+              </li>
+            ))}</ul>
+          )}
+        </article>
+      ))}
       {otherObservedDomains.length > 0 && (
         <div className="ds-portal__unclassified-services">
           <h4>Otros dominios externos observados</h4>
-          <p>La conexión con estos dominios se observó, pero no hay una identificación fiable de su proveedor o función. Por eso se muestran como indicio y no se penalizan automáticamente.</p>
+          <p>Estos dominios se registraron en la observación; no se atribuyen a una empresa ni a un tratamiento sin evidencia que los vincule.</p>
           <ul>{otherObservedDomains.map((domain) => <li key={domain}>{domain}</li>)}</ul>
         </div>
       )}
@@ -1382,6 +1400,8 @@ function FirstEntryPolicyAccessSection({ access }: { access: FirstEntryPolicyAcc
       : "No se pudo comprobar";
   const summary = access.reasonCode === "consent_component_link_accessible"
     ? "El aviso de consentimiento contiene un enlace visible y accesible a documentación legal."
+    : access.reasonCode === "information_notice_link_accessible_without_consent"
+      ? "El aviso informativo de primera entrada contiene un enlace visible y accesible a la política. No se solicitó consentimiento y no se detectaron cookies de terceros."
     : access.reasonCode === "consent_link_missing"
       ? "El aviso de consentimiento no contiene un enlace visible a documentación legal. Un enlace que solo aparece en el footer no satisface esta comprobación."
       : access.reasonCode === "consent_link_unavailable"
@@ -1390,10 +1410,13 @@ function FirstEntryPolicyAccessSection({ access }: { access: FirstEntryPolicyAcc
           ? "No se solicitó consentimiento ni se detectaron cookies de terceros en la entrada inicial; el enlace del footer permitió abrir la documentación."
           : access.reasonCode === "footer_insufficient_with_third_party_cookies"
             ? "Se detectó una cookie de un dominio de terceros en la entrada inicial. Un enlace que solo aparece en el footer no satisface esta comprobación."
+            : access.reasonCode === "information_notice_insufficient_with_third_party_cookies"
+              ? "Se detectó una cookie de un dominio de terceros en la entrada inicial. El enlace del aviso informativo no sustituye el consentimiento requerido."
             : access.reasonCode === "policy_link_missing"
               ? "No se encontró un enlace visible a documentación legal pertinente en el lugar requerido."
               : "La evidencia del navegador está incompleta; no se califica como cumplimiento ni como incumplimiento.";
   const locationLabel = access.linkLocation === "consent_component" ? "aviso de consentimiento"
+    : access.linkLocation === "information_notice" ? "aviso informativo de primera entrada"
     : access.linkLocation === "footer" ? "footer"
       : access.linkLocation === "none" ? "ningún lugar requerido" : "ubicación no determinada";
   const linkUrl = access.link ? `https://${access.link.hostname}${access.link.path}` : null;

@@ -12,6 +12,7 @@ import { resolveScanWorkerPoolConfig } from "./worker-pool-config.js";
 import { runScanWorker } from "./worker-runtime.js";
 import { runProviderCatalogScheduler } from "@desarrolloseguro/persistence/provider-catalog-scheduler";
 import { refreshProviderCatalog } from "./provider-catalog-refresh.js";
+import { identifyUnattributedProviderDestination } from "./provider-destination-identity.js";
 import {
   assessCatalogProviderDocumentation,
   mergeProviderDocumentationComparison,
@@ -45,40 +46,42 @@ export function createScanWorker(
       const result = await executor.execute(job, signal);
       let snapshot = await providerCatalog.readActive();
       if (!snapshot) throw new Error("provider_catalog_active_missing");
-      const knownObservedDomains = new Set((result.publicServiceComparison?.items ?? [])
-        .flatMap(({ observedDomains }) => observedDomains.map((domain) => domain.toLowerCase())));
       const firstParty = job.hostname.toLowerCase();
-      for (const hostname of result.privacyAssessment?.evidence.domains ?? []) {
-        const domain = hostname.toLowerCase().replace(/^\.|\.$/gu, "");
-        if (!domain || domain === firstParty || domain.endsWith(`.${firstParty}`) || knownObservedDomains.has(domain)) continue;
-        const suffix = createHash("sha256").update(domain).digest("hex").slice(0, 8);
-        let slug = domain.replace(/[^a-z0-9]+/giu, "_");
-        while (slug.startsWith("_")) slug = slug.slice(1);
-        while (slug.endsWith("_")) slug = slug.slice(0, -1);
-        slug = slug.slice(0, 20) || "external";
+      const catalogedProviderIds = new Set(snapshot.providerFacts
+        .filter(isRecord)
+        .map((provider) => provider.providerId)
+        .filter((providerId): providerId is string => typeof providerId === "string"));
+      for (const item of result.publicServiceComparison?.items ?? []) {
+        if (!item.providerId.startsWith("dst_") || catalogedProviderIds.has(item.providerId)) continue;
+        const domain = item.observedDomains[0];
+        if (!domain) continue;
+        const identity = identifyUnattributedProviderDestination(domain);
+        if (identity.providerId !== item.providerId) throw new Error("provider_destination_identity_mismatch");
         const scanDate = result.startedAt.toISOString();
         await providerCatalog.recordDiscoveredProvider({
-          providerId: `dst_${slug}_${suffix}`.slice(0, 32),
-          displayName: `Destino externo ${domain}`.slice(0, 120),
-          aliases: [domain],
+          providerId: identity.providerId,
+          displayName: identity.displayName,
+          aliases: [identity.hostname],
           products: [],
           evidence: {
             kind: "observed_destination",
-            sourceId: `scan_${suffix}`,
-            title: "Solicitud de red observada durante la auditoría",
+            sourceId: `scan_${createHash("sha256").update(`${job.id}:${identity.hostname}`).digest("hex").slice(0, 24)}`,
+            title: "Solicitud externa completada durante la auditoría",
             url: `https://${firstParty}/`,
             capturedAt: scanDate,
-            excerpt: `La auditoría observó una solicitud desde ${firstParty} hacia ${domain}. Esto identifica un destino de red y no atribuye por sí solo una empresa ni un tratamiento de datos.`,
-            destinationHostname: domain,
+            excerpt: `El navegador completó una solicitud desde ${firstParty} hacia ${identity.hostname}. El dominio identifica el destino observado, no una empresa ni el tratamiento recibido.`,
+            destinationHostname: identity.hostname,
             destinationPath: "/",
           },
           officialDocuments: [],
         });
+        catalogedProviderIds.add(identity.providerId);
       }
       snapshot = await providerCatalog.readActive();
       if (!snapshot) throw new Error("provider_catalog_active_missing");
       const providerDocumentation = assessCatalogProviderDocumentation({
         declarations: result.publicServiceDeclarations,
+        observedProviderIds: (result.publicServiceComparison?.items ?? []).map(({ providerId }) => providerId),
         snapshot,
       });
       const publicServiceComparison = mergeProviderDocumentationComparison(
@@ -124,4 +127,8 @@ export function createScanWorker(
     },
     close: () => store.close(),
   };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

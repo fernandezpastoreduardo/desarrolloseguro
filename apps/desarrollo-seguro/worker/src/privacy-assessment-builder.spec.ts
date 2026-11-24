@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { assessPrivacyObservation, getObservedPublicServices } from "./privacy-assessment-builder.js";
+import { identifyUnattributedProviderDestination } from "./provider-destination-identity.js";
 import type { PrivacyBrowserFlowObservation, PrivacyBrowserObservation } from "./privacy-browser-observer.js";
 
 function flow(overrides: Partial<PrivacyBrowserFlowObservation> = {}): PrivacyBrowserFlowObservation {
@@ -29,14 +30,17 @@ function observation(overrides: Partial<PrivacyBrowserObservation> = {}): Privac
 }
 
 describe("assessPrivacyObservation", () => {
-  it("returns only confirmed third-party service and domain pairs", () => {
+  it("retains confirmed services and completed third-party destinations without assigning unknown companies", () => {
     const result = getObservedPublicServices(observation({
       initial: flow({
-        completedHostsAfterChoice: ["www.google-analytics.com", "grumphya.com", "unknown.example"],
+        completedHostsAfterChoice: ["www.google-analytics.com", "grumphya.com", "unknown-destination.net"],
         cookiesAfterChoice: [{ name: "_ga", domain: ".grumphya.com", secure: true, httpOnly: false }],
       }),
     }));
-    expect(result).toEqual([{ providerId: "google-analytics", domain: "www.google-analytics.com" }]);
+    expect(result).toEqual([
+      { providerId: "google-analytics", domain: "www.google-analytics.com" },
+      { providerId: identifyUnattributedProviderDestination("unknown-destination.net").providerId, domain: "unknown-destination.net" },
+    ]);
   });
 
   it("gives a full score when the homepage has no consent prompt or observed tracking", () => {

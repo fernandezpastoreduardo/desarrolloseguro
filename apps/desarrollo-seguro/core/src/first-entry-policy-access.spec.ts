@@ -65,6 +65,24 @@ describe("first-entry policy access", () => {
     }))).toMatchObject({ status: "unknown", reasonCode: "auditor_error" });
   });
 
+  it("passes an accessible privacy link in an informational cookie notice without consent or third-party cookies", () => {
+    const result = assessFirstEntryPolicyAccess(input({
+      consentPromptDetected: false,
+      thirdPartyCookieDetected: false,
+      nonEssentialThirdPartyStorageDetected: false,
+      informationNoticeLink: privacyLink,
+      informationNoticeDocumentAccess: "accessible",
+    }));
+    expect(result).toMatchObject({
+      status: "pass",
+      reasonCode: "information_notice_link_accessible_without_consent",
+      linkLocation: "information_notice",
+      link: privacyLink,
+      documentAccess: "accessible",
+    });
+    expect(parseFirstEntryPolicyAccess(result)).toEqual(result);
+  });
+
   it("keeps document access unknown when the auditor cannot verify the target", () => {
     expect(assessFirstEntryPolicyAccess(input({
       consentComponentLink: privacyLink,

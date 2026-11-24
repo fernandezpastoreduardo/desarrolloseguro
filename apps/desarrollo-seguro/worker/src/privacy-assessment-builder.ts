@@ -9,6 +9,7 @@ import {
 } from "@desarrolloseguro/core";
 import { PRIVACY_KNOWLEDGE_RULES } from "./privacy-knowledge-catalog.js";
 import { matchPrivacySignal, type PrivacyKnowledgeMatch } from "./privacy-knowledge-base.js";
+import { identifyUnattributedProviderDestination } from "./provider-destination-identity.js";
 import type { PrivacyBrowserFlowObservation, PrivacyBrowserObservation } from "./privacy-browser-observer.js";
 
 type Finding = { id: string; severity: PrivacySeverity; confidence: "confirmed" | "unknown" };
@@ -25,7 +26,7 @@ export function assessPrivacyObservation(observation: PrivacyBrowserObservation)
   return assessPrivacy({ criteria: [initial, excess, parity, rejection, vendorControls], evidence });
 }
 
-/** Returns only high-confidence provider and host pairs actually seen in the browser. */
+/** Returns known providers and stable destination records from completed third-party requests. */
 export function getObservedPublicServices(
   observation: PrivacyBrowserObservation,
 ): Array<{ providerId: string; domain: string }> {
@@ -33,7 +34,14 @@ export function getObservedPublicServices(
   for (const flow of [observation.initial, observation.accept, observation.reject]) {
     for (const hostname of flow.completedHostsAfterChoice) {
       if (!isThirdPartyPrivacyHost(observation.hostname, hostname) || !isSafeHostname(hostname)) continue;
-      for (const match of matchRequestHost(hostname).filter(isConfirmedMatch)) {
+      const confirmedMatches = matchRequestHost(hostname).filter(isConfirmedMatch);
+      if (confirmedMatches.length === 0) {
+        const { providerId, hostname: normalizedHostname } = identifyUnattributedProviderDestination(hostname);
+        const domains = services.get(providerId) ?? new Set<string>();
+        domains.add(normalizedHostname);
+        services.set(providerId, domains);
+      }
+      for (const match of confirmedMatches) {
         const providerId = normalizePublicServiceProviderId(match.provider);
         if (!providerId) continue;
         const domains = services.get(providerId) ?? new Set<string>();

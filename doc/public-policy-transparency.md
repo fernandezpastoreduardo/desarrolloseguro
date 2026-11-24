@@ -10,13 +10,15 @@ El auditor pulsa el enlace con navegación de solo lectura y registra si el
 documento carga, junto con el host y la ruta, sin guardar query strings ni
 fragmentos.
 
-Si no se solicita consentimiento y la lectura inicial completa no detecta
-cookies de terceros, un enlace pertinente del footer satisface esta comprobación.
-Una solicitud de red a un tercero por sí sola no invalida esa excepción; la
-recepción de datos por ese proveedor se evalúa aparte. Si la lectura no es
-completa, el resultado es «no se pudo comprobar», no un aprobado ni un fallo del
-sitio. El almacenamiento de terceros no esencial conserva su comprobación
-separada.
+Un aviso informativo visible que contiene un enlace operativo a la política
+también se registra aunque no solicite consentimiento. Si no se solicita
+consentimiento y la lectura inicial completa no detecta cookies de terceros,
+el enlace de ese aviso o del footer satisface esta comprobación; no se exige un
+control de rechazo. Una solicitud de red a un tercero por sí sola no invalida
+esa excepción; la recepción de datos por ese proveedor se evalúa aparte. Si la
+lectura no es completa, el resultado es «no se pudo comprobar», no un aprobado
+ni un fallo del sitio. El almacenamiento de terceros no esencial conserva su
+comprobación separada.
 
 El informe público muestra el resultado y la evidencia estructurada de esta
 comprobación, la comparación de servicios externos y los hallazgos jurídicos

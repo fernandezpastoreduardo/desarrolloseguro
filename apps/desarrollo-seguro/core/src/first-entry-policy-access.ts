@@ -11,16 +11,18 @@ export type FirstEntryPolicyAccess = {
   status: "pass" | "fail" | "unknown";
   reasonCode:
     | "consent_component_link_accessible"
+    | "information_notice_link_accessible_without_consent"
     | "consent_link_missing"
     | "consent_link_unavailable"
     | "footer_link_accessible_without_consent"
     | "footer_insufficient_with_third_party_cookies"
+    | "information_notice_insufficient_with_third_party_cookies"
     | "policy_link_missing"
     | "auditor_error";
   consentPromptDetected: boolean | null;
   thirdPartyCookieDetected: boolean | null;
   nonEssentialThirdPartyStorageDetected: boolean | null;
-  linkLocation: "consent_component" | "footer" | "none" | "unknown";
+  linkLocation: "consent_component" | "information_notice" | "footer" | "none" | "unknown";
   link: FirstEntryPolicyLink | null;
   documentAccess: "accessible" | "unavailable" | "not_checked" | "unknown";
 };
@@ -30,8 +32,10 @@ export type FirstEntryPolicyAccessInput = {
   thirdPartyCookieDetected: boolean | null;
   nonEssentialThirdPartyStorageDetected: boolean | null;
   consentComponentLink: FirstEntryPolicyLink | null;
+  informationNoticeLink?: FirstEntryPolicyLink | null;
   footerLink: FirstEntryPolicyLink | null;
   componentLinkDocumentAccess: "accessible" | "unavailable" | "not_checked" | "unknown";
+  informationNoticeDocumentAccess?: "accessible" | "unavailable" | "not_checked" | "unknown";
   footerLinkDocumentAccess: "accessible" | "unavailable" | "not_checked" | "unknown";
   auditorError?: boolean;
 };
@@ -53,21 +57,28 @@ export function assessFirstEntryPolicyAccess(input: FirstEntryPolicyAccessInput)
     return result("pass", "consent_component_link_accessible", input, "consent_component", input.consentComponentLink, "accessible");
   }
   if (input.thirdPartyCookieDetected === null) {
-    return result("unknown", "auditor_error", input, input.footerLink ? "footer" : "unknown", input.footerLink, input.footerLinkDocumentAccess);
+    const link = input.informationNoticeLink ?? input.footerLink;
+    return result("unknown", "auditor_error", input, input.informationNoticeLink ? "information_notice" : input.footerLink ? "footer" : "unknown", link, input.informationNoticeLink ? input.informationNoticeDocumentAccess ?? "unknown" : input.footerLinkDocumentAccess);
   }
-  if (!input.footerLink) {
+  const informationNoticeLink = input.informationNoticeLink ?? null;
+  const firstEntryLink = informationNoticeLink ?? input.footerLink;
+  const firstEntryAccess = informationNoticeLink ? input.informationNoticeDocumentAccess ?? "unknown" : input.footerLinkDocumentAccess;
+  const firstEntryLocation = informationNoticeLink ? "information_notice" as const : "footer" as const;
+  if (!firstEntryLink) {
     return result("fail", "policy_link_missing", input, "none", null, "not_checked");
   }
   if (input.thirdPartyCookieDetected) {
-    return result("fail", "footer_insufficient_with_third_party_cookies", input, "footer", input.footerLink, input.footerLinkDocumentAccess);
+    return result("fail", informationNoticeLink ? "information_notice_insufficient_with_third_party_cookies" : "footer_insufficient_with_third_party_cookies", input, firstEntryLocation, firstEntryLink, firstEntryAccess);
   }
-  if (input.footerLinkDocumentAccess === "unknown" || input.footerLinkDocumentAccess === "not_checked") {
-    return result("unknown", "auditor_error", input, "footer", input.footerLink, input.footerLinkDocumentAccess);
+  if (firstEntryAccess === "unknown" || firstEntryAccess === "not_checked") {
+    return result("unknown", "auditor_error", input, firstEntryLocation, firstEntryLink, firstEntryAccess);
   }
-  if (input.footerLinkDocumentAccess === "unavailable") {
-    return result("fail", "consent_link_unavailable", input, "footer", input.footerLink, "unavailable");
+  if (firstEntryAccess === "unavailable") {
+    return result("fail", "consent_link_unavailable", input, firstEntryLocation, firstEntryLink, "unavailable");
   }
-  return result("pass", "footer_link_accessible_without_consent", input, "footer", input.footerLink, "accessible");
+  return informationNoticeLink
+    ? result("pass", "information_notice_link_accessible_without_consent", input, "information_notice", informationNoticeLink, "accessible")
+    : result("pass", "footer_link_accessible_without_consent", input, "footer", input.footerLink, "accessible");
 }
 
 export function parseFirstEntryPolicyAccess(value: unknown): FirstEntryPolicyAccess | null {
@@ -77,14 +88,15 @@ export function parseFirstEntryPolicyAccess(value: unknown): FirstEntryPolicyAcc
   ]) || value.policyVersion !== FIRST_ENTRY_POLICY_ACCESS_VERSION ||
       !["pass", "fail", "unknown"].includes(String(value.status)) ||
       ![
-        "consent_component_link_accessible", "consent_link_missing", "consent_link_unavailable",
+        "consent_component_link_accessible", "information_notice_link_accessible_without_consent", "consent_link_missing", "consent_link_unavailable",
         "footer_link_accessible_without_consent", "footer_insufficient_with_third_party_cookies",
+        "information_notice_insufficient_with_third_party_cookies",
         "policy_link_missing", "auditor_error",
       ].includes(String(value.reasonCode)) ||
       !(value.consentPromptDetected === true || value.consentPromptDetected === false || value.consentPromptDetected === null) ||
       !(value.thirdPartyCookieDetected === true || value.thirdPartyCookieDetected === false || value.thirdPartyCookieDetected === null) ||
       !(value.nonEssentialThirdPartyStorageDetected === true || value.nonEssentialThirdPartyStorageDetected === false || value.nonEssentialThirdPartyStorageDetected === null) ||
-      !["consent_component", "footer", "none", "unknown"].includes(String(value.linkLocation)) ||
+      !["consent_component", "information_notice", "footer", "none", "unknown"].includes(String(value.linkLocation)) ||
       !["accessible", "unavailable", "not_checked", "unknown"].includes(String(value.documentAccess)) ||
       (value.link !== null && !isPolicyLink(value.link))) return null;
 
@@ -94,14 +106,16 @@ export function parseFirstEntryPolicyAccess(value: unknown): FirstEntryPolicyAcc
   const access = value.documentAccess as FirstEntryPolicyAccess["documentAccess"];
   if (status === "pass" && access !== "accessible") return null;
   if (status === "pass" && value.consentPromptDetected && (location !== "consent_component" || reasonCode !== "consent_component_link_accessible")) return null;
-  if (status === "pass" && !value.consentPromptDetected && (value.thirdPartyCookieDetected !== false || location !== "footer" || reasonCode !== "footer_link_accessible_without_consent")) return null;
-  if (status === "pass" && reasonCode !== "consent_component_link_accessible" && reasonCode !== "footer_link_accessible_without_consent") return null;
+  if (status === "pass" && !value.consentPromptDetected && (value.thirdPartyCookieDetected !== false || !["footer", "information_notice"].includes(location) || !["footer_link_accessible_without_consent", "information_notice_link_accessible_without_consent"].includes(reasonCode))) return null;
+  if (status === "pass" && reasonCode !== "consent_component_link_accessible" && reasonCode !== "footer_link_accessible_without_consent" && reasonCode !== "information_notice_link_accessible_without_consent") return null;
   if (status === "unknown" && reasonCode !== "auditor_error") return null;
   if (status === "fail" && reasonCode === "auditor_error") return null;
   if (reasonCode === "consent_link_missing" && (value.consentPromptDetected !== true || location !== "none" || value.link !== null)) return null;
   if (reasonCode === "consent_link_unavailable" && (access !== "unavailable" || value.link === null)) return null;
   if (reasonCode === "footer_link_accessible_without_consent" && (value.consentPromptDetected !== false || value.thirdPartyCookieDetected !== false || access !== "accessible" || location !== "footer")) return null;
+  if (reasonCode === "information_notice_link_accessible_without_consent" && (value.consentPromptDetected !== false || value.thirdPartyCookieDetected !== false || access !== "accessible" || location !== "information_notice")) return null;
   if (reasonCode === "footer_insufficient_with_third_party_cookies" && (value.consentPromptDetected !== false || value.thirdPartyCookieDetected !== true || location !== "footer")) return null;
+  if (reasonCode === "information_notice_insufficient_with_third_party_cookies" && (value.consentPromptDetected !== false || value.thirdPartyCookieDetected !== true || location !== "information_notice")) return null;
   if (reasonCode === "policy_link_missing" && (location !== "none" || value.link !== null)) return null;
   if (location === "none" && value.link !== null) return null;
   if (location !== "none" && location !== "unknown" && value.link === null) return null;
