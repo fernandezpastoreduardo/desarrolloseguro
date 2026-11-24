@@ -317,6 +317,8 @@ async function applyRuntimeGrants(pool: Pool): Promise<void> {
       ON public.ds_scan_public_policy_transparency TO ds_read;
     GRANT SELECT (run_id, comparison_json, created_at)
       ON public.ds_scan_public_service_comparisons TO ds_read;
+    GRANT SELECT (run_id, findings_json, created_at)
+      ON public.ds_scan_legal_cookie_findings TO ds_read;
     GRANT SELECT (run_id, summary_json, created_at)
       ON public.ds_scan_internal_audit_public_summaries TO ds_read;
 
@@ -348,6 +350,10 @@ async function applyRuntimeGrants(pool: Pool): Promise<void> {
       ds_complete_scan_with_transparency(uuid, uuid, timestamptz, text,
         timestamptz, text, jsonb, jsonb, jsonb, jsonb, jsonb, jsonb, jsonb)
       TO ds_worker;
+    GRANT EXECUTE ON FUNCTION ds_complete_scan_with_legal_cookie_findings(
+      uuid, uuid, timestamptz, text, timestamptz, text, jsonb, jsonb, jsonb,
+      jsonb, jsonb, jsonb, jsonb, jsonb, jsonb
+    ) TO ds_worker;
     ALTER DEFAULT PRIVILEGES FOR ROLE ds_migrator IN SCHEMA public
       REVOKE SELECT ON TABLES FROM ds_read;
     ALTER DEFAULT PRIVILEGES FOR ROLE ds_migrator IN SCHEMA public

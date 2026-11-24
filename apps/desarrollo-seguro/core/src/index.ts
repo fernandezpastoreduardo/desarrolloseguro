@@ -28,4 +28,5 @@ export * from "./internal-dependency-inventory.js";
 export * from "./processor-inventory.js";
 export * from "./public-policy-assessment.js";
 export * from "./public-service-comparison.js";
+export * from "./legal-cookie-findings.js";
 export * from "./internal-audit-public-summary.js";

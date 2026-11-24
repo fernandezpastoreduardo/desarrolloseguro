@@ -36,6 +36,10 @@ export class PrivacyBrowserRequestGate {
     this.preferenceWriteUntil = this.currentTime() + (this.options.preferenceWriteWindowMs ?? 5_000);
   }
 
+  disarmPreferenceWrite(): void {
+    this.preferenceWriteUntil = 0;
+  }
+
   inspect(urlInput: string, methodInput: string): PrivacyBrowserRequestDecision {
     this.requests += 1;
     if (this.requests > this.options.maxRequests) {

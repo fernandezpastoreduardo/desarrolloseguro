@@ -624,6 +624,9 @@ function makePrivacyObservation(): PrivacyBrowserObservation {
     actionsToAccept: 0, actionsToReject: 0, preferenceWriteAllowed: false,
     rejectionPersistedAfterReload: null, signalHostsAfterChoice: [], completedHostsAfterChoice: [],
     cookiesAfterChoice: [], storageKeysAfterChoice: [], cookieReadComplete: true, storageReadComplete: true,
+    phaseEvidence: { beforeChoice: null, choiceActionAtMs: null, afterChoice: null, reloadStartedAtMs: null,
+      afterReload: null, rejectionChoiceStateAfterReload: "unknown", rejectionChoiceEvidence: null,
+      networkRequests: [], networkRequestsComplete: true },
   });
   return {
     protocolVersion: 1, requestId: REQUEST.requestId, hostname: REQUEST.hostname, status: "complete",

@@ -1,6 +1,10 @@
-import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
+import { chromium, type Browser, type BrowserContext, type Page, type Request } from "playwright";
 import { normalizeHostname, isThirdPartyPrivacyHost, PRIVACY_BROWSER_BUDGET } from "@desarrolloseguro/core";
 import { PrivacyBrowserRequestGate } from "./privacy-browser-request-gate.js";
+import {
+  PrivacyRequestTimeline,
+  type PrivacyRequestEvidence,
+} from "./privacy-request-timeline.js";
 import { PRIVACY_KNOWLEDGE_RULES } from "./privacy-knowledge-catalog.js";
 import {
   areVendorTogglesOff,
@@ -10,14 +14,17 @@ import {
   inspectVendorToggles,
   turnVendorTogglesOff,
   type VendorToggle,
+  type VendorToggleInspection,
 } from "./privacy-consent-controls.js";
 
 const NAVIGATION_TIMEOUT_MS = 15_000;
 const CONSENT_SETTLE_MS = 1_000;
 const ACTION_TIMEOUT_MS = 5_000;
 const MAX_RECORDED_NAMES = 200;
+const MAX_PHASE_SNAPSHOT_NAMES = 50;
 const MAX_RECORDED_HOSTS = 200;
 const MAX_PROVIDER_CONTEXTS = Math.min(PRIVACY_BROWSER_BUDGET.individualProviders, PRIVACY_BROWSER_BUDGET.contexts - 4);
+const NONESSENTIAL_TRACKING_CATEGORIES = new Set(["analytics", "advertising", "social"]);
 
 export type PrivacyBrowserInput = {
   protocolVersion: 1;
@@ -39,6 +46,38 @@ export type PrivacyBrowserFlowObservation = {
   completedHostsAfterChoice: string[];
   cookiesAfterChoice: Array<{ name: string; domain: string; secure: boolean; httpOnly: boolean }>;
   storageKeysAfterChoice: Array<{
+    name: string;
+    domain: string;
+    kind: "local" | "session" | "indexeddb" | "cache" | "window-name";
+  }>;
+  cookieReadComplete: boolean;
+  storageReadComplete: boolean;
+  phaseEvidence: {
+    beforeChoice: PrivacyBrowserStateSnapshot | null;
+    choiceActionAtMs: number | null;
+    afterChoice: PrivacyBrowserStateSnapshot | null;
+    reloadStartedAtMs: number | null;
+    afterReload: PrivacyBrowserStateSnapshot | null;
+    rejectionChoiceStateAfterReload: "rejected" | "not_rejected" | "unknown";
+    rejectionChoiceEvidence: PrivacyRejectionChoiceEvidence | null;
+    networkRequests: PrivacyRequestEvidence[];
+    networkRequestsComplete: boolean;
+  };
+};
+
+export type PrivacyRejectionChoiceEvidence = {
+  state: "rejected" | "not_rejected" | "unknown";
+  capturedAtMs: number;
+  preferencesVisible: boolean;
+  visibleToggleCount: number;
+  unmatchedToggleCount: number;
+  providers: Array<{ provider: string; state: "enabled" | "disabled" | "unknown" }>;
+};
+
+export type PrivacyBrowserStateSnapshot = {
+  capturedAtMs: number;
+  cookies: Array<{ name: string; domain: string; secure: boolean; httpOnly: boolean }>;
+  storageKeys: Array<{
     name: string;
     domain: string;
     kind: "local" | "session" | "indexeddb" | "cache" | "window-name";
@@ -109,6 +148,29 @@ const UNKNOWN_FLOW: PrivacyBrowserFlowObservation = {
   storageKeysAfterChoice: [],
   cookieReadComplete: false,
   storageReadComplete: false,
+  phaseEvidence: {
+    beforeChoice: null,
+    choiceActionAtMs: null,
+    afterChoice: null,
+    reloadStartedAtMs: null,
+    afterReload: null,
+    rejectionChoiceStateAfterReload: "unknown",
+    rejectionChoiceEvidence: null,
+    networkRequests: [],
+    networkRequestsComplete: true,
+  },
+};
+
+const EMPTY_PHASE_EVIDENCE: PrivacyBrowserFlowObservation["phaseEvidence"] = {
+  beforeChoice: null,
+  choiceActionAtMs: null,
+  afterChoice: null,
+  reloadStartedAtMs: null,
+  afterReload: null,
+  rejectionChoiceStateAfterReload: "unknown",
+  rejectionChoiceEvidence: null,
+  networkRequests: [],
+  networkRequestsComplete: true,
 };
 
 /** Runs one read-only baseline and isolated accept/reject flows through the egress proxy. */
@@ -237,21 +299,24 @@ async function runFlow(
     viewport: { width: 1365, height: 768 },
   });
   let pageLoaded = false;
+  const timeline = new PrivacyRequestTimeline();
   const completedHosts = new Set<string>();
   try {
-    const flowHosts = await installRequestGate(context, gate, ledger);
+    const flowHosts = await installRequestGate(context, gate, ledger, (request) => timeline.markBlocked(request));
     const page = await context.newPage();
     page.setDefaultTimeout(ACTION_TIMEOUT_MS);
     page.setDefaultNavigationTimeout(NAVIGATION_TIMEOUT_MS);
+    timeline.attach(page);
     page.on("requestfinished", (request) => {
-      const hostname = safeHostname(request.url());
-      if (hostname) completedHosts.add(hostname);
+      const requestHostname = safeHostname(request.url());
+      if (requestHostname) completedHosts.add(requestHostname);
     });
     try {
       await page.goto(`https://${hostname}/`, { waitUntil: "domcontentloaded" });
       pageLoaded = true;
     } catch {
-      return flowUnknown(pageLoaded, ledger, completedHosts);
+      const captured = await captureFlow(context, page, { ...UNKNOWN_FLOW, pageLoaded }, timeline, ledger, flowHosts, completedHosts);
+      return { ...captured, cookieReadComplete: false, storageReadComplete: false };
     }
     await page.waitForTimeout(CONSENT_SETTLE_MS);
     context.on("page", (openedPage) => {
@@ -261,6 +326,7 @@ async function runFlow(
     const hasConsentControls = controls.length > 0;
     const acceptVisibleAtFirstLayer = controls.some(({ kind }) => kind === "accept");
     const rejectVisibleAtFirstLayer = controls.some(({ kind }) => kind === "reject");
+    const firstLayerSnapshot = await captureStateSnapshot(context, page, timeline.elapsed());
     if (action === "initial") {
       return await captureFlow(context, page, {
         status: "evaluated",
@@ -278,7 +344,8 @@ async function runFlow(
         storageKeysAfterChoice: [],
         cookieReadComplete: false,
         storageReadComplete: false,
-      }, flowHosts, ledger, completedHosts);
+        phaseEvidence: { ...EMPTY_PHASE_EVIDENCE, beforeChoice: firstLayerSnapshot },
+      }, timeline, ledger, flowHosts, completedHosts);
     }
 
     if (!hasConsentControls) {
@@ -291,7 +358,8 @@ async function runFlow(
         rejectVisibleAtFirstLayer: false,
         actionsToAccept: 0,
         actionsToReject: 0,
-      }, flowHosts, ledger, completedHosts);
+        phaseEvidence: { ...EMPTY_PHASE_EVIDENCE, beforeChoice: firstLayerSnapshot },
+      }, timeline, ledger, flowHosts, completedHosts);
     }
 
     const chosen = action === "accept" ? "accept" : "reject";
@@ -310,20 +378,39 @@ async function runFlow(
         ...UNKNOWN_FLOW,
         pageLoaded,
         consentPromptDetected: hasConsentControls,
-      }, flowHosts, ledger, completedHosts);
+        phaseEvidence: { ...EMPTY_PHASE_EVIDENCE, beforeChoice: firstLayerSnapshot },
+      }, timeline, ledger, flowHosts, completedHosts);
     }
     steps += 1;
+    const beforeChoice = await captureStateSnapshot(context, page, timeline.elapsed());
     const preferenceWritesBefore = gate.getAllowedPreferenceWrites();
     gate.armPreferenceWrite();
-    if (!await clickConsentControl(page, selected)) return flowUnknown(pageLoaded, ledger, completedHosts);
+    let choiceActionAtMs: number | null = null;
+    if (!await clickConsentControl(page, selected, () => { choiceActionAtMs = timeline.setPhase("after_choice"); })) {
+      return await captureFlow(context, page, { ...UNKNOWN_FLOW, pageLoaded,
+        phaseEvidence: { ...EMPTY_PHASE_EVIDENCE, beforeChoice, choiceActionAtMs } }, timeline, ledger, flowHosts, completedHosts);
+    }
+    const afterChoice = await captureStateSnapshot(context, page, timeline.elapsed());
     await page.waitForTimeout(CONSENT_SETTLE_MS);
-    const hostsAfterChoice = new Set(flowHosts);
+    const hostsAfterChoice = [...flowHosts];
+    let afterReload: PrivacyBrowserStateSnapshot | null = null;
+    let reloadStartedAtMs: number | null = null;
     let rejectionPersistedAfterReload: boolean | null = null;
+    let rejectionChoiceEvidence: PrivacyRejectionChoiceEvidence | null = null;
+    let legacyFinalSnapshot: PrivacyBrowserStateSnapshot | undefined;
+    let legacyFlowHosts: Set<string> | undefined;
+    let legacyCompletedHosts: Set<string> | undefined;
     if (action === "reject" && !gate.hasExceededBudget()) {
       try {
+        reloadStartedAtMs = timeline.setPhase("after_reload");
         await page.reload({ waitUntil: "domcontentloaded" });
         const afterReloadControls = await inspectConsentControls(page);
         rejectionPersistedAfterReload = !afterReloadControls.some(({ kind }) => kind === "accept" || kind === "reject");
+        legacyFinalSnapshot = await captureStateSnapshot(context, page, timeline.elapsed(), MAX_RECORDED_NAMES);
+        afterReload = limitPhaseSnapshot(legacyFinalSnapshot);
+        legacyFlowHosts = new Set(flowHosts);
+        legacyCompletedHosts = new Set(completedHosts);
+        rejectionChoiceEvidence = await capturePersistedChoiceState(page, gate, timeline);
       } catch {
         rejectionPersistedAfterReload = null;
       }
@@ -338,16 +425,66 @@ async function runFlow(
       actionsToReject: action === "reject" ? steps : null,
       preferenceWriteAllowed: gate.getAllowedPreferenceWrites() > preferenceWritesBefore,
       rejectionPersistedAfterReload,
-      signalHostsAfterChoice: [...hostsAfterChoice],
-      completedHostsAfterChoice: [...completedHosts],
+      signalHostsAfterChoice: hostsAfterChoice,
+      completedHostsAfterChoice: [],
       cookiesAfterChoice: [],
       storageKeysAfterChoice: [],
       cookieReadComplete: false,
       storageReadComplete: false,
-    }, flowHosts, ledger, completedHosts);
+      phaseEvidence: { beforeChoice, choiceActionAtMs, afterChoice, reloadStartedAtMs, afterReload,
+        rejectionChoiceStateAfterReload: rejectionChoiceEvidence?.state ?? "unknown",
+        rejectionChoiceEvidence,
+        networkRequests: [], networkRequestsComplete: true },
+    }, timeline, ledger, legacyFlowHosts ?? flowHosts, legacyCompletedHosts ?? completedHosts, legacyFinalSnapshot);
   } finally {
     await context.close().catch(() => undefined);
   }
+}
+
+async function capturePersistedChoiceState(
+  page: Page,
+  gate: PrivacyBrowserRequestGate,
+  timeline: PrivacyRequestTimeline,
+): Promise<PrivacyRejectionChoiceEvidence> {
+  gate.disarmPreferenceWrite();
+  timeline.setPhase("cmp_inspection");
+  const providers = [...new Set(PRIVACY_KNOWLEDGE_RULES
+    .filter(({ category }) => NONESSENTIAL_TRACKING_CATEGORIES.has(category))
+    .map(({ provider }) => provider))];
+  let controls = await inspectConsentControls(page);
+  let preferencesVisible = controls.some(({ kind }) => kind === "save");
+  let inspection: VendorToggleInspection = { toggles: [], visibleCount: 0, unmatchedCount: 0 };
+  if (preferencesVisible) inspection = await inspectVendorToggles(page, providers);
+  else {
+    const manage = findConsentControl(controls, "manage");
+    if (manage && await clickConsentControl(page, manage)) {
+      await page.waitForTimeout(CONSENT_SETTLE_MS);
+      controls = await inspectConsentControls(page);
+      inspection = await inspectVendorToggles(page, providers);
+      preferencesVisible = controls.some(({ kind }) => kind === "save") ||
+        (inspection.visibleCount > 0 && inspection.toggles.length > 0);
+    }
+  }
+  const providerStates = inspection.toggles.map(({ provider, enabled }) => ({
+    provider,
+    state: enabled === null ? "unknown" as const : enabled ? "enabled" as const : "disabled" as const,
+  }));
+  const hasEnabledProvider = inspection.toggles.some(({ enabled }) => enabled === true);
+  const hasUnknownProvider = inspection.toggles.some(({ enabled }) => enabled === null);
+  const state = hasEnabledProvider
+    ? "not_rejected"
+    : !preferencesVisible || inspection.visibleCount === 0 || inspection.toggles.length === 0 ||
+        inspection.unmatchedCount > 0 || hasUnknownProvider
+      ? "unknown"
+      : "rejected";
+  return {
+    state,
+    capturedAtMs: timeline.elapsed(),
+    preferencesVisible,
+    visibleToggleCount: inspection.visibleCount,
+    unmatchedToggleCount: inspection.unmatchedCount,
+    providers: providerStates,
+  };
 }
 
 async function discoverVendorControls(
@@ -539,7 +676,12 @@ function resolveVendorControlCoverage(
   return "complete";
 }
 
-async function installRequestGate(context: BrowserContext, gate: PrivacyBrowserRequestGate, ledger: RequestLedger): Promise<Set<string>> {
+async function installRequestGate(
+  context: BrowserContext,
+  gate: PrivacyBrowserRequestGate,
+  ledger: RequestLedger,
+  markRequestBlocked?: (request: Request) => void,
+): Promise<Set<string>> {
   const flowHosts = new Set<string>();
   await context.route("**/*", async (route) => {
     const request = route.request();
@@ -551,6 +693,7 @@ async function installRequestGate(context: BrowserContext, gate: PrivacyBrowserR
       if (decision.thirdParty) ledger.thirdPartyRequestHosts.add(decision.hostname);
     }
     if (!decision.allowed) {
+      markRequestBlocked?.(request);
       ledger.blockedRequestCount += 1;
       if (decision.reason === "request_budget_exceeded") ledger.overflow = true;
       await route.abort("blockedbyclient").catch(() => undefined);
@@ -577,36 +720,72 @@ async function captureFlow(
   context: BrowserContext,
   page: Page,
   base: PrivacyBrowserFlowObservation,
-  flowHosts: Set<string>,
+  timeline: PrivacyRequestTimeline,
   ledger: RequestLedger,
-  completedHosts: Set<string> = new Set(),
+  flowHosts: Set<string>,
+  completedHosts: Set<string>,
+  finalSnapshotOverride?: PrivacyBrowserStateSnapshot,
 ): Promise<PrivacyBrowserFlowObservation> {
-  const cookies = await captureCookies(context);
-  const storage = await captureStorageKeys(page);
-  const cookiesAfterChoice = base.cookiesAfterChoice.length > 0 ? base.cookiesAfterChoice : cookies.items;
-  const storageKeysAfterChoice = base.storageKeysAfterChoice.length > 0 ? base.storageKeysAfterChoice : storage.items;
-  if (!cookies.complete || !storage.complete || ledger.signalHosts.size > MAX_RECORDED_HOSTS) {
+  const finalSnapshot = finalSnapshotOverride ?? await captureStateSnapshot(context, page, timeline.elapsed(), MAX_RECORDED_NAMES);
+  const trackedRequests = await timeline.snapshot();
+  const phaseEvidence = { ...base.phaseEvidence,
+    networkRequests: trackedRequests.events,
+    networkRequestsComplete: trackedRequests.complete,
+  };
+  const cookiesAfterChoice = base.cookiesAfterChoice.length > 0 ? base.cookiesAfterChoice : finalSnapshot.cookies;
+  const storageKeysAfterChoice = base.storageKeysAfterChoice.length > 0 ? base.storageKeysAfterChoice : finalSnapshot.storageKeys;
+  if (!finalSnapshot.cookieReadComplete || !finalSnapshot.storageReadComplete || ledger.signalHosts.size > MAX_RECORDED_HOSTS) {
     ledger.overflow = true;
   }
   return {
     ...base,
-    status: cookies.complete && storage.complete ? base.status : "unknown",
-    cookieReadComplete: cookies.complete,
-    storageReadComplete: storage.complete,
+    status: finalSnapshot.cookieReadComplete && finalSnapshot.storageReadComplete ? base.status : "unknown",
+    cookieReadComplete: finalSnapshot.cookieReadComplete,
+    storageReadComplete: finalSnapshot.storageReadComplete,
     signalHostsAfterChoice: base.signalHostsAfterChoice.length > 0
       ? base.signalHostsAfterChoice
       : [...flowHosts].slice(0, MAX_RECORDED_HOSTS),
     completedHostsAfterChoice: [...completedHosts].slice(0, MAX_RECORDED_HOSTS),
     cookiesAfterChoice,
     storageKeysAfterChoice,
+    phaseEvidence,
   };
 }
 
-async function captureCookies(context: BrowserContext): Promise<{ items: PrivacyBrowserFlowObservation["cookiesAfterChoice"]; complete: boolean }> {
+function limitPhaseSnapshot(snapshot: PrivacyBrowserStateSnapshot): PrivacyBrowserStateSnapshot {
+  return {
+    ...snapshot,
+    cookies: snapshot.cookies.slice(0, MAX_PHASE_SNAPSHOT_NAMES),
+    storageKeys: snapshot.storageKeys.slice(0, MAX_PHASE_SNAPSHOT_NAMES),
+    cookieReadComplete: snapshot.cookieReadComplete && snapshot.cookies.length <= MAX_PHASE_SNAPSHOT_NAMES,
+    storageReadComplete: snapshot.storageReadComplete && snapshot.storageKeys.length <= MAX_PHASE_SNAPSHOT_NAMES,
+  };
+}
+
+async function captureStateSnapshot(
+  context: BrowserContext,
+  page: Page,
+  capturedAtMs: number,
+  maxNames = MAX_PHASE_SNAPSHOT_NAMES,
+): Promise<PrivacyBrowserStateSnapshot> {
+  const [cookies, storage] = await Promise.all([captureCookies(context, maxNames), captureStorageKeys(page, maxNames)]);
+  return {
+    capturedAtMs,
+    cookies: cookies.items,
+    storageKeys: storage.items,
+    cookieReadComplete: cookies.complete,
+    storageReadComplete: storage.complete,
+  };
+}
+
+async function captureCookies(
+  context: BrowserContext,
+  maxNames = MAX_RECORDED_NAMES,
+): Promise<{ items: PrivacyBrowserFlowObservation["cookiesAfterChoice"]; complete: boolean }> {
   try {
     const cookies = await context.cookies();
-    const complete = cookies.length <= MAX_RECORDED_NAMES;
-    return { items: cookies.slice(0, MAX_RECORDED_NAMES).map(({ name, domain, secure, httpOnly }) => ({
+    const complete = cookies.length <= maxNames;
+    return { items: cookies.slice(0, maxNames).map(({ name, domain, secure, httpOnly }) => ({
       name: safeName(name),
       domain: safeName(domain.replace(/^\./u, "").toLowerCase()),
       secure,
@@ -617,7 +796,10 @@ async function captureCookies(context: BrowserContext): Promise<{ items: Privacy
   }
 }
 
-async function captureStorageKeys(page: Page): Promise<{ items: PrivacyBrowserFlowObservation["storageKeysAfterChoice"]; complete: boolean }> {
+async function captureStorageKeys(
+  page: Page,
+  maxNames = MAX_RECORDED_NAMES,
+): Promise<{ items: PrivacyBrowserFlowObservation["storageKeysAfterChoice"]; complete: boolean }> {
   const items: PrivacyBrowserFlowObservation["storageKeysAfterChoice"] = [];
   let complete = true;
   for (const frame of page.frames()) {
@@ -663,8 +845,8 @@ async function captureStorageKeys(page: Page): Promise<{ items: PrivacyBrowserFl
       complete = false;
     }
   }
-  if (items.length > MAX_RECORDED_NAMES) complete = false;
-  return { items: items.slice(0, MAX_RECORDED_NAMES), complete };
+  if (items.length > maxNames) complete = false;
+  return { items: items.slice(0, maxNames), complete };
 }
 
 function safeHostname(urlInput: string): string | null {
@@ -679,17 +861,4 @@ function safeHostname(urlInput: string): string | null {
 
 function safeName(value: string): string {
   return value.length <= 100 && /^[\p{L}\p{N}_.:@+-]+$/u.test(value) ? value : "";
-}
-
-function flowUnknown(
-  pageLoaded: boolean,
-  ledger: RequestLedger,
-  completedHosts: Set<string> = new Set(),
-): PrivacyBrowserFlowObservation {
-  return {
-    ...UNKNOWN_FLOW,
-    pageLoaded,
-    signalHostsAfterChoice: [...ledger.signalHosts].slice(0, MAX_RECORDED_HOSTS),
-    completedHostsAfterChoice: [...completedHosts].slice(0, MAX_RECORDED_HOSTS),
-  };
 }

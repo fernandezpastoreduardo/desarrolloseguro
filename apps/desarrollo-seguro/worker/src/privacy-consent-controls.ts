@@ -16,6 +16,7 @@ export type VendorToggle = {
   provider: string;
   indices: number[];
   count: number;
+  enabled: boolean | null;
   declaredLegitimateInterest: boolean | null;
 };
 
@@ -57,7 +58,7 @@ export async function inspectVendorToggles(page: Page, knownProviders: readonly 
   return page.locator(VENDOR_TOGGLE_SELECTOR).evaluateAll((elements, providers) => {
     const normalizeText = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/gu, "").toLowerCase();
     const providerNames = providers.map((provider) => ({ provider, normalized: normalizeText(provider) }));
-    const byProvider = new Map<string, { indices: number[]; interests: boolean[] }>();
+    const byProvider = new Map<string, { indices: number[]; interests: boolean[]; states: Array<boolean | null> }>();
     let visibleCount = 0;
     let unmatchedCount = 0;
     for (const [index, element] of elements.entries()) {
@@ -67,6 +68,11 @@ export async function inspectVendorToggles(page: Page, knownProviders: readonly 
       if (rect.width <= 0 || rect.height <= 0 || style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0) continue;
       visibleCount += 1;
       const input = element instanceof HTMLInputElement ? element : null;
+      const ariaChecked = element.getAttribute("aria-checked");
+      const enabled = input?.type === "checkbox" ? input.checked
+        : ariaChecked === "true" ? true
+          : ariaChecked === "false" ? false
+            : null;
       const labelledBy = (element.getAttribute("aria-labelledby") ?? "").split(/\s+/u)
         .map((id) => document.getElementById(id)?.textContent ?? "").join(" ");
       const explicitLabel = input?.labels ? Array.from(input.labels).map(({ textContent }) => textContent ?? "").join(" ") : "";
@@ -80,9 +86,10 @@ export async function inspectVendorToggles(page: Page, knownProviders: readonly 
         continue;
       }
       const { provider } = matches[0]!;
-      const entry = byProvider.get(provider) ?? { indices: [], interests: [] };
+      const entry = byProvider.get(provider) ?? { indices: [], interests: [], states: [] };
       entry.indices.push(index);
       entry.interests.push(/inter[eé]s(?:\s+de)?\s+leg[ií]timo|legitimate\s+interest/iu.test(normalizeText(rowText)));
+      entry.states.push(enabled);
       byProvider.set(provider, entry);
     }
     return {
@@ -92,6 +99,11 @@ export async function inspectVendorToggles(page: Page, knownProviders: readonly 
         provider,
         indices: entry.indices,
         count: entry.indices.length,
+        enabled: entry.states.some((state) => state === true)
+          ? true
+          : entry.states.length > 0 && entry.states.every((state) => state === false)
+            ? false
+            : null,
         declaredLegitimateInterest: entry.interests.some(Boolean),
       })),
     };
@@ -135,10 +147,11 @@ export async function areVendorTogglesOff(page: Page, toggle: VendorToggle): Pro
   }
 }
 
-export async function clickConsentControl(page: Page, control: ConsentControl): Promise<boolean> {
+export async function clickConsentControl(page: Page, control: ConsentControl, beforeClick?: () => void): Promise<boolean> {
   if (!control.safeToClick) return false;
   const locator: Locator = page.locator(CONSENT_CONTROL_SELECTOR).nth(control.index);
   try {
+    beforeClick?.();
     await locator.click({ timeout: ACTION_TIMEOUT_MS });
     return true;
   } catch {

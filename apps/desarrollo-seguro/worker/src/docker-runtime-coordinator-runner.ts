@@ -11,6 +11,7 @@ import {
 } from "./transport-v1-executor-protocol.js";
 import type { RuntimeCoordinatorRunner } from "./runtime-coordinator-server.js";
 import { assessPrivacyObservation, getObservedPublicServices } from "./privacy-assessment-builder.js";
+import { buildLegalCookieFindings } from "./privacy-legal-cookie-findings.js";
 import type { PrivacyBrowserObservation } from "./privacy-browser-observer.js";
 import {
   createJsonLineRuntimeDiagnostic,
@@ -150,10 +151,14 @@ export function createDockerRuntimeCoordinatorRunner(
         }
         result = response.result;
         let privacyAssessment = assessPrivacy({ criteria: [] });
+        let legalCookieFindings: ReturnType<typeof buildLegalCookieFindings> = [];
         let observation: PrivacyBrowserObservation | undefined;
         try {
           observation = await session.observePrivacy?.(request, signal);
-          if (observation) privacyAssessment = assessPrivacyObservation(observation);
+          if (observation) {
+            privacyAssessment = assessPrivacyObservation(observation);
+            legalCookieFindings = buildLegalCookieFindings(observation);
+          }
         } catch {
           // Privacy browser failures lower coverage but never block the established scan or certification.
         }
@@ -171,6 +176,7 @@ export function createDockerRuntimeCoordinatorRunner(
         result = {
           ...completedResult,
           privacyAssessment,
+          legalCookieFindings,
           ...(publicServiceComparison ? { publicServiceComparison } : {}),
         };
       } catch (error) {
