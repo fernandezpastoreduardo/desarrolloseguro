@@ -51,6 +51,17 @@ describe("buildLegalCookieFindings", () => {
 
     expect(buildLegalCookieFindings(observation)).toEqual([]);
   });
+
+  it("does not create an LSSI finding for a technical first-party session cookie or absent rejection action", () => {
+    const observation = makeObservation({
+      initial: makeFlow({ beforeChoice: {
+        capturedAtMs: 40,
+        cookies: [{ name: "sessionid", domain: "example.es", secure: true, httpOnly: true }],
+        storageKeys: [], cookieReadComplete: true, storageReadComplete: true,
+      } }),
+    });
+    expect(buildLegalCookieFindings(observation)).toEqual([]);
+  });
 });
 
 function makeObservation(
