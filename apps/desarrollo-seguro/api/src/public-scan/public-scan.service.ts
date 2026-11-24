@@ -25,6 +25,7 @@ import {
   type ProcessorTransparencyAssessment,
   type PublicPolicyTransparencyAssessment,
   type PublicServiceComparison,
+  type LegalCookieFinding,
   type ScanFailureDiagnostic,
 } from "@desarrolloseguro/core";
 import {
@@ -64,6 +65,7 @@ export type PublicReport = {
   processorTransparencyAssessment: ProcessorTransparencyAssessment | null;
   publicPolicyTransparencyAssessment: PublicPolicyTransparencyAssessment | null;
   publicServiceComparison: PublicServiceComparison | null;
+  legalCookieFindings?: LegalCookieFinding[];
   betaCertification: ReturnType<typeof assessBetaCertification>;
   certification: PublicBetaCertificationResponse | null;
   internalAuditSummary: InternalAuditPublicSummary | null;
@@ -331,6 +333,7 @@ function toPublicReport(
       ? assessDomainEthicsV4(report.checks, processorTransparencyAssessment)
       : assessDomainEthics(report.checks);
   const privacyAssessment = report.privacyAssessment ?? null;
+  const legalCookieFindings = report.legalCookieFindings;
   const resolvedInternalAuditState = report.hostname !== "grumphya.com"
     ? null
     : internalAuditState ?? (report.internalAuditSummary?.status === "complete" ? "complete" : "review");
@@ -351,6 +354,7 @@ function toPublicReport(
     processorTransparencyAssessment,
     publicPolicyTransparencyAssessment,
     publicServiceComparison,
+    ...(legalCookieFindings?.length ? { legalCookieFindings } : {}),
     betaCertification: assessBetaCertification(toBetaObservations(report.checks)),
     certification: toPublicCertification(report.certification),
     internalAuditState: resolvedInternalAuditState,

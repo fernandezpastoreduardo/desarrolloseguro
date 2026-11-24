@@ -1,0 +1,100 @@
+# Auditoría jurídica de cookies y consentimiento — especificación propuesta
+
+Estado: especificación aprobada para implementación incremental. Los primeros slices implementan adquisición temporal de evidencia y una capa de hallazgos LSSI independiente; la puntuación, el informe legacy y la presentación jurídica requieren sus tareas acordadas. La fuente transversal de filosofía es `agentic-guidelines/legal-evidence-and-sanctions.md`.
+
+## Propósito
+
+Detectar y publicar incumplimientos legales observables en el uso de cookies y tecnologías equivalentes. Cuando la ejecución del navegador demuestra todos los elementos de una regla legal versionada, el resultado se nombra **incumplimiento legal acreditado** y muestra la evidencia y el precepto aplicable. No se rebaja a «señal», «riesgo» o «susceptible de sanción» por una cautela genérica.
+
+La herramienta acredita hechos técnicos y aplica una regla jurídica explícita. No afirma que una resolución administrativa o judicial ya haya declarado responsable al titular, ni convierte un máximo legal en una multa impuesta o garantizada.
+
+## Alcance de la primera entrega
+
+- Primera visita de una página pública en Chromium, con perfil nuevo y almacenamiento limpio.
+- Captura del banner y de los enlaces visibles en primera capa.
+- Observación antes de aceptar o rechazar, después de cada acción y después de recargar.
+- Cookies, almacenamiento web y peticiones de terceros, con atribución temporal exacta.
+- Flujos independientes de aceptación y rechazo para evitar que el estado de uno contamine el otro.
+- Reglas para LSSI, RGPD y LOPDGDD; vía de consumo/LCD cuando la actividad y los elementos legales observados permitan aplicarla.
+- No se considera infracción autónoma el mero hecho de que la página permita navegar mientras el aviso está visible.
+- Fingerprinting y cabeceras HTTP son comprobaciones diferenciadas; no se deducen de la mera presencia de Google Analytics ni de una puntuación general.
+
+## Secuencia probatoria del navegador
+
+Cada flujo parte de un contexto Chromium nuevo. El registro distingue estos estados:
+
+1. **Inicio de navegación:** anotar orden y tiempo monotónico de cada petición desde el primer byte; registrar cookies recibidas (`Set-Cookie`) y enviadas, identificadores de almacenamiento y scripts que se ejecutan antes de que el usuario interactúe.
+2. **Primera capa:** guardar captura del aviso, texto, controles accesibles, enlaces y destinos; registrar posición, área, tipografía, color, contraste y estilo calculado de aceptar, rechazar y configurar.
+3. **Antes de elegir:** guardar inventario de cookies y almacenamiento, incluyendo nombre, dominio, atributos y primera/última observación; no conservar valores de cookie.
+4. **Acción explícita:** registrar control pulsado, etiqueta, hora, secuencia de pasos y cambios de estado detectados.
+5. **Inmediatamente después:** tomar nuevo inventario y registrar solo eventos de red posteriores a la acción. Mantener separados los eventos previos.
+6. **Recarga:** tomar otro inventario; comprobar el estado de rechazo en el CMP y verificar cookies y peticiones posteriores a la recarga. La ausencia de botones no basta para acreditar que la decisión se conservó.
+7. **Resultado:** presentar líneas temporales diferenciadas para antes de elegir, después de rechazar y después de recargar; toda cobertura incompleta queda identificada y no equivale a cumplimiento.
+
+Las evidencias persistidas no incluyen valores de cookies, credenciales, cuerpos completos de peticiones ni parámetros identificativos innecesarios. Se conservan URL normalizada sin query ni fragmento, host, tipo de recurso, método, estado, tiempo, iniciador cuando esté disponible y nombres de cookies/campos pertinentes. La captura visual evita formularios o contenido personal ajeno al aviso.
+
+Cada flujo del primer slice de implementación emite inventarios separados `beforeChoice`, `afterChoice` y `afterReload`, marcas monotónicas de acción y recarga, más eventos de red con fase y tiempos monotónicos de inicio, respuesta y finalización, estado y bloqueo hecho por el auditor. El registro temporal se limita a 30 solicitudes por contexto y a 50 cookies/claves por snapshot; alcanzar un límite marca esa parte de la evidencia como incompleta sin alterar la puntuación ni la presentación legacy. Los valores de cookies y cuerpos de solicitudes/respuestas no se guardan. `phaseEvidence.rejectionChoiceStateAfterReload` permanece `unknown` hasta observar directamente el estado guardado de rechazo en el CMP; que el banner desaparezca no demuestra persistencia. El campo legacy `rejectionPersistedAfterReload` se conserva sin cambios de conducta para no modificar el informe existente y no se usa como prueba jurídica en la auditoría nueva.
+
+Después de recargar el flujo de rechazo se reabre el panel de preferencias sin guardar cambios y se leen los interruptores atribuibles a proveedores locales conocidos de analítica, publicidad o redes sociales. Solo se leen controles dentro de un panel identificado por una acción «Preferencias/Configurar» o un control «Guardar» visible; no se toman interruptores genéricos de la página como preferencias del CMP. Se confirma el rechazo si hay controles y todos están identificados, su estado es legible y están desactivados. Un control identificado que siga activado acredita que el rechazo no se conservó para ese proveedor. Sin panel reconocido, sin controles visibles, con interruptores no atribuibles o con estados ilegibles, el resultado es `unknown`. Los datos incluyen proveedor, estado, recuentos y fase de inspección, nunca el texto libre de la interfaz ni valores de almacenamiento. El presupuesto de escrituras se cierra antes de esta inspección, que registra sus solicitudes en la fase independiente `cmp_inspection`.
+
+## Matriz legal inicial para España
+
+La matriz se almacena versionada por jurisdicción, vigencia, fuente, regla, elementos jurídicos, evidencia exigida, clasificación y órgano competente. Una conducta puede activar varias filas si satisface los elementos de cada una. La LSSI permite tramitar otro procedimiento por los mismos hechos cuando otra ley los tipifica y no hay identidad del bien jurídico protegido; también excluye la duplicación en los supuestos de identidad previstos en su art. 44. El informe conserva cada vía concurrente, pero no suma automáticamente los máximos de multa.
+
+| Conducta observable | Elementos probatorios que debe registrar el auditor | Regla y consecuencia que puede mostrar |
+|---|---|---|
+| Instalar o acceder a cookies no exentas antes del consentimiento | Cookie o acceso identificable, marca temporal previa a cualquier acción, dominio/finalidad sustentados por política, catálogo técnico o petición asociada | LSSI art. 22.2; tipificación leve art. 38.4.g; multa legal de hasta 30.000 € según art. 39. Competencia sancionadora de la AEPD para el art. 38.4.g conforme al art. 43.1. La excepción para almacenamiento técnico/estrictamente necesario debe verificarse, no presumirse. |
+| Seguir enviando o usando cookies analíticas tras pulsar «Rechazar» | Acción de rechazo con hora; cookie en inventario posterior y/o petición posterior que envía su nombre; evidencia de que el identificador corresponde al proveedor/finalidad | LSSI arts. 22.2 y 38.4.g. Si los eventos acreditan además tratamiento de datos personales, evaluar RGPD arts. 5, 6, 7 y 25 y las categorías LOPDGDD correspondientes. Rechazar antes de consentir se modela como rechazo expreso, no como «retirada» de un consentimiento previo. |
+| Declarar que las cookies solo se instalan con consentimiento y observar su instalación previa | Texto exacto visible antes de elegir, cookie no exenta identificada y cronología de instalación; captura reproducible | Contradicción directa con la conducta observada. Evaluar obligación de información de LSSI 22.2 y, si hay datos personales, transparencia/lealtad RGPD art. 5.1.a y deber de información de arts. 12–13; LOPDGDD art. 72.1.a/h cuando encajen sus elementos. |
+| Rechazo menos visible o más difícil que aceptación | Captura y datos DOM/estilo de ambos botones; posición, dimensiones, contraste, jerarquía visual y número de acciones; comparación en escritorio y móvil | Criterio AEPD: rechazo en la misma capa, nivel y visibilidad y con mecanismo similar. La guía orienta la aplicación del consentimiento exigido por LSSI. El hallazgo visual se publica por separado; el art. 22.2/38.4.g se asocia a almacenamiento/acceso sin consentimiento válido probado, no a una diferencia estética aislada. |
+| Ausencia de enlace visible y directo a información detallada de cookies en primera capa | Árbol de enlaces visible, texto y destino real; navegación directa y captura; comprobar si el enlace de footer existe y funciona | Criterio de primera capa de la Guía AEPD (enlace visible a segunda capa). Asociar a LSSI art. 22.2 si la información sobre uso/fines no fue clara y completa antes del uso. La falta de enlace por sí sola no se presenta como una multa independiente tipificada en el art. 38.4.g. |
+| Mensaje implícito de consentimiento por continuar navegando | Secuencia que demuestre que el sitio usa cookies sin una acción afirmativa específica; conservar texto y acciones disponibles | La guía AEPD recoge que seguir navegando no es consentimiento válido. La regla sancionadora se vincula al uso de cookies no exentas sin el consentimiento exigido, no al simple hecho de que la navegación no esté bloqueada. |
+| Práctica comercial engañosa hacia consumidores | Servicio y contexto comercial visibles; audiencia consumidora; mensaje falso/omisión; materialidad para decisión económica según el precepto; evidencia reproducible del engaño | LCD arts. 5 y 7; TRLGDCU art. 47.m tipifica el uso de prácticas comerciales desleales con consumidores. Solo se añade esta vía cuando se acrediten sus elementos y la competencia territorial/material correspondiente; clasificación y rango se obtienen de TRLGDCU arts. 48–49 y normativa autonómica aplicable. No se activa solo porque haya un banner de cookies. |
+
+### Marco sancionador que mostrará el informe
+
+- Para la infracción de cookies LSSI art. 38.4.g, el texto vigente la califica como leve y el art. 39 fija un máximo de 30.000 €. No se afirmará que el mínimo legal sea 1.000 €: ese mínimo no aparece en ese precepto.
+- Para RGPD art. 83.5, el máximo legal puede alcanzar 20 millones de euros o el 4 % del volumen de negocio anual mundial total del ejercicio anterior, si esta cifra es superior. El RGPD no establece una banda fija de 1.000–30.000 € para este caso.
+- LOPDGDD arts. 72–74 califican tipos de infracción; no constituyen una cuarta multa acumulable independiente del régimen RGPD. Art. 72.1 recoge, entre otros, vulneraciones sustanciales de principios, licitud, validez del consentimiento e información; art. 73.d/e cubre obligaciones de protección desde el diseño y por defecto.
+- El régimen de consumo (TRLGDCU art. 49) tiene rangos propios y posibles incrementos ligados al beneficio ilícito. Solo se muestra tras mapear la conducta a un tipo del art. 47 y a la autoridad competente.
+- La vista separa **multa máxima legal**, **sanción propuesta en un expediente** y **sanción firme impuesta**; nunca las presenta como la misma cifra.
+- La AEPD puede iniciar procedimientos por iniciativa propia o a raíz de reclamación (LOPDGDD art. 64.2); el expediente SEAT citado se inició de oficio y acabó con pago de multa. El informe no dirá que la denuncia es requisito para la multa ni que una denuncia por sí sola garantiza el resultado. Mostrará el incumplimiento acreditado, la autoridad, el máximo legal y, cuando ayude a contextualizar, precedentes con sanciones efectivamente impuestas.
+
+## Precedente oficial de referencia
+
+La resolución AEPD PS-00284-2024 contra SEAT documenta cookies no técnicas antes del consentimiento y persistencia/envío de cookies no técnicas después de revocar un consentimiento. La AEPD actuó **de oficio**, abrió procedimiento por LSSI art. 22.2 (art. 38.4.g), propuso 20.000 € y el procedimiento terminó tras el pago de 12.000 € y el reconocimiento de responsabilidad. Es un precedente directo que demuestra que no hace falta denuncia para que la AEPD investigue e imponga una multa por una conducta de cookies acreditada. La cifra final es un resultado concreto de ese expediente, no una tarifa automática para otros titulares.
+
+La referencia encontrada de Wallapop (E/00993/2018) no es un precedente de cookies: trata de protección de datos y pagos, y terminó archivada. No se citará como precedente de este flujo.
+
+## Requisitos de la salida legal
+
+Cada hallazgo contendrá: identificador de regla y versión; nombre explícito del incumplimiento acreditado; hechos observados con línea temporal; artefactos probatorios; artículos y texto oficial vigente; autoridad con competencia para ese tipo; clasificación legal; marco sancionador aplicable y naturaleza de la cuantía (máximo legal, propuesta o resolución firme); fecha y hash del conjunto de evidencias; reglas de concurrencia aplicadas.
+
+El slice LSSI inicial calcula un conjunto `legalCookieFindings` separado del objeto de puntuación. Solo crea un hallazgo si una cookie figura en `phaseEvidence` antes de la acción de consentimiento o después de la acción explícita de rechazo (inmediatamente después y tras recargar), y una regla técnica versionada de confianza alta la atribuye a una finalidad analítica, publicitaria o social. Para inventarios se requiere lectura completa; una cookie enviada o recibida se acredita directamente mediante su nombre y fase de red. Cada artefacto identifica flujo, fase, instante monotónico, cookie (nombre y dominio, nunca valor), regla de atribución y evidencia de red correlacionada cuando exista. La capa no altera criterios, puntuaciones ni campos legacy. No genera filas por hosts o nombres de cookie sin atribución confirmada.
+
+Los hallazgos jurídicos se muestran aparte de las puntuaciones técnicas. Si existe al menos un incumplimiento legal acreditado, la puntuación global queda fijada en el valor mínimo de su escala y no puede compensarse con controles correctos. Las puntuaciones técnicas por área se conservan y muestran por separado. Un resultado no evaluado o una señal que no alcance los elementos de una regla jurídica no activa este bloqueo. La escala numérica global y su valor mínimo deben estar definidos antes de implementar el cálculo.
+
+## Aceptación
+
+1. Un fixture con analítica antes de elegir produce eventos pre-elección separados y el hallazgo LSSI correspondiente; no se confunde con tráfico posterior al rechazo.
+2. Un fixture que conserva una cookie y envía una petición después de «Rechazar» produce el hallazgo de rechazo ineficaz, incluyendo la evidencia posterior al clic y tras recargar.
+3. Una cookie técnica documentada y una navegación permitida sin instalar tecnologías no exentas no producen el hallazgo LSSI de falta de consentimiento.
+4. La persistencia del rechazo se acredita con el estado guardado del CMP más el comportamiento posterior, no solo por la desaparición del banner.
+5. Las diferencias visuales de aceptar/rechazar se respaldan por captura y medidas DOM en móvil y escritorio.
+6. Texto falso y enlace ausente se muestran como hechos separados y solo reciben los artículos/multas que el mapa legal haya conectado a sus elementos.
+7. RGPD, LOPDGDD, LSSI y consumo aparecen como regímenes distintos, con órganos y cuantías correctos; ningún importe se calcula por suma automática.
+8. «No bloquea la navegación» por sí solo no genera un incumplimiento.
+9. La cobertura incompleta nunca produce resultado de cumplimiento.
+10. Un incumplimiento legal acreditado fija la puntuación global en el mínimo de escala; ninguna nota técnica puede compensarlo.
+11. Las notas técnicas por área permanecen visibles aunque el bloqueo legal fije la puntuación global.
+12. El informe público expone los hallazgos y evidencia verificable sin valores de cookies, credenciales, cuerpos completos de requests ni datos personales innecesarios.
+
+## Fuentes oficiales iniciales
+
+- [LSSI, Ley 34/2002, texto consolidado](https://www.boe.es/buscar/act.php?id=BOE-A-2002-13758)
+- [RGPD, Reglamento (UE) 2016/679, art. 83](https://eur-lex.europa.eu/legal-content/EN/ALL/?uri=celex%3A32016R0679)
+- [LOPDGDD, Ley Orgánica 3/2018](https://www.boe.es/buscar/act.php?id=BOE-A-2018-16673)
+- [Guía de cookies de la AEPD](https://www.aepd.es/guias/guia-cookies.pdf)
+- [LCD, Ley 3/1991, arts. 5 y 7](https://www.boe.es/buscar/act.php?id=BOE-A-1991-628)
+- [TRLGDCU, Real Decreto Legislativo 1/2007](https://www.boe.es/buscar/act.php?id=BOE-A-2007-20555)
+- [AEPD, procedimiento PS-00284-2024 (SEAT)](https://www.aepd.es/documento/ps-00284-2024.pdf)

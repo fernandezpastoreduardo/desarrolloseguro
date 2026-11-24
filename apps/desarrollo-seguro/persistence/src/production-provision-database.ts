@@ -487,6 +487,8 @@ async function applyRuntimeGrants(pool: Pool): Promise<void> {
       ON public.ds_scan_public_policy_transparency TO ${READ_ROLE};
     GRANT SELECT (run_id, comparison_json)
       ON public.ds_scan_public_service_comparisons TO ${READ_ROLE};
+    GRANT SELECT (run_id, findings_json)
+      ON public.ds_scan_legal_cookie_findings TO ${READ_ROLE};
     GRANT SELECT (run_id, summary_json)
       ON public.ds_scan_internal_audit_public_summaries TO ${READ_ROLE};
 
@@ -517,6 +519,10 @@ async function applyRuntimeGrants(pool: Pool): Promise<void> {
       public.ds_complete_scan_with_transparency(uuid, uuid, timestamptz, text,
         timestamptz, text, jsonb, jsonb, jsonb, jsonb, jsonb, jsonb, jsonb)
       TO ${WORKER_ROLE};
+    GRANT EXECUTE ON FUNCTION public.ds_complete_scan_with_legal_cookie_findings(
+      uuid, uuid, timestamptz, text, timestamptz, text, jsonb, jsonb, jsonb,
+      jsonb, jsonb, jsonb, jsonb, jsonb, jsonb
+    ) TO ${WORKER_ROLE};
     GRANT EXECUTE ON FUNCTION public.ds_purge_expired_reports(timestamptz),
       public.ds_purge_inactive_public_reports(timestamptz),
       public.ds_enqueue_due_certification_scans(timestamptz)

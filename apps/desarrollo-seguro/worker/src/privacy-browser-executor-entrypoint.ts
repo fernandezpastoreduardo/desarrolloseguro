@@ -85,6 +85,17 @@ function unknownFlow(): PrivacyBrowserObservation["initial"] {
     storageKeysAfterChoice: [],
     cookieReadComplete: false,
     storageReadComplete: false,
+    phaseEvidence: {
+      beforeChoice: null,
+      choiceActionAtMs: null,
+      afterChoice: null,
+      reloadStartedAtMs: null,
+      afterReload: null,
+      rejectionChoiceStateAfterReload: "unknown",
+      rejectionChoiceEvidence: null,
+      networkRequests: [],
+      networkRequestsComplete: true,
+    },
   };
 }
 

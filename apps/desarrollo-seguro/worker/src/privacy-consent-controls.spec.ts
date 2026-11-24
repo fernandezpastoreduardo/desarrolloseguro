@@ -50,6 +50,7 @@ describe("privacy consent controls", () => {
       provider: "Google Analytics",
       indices: [0, 1],
       count: 2,
+      enabled: true,
       declaredLegitimateInterest: true,
     }]);
   });
@@ -62,6 +63,7 @@ describe("privacy consent controls", () => {
       provider: "Google Analytics",
       indices: [0, 1],
       count: 2,
+      enabled: true,
       declaredLegitimateInterest: false,
     };
     const beforeToggle = vi.fn();
@@ -79,6 +81,7 @@ describe("privacy consent controls", () => {
       provider: "Google Analytics",
       indices: [0],
       count: 1,
+      enabled: null,
       declaredLegitimateInterest: null,
     };
     expect(await turnVendorTogglesOff(page as never, provider)).toEqual({ disabled: false, actions: 0 });

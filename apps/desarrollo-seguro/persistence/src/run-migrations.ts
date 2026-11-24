@@ -147,6 +147,7 @@ const MIGRATIONS = [
     version: "042_public_service_comparisons",
     file: "042_public_service_comparisons.sql",
   },
+  { version: "043_legal_cookie_findings", file: "043_legal_cookie_findings.sql" },
 ] as const;
 
 const MIGRATION_LOCK_ID = 728194032;
