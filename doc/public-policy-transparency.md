@@ -45,6 +45,11 @@ multa concreta que impondrá una autoridad. Si falta un elemento legal, el
 informe conserva la contradicción y muestra qué estado del mapeo jurídico se
 aplicó; no inventa artículos ni cuantías.
 
+Los hallazgos nuevos incluyen las fuentes públicas por elemento legal, con
+título, enlace y fragmento breve. Los informes históricos con el formato
+anterior siguen siendo válidos; los IDs de fuente antiguos no se interpretan
+como enlaces que el lector pueda abrir.
+
 La ausencia de documentación pertinente, una fuente oficial no localizada y
 un fallo técnico al abrir un enlace son resultados diferentes. No encontrar
 una URL con las fuentes permitidas no demuestra que el proveedor carezca de

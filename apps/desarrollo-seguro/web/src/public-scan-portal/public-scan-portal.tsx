@@ -229,7 +229,15 @@ type PublicServiceComparison = {
       providerFact: { title: string; url: string; excerpt: string };
       providerValue: boolean;
       relation: "opposes" | "supports";
-      legalFinding?: { status: "infraccion_legal_acreditada"; instrument: string; articles: string[]; authority: string; sanction: { alternatives: Array<{ type: string; amount?: number; percentage?: number; currency?: string }> } };
+      legalFinding?: {
+        status: "infraccion_legal_acreditada";
+        instrument: string;
+        articles: string[];
+        authority: string;
+        sanction: { alternatives: Array<{ type: string; amount?: number; percentage?: number; currency?: string }> };
+        officialSources?: Array<{ sourceId: string; title: string; url: string; issuer: string; version: string; checkedAt: string }>;
+        supportingSources?: Record<string, Array<{ sourceId: string; title: string; url: string; excerpt: string }>>;
+      };
     }>;
   }>;
 };
@@ -1357,9 +1365,33 @@ function PublicServiceComparisonSection({ comparison, observedDomains, catalogVe
                 <div className="ds-portal__provider-legal-finding" data-status="infraccion_legal_acreditada">
                   <strong>Incumplimiento legal acreditado</strong>
                   <p>{item.legalFinding.instrument}, artículos {item.legalFinding.articles.join(", ")}. Organismo competente: {item.legalFinding.authority}.</p>
+                  {item.legalFinding.officialSources && (
+                    <p>Fuentes jurídicas oficiales: {item.legalFinding.officialSources.map((source, index) => (
+                      <span key={source.sourceId}>
+                        {index > 0 ? " · " : ""}<a href={source.url} target="_blank" rel="noopener noreferrer">{source.title}</a>
+                        {` (${source.issuer}; ${source.checkedAt.slice(0, 10)})`}
+                      </span>
+                    ))}.</p>
+                  )}
                   <p>Escala sancionadora prevista: {item.legalFinding.sanction.alternatives.map((scale) =>
                     scale.type === "fixed_amount" ? `${scale.amount?.toLocaleString("es-ES")} ${scale.currency}` : `${scale.percentage} % del volumen de negocio mundial anual`,
                   ).join(" o ")} (la cuantía concreta la determina el organismo competente).</p>
+                  {item.legalFinding.supportingSources && (
+                    <details>
+                      <summary>Fuentes de los elementos legales</summary>
+                      <ul>
+                        {Object.entries(item.legalFinding.supportingSources).flatMap(([element, sources]) =>
+                          sources.map((source) => (
+                            <li key={`${element}-${source.sourceId}`}>
+                              <b>{getLegalEvidenceElementLabel(element)}:</b>{" "}
+                              <a href={source.url} target="_blank" rel="noopener noreferrer">{source.title}</a>
+                              {source.excerpt ? <blockquote>{source.excerpt}</blockquote> : null}
+                            </li>
+                          )),
+                        )}
+                      </ul>
+                    </details>
+                  )}
                 </div>
               )}
             </div>
@@ -1449,6 +1481,18 @@ function FirstEntryPolicyAccessSection({ access }: { access: FirstEntryPolicyAcc
       )}
     </section>
   );
+}
+
+function getLegalEvidenceElementLabel(element: string): string {
+  const labels: Record<string, string> = {
+    site_denies_or_omits_recipient: "Lo que declara el sitio sobre el destinatario",
+    provider_receives_matching_data: "Lo que documenta el proveedor sobre la recepción",
+    personal_data_in_flow: "Datos personales identificados en el flujo",
+    audited_entity_is_controller: "Identificación de la entidad responsable",
+    data_origin_is_established: "Origen de los datos",
+    aepd_jurisdiction_is_established: "Competencia de la AEPD",
+  };
+  return labels[element] ?? "Elemento legal acreditado";
 }
 
 function getOfficialDocumentLabel(kind: string): string {

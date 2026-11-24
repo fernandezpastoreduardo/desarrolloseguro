@@ -117,6 +117,10 @@ describe("provider documentation contradictions", () => {
             personal_data_in_flow: ["observed-personal-data-category"],
             audited_entity_is_controller: ["controller-declaration"],
           },
+          supportingSources: {
+            personal_data_in_flow: [{ sourceId: "observed-personal-data-category", sourceKind: "auditor_observation" }],
+            audited_entity_is_controller: [{ sourceId: "controller-declaration", sourceKind: "audited_site" }],
+          },
         },
       }],
     });
@@ -126,6 +130,10 @@ describe("provider documentation contradictions", () => {
     ]);
     expect(parseProviderDocumentationContradiction(result)).toEqual(result);
     if (!result) throw new Error("expected_contradiction");
+    const legacy = JSON.parse(JSON.stringify(result)) as typeof result;
+    if (!legacy) throw new Error("expected_legacy_fixture");
+    delete legacy.comparisons[0]?.legalFinding?.supportingSources;
+    expect(parseProviderDocumentationContradiction(legacy)).toEqual(legacy);
     const forged = JSON.parse(JSON.stringify(result)) as {
       comparisons: Array<{ legalFinding: { sanction: { alternatives: Array<Record<string, unknown>> } } }>;
     };

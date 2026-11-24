@@ -62,6 +62,7 @@ export type ProviderLegalFinding = {
   sanction: ProviderLegalRule["sanction"];
   officialSources: ProviderLegalRule["references"];
   supportingEvidence: Partial<Record<ProviderLegalElementId, string[]>>;
+  supportingSources?: Partial<Record<ProviderLegalElementId, ProviderEvidenceSource[]>>;
 };
 
 export type ProviderDocumentationSourceReceipt = {
@@ -295,11 +296,24 @@ function isValidLegalFinding(value: unknown): value is ProviderLegalFinding {
       !isValidSanctionScale(value.sanction) ||
       value.authority !== rule.authority) return false;
   const evidence = value.supportingEvidence;
-  return Object.keys(evidence).length === PROVIDER_RECIPIENT_DISCLOSURE_ELEMENT_IDS.length &&
+  const supportingEvidenceValid = Object.keys(evidence).length === PROVIDER_RECIPIENT_DISCLOSURE_ELEMENT_IDS.length &&
     PROVIDER_RECIPIENT_DISCLOSURE_ELEMENT_IDS.every((key) => Object.hasOwn(evidence, key)) &&
     Object.keys(evidence).every((key) => PROVIDER_RECIPIENT_DISCLOSURE_ELEMENT_IDS.includes(key as ProviderLegalElementId)) &&
     Object.values(evidence).every((sources) => Array.isArray(sources) && sources.length > 0 && sources.length <= 10 &&
       sources.every((sourceId) => typeof sourceId === "string" && sourceId.length <= 96));
+  if (!supportingEvidenceValid) return false;
+  if (value.supportingSources === undefined) return true;
+  const supportingSources = value.supportingSources;
+  if (!isRecord(supportingSources) ||
+      Object.keys(supportingSources).length !== PROVIDER_RECIPIENT_DISCLOSURE_ELEMENT_IDS.length ||
+      !PROVIDER_RECIPIENT_DISCLOSURE_ELEMENT_IDS.every((key) => Object.hasOwn(supportingSources, key))) return false;
+  return PROVIDER_RECIPIENT_DISCLOSURE_ELEMENT_IDS.every((key) => {
+    const sources = supportingSources[key];
+    const sourceIds = evidence[key];
+    return Array.isArray(sources) && sources.length > 0 && sources.length <= 10 &&
+      sources.every(isValidSource) &&
+      deepEqual(sources.map(({ sourceId }) => sourceId), sourceIds);
+  });
 }
 
 function isIndependentEvidencePair(site: ProviderEvidenceSource, provider: ProviderEvidenceSource): boolean {
@@ -427,8 +441,12 @@ function elementIsSatisfied(item: ProviderLegalElementEvidence | undefined): ite
 
 function toLegalFinding(rule: ProviderLegalRule, evidence: ProviderLegalEvidence): ProviderLegalFinding {
   const supportingEvidence: Partial<Record<ProviderLegalElementId, string[]>> = {};
+  const supportingSources: Partial<Record<ProviderLegalElementId, ProviderEvidenceSource[]>> = {};
   for (const [elementId, item] of Object.entries(evidence.elements)) {
-    if (elementIsSatisfied(item)) supportingEvidence[elementId as ProviderLegalElementId] = item.evidence.map(({ sourceId }) => sourceId);
+    if (elementIsSatisfied(item)) {
+      supportingEvidence[elementId as ProviderLegalElementId] = item.evidence.map(({ sourceId }) => sourceId);
+      supportingSources[elementId as ProviderLegalElementId] = [...item.evidence];
+    }
   }
   return {
     status: "infraccion_legal_acreditada",
@@ -442,6 +460,7 @@ function toLegalFinding(rule: ProviderLegalRule, evidence: ProviderLegalEvidence
     sanction: rule.sanction,
     officialSources: rule.references,
     supportingEvidence,
+    supportingSources,
   };
 }
 

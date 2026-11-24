@@ -108,6 +108,10 @@ legal vigente acrediten.
 - Cada hallazgo incluye las dos afirmaciones comparadas, referencia precisa a
   ambas fuentes, fecha y versión del catálogo, artículo y norma aplicables,
   organismo competente y multa prevista según el mapeo legal vigente.
+- Cada hallazgo expone además las fuentes identificables que acreditan cada
+  elemento legal: título, URL pública y fragmento mínimo. Los IDs internos
+  pueden acompañar a la evidencia, pero no sustituyen las referencias
+  verificables para quien lee el informe.
 - Mantener por separado los incumplimientos de distintas normas/autoridades.
   No sumar máximos ni asignar un artículo o cuantía sin una regla legal
   versionada que justifique esa atribución.
