@@ -1,4 +1,4 @@
-import { normalizeHostname, SCAN_FAILURE_CODES, parsePrivacyAssessment, parsePublicPolicyTransparencyAssessment, parsePublicServiceDeclarations, parseScanFailureDiagnostic, type ScanFailureCode, type ScanFailureDiagnostic } from "@desarrolloseguro/core";
+import { normalizeHostname, SCAN_FAILURE_CODES, parseFirstEntryPolicyAccess, parseLegalCookieFindings, parsePrivacyAssessment, parsePublicPolicyTransparencyAssessment, parsePublicServiceComparison, parsePublicServiceDeclarations, parseScanFailureDiagnostic, type ScanFailureCode, type ScanFailureDiagnostic } from "@desarrolloseguro/core";
 import type { ScanCheck, ScanRunInput } from "@desarrolloseguro/persistence";
 import { isNetworkProbeFailureList, type NetworkProbeFailure, type ScanProfileVersion } from "./transport-v1-executor.js";
 import { getTransportBudget } from "./transport-budget.js";
@@ -181,6 +181,34 @@ function parseExecutorResult(
     const declarations = parsePublicServiceDeclarations(value.publicServiceDeclarations);
     if (!declarations) throw new Error("executor_result_invalid");
     result.publicServiceDeclarations = declarations;
+  }
+  if (
+    value.publicServiceComparison !== undefined ||
+    value.legalCookieFindings !== undefined ||
+    value.firstEntryPolicyAccess !== undefined
+  ) {
+    if (profileVersion !== "domain-v4" || value.scannerVersion !== "domain-v4-network-adapter-3") {
+      throw new Error("executor_result_invalid");
+    }
+  }
+  if (value.publicServiceComparison !== undefined) {
+    const comparison = value.publicServiceComparison === null
+      ? null
+      : parsePublicServiceComparison(value.publicServiceComparison);
+    if (value.publicServiceComparison !== null && !comparison) throw new Error("executor_result_invalid");
+    result.publicServiceComparison = comparison;
+  }
+  if (value.legalCookieFindings !== undefined) {
+    const findings = parseLegalCookieFindings(value.legalCookieFindings);
+    if (!findings) throw new Error("executor_result_invalid");
+    result.legalCookieFindings = findings;
+  }
+  if (value.firstEntryPolicyAccess !== undefined) {
+    const access = value.firstEntryPolicyAccess === null
+      ? null
+      : parseFirstEntryPolicyAccess(value.firstEntryPolicyAccess);
+    if (value.firstEntryPolicyAccess !== null && !access) throw new Error("executor_result_invalid");
+    result.firstEntryPolicyAccess = access;
   }
   return result;
 }

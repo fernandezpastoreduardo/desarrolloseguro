@@ -18,6 +18,11 @@ completa, el resultado es «no se pudo comprobar», no un aprobado ni un fallo d
 sitio. El almacenamiento de terceros no esencial conserva su comprobación
 separada.
 
+El informe público muestra el resultado y la evidencia estructurada de esta
+comprobación, la comparación de servicios externos y los hallazgos jurídicos
+acreditados. Estos datos se conservan desde la ejecución aislada del auditor
+hasta su presentación pública; no se descartan en el transporte interno.
+
 ## Proveedores, fuentes y contradicciones
 
 El auditor identifica los proveedores que aparecen en la política y en los

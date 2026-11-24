@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ClaimedScanJob } from "@desarrolloseguro/persistence";
+import { parseTransportV1ExecutorResponse } from "./transport-v1-executor-protocol.js";
 import {
   TransportV1FixtureExecutor,
   TransportV1NetworkExecutor,
@@ -47,6 +48,51 @@ function makeSource(): TransportV1FixtureObservationSource {
 }
 
 describe("TransportV1 executors", () => {
+  it("preserves domain-v4 privacy evidence across the executor response boundary", () => {
+    const firstEntryPolicyAccess = {
+      policyVersion: "first-entry-policy-access-v1",
+      status: "fail",
+      reasonCode: "consent_link_missing",
+      consentPromptDetected: true,
+      thirdPartyCookieDetected: true,
+      nonEssentialThirdPartyStorageDetected: true,
+      linkLocation: "none",
+      link: null,
+      documentAccess: "not_checked",
+    } as const;
+    const observedAt = "2026-11-24T03:00:00.000Z";
+    const controlIds = ["DS-DNS-01", "DS-TLS-01", "DS-TLS-02", "DS-HTTP-01", "DS-HDR-01", "DS-PRIV-04", "DS-PRIV-05", "DS-PRIV-06", "DS-PRIV-07", "DS-QUAL-02"];
+    const result = {
+      scannerVersion: "domain-v4-network-adapter-3",
+      startedAt: observedAt,
+      completedAt: observedAt,
+      verdict: "inconclusive",
+      scope: ["/"],
+      checks: controlIds.map((controlId) => ({
+        controlId, status: "unknown", required: true, severity: "high", observedAt,
+        targetPath: "/", method: "GET", summary: "Fixture observation.", limitation: "Fixture only.", evidence: {},
+      })),
+      metrics: { requestsCount: 0, bytesCount: 0, durationMs: 0, pagesCount: 0 },
+      publicPolicyTransparencyAssessment: {
+        policyVersion: "public-policy-v1",
+        status: "pass",
+        reasonCode: "disclosure_found",
+        evidence: { linksFound: 1, pagesInspected: 1, unavailablePages: 0, accessDeniedPages: 0, providerMentions: 1, providersMissingPurpose: 0, categories: ["other"] },
+      },
+      publicServiceComparison: null,
+      legalCookieFindings: [],
+      firstEntryPolicyAccess,
+    };
+
+    const response = parseTransportV1ExecutorResponse({ protocolVersion: 1, requestId: JOB.id, result }, JOB.id, "domain-v4");
+
+    expect("result" in response && response.result).toMatchObject({
+      publicServiceComparison: null,
+      legalCookieFindings: [],
+      firstEntryPolicyAccess,
+    });
+  });
+
   it("retains normalized provider-purpose declarations from the public policy", async () => {
     const policyEvidence = {
       publicPolicyLinksFound: 1,
