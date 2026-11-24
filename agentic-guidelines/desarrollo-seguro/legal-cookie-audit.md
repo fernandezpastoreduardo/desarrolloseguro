@@ -17,6 +17,25 @@ La herramienta acredita hechos técnicos y aplica una regla jurídica explícita
 - Flujos independientes de aceptación y rechazo para evitar que el estado de uno contamine el otro.
 - Reglas para LSSI, RGPD y LOPDGDD; vía de consumo/LCD cuando la actividad y los elementos legales observados permitan aplicarla.
 - No se considera infracción autónoma el mero hecho de que la página permita navegar mientras el aviso está visible.
+- La ausencia de un control «Rechazar» no es por sí misma un incumplimiento. Si el inventario completo de primera visita solo acredita cookies técnicas/exentas y el aviso informativo enlaza a la política de privacidad, ese caso se evalúa como limpio; no se exige una interfaz de consentimiento para cookies que no requieren consentimiento.
+- La visita al enlace de política se captura como fase distinta en un contexto
+  nuevo: conservar por separado la instantánea de primera entrada y la
+  instantánea posterior a navegar al enlace, ambas con nombres, dominios,
+  atributos de cookies y claves/tipos de almacenamiento, sin valores y con
+  tiempos monotónicos. No se pulsa «Entendido» ni se inventa una acción de
+  rechazo durante esta fase. Una cookie observada solo después de abrir la
+  política no es una cookie pre-consentimiento ni una cookie posterior al
+  rechazo; no genera un hallazgo de rechazo ausente.
+- Regresión documentada de Grumphya: `grumphya_anon` aparece como cookie propia
+  al abrir la política de privacidad, no en la instantánea inicial limpia. La
+  evidencia aportada indica `Secure`, `HttpOnly`, `SameSite=Strict` y expiración
+  el 29-12-2027; la política describe su finalidad como mantener el perfil
+  anónimo y limitar los intentos gratuitos. Esa cuota forma parte del servicio
+  solicitado y se trata como cookie técnica, no de terceros ni de seguimiento.
+  No se atribuyen claves de almacenamiento de sesión a esta evidencia. La
+  falta de botón de rechazo no genera hallazgo cuando el inventario observado
+  se limita a cookies técnicas y el aviso enlaza la política. La ocurrencia
+  posterior a abrir la política permanece separada de la instantánea inicial.
 - Fingerprinting y cabeceras HTTP son comprobaciones diferenciadas; no se deducen de la mera presencia de Google Analytics ni de una puntuación general.
 
 ## Secuencia probatoria del navegador
@@ -70,22 +89,24 @@ La referencia encontrada de Wallapop (E/00993/2018) no es un precedente de cooki
 
 Cada hallazgo contendrá: identificador de regla y versión; nombre explícito del incumplimiento acreditado; hechos observados con línea temporal; artefactos probatorios; artículos y texto oficial vigente; autoridad con competencia para ese tipo; clasificación legal; marco sancionador aplicable y naturaleza de la cuantía (máximo legal, propuesta o resolución firme); fecha y hash del conjunto de evidencias; reglas de concurrencia aplicadas.
 
-El slice LSSI inicial calcula un conjunto `legalCookieFindings` separado del objeto de puntuación. Solo crea un hallazgo si una cookie figura en `phaseEvidence` antes de la acción de consentimiento o después de la acción explícita de rechazo (inmediatamente después y tras recargar), y una regla técnica versionada de confianza alta la atribuye a una finalidad analítica, publicitaria o social. Para inventarios se requiere lectura completa; una cookie enviada o recibida se acredita directamente mediante su nombre y fase de red. Cada artefacto identifica flujo, fase, instante monotónico, cookie (nombre y dominio, nunca valor), regla de atribución y evidencia de red correlacionada cuando exista. La capa no altera criterios, puntuaciones ni campos legacy. No genera filas por hosts o nombres de cookie sin atribución confirmada.
+El slice LSSI inicial calcula `legalCookieFindings` separado de los controles técnicos. Solo crea un hallazgo si una cookie figura en `phaseEvidence` antes de la acción de consentimiento o después de la acción explícita de rechazo (inmediatamente después y tras recargar), y una regla técnica versionada de confianza alta la atribuye a una finalidad analítica, publicitaria o social. Para inventarios se requiere lectura completa; una cookie enviada o recibida se acredita directamente mediante su nombre y fase de red. Cada artefacto identifica flujo, fase, instante monotónico, cookie (nombre y dominio, nunca valor), regla de atribución y evidencia de red correlacionada cuando exista. La capa no altera los controles técnicos ni campos históricos.
 
-Los hallazgos jurídicos se muestran aparte de las puntuaciones técnicas. Si existe al menos un incumplimiento legal acreditado, la puntuación global queda fijada en el valor mínimo de su escala y no puede compensarse con controles correctos. Las puntuaciones técnicas por área se conservan y muestran por separado. Un resultado no evaluado o una señal que no alcance los elementos de una regla jurídica no activa este bloqueo. La escala numérica global y su valor mínimo deben estar definidos antes de implementar el cálculo.
+Los hallazgos jurídicos se muestran aparte de las puntuaciones técnicas. Si existe al menos un `legalCookieFinding` acreditado o una contradicción de proveedores que contenga un `legalFinding.status = infraccion_legal_acreditada`, la puntuación global queda fijada en `0`, mínimo de la escala global vigente de 0 a 100; los controles correctos no pueden compensarla. Las puntuaciones técnicas por área se conservan y muestran por separado. Una contradicción factual sin mapeo legal completo, una comprobación no evaluada o una señal que no alcance los elementos de una regla jurídica no activa el bloqueo.
 
 ## Aceptación
 
 1. Un fixture con analítica antes de elegir produce eventos pre-elección separados y el hallazgo LSSI correspondiente; no se confunde con tráfico posterior al rechazo.
 2. Un fixture que conserva una cookie y envía una petición después de «Rechazar» produce el hallazgo de rechazo ineficaz, incluyendo la evidencia posterior al clic y tras recargar.
 3. Una cookie técnica documentada y una navegación permitida sin instalar tecnologías no exentas no producen el hallazgo LSSI de falta de consentimiento.
+3a. Un aviso informativo sin control «Rechazar», con enlace accesible a la política y un inventario completo que solo contiene una cookie técnica, pasa la comprobación de acceso a la política y no genera un hallazgo de rechazo ausente.
+3b. La cookie propia `grumphya_anon` aparece solo en la instantánea posterior a abrir la política; se conserva con su fase/tiempo, dominio y atributos, sin valores, y no se convierte en fallo de rechazo. La finalidad declarada de límite de intentos gratuitos y la duración de 400 días quedan disponibles para evaluación separada de necesidad/retención.
 4. La persistencia del rechazo se acredita con el estado guardado del CMP más el comportamiento posterior, no solo por la desaparición del banner.
 5. Las diferencias visuales de aceptar/rechazar se respaldan por captura y medidas DOM en móvil y escritorio.
 6. Texto falso y enlace ausente se muestran como hechos separados y solo reciben los artículos/multas que el mapa legal haya conectado a sus elementos.
 7. RGPD, LOPDGDD, LSSI y consumo aparecen como regímenes distintos, con órganos y cuantías correctos; ningún importe se calcula por suma automática.
 8. «No bloquea la navegación» por sí solo no genera un incumplimiento.
 9. La cobertura incompleta nunca produce resultado de cumplimiento.
-10. Un incumplimiento legal acreditado fija la puntuación global en el mínimo de escala; ninguna nota técnica puede compensarlo.
+10. Un `legalCookieFinding` acreditado o un `legalFinding` de proveedor acreditado fija la puntuación global en 0; ninguna nota técnica puede compensarlo.
 11. Las notas técnicas por área permanecen visibles aunque el bloqueo legal fije la puntuación global.
 12. El informe público expone los hallazgos y evidencia verificable sin valores de cookies, credenciales, cuerpos completos de requests ni datos personales innecesarios.
 

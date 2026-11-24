@@ -26,7 +26,8 @@ function observation(overrides: Partial<PrivacyBrowserObservation> = {}): Privac
   return {
     protocolVersion: 1, requestId: "947dd0c9-564c-4a30-8ce3-efb4ecae9136", hostname: "example.org",
     status: "complete", context: { browser: "Chromium", locale: "es-ES", timezone: "Europe/Madrid", viewport: "desktop-1365x768" },
-    initial: flow, accept: flow, reject: flow, vendorControlCoverage: "not_applicable", vendorControlCount: 0,
+    initial: flow, policyLinkVisit: { status: "not_applicable", link: null, documentAccess: "not_checked", navigationStartedAtMs: null, beforeNavigation: null, afterNavigation: null },
+    accept: flow, reject: flow, vendorControlCoverage: "not_applicable", vendorControlCount: 0,
     vendorControls: [], requestCount: 1, blockedRequestCount: 0, requestBudgetExceeded: false,
     thirdPartyRequestHosts: ["analytics.example.net"], receivedBytes: 0,
     ...overrides,
@@ -55,12 +56,20 @@ describe("first-entry policy access from browser evidence", () => {
     });
   });
 
-  it("passes the privacy link in a non-consent informational notice with a clean cookie inventory", () => {
+  it("passes a policy link in an informational notice when the only cookie is technical and there is no reject control", () => {
     const clean = observation();
     expect(assessFirstEntryPolicyAccessObservation({
       ...clean,
       initial: {
         ...clean.initial,
+        rejectVisibleAtFirstLayer: false,
+        phaseEvidence: {
+          ...clean.initial.phaseEvidence,
+          beforeChoice: {
+            ...clean.initial.phaseEvidence.beforeChoice!,
+            cookies: [{ name: "sessionid", domain: "example.org", secure: true, httpOnly: true }],
+          },
+        },
         firstEntryPolicyLinks: {
           ...clean.initial.firstEntryPolicyLinks,
           informationNoticeLink: link,

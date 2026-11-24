@@ -1,9 +1,9 @@
-import type { ScanRunInput } from "@desarrolloseguro/persistence";
 import type { ClaimedScanJob } from "@desarrolloseguro/persistence";
 import type { ScanExecutor } from "./scan-job-processor.js";
 import { ProcessorAuditorClient } from "./processor-auditor-client.js";
 import { assessDevelopmentSecurityProcessorRegistry } from "@desarrolloseguro/core";
 import { DEVELOPMENT_SECURITY_PROCESSOR_REGISTRY } from "./development-security-processor-registry.js";
+import type { ScanExecutorResult } from "./public-policy-document-boundary.js";
 
 export class ProcessorAuditorScanExecutor implements ScanExecutor {
   constructor(
@@ -19,7 +19,7 @@ export class ProcessorAuditorScanExecutor implements ScanExecutor {
   async execute(
     job: ClaimedScanJob,
     signal: AbortSignal,
-  ): Promise<Omit<ScanRunInput, "jobId" | "leaseToken" | "hostname" | "profileVersion">> {
+  ): Promise<ScanExecutorResult> {
     const result = await this.scanExecutor.execute(job, signal);
     if (job.hostname === "desarrolloseguro.org") {
       return {

@@ -50,6 +50,41 @@ export type ProviderLegalEvidence = {
   elements: Readonly<Partial<Record<ProviderLegalElementId, ProviderLegalElementEvidence>>>;
 };
 
+/** Explicit audited-site legal context carried from the public-policy crawl. */
+export type ProviderLegalEvidenceContext = {
+  dataOrigin?: {
+    value: ProviderLegalDataOrigin;
+    evidence: ProviderEvidenceSource[];
+  };
+  auditedEntityIsController?: { evidence: ProviderEvidenceSource[] };
+  aepdJurisdictionIsEstablished?: { evidence: ProviderEvidenceSource[] };
+};
+
+export function isProviderLegalEvidenceContext(value: unknown): value is ProviderLegalEvidenceContext {
+  if (!isRecord(value) || Object.keys(value).length === 0 || Object.keys(value).some((key) =>
+    !["dataOrigin", "auditedEntityIsController", "aepdJurisdictionIsEstablished"].includes(key))) return false;
+  if (Object.hasOwn(value, "dataOrigin")) {
+    const origin = value.dataOrigin;
+    if (!isRecord(origin) || Object.keys(origin).length !== 2 ||
+        !["value", "evidence"].every((key) => Object.hasOwn(origin, key)) ||
+        !["obtained_from_subject", "not_obtained_from_subject"].includes(String(origin.value)) ||
+        !isAuditedSiteSourceList(origin.evidence)) return false;
+  }
+  for (const key of ["auditedEntityIsController", "aepdJurisdictionIsEstablished"] as const) {
+    if (!Object.hasOwn(value, key)) continue;
+    const claim = value[key];
+    if (!isRecord(claim) || Object.keys(claim).length !== 1 || !Object.hasOwn(claim, "evidence") ||
+        !isAuditedSiteSourceList(claim.evidence)) return false;
+  }
+  return true;
+}
+
+function isAuditedSiteSourceList(value: unknown): value is ProviderEvidenceSource[] {
+  return Array.isArray(value) && value.length > 0 && value.length <= 5 &&
+    value.every((source) => isRecord(source) && isValidSource(source as unknown as ProviderEvidenceSource) &&
+      source.sourceKind === "audited_site");
+}
+
 export type ProviderLegalFinding = {
   status: "infraccion_legal_acreditada";
   ruleId: string;

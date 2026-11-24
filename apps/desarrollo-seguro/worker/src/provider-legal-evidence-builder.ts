@@ -8,21 +8,11 @@ import {
   type ProviderStatement,
 } from "@desarrolloseguro/core";
 
-type ExplicitEvidence = {
-  evidence: readonly ProviderEvidenceSource[];
-};
-
-type PersonalDataFlowEvidence = ExplicitEvidence & (
-  | { basis: "direct_personal_data_flow" }
-  | { basis: "destination_host_only" }
-);
+type ExplicitEvidence = { evidence: readonly ProviderEvidenceSource[] };
 
 export type ProviderLegalEvidenceContext = {
-  dataOrigin?: {
-    value: ProviderLegalDataOrigin;
-    evidence: readonly ProviderEvidenceSource[];
-  };
-  personalDataInFlow?: PersonalDataFlowEvidence;
+  dataOrigin?: { value: ProviderLegalDataOrigin; evidence: readonly ProviderEvidenceSource[] };
+  personalDataInFlow?: ExplicitEvidence & { basis: "direct_personal_data_flow" | "destination_host_only" };
   auditedEntityIsController?: ExplicitEvidence;
   aepdJurisdictionIsEstablished?: ExplicitEvidence;
 };

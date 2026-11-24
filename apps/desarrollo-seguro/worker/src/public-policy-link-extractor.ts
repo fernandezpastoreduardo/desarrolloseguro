@@ -6,9 +6,10 @@ const MAX_HTML_BYTES = 256 * 1024;
 const MAX_DOCUMENT_NODES = 50_000;
 const MAX_ANCHOR_TEXT_LENGTH = 1_024;
 const MAX_POLICY_PATH_LENGTH = 512;
+const MAX_PUBLIC_LINK_LABEL_LENGTH = 200;
 export const MAX_PUBLIC_POLICY_LINKS = 30;
 
-const POLICY_REFERENCE = /(?:privacy|privacidad|protecci[oó]n\s+de\s+datos|data\s+protection|cookie|cookies|pol[ií]tica\s+(?:de\s+)?(?:privacidad|datos|cookies)|t[eé]rminos|terms|conditions|condiciones|aviso\s+legal|legal\s+notice|imprint)/iu;
+const POLICY_REFERENCE = /(?:privacy|privacidad|protecci[oó]n\s+de\s+datos|data\s+protection|cookie|cookies|pol[ií]tica\s+(?:de\s+)?(?:privacidad|datos|cookies)|t[eé]rminos|terms|conditions|condiciones|aviso\s+legal|legal\s+notice|imprint|\bDPA\b|data\s+processing|tratamiento\s+de\s+datos|sub[\s-]?processors?|subencargados?|encargados?\s+del\s+tratamiento|service\s+documentation|documentaci[oó]n\s+(?:del\s+)?servicio|technical\s+documentation|documentaci[oó]n\s+t[eé]cnica|developer\s+documentation|API\s+documentation)/iu;
 const PRIVATE_HOST_SUFFIXES = [
   ".localhost", ".local", ".internal", ".test", ".invalid", ".example",
   ".home.arpa", ".onion", ".lan", ".home", ".corp", ".intranet", ".private",
@@ -18,17 +19,24 @@ export type PublicPolicyLink = {
   hostname: string;
   path: string;
   kind: "privacy" | "cookies" | "terms" | "legal";
+  /** Canonical HTTPS target; query strings and fragments are intentionally removed. */
+  href?: string;
+  /** Visible link text, bounded and redacted before leaving the parser. */
+  anchorText?: string;
+  documentRole?: "audited_site_policy" | "provider_document";
 };
 
 /**
  * Finds likely public privacy, cookie, legal, and terms pages linked from a
- * page. Only normalized HTTPS host/path pairs cross this boundary; query
- * strings, fragments, labels, and source HTML are discarded. DNS resolution
- * and private-address rejection must still be enforced by the network layer.
+ * page. Only normalized HTTPS targets and bounded visible labels cross this
+ * boundary; query strings, fragments, and source HTML are discarded. DNS
+ * resolution and private-address rejection must still be enforced by the
+ * network layer.
  */
 export function extractPublicPolicyLinks(
   hostnameInput: unknown,
   html: unknown,
+  sourcePagePath = "/",
 ): PublicPolicyLink[] {
   if (typeof html !== "string" || Buffer.byteLength(html, "utf8") > MAX_HTML_BYTES) {
     return [];
@@ -41,6 +49,8 @@ export function extractPublicPolicyLinks(
     return [];
   }
 
+  if (typeof sourcePagePath !== "string" || !sourcePagePath.startsWith("/") ||
+      sourcePagePath.length > MAX_POLICY_PATH_LENGTH || containsUnsafeUrlCharacter(sourcePagePath)) return [];
   const document = parse(html);
   const pending: DefaultTreeAdapterMap["node"][] = [document];
   const links: PublicPolicyLink[] = [];
@@ -61,7 +71,7 @@ export function extractPublicPolicyLinks(
           const reference = `${href.split(/[?#]/u, 1)[0]} ${anchorText}`;
           if (!hasPolicyReference(reference)) continue;
           const kind = classifyPolicyReference(reference);
-          const link = normalizePolicyLink(href, rootHostname, kind);
+          const link = normalizePolicyLink(href, rootHostname, sourcePagePath, kind, anchorText);
           if (link) {
             const key = `${link.hostname}${link.path}`;
             if (!seen.has(key)) {
@@ -87,13 +97,15 @@ export function extractPublicPolicyLinks(
 function normalizePolicyLink(
   href: string,
   rootHostname: string,
+  sourcePagePath: string,
   kind: PublicPolicyLink["kind"],
+  anchorText: string,
 ): PublicPolicyLink | undefined {
   if (containsUnsafeUrlCharacter(href)) return undefined;
 
   let url: URL;
   try {
-    url = new URL(href.trim(), `https://${rootHostname}/`);
+    url = new URL(href.trim(), `https://${rootHostname}${sourcePagePath}`);
   } catch {
     return undefined;
   }
@@ -124,7 +136,25 @@ function normalizePolicyLink(
     return undefined;
   }
 
-  return { hostname: normalizedHostname, path, kind };
+  const normalizedHref = `https://${normalizedHostname}${path}`;
+  return {
+    hostname: normalizedHostname,
+    path,
+    kind,
+    href: normalizedHref,
+    anchorText: redactLabel(anchorText),
+    documentRole: isProviderDocumentReference(`${href} ${anchorText}`) || !isSameSiteHost(rootHostname, normalizedHostname)
+      ? "provider_document"
+      : "audited_site_policy",
+  };
+}
+
+function isProviderDocumentReference(value: string): boolean {
+  return /\bDPA\b|data\s+processing|tratamiento\s+de\s+datos|sub[\s-]?processors?|subencargados?|encargados?\s+del\s+tratamiento|service\s+documentation|documentaci[oó]n\s+(?:del\s+)?servicio|technical\s+documentation|documentaci[oó]n\s+t[eé]cnica|developer\s+documentation|API\s+documentation/iu.test(value);
+}
+
+function isSameSiteHost(left: string, right: string): boolean {
+  return left === right || left.endsWith(`.${right}`) || right.endsWith(`.${left}`);
 }
 
 function hasPolicyReference(value: string): boolean {
@@ -166,6 +196,13 @@ function collectText(node: DefaultTreeAdapterMap["node"]): string {
     }
   }
   return text.slice(0, MAX_ANCHOR_TEXT_LENGTH);
+}
+
+function redactLabel(value: string): string {
+  const compact = value.replace(/\s+/gu, " ").trim().slice(0, MAX_PUBLIC_LINK_LABEL_LENGTH);
+  return compact
+    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/giu, "[redacted]")
+    .replace(/\b(?:sk|key|token)[-_][A-Z0-9_-]{12,}\b/giu, "[redacted]");
 }
 
 function isElement(node: DefaultTreeAdapterMap["node"]): node is DefaultTreeAdapterMap["element"] {

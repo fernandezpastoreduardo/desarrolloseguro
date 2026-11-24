@@ -13,8 +13,10 @@ import { runScanWorker } from "./worker-runtime.js";
 import { runProviderCatalogScheduler } from "@desarrolloseguro/persistence/provider-catalog-scheduler";
 import { refreshProviderCatalog } from "./provider-catalog-refresh.js";
 import { identifyUnattributedProviderDestination } from "./provider-destination-identity.js";
+import { toCatalogedProviderDocumentDiscovery } from "./provider-document-discovery.js";
 import {
   assessCatalogProviderDocumentation,
+  getProviderLegalEvidenceContexts,
   mergeProviderDocumentationComparison,
 } from "./provider-documentation-assessment.js";
 
@@ -71,17 +73,47 @@ export function createScanWorker(
             capturedAt: scanDate,
             excerpt: `El navegador completó una solicitud desde ${firstParty} hacia ${identity.hostname}. El dominio identifica el destino observado, no una empresa ni el tratamiento recibido.`,
             destinationHostname: identity.hostname,
-            destinationPath: "/",
           },
           officialDocuments: [],
         });
         catalogedProviderIds.add(identity.providerId);
       }
+      for (const document of result.publicPolicyDiscoveredDocuments ?? []) {
+        const discovery = toCatalogedProviderDocumentDiscovery({
+          document,
+          providerFacts: snapshot.providerFacts,
+          capturedAt: result.completedAt.toISOString(),
+        });
+        if (discovery) await providerCatalog.recordDiscoveredProvider(discovery);
+      }
       snapshot = await providerCatalog.readActive();
       if (!snapshot) throw new Error("provider_catalog_active_missing");
+      const providerDocumentUrls = new Set((result.publicPolicyDiscoveredDocuments ?? []).flatMap((document) =>
+        toCatalogedProviderDocumentDiscovery({
+          document,
+          providerFacts: snapshot.providerFacts,
+          capturedAt: result.completedAt.toISOString(),
+        }) ? [document.href] : [],
+      ));
+      const siteDeclarations = (result.publicServiceDeclarations ?? []).map((declaration) => ({
+        ...declaration,
+        ...(declaration.siteStatements
+          ? { siteStatements: declaration.siteStatements.filter((statement) =>
+              !providerDocumentUrls.has(statement.source.url)) }
+          : {}),
+      }));
       const providerDocumentation = assessCatalogProviderDocumentation({
-        declarations: result.publicServiceDeclarations,
+        declarations: siteDeclarations,
         observedProviderIds: (result.publicServiceComparison?.items ?? []).map(({ providerId }) => providerId),
+        linkedProviderIds: (result.publicPolicyDiscoveredDocuments ?? []).flatMap((document) => {
+          const discovery = toCatalogedProviderDocumentDiscovery({
+            document,
+            providerFacts: snapshot.providerFacts,
+            capturedAt: result.completedAt.toISOString(),
+          });
+          return discovery ? [discovery.providerId] : [];
+        }),
+        legalEvidenceContexts: getProviderLegalEvidenceContexts(siteDeclarations),
         snapshot,
       });
       const publicServiceComparison = mergeProviderDocumentationComparison(

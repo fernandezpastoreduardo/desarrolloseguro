@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ProviderCatalogSnapshot } from "@desarrolloseguro/persistence/provider-catalog";
 import { PROVIDER_LEGAL_RULES, type ProviderEvidenceSource } from "@desarrolloseguro/core";
-import { assessCatalogProviderDocumentation, mergeProviderDocumentationComparison } from "./provider-documentation-assessment.js";
+import { assessCatalogProviderDocumentation, getProviderLegalEvidenceContexts, mergeProviderDocumentationComparison } from "./provider-documentation-assessment.js";
 import type { ProviderLegalEvidenceContext } from "./provider-legal-evidence-builder.js";
 
 const siteStatement = {
@@ -23,6 +23,25 @@ const siteStatement = {
 };
 
 describe("catalog provider documentation assessment", () => {
+  it("passes crawled legal-context evidence through the worker composition map by provider", () => {
+    const context = {
+      dataOrigin: {
+        value: "obtained_from_subject" as const,
+        evidence: [{ ...siteStatement.source, excerpt: "Obtenemos los datos personales directamente del interesado." }],
+      },
+      auditedEntityIsController: {
+        evidence: [{ ...siteStatement.source, excerpt: "Somos responsables del tratamiento." }],
+      },
+      aepdJurisdictionIsEstablished: {
+        evidence: [{ ...siteStatement.source, excerpt: "La AEPD es nuestra autoridad de control competente." }],
+      },
+    };
+    expect(getProviderLegalEvidenceContexts([{
+      providerId: "openai-api", purposes: [], legalEvidenceContext: context,
+    }])).toEqual({ "openai-api": context });
+    expect(getProviderLegalEvidenceContexts(undefined)).toEqual({});
+  });
+
   it("compares explicit site statements with an official fact from the loaded snapshot", () => {
     const findings = assessCatalogProviderDocumentation({
       declarations: [{ providerId: "openai-api", purposes: ["ai_processing"], siteStatements: [siteStatement] }],

@@ -57,6 +57,7 @@ export function classifyPublicPolicyHtml(html: string): PublicPolicyClassificati
   const categories = new Set<string>();
   const declaredServices = new Map<string, Set<string>>();
   const siteStatements: NonNullable<PublicPolicyClassification["siteStatements"]>[number][] = [];
+  const legalContextClaims: NonNullable<PublicPolicyClassification["legalContextClaims"]>[number][] = [];
   let accessDenied = false;
 
   for (const { text: block, excerpt } of blocks) {
@@ -65,6 +66,7 @@ export function classifyPublicPolicyHtml(html: string): PublicPolicyClassificati
     }
     for (const sentence of splitStatements(excerpt)) {
       const normalizedSentence = normalizeText(sentence);
+      legalContextClaims.push(...classifyLegalContextSentence(sentence, normalizedSentence));
       const sentenceProviders = PROVIDERS.filter((provider) =>
         PROVIDER_IDENTIFIER.test(provider.id) && provider.aliases.some((alias) => includesPhrase(normalizedSentence, alias)),
       );
@@ -132,9 +134,71 @@ export function classifyPublicPolicyHtml(html: string): PublicPolicyClassificati
       purposeIds: [...purposeIds].sort(compareIdentifiers),
     })).sort((left, right) => compareIdentifiers(left.providerId, right.providerId)).slice(0, 30),
     siteStatements: deduplicateStatements(siteStatements).slice(0, 30),
+    ...(legalContextClaims.length > 0 ? { legalContextClaims: deduplicateLegalContextClaims(legalContextClaims).slice(0, 30) } : {}),
     documentTitle: extractDocumentTitle(html),
     ...(accessDenied ? { accessDenied: true } : {}),
   };
+}
+
+/** Extracts only literal receipt/collection statements from fetched provider documents. */
+export function classifyProviderDocumentHtml(html: string): Array<{ factId: "provider_receives_personal_data"; value: boolean; excerpt: string }> {
+  if (Buffer.byteLength(html, "utf8") > MAX_POLICY_TEXT_BYTES) throw new Error("public_policy_text_limit_exceeded");
+  const facts = new Map<string, { factId: "provider_receives_personal_data"; value: boolean; excerpt: string }>();
+  for (const { excerpt } of extractVisibleTextBlocks(html)) {
+    for (const sentence of splitStatements(excerpt)) {
+      if (sentence.length > MAX_BLOCK_LENGTH || containsSensitiveProviderFactExcerpt(sentence)) continue;
+      const normalized = normalizeText(sentence);
+      const positive = /\b(?:we|our company)\s+(?:may\s+|will\s+|do\s+)?(?:receive|collect|obtain|recibir|recopilar|recoger|obtener)\b[^.!?]{0,180}\b(?:personal data|personal information|datos personales)\b/u.test(normalized);
+      const negative = /\b(?:we|our company)\s+(?:do not|don't|never|no)\s+(?:receive|collect|obtain|recibir|recopilar|recoger|obtener)\b[^.!?]{0,180}\b(?:personal data|personal information|datos personales)\b/u.test(normalized);
+      if (positive === negative) continue;
+      facts.set(`${positive}`, {
+        factId: "provider_receives_personal_data",
+        value: positive,
+        excerpt: sentence.slice(0, 500),
+      });
+    }
+  }
+  const distinctValues = new Set([...facts.values()].map(({ value }) => value));
+  if (distinctValues.size !== 1) return [];
+  return [...facts.values()].slice(0, 5);
+}
+
+function classifyLegalContextSentence(
+  excerpt: string,
+  sentence: string,
+): NonNullable<PublicPolicyClassification["legalContextClaims"]>[number][] {
+  const output: NonNullable<PublicPolicyClassification["legalContextClaims"]>[number][] = [];
+  const mentionsPersonalData = /\b(?:datos personales|informacion personal|personal data|personal information)\b/u.test(sentence);
+  const mentionsInterestedParty = /\b(?:interesado|interesados|persona interesada|personas interesadas|data subject|data subjects)\b/u.test(sentence);
+  const mentionsThirdPartySource = /\b(?:de terceros|from third parties)\b/u.test(sentence);
+  const obtainedDirectly = /\b(?:obtenemos|recogemos|recopilamos|recibimos|obtain|collect)\b.{0,100}\b(?:datos personales|informacion personal|personal data|personal information)\b.{0,80}\b(?:directamente|de forma directa|directly)\b.{0,60}\b(?:del interesado|de los interesados|data subject|data subjects|you)\b/u.test(sentence) ||
+    /\b(?:datos personales|informacion personal|personal data|personal information)\b.{0,80}\b(?:obtenidos|recogidos|recopilados|obtained|collected)\b.{0,60}\b(?:directamente|de forma directa|directly)\b.{0,60}\b(?:del interesado|de los interesados|data subject|data subjects|you)\b/u.test(sentence);
+  const notObtainedFromSubject = /\b(?:no|nunca|not|never)\b.{0,50}\b(?:obtenemos|recogemos|recopilamos|recibimos|obtain|collect)\b.{0,100}\b(?:datos personales|informacion personal|personal data|personal information)\b.{0,60}\b(?:del interesado|de los interesados|data subject|data subjects)\b/u.test(sentence) ||
+    /\b(?:obtenemos|recogemos|recopilamos|recibimos|obtain|collect)\b.{0,60}\b(?:datos personales|informacion personal|personal data|personal information)\b.{0,60}\b(?:de terceros|from third parties)\b/u.test(sentence);
+  if (mentionsPersonalData && (mentionsInterestedParty || mentionsThirdPartySource) && obtainedDirectly !== notObtainedFromSubject) {
+    output.push({
+      kind: "data_origin",
+      value: obtainedDirectly ? "obtained_from_subject" : "not_obtained_from_subject",
+      excerpt: excerpt.slice(0, MAX_BLOCK_LENGTH),
+    });
+  }
+  if (/\b(?:somos|actuamos como|we are|we act as)\b.{0,40}\b(?:el |la )?(?:responsable del tratamiento|responsables del tratamiento|data controller|controller)\b/u.test(sentence)) {
+    output.push({ kind: "audited_entity_is_controller", excerpt: excerpt.slice(0, MAX_BLOCK_LENGTH) });
+  }
+  if (/\b(?:nuestra autoridad de control(?: competente)? es (?:la )?(?:aepd|agencia espanola de proteccion de datos)|(?:aepd|agencia espanola de proteccion de datos) es (?:la )?autoridad de control(?: competente)?|our competent supervisory authority is (?:the )?(?:aepd|spanish data protection authority))\b/u.test(sentence)) {
+    output.push({ kind: "aepd_jurisdiction_is_established", excerpt: excerpt.slice(0, MAX_BLOCK_LENGTH) });
+  }
+  return output;
+}
+
+function deduplicateLegalContextClaims<T extends { kind: string; excerpt: string }>(claims: readonly T[]): T[] {
+  const seen = new Set<string>();
+  return claims.filter((claim) => {
+    const key = `${claim.kind}\0${"value" in claim ? claim.value : ""}\0${claim.excerpt}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 export function getPublicPolicyProviderSources(): readonly {
@@ -342,6 +406,10 @@ function toProviderId(label: string): string {
 
 function compareIdentifiers(left: string, right: string): number {
   return left.localeCompare(right, "en");
+}
+
+function containsSensitiveProviderFactExcerpt(value: string): boolean {
+  return /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b|\b(?:sk|key|token)[-_][A-Z0-9_-]{12,}\b/iu.test(value);
 }
 
 function includesPhrase(text: string, phraseInput: string): boolean {

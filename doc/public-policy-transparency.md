@@ -12,13 +12,14 @@ fragmentos.
 
 Un aviso informativo visible que contiene un enlace operativo a la política
 también se registra aunque no solicite consentimiento. Si no se solicita
-consentimiento y la lectura inicial completa no detecta cookies de terceros,
-el enlace de ese aviso o del footer satisface esta comprobación; no se exige un
-control de rechazo. Una solicitud de red a un tercero por sí sola no invalida
-esa excepción; la recepción de datos por ese proveedor se evalúa aparte. Si la
-lectura no es completa, el resultado es «no se pudo comprobar», no un aprobado
-ni un fallo del sitio. El almacenamiento de terceros no esencial conserva su
-comprobación separada.
+consentimiento y la lectura inicial completa solo acredita cookies técnicas o
+exentas, el enlace de ese aviso o del footer satisface esta comprobación; no se
+exige un control de rechazo por la ausencia de cookies no esenciales. Una
+solicitud de red a un tercero por sí sola no invalida esa excepción; la
+recepción de datos por ese proveedor se evalúa aparte. Si la lectura no es
+completa, el resultado es «no se pudo comprobar», no un aprobado ni un fallo
+del sitio. El almacenamiento de terceros no esencial conserva su comprobación
+separada.
 
 El informe público muestra el resultado y la evidencia estructurada de esta
 comprobación, la comparación de servicios externos y los hallazgos jurídicos
@@ -26,6 +27,23 @@ acreditados. Estos datos se conservan desde la ejecución aislada del auditor
 hasta su presentación pública; no se descartan en el transporte interno.
 La sección de servicios muestra además la versión inmutable del catálogo
 oficial usado en ese informe.
+
+La navegación al enlace visible de política se comprueba en un contexto nuevo y
+su estado posterior se muestra separado de la instantánea inicial. El informe
+conserva tiempo monotónico, nombres, dominios y atributos de cookies y los
+nombres, dominios y tipos de almacenamiento, sin sus valores. La inspección no
+pulsa «Entendido» ni controles de consentimiento. Por eso una cookie que solo
+aparece después de abrir la política no se presenta como instalada antes de
+elegir ni como persistente tras rechazar.
+
+En la evidencia aportada para Grumphya, `grumphya_anon` es una cookie propia
+que mantiene el perfil anónimo y descuenta los intentos gratuitos. Aparece al
+abrir la política; consta como `Secure`, `HttpOnly`, `SameSite=Strict`, con
+expiración el 29-12-2027. Esa función de cuota forma parte del servicio y se
+clasifica como técnica, no como seguimiento o cookie de terceros. No tener un
+botón de rechazo no crea un incumplimiento cuando las cookies observadas son
+técnicas y la política está enlazada desde el aviso. La evidencia no contiene
+claves de almacenamiento de sesión.
 
 ## Proveedores, fuentes y contradicciones
 
@@ -40,10 +58,12 @@ Una contradicción documental confirmada se incorpora al resultado y afecta a
 la puntuación de transparencia. Cuando la evidencia satisface todos los
 elementos de una regla jurídica versionada, el informe identifica la
 infracción legal acreditada, los artículos, la autoridad competente y la
-escala sancionadora establecida por la norma. La escala legal no predice la
-multa concreta que impondrá una autoridad. Si falta un elemento legal, el
-informe conserva la contradicción y muestra qué estado del mapeo jurídico se
-aplicó; no inventa artículos ni cuantías.
+escala sancionadora establecida por la norma. Esa infracción fija en cero la
+puntuación global (`mvp-global-v2`); las notas técnicas de Ética y Privacidad
+se mantienen visibles por separado. La escala legal no predice la multa
+concreta que impondrá una autoridad. Si falta un elemento legal, el informe
+conserva la contradicción y muestra qué estado del mapeo jurídico se aplicó;
+no inventa artículos ni cuantías ni activa el cero jurídico.
 
 Los hallazgos nuevos incluyen las fuentes públicas por elemento legal, con
 título, enlace y fragmento breve. Los informes históricos con el formato
@@ -68,6 +88,12 @@ las 03:00, hora de `Europe/Madrid`, con reintentos si una fuente no está
 disponible. Usa únicamente URLs oficiales obtenidas del sitio auditado o ya
 registradas en el catálogo; no usa buscadores externos. La versión actualizada
 se utiliza en auditorías posteriores.
+
+Si una auditoría aporta una fuente o una referencia nueva para un proveedor ya
+catalogado, se añade a una nueva versión inmutable sin sustituir las evidencias
+anteriores. Una repetición idéntica no genera otra versión. Si un identificador
+de documento existente llega con URL o contenido incompatible, el sistema
+rechaza esa combinación para no sobrescribir la evidencia registrada.
 
 El lector de red no envía cookies, credenciales ni `Referer`, solo accede por
 HTTPS y limita el tiempo, el número de solicitudes y el volumen de datos.

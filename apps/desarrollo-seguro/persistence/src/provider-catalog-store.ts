@@ -53,6 +53,7 @@ export type ProviderDiscoveryDocument = {
   status: "fetched" | "unavailable" | "failed";
   sha256: string | null;
   checkedAt: string;
+  documentedFacts?: Array<{ factId: "provider_receives_personal_data"; value: boolean; excerpt: string }>;
 };
 
 export type ProviderDiscoveryInput = {
@@ -171,39 +172,27 @@ export class PostgresProviderCatalogStore {
       const active = await this.readActive();
       if (!active) throw new Error("provider_catalog_active_missing");
       const existingProvider = active.providerFacts.find((fact) => isRecord(fact) && fact.providerId === normalized.providerId);
-      if (existingProvider) {
+      if (!existingProvider && active.providerFacts.length >= MAX_PROVIDERS) throw new Error("provider_catalog_provider_limit_exceeded");
+
+      const discovery = existingProvider
+        ? mergeDiscoveredProvider(existingProvider, active.sources, normalized)
+        : createDiscoveredProvider(normalized);
+      if (!discovery.changed) {
         return {
           catalogVersion: active.catalogVersion,
           created: false,
-          documentationStatus: isRecord(existingProvider) && isDocumentationStatus(existingProvider.documentationStatus)
-            ? existingProvider.documentationStatus
-            : getDocumentationStatus(normalized.officialDocuments),
+          documentationStatus: discovery.documentationStatus,
         };
       }
-      if (active.providerFacts.length >= MAX_PROVIDERS) throw new Error("provider_catalog_provider_limit_exceeded");
 
-      const documentationStatus = getDocumentationStatus(normalized.officialDocuments);
-      const providerFact = {
-        providerId: normalized.providerId,
-        displayName: normalized.displayName,
-        aliases: normalized.aliases,
-        products: normalized.products,
-        serviceSummary: "Proveedor identificado durante una auditoría; hechos oficiales pendientes de extracción.",
-        documentationStatus,
-        discoveryEvidence: [normalized.evidence],
-        officialDocuments: normalized.officialDocuments.map(({ documentId, kind, title, url, checkedAt }) => ({
-          documentId,
-          kind,
-          title,
-          url,
-          reviewedAt: checkedAt.slice(0, 10),
-        })),
-        documentedFacts: [],
-      };
-      const providerFacts = [...active.providerFacts, providerFact];
+      const providerFacts = existingProvider
+        ? active.providerFacts.map((fact) => isRecord(fact) && fact.providerId === normalized.providerId
+          ? discovery.providerFact
+          : fact)
+        : [...active.providerFacts, discovery.providerFact];
       const sources = [
         ...active.sources,
-        ...normalized.officialDocuments.map((document) => ({
+        ...discovery.newDocuments.map((document) => ({
           providerId: normalized.providerId,
           documentId: document.documentId,
           title: document.title,
@@ -218,23 +207,26 @@ export class PostgresProviderCatalogStore {
       if (!validFacts || !validSources) throw new Error("provider_catalog_discovery_payload_invalid");
       const version = computeProviderCatalogVersion(validFacts, active.legalRules, validSources);
       try {
-        const result = await this.pool.query<{ ds_add_provider_catalog_discovery_version: unknown }>(
-          `SELECT public.ds_add_provider_catalog_discovery_version(
+        const functionName = existingProvider
+          ? "ds_add_provider_catalog_discovery_evidence_version"
+          : "ds_add_provider_catalog_discovery_version";
+        const result = await this.pool.query<Record<string, unknown>>(
+          `SELECT public.${functionName}(
             $1, $2, $3::jsonb, $4::jsonb, $5::jsonb, $6::jsonb
-          ) AS ds_add_provider_catalog_discovery_version`,
+          ) AS ${functionName}`,
           [
             active.catalogVersion,
             version,
             JSON.stringify(validFacts),
             JSON.stringify(active.legalRules),
             JSON.stringify(validSources),
-            JSON.stringify({ ...normalized, documentationStatus }),
+            JSON.stringify({ ...normalized, documentationStatus: getDocumentationStatus(normalized.officialDocuments) }),
           ],
         );
-        if (result.rows[0]?.ds_add_provider_catalog_discovery_version !== version) {
+        if (result.rows[0]?.[functionName] !== version) {
           throw new Error("provider_catalog_discovery_activation_invalid");
         }
-        return { catalogVersion: version, created: true, documentationStatus };
+        return { catalogVersion: version, created: true, documentationStatus: discovery.documentationStatus };
       } catch (error) {
         if (!(error instanceof Error) || error.message !== "provider_catalog_active_version_changed" || attempt === 2) throw error;
       }
@@ -282,6 +274,198 @@ export class PostgresProviderCatalogStore {
       [toMadridLocalDate(scheduledAt), failureCode, JSON.stringify(sources)],
     );
   }
+}
+
+type DiscoveredProviderMerge = {
+  providerFact: Record<string, unknown>;
+  newDocuments: ProviderDiscoveryDocument[];
+  documentationStatus: ProviderDiscoveryResult["documentationStatus"];
+  changed: boolean;
+};
+
+function createDiscoveredProvider(input: ProviderDiscoveryInput): DiscoveredProviderMerge {
+  const documentationStatus = getDocumentationStatus(input.officialDocuments);
+  return {
+    providerFact: {
+      providerId: input.providerId,
+      displayName: input.displayName,
+      aliases: input.aliases,
+      products: input.products,
+      serviceSummary: "Proveedor identificado durante una auditoría; hechos oficiales pendientes de extracción.",
+      documentationStatus,
+      discoveryEvidence: [input.evidence],
+      officialDocuments: input.officialDocuments.map(({ documentId, kind, title, url, checkedAt }) => ({
+        documentId,
+        kind,
+        title,
+        url,
+        reviewedAt: checkedAt.slice(0, 10),
+      })),
+      documentedFacts: input.officialDocuments.flatMap((document) => document.status === "fetched"
+        ? (document.documentedFacts ?? []).map((fact) => ({ documentId: document.documentId, ...fact }))
+        : []),
+    },
+    newDocuments: [...input.officialDocuments],
+    documentationStatus,
+    changed: true,
+  };
+}
+
+function mergeDiscoveredProvider(
+  existing: unknown,
+  sourceReceipts: readonly ProviderCatalogSourceReceipt[],
+  input: ProviderDiscoveryInput,
+): DiscoveredProviderMerge {
+  if (!isRecord(existing) || existing.displayName !== input.displayName) {
+    throw new Error("provider_catalog_discovery_identity_conflict");
+  }
+  const aliases = mergeStringValues(existing.aliases, input.aliases, 20);
+  const products = mergeStringValues(existing.products, input.products, 20);
+  const evidence = readDiscoveryEvidence(existing.discoveryEvidence);
+  const previousEvidence = evidence.find((item) => item.sourceId === input.evidence.sourceId);
+  if (previousEvidence && !sameJson(
+    { ...previousEvidence, capturedAt: undefined },
+    { ...input.evidence, capturedAt: undefined },
+  )) {
+    throw new Error("provider_catalog_discovery_evidence_conflict");
+  }
+  const newEvidence = previousEvidence ? [] : [input.evidence];
+
+  const documents = readDiscoveredDocumentMetadata(existing.officialDocuments);
+  const receiptsByDocumentId = new Map(sourceReceipts
+    .filter(({ providerId }) => providerId === input.providerId)
+    .map((receipt) => [receipt.documentId, receipt]));
+  const newDocuments: ProviderDiscoveryDocument[] = [];
+  const documentedFacts = readStoredDocumentedFacts(existing.documentedFacts);
+  for (const document of input.officialDocuments) {
+    const prior = documents.find(({ documentId }) => documentId === document.documentId);
+    const priorReceipt = receiptsByDocumentId.get(document.documentId);
+    for (const fact of document.status === "fetched" ? document.documentedFacts ?? [] : []) {
+      const candidate = { documentId: document.documentId, ...fact };
+      const previous = documentedFacts.find((item) => item.documentId === candidate.documentId && item.factId === candidate.factId);
+      if (previous && !sameJson(previous, candidate)) throw new Error("provider_catalog_discovery_fact_conflict");
+      if (!previous) documentedFacts.push(candidate);
+    }
+    if (!prior && !priorReceipt) {
+      newDocuments.push(document);
+      documents.push({
+        documentId: document.documentId,
+        kind: document.kind,
+        title: document.title,
+        url: document.url,
+        reviewedAt: document.checkedAt.slice(0, 10),
+      });
+      continue;
+    }
+    if (!prior || !priorReceipt || prior.kind !== document.kind || prior.title !== document.title || prior.url !== document.url ||
+        priorReceipt.title !== document.title || priorReceipt.url !== document.url || priorReceipt.status !== document.status ||
+        priorReceipt.sha256 !== document.sha256) {
+      throw new Error("provider_catalog_discovery_document_conflict");
+    }
+  }
+  const previousStatus = isDocumentationStatus(existing.documentationStatus)
+    ? existing.documentationStatus
+    : "source_not_localized";
+  const documentationStatus = mergeDocumentationStatus(previousStatus, input.officialDocuments);
+  const changed = newEvidence.length > 0 || newDocuments.length > 0 ||
+    !sameJson(aliases, existing.aliases ?? []) || !sameJson(products, existing.products ?? []) ||
+    documentationStatus !== previousStatus;
+  return {
+    providerFact: {
+      ...existing,
+      aliases,
+      products,
+      documentationStatus,
+      discoveryEvidence: [...evidence, ...newEvidence],
+      officialDocuments: documents,
+      documentedFacts,
+    },
+    newDocuments,
+    documentationStatus,
+    changed,
+  };
+}
+
+function mergeStringValues(existing: unknown, incoming: readonly string[], maximum: number): string[] {
+  const prior = Array.isArray(existing) && existing.every((item) => typeof item === "string")
+    ? existing as string[]
+    : [];
+  const merged = [...new Set([...prior, ...incoming])];
+  if (merged.length > maximum) throw new Error("provider_catalog_discovery_payload_invalid");
+  return merged;
+}
+
+function readDiscoveryEvidence(value: unknown): ProviderDiscoveryEvidence[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > 100 || !value.every((item) => isRecord(item) &&
+      typeof item.sourceId === "string" && typeof item.kind === "string" && typeof item.url === "string")) {
+    throw new Error("provider_catalog_discovery_payload_invalid");
+  }
+  return value as unknown as ProviderDiscoveryEvidence[];
+}
+
+function normalizeDiscoveredFacts(value: unknown, status: unknown): ProviderDiscoveryDocument["documentedFacts"] | null {
+  if (status !== "fetched" || !Array.isArray(value) || value.length > 5) return null;
+  const output: NonNullable<ProviderDiscoveryDocument["documentedFacts"]> = [];
+  for (const fact of value) {
+    if (!isRecord(fact) || !onlyKeys(fact, ["factId", "value", "excerpt"]) ||
+        fact.factId !== "provider_receives_personal_data" || typeof fact.value !== "boolean" ||
+        !isSafeText(fact.excerpt, 1, 500)) return null;
+    output.push({ factId: "provider_receives_personal_data", value: fact.value, excerpt: fact.excerpt.trim() });
+  }
+  return output;
+}
+
+function readStoredDocumentedFacts(value: unknown): Array<{
+  documentId: string; factId: "provider_receives_personal_data"; value: boolean; excerpt: string;
+}> {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > MAX_RULES) throw new Error("provider_catalog_discovery_payload_invalid");
+  const output: Array<{ documentId: string; factId: "provider_receives_personal_data"; value: boolean; excerpt: string }> = [];
+  for (const entry of value) {
+    if (!isRecord(entry) || !onlyKeys(entry, ["documentId", "factId", "value", "excerpt"]) ||
+        !isIdentifier(entry.documentId, 96) || entry.factId !== "provider_receives_personal_data" ||
+        typeof entry.value !== "boolean" || !isSafeText(entry.excerpt, 1, 500)) {
+      throw new Error("provider_catalog_discovery_payload_invalid");
+    }
+    output.push({ documentId: entry.documentId, factId: entry.factId, value: entry.value, excerpt: entry.excerpt });
+  }
+  return output;
+}
+
+function readDiscoveredDocumentMetadata(value: unknown): Array<{
+  documentId: string; kind: string; title: string; url: string; reviewedAt: string;
+}> {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > 50 || !value.every(isRecord)) {
+    throw new Error("provider_catalog_discovery_payload_invalid");
+  }
+  const documents = value.flatMap((item) => typeof item.documentId === "string" &&
+      typeof item.kind === "string" && item.kind.length > 0 && item.kind.length <= 64 &&
+      typeof item.title === "string" && typeof item.url === "string" && typeof item.reviewedAt === "string"
+    ? [{
+        documentId: item.documentId,
+        kind: item.kind,
+        title: item.title,
+        url: item.url,
+        reviewedAt: item.reviewedAt,
+      }]
+    : []);
+  if (documents.length !== value.length) throw new Error("provider_catalog_discovery_payload_invalid");
+  return documents;
+}
+
+function mergeDocumentationStatus(
+  previous: ProviderDiscoveryResult["documentationStatus"],
+  incoming: readonly ProviderDiscoveryDocument[],
+): ProviderDiscoveryResult["documentationStatus"] {
+  if (previous === "located" || incoming.some(({ status }) => status === "fetched")) return "located";
+  if (previous === "source_unavailable" || incoming.length > 0) return "source_unavailable";
+  return previous;
+}
+
+function sameJson(left: unknown, right: unknown): boolean {
+  return JSON.stringify(canonicalize(left)) === JSON.stringify(canonicalize(right));
 }
 
 export function computeProviderCatalogVersion(
@@ -370,20 +554,22 @@ function normalizeProviderDiscovery(value: ProviderDiscoveryInput): ProviderDisc
     excerpt: redactSensitiveText(evidence.excerpt.trim()).slice(0, 500),
     ...(evidence.kind === "observed_destination" ? {
       destinationHostname: normalizePublicHostname(evidence.destinationHostname),
-      destinationPath: normalizePublicPath(evidence.destinationPath),
+      ...(evidence.destinationPath !== undefined ? { destinationPath: normalizePublicPath(evidence.destinationPath) } : {}),
     } : {}),
   };
   if (normalizedEvidence.kind === "observed_destination" &&
-      (!normalizedEvidence.destinationHostname || !normalizedEvidence.destinationPath)) return null;
+      (!normalizedEvidence.destinationHostname || evidence.destinationPath !== undefined && !normalizedEvidence.destinationPath)) return null;
   if (normalizedEvidence.kind === "explicit_site_reference" &&
       (evidence.destinationHostname !== undefined || evidence.destinationPath !== undefined)) return null;
 
   const documents: ProviderDiscoveryDocument[] = [];
   const documentIds = new Set<string>();
   for (const document of value.officialDocuments) {
-    if (!isRecord(document) || !onlyKeys(document, [
+    if (!isRecord(document) || !(onlyKeys(document, [
       "documentId", "kind", "title", "url", "discoveryMethod", "status", "sha256", "checkedAt",
-    ]) || !isIdentifier(document.documentId, 96) || documentIds.has(document.documentId) ||
+    ]) || onlyKeys(document, [
+      "documentId", "kind", "title", "url", "discoveryMethod", "status", "sha256", "checkedAt", "documentedFacts",
+    ])) || !isIdentifier(document.documentId, 96) || documentIds.has(document.documentId) ||
         !["privacy", "cookies", "terms", "legal", "service", "technical"].includes(String(document.kind)) ||
         !isSafeText(document.title, 1, 240) || typeof document.url !== "string" || !isPublicEvidenceUrl(document.url) ||
         !["audited_site_link", "known_official_catalog"].includes(String(document.discoveryMethod)) ||
@@ -393,6 +579,10 @@ function normalizeProviderDiscovery(value: ProviderDiscoveryInput): ProviderDisc
         document.status !== "fetched" && document.sha256 !== null ||
         typeof document.checkedAt !== "string" || !Number.isFinite(Date.parse(document.checkedAt))) return null;
     documentIds.add(document.documentId);
+    const documentedFacts = document.documentedFacts === undefined
+      ? undefined
+      : normalizeDiscoveredFacts(document.documentedFacts, document.status);
+    if (document.documentedFacts !== undefined && !documentedFacts) return null;
     documents.push({
       documentId: document.documentId,
       kind: document.kind as ProviderDiscoveryDocument["kind"],
@@ -402,6 +592,7 @@ function normalizeProviderDiscovery(value: ProviderDiscoveryInput): ProviderDisc
       status: document.status as ProviderDiscoveryDocument["status"],
       sha256: document.sha256 as string | null,
       checkedAt: new Date(document.checkedAt).toISOString(),
+      ...(documentedFacts ? { documentedFacts } : {}),
     });
   }
   return {

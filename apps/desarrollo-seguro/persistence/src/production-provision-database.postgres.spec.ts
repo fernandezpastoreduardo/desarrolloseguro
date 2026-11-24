@@ -1,4 +1,5 @@
 import { Pool } from "pg";
+import { DEVELOPMENT_SECURITY_MIGRATION_COUNT } from "./run-migrations.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   provisionProductionDevelopmentSecurityDatabase,
@@ -193,7 +194,7 @@ describePostgres.sequential(
       const migrationCount = await targetAdminPool?.query(
         "SELECT count(*)::integer AS count FROM public.ds_schema_migrations",
       );
-      expect(migrationCount?.rows[0]?.count).toBe(46);
+      expect(migrationCount?.rows[0]?.count).toBe(DEVELOPMENT_SECURITY_MIGRATION_COUNT);
     });
 
     it("applies column-scoped runtime grants and does not grant schema ownership to the API", async () => {
@@ -404,7 +405,7 @@ describePostgres.sequential(
       const migrationCount = await targetAdminPool?.query(
         "SELECT count(*)::integer AS count FROM public.ds_schema_migrations",
       );
-      expect(migrationCount?.rows[0]?.count).toBe(46);
+      expect(migrationCount?.rows[0]?.count).toBe(DEVELOPMENT_SECURITY_MIGRATION_COUNT);
     });
   },
 );

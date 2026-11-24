@@ -6,6 +6,30 @@ export type FirstEntryPolicyLink = {
   kind: "privacy" | "cookies" | "terms" | "legal";
 };
 
+export type FirstEntryPolicyStateSnapshot = {
+  capturedAtMs: number;
+  cookies: Array<{
+    name: string;
+    domain: string;
+    secure: boolean;
+    httpOnly: boolean;
+    sameSite: "Strict" | "Lax" | "None" | "unspecified";
+    expiresAtUnixSeconds: number | null;
+  }>;
+  storageKeys: Array<{ name: string; domain: string; kind: "local" | "session" | "indexeddb" | "cache" | "window-name" }>;
+  cookieReadComplete: boolean;
+  storageReadComplete: boolean;
+};
+
+export type FirstEntryPolicyLinkVisit = {
+  status: "evaluated" | "unknown" | "not_applicable";
+  link: FirstEntryPolicyLink | null;
+  documentAccess: "accessible" | "unavailable" | "not_checked" | "unknown";
+  navigationStartedAtMs: number | null;
+  beforeNavigation: FirstEntryPolicyStateSnapshot | null;
+  afterNavigation: FirstEntryPolicyStateSnapshot | null;
+};
+
 export type FirstEntryPolicyAccess = {
   policyVersion: typeof FIRST_ENTRY_POLICY_ACCESS_VERSION;
   status: "pass" | "fail" | "unknown";
@@ -25,6 +49,7 @@ export type FirstEntryPolicyAccess = {
   linkLocation: "consent_component" | "information_notice" | "footer" | "none" | "unknown";
   link: FirstEntryPolicyLink | null;
   documentAccess: "accessible" | "unavailable" | "not_checked" | "unknown";
+  policyLinkVisit?: FirstEntryPolicyLinkVisit;
 };
 
 export type FirstEntryPolicyAccessInput = {
@@ -85,7 +110,7 @@ export function parseFirstEntryPolicyAccess(value: unknown): FirstEntryPolicyAcc
   if (!isRecord(value) || !exactKeys(value, [
     "policyVersion", "status", "reasonCode", "consentPromptDetected",
     "thirdPartyCookieDetected", "nonEssentialThirdPartyStorageDetected", "linkLocation", "link", "documentAccess",
-  ]) || value.policyVersion !== FIRST_ENTRY_POLICY_ACCESS_VERSION ||
+  ], ["policyLinkVisit"]) || value.policyVersion !== FIRST_ENTRY_POLICY_ACCESS_VERSION ||
       !["pass", "fail", "unknown"].includes(String(value.status)) ||
       ![
         "consent_component_link_accessible", "information_notice_link_accessible_without_consent", "consent_link_missing", "consent_link_unavailable",
@@ -99,6 +124,8 @@ export function parseFirstEntryPolicyAccess(value: unknown): FirstEntryPolicyAcc
       !["consent_component", "information_notice", "footer", "none", "unknown"].includes(String(value.linkLocation)) ||
       !["accessible", "unavailable", "not_checked", "unknown"].includes(String(value.documentAccess)) ||
       (value.link !== null && !isPolicyLink(value.link))) return null;
+  const policyLinkVisit = value.policyLinkVisit === undefined ? undefined : parsePolicyLinkVisit(value.policyLinkVisit);
+  if (value.policyLinkVisit !== undefined && !policyLinkVisit) return null;
 
   const status = value.status as FirstEntryPolicyAccess["status"];
   const reasonCode = value.reasonCode as FirstEntryPolicyAccess["reasonCode"];
@@ -129,7 +156,53 @@ export function parseFirstEntryPolicyAccess(value: unknown): FirstEntryPolicyAcc
     linkLocation: location,
     link: value.link as FirstEntryPolicyLink | null,
     documentAccess: access,
+    ...(policyLinkVisit ? { policyLinkVisit } : {}),
   };
+}
+
+function parsePolicyLinkVisit(value: unknown): FirstEntryPolicyLinkVisit | null {
+  if (!isRecord(value) || !exactKeys(value, [
+    "status", "link", "documentAccess", "navigationStartedAtMs", "beforeNavigation", "afterNavigation",
+  ]) || !["evaluated", "unknown", "not_applicable"].includes(String(value.status)) ||
+      !(value.link === null || isPolicyLink(value.link)) ||
+      !["accessible", "unavailable", "not_checked", "unknown"].includes(String(value.documentAccess)) ||
+      !(value.navigationStartedAtMs === null || isNonNegativeInteger(value.navigationStartedAtMs)) ||
+      !(value.beforeNavigation === null || isPolicyStateSnapshot(value.beforeNavigation)) ||
+      !(value.afterNavigation === null || isPolicyStateSnapshot(value.afterNavigation))) return null;
+  if (value.status === "evaluated" && value.link !== null &&
+      (value.documentAccess === "not_checked" || value.navigationStartedAtMs === null || value.beforeNavigation === null ||
+       value.afterNavigation === null ||
+       value.beforeNavigation.capturedAtMs > value.navigationStartedAtMs ||
+       value.navigationStartedAtMs > value.afterNavigation.capturedAtMs)) return null;
+  if (value.status === "not_applicable" && (value.link !== null || value.navigationStartedAtMs !== null || value.afterNavigation !== null)) return null;
+  return value as unknown as FirstEntryPolicyLinkVisit;
+}
+
+function isPolicyStateSnapshot(value: unknown): value is FirstEntryPolicyStateSnapshot {
+  if (!isRecord(value) || !exactKeys(value, ["capturedAtMs", "cookies", "storageKeys", "cookieReadComplete", "storageReadComplete"]) ||
+      !isNonNegativeInteger(value.capturedAtMs) || !Array.isArray(value.cookies) || value.cookies.length > 200 ||
+      !Array.isArray(value.storageKeys) || value.storageKeys.length > 200 ||
+      typeof value.cookieReadComplete !== "boolean" || typeof value.storageReadComplete !== "boolean") return false;
+  return value.cookies.every((cookie) => isRecord(cookie) && exactKeys(cookie, ["name", "domain", "secure", "httpOnly", "sameSite", "expiresAtUnixSeconds"]) &&
+    isSafeEvidenceName(cookie.name, 100) && isSafeEvidenceName(cookie.domain, 253) &&
+    typeof cookie.secure === "boolean" && typeof cookie.httpOnly === "boolean" &&
+    ["Strict", "Lax", "None", "unspecified"].includes(String(cookie.sameSite)) &&
+    (cookie.expiresAtUnixSeconds === null || isNonNegativeInteger(cookie.expiresAtUnixSeconds))) &&
+    value.storageKeys.every((entry) => isRecord(entry) && exactKeys(entry, ["name", "domain", "kind"]) &&
+      isSafeEvidenceName(entry.name, 100) && isSafeEvidenceName(entry.domain, 253) &&
+      ["local", "session", "indexeddb", "cache", "window-name"].includes(String(entry.kind)));
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return Number.isSafeInteger(value) && (value as number) >= 0;
+}
+
+function isSafeEvidenceName(value: unknown, maxLength: number): value is string {
+  return typeof value === "string" && value.length > 0 && value.length <= maxLength &&
+    !Array.from(value).some((character) => {
+      const code = character.codePointAt(0) ?? 0;
+      return code <= 0x20 || code === 0x7f;
+    });
 }
 
 function result(
@@ -183,6 +256,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype;
 }
 
-function exactKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
-  return Reflect.ownKeys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
+function exactKeys(value: Record<string, unknown>, keys: readonly string[], optionalKeys: readonly string[] = []): boolean {
+  const allKeys = [...keys, ...optionalKeys];
+  return Reflect.ownKeys(value).every((key) => typeof key === "string" && allKeys.includes(key)) &&
+    keys.every((key) => Object.hasOwn(value, key)) &&
+    Reflect.ownKeys(value).length >= keys.length &&
+    Reflect.ownKeys(value).length <= allKeys.length;
 }

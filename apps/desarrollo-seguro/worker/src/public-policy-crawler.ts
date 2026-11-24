@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { normalizeHostname } from "@desarrolloseguro/core";
-import type { ProviderStatement } from "@desarrolloseguro/core";
+import type { ProviderLegalDataOrigin, ProviderStatement } from "@desarrolloseguro/core";
 import type { LookupFunction } from "node:net";
 import {
   extractPublicPolicyLinks,
@@ -11,6 +11,8 @@ import {
   createEgressDestinationAuthorizer,
 } from "./egress-destination-policy.js";
 import type { PublicDnsResolver } from "./pinned-dns-lookup.js";
+import type { PublicPolicyDiscoveredDocument } from "./public-policy-document-boundary.js";
+import { classifyProviderDocumentHtml } from "./public-policy-classifier.js";
 
 export const PUBLIC_POLICY_CRAWL_LIMITS = Object.freeze({
   durationMs: 120_000,
@@ -41,6 +43,7 @@ const MAX_SITE_STATEMENTS = 30;
 const MAX_SITE_EXCERPT_LENGTH = 500;
 const SITE_SOURCE_VERSION = "public-policy-source-v1";
 const MAX_SITE_STATEMENT_BYTES = 20 * 1024;
+const MAX_DISCOVERED_DOCUMENT_LINKS = 40;
 
 export type PublicPolicyFetchFailureCode =
   | "auditor_error"
@@ -91,6 +94,11 @@ export type PublicPolicyClassification = {
     basis: "explicit_claim";
     excerpt: string;
   }[];
+  /** Literal site declarations; crawler attaches a source receipt to every claim. */
+  legalContextClaims?: readonly (
+    | { kind: "data_origin"; value: ProviderLegalDataOrigin; excerpt: string }
+    | { kind: "audited_entity_is_controller" | "aepd_jurisdiction_is_established"; excerpt: string }
+  )[];
   documentTitle?: string;
   /** True only for an explicit, cataloged anti-bot or access-denied page. */
   accessDenied?: boolean;
@@ -115,7 +123,14 @@ export type PublicPolicyEvidence = {
   unavailablePages: number;
   providers: string[];
   providersWithPurpose: string[];
-  declaredServices: Array<{ providerId: string; purposeIds: string[]; siteStatements?: ProviderStatement[] }>;
+  declaredServices: Array<{
+    providerId: string;
+    purposeIds: string[];
+    siteStatements?: ProviderStatement[];
+    legalEvidenceContext?: import("@desarrolloseguro/core").ProviderLegalEvidenceContext;
+  }>;
+  /** Explicit legal/documentation links found in fetched public-policy HTML. */
+  discoveredDocuments: PublicPolicyDiscoveredDocument[];
   purposes: string[];
   categories: string[];
   requestsCount: number;
@@ -222,7 +237,19 @@ export async function collectPublicPolicyEvidence(
     ) return withInitialPage(empty, input, "unknown", "auditor_error");
     links = extractPublicPolicyLinks(hostname, input.html);
   }
-  const evidence = createEvidence(links.length);
+  const evidence = createEvidence(links.filter(({ documentRole }) => documentRole !== "provider_document").length);
+  const discoveredDocuments: PublicPolicyDiscoveredDocument[] = [];
+  const seenDiscoveredDocuments = new Set<string>();
+  const targetReceipts = new Map<string, Pick<PublicPolicyDiscoveredDocument, "fetchStatus" | "sha256" | "failureCode" | "documentedFacts">>();
+  for (const link of links) {
+    addDiscoveredDocument(discoveredDocuments, seenDiscoveredDocuments, {
+      ...link,
+      href: link.href ?? publicUrl(link),
+      anchorText: link.anchorText ?? "",
+      documentRole: link.documentRole ?? "audited_site_policy",
+    }, `https://${hostname}/`);
+  }
+  evidence.discoveredDocuments = discoveredDocuments;
   if (links.length === 0) {
     return withInitialPage(evidence, input, "fail", "no_policy_links");
   }
@@ -240,11 +267,18 @@ export async function collectPublicPolicyEvidence(
   const providers = new Set<string>();
   const providersWithPurpose = new Set<string>();
   const declaredServices = new Map<string, { purposes: Set<string>; siteStatements: ProviderStatement[] }>();
+  const legalContext: {
+    dataOrigin?: import("@desarrolloseguro/core").ProviderLegalEvidenceContext["dataOrigin"];
+    dataOriginConflict?: boolean;
+    controllerEvidence?: import("@desarrolloseguro/core").ProviderEvidenceSource[];
+    jurisdictionEvidence?: import("@desarrolloseguro/core").ProviderEvidenceSource[];
+  } = {};
   const purposes = new Set<string>();
   let denied = 0;
   let unavailable = 0;
   let hadAuditorError = false;
   let hadBudgetExhaustion = false;
+  let fetchAttempts = 0;
 
   for (const link of links) {
     if (!isSafeDiscoveredLink(link)) {
@@ -257,7 +291,7 @@ export async function collectPublicPolicyEvidence(
       break;
     }
     if (
-      evidence.pagesInspected >= Math.min(PUBLIC_POLICY_CRAWL_LIMITS.pages, budget.pages) ||
+      fetchAttempts >= Math.min(PUBLIC_POLICY_CRAWL_LIMITS.pages, budget.pages) ||
       evidence.requestsCount >= Math.min(PUBLIC_POLICY_CRAWL_LIMITS.requests, budget.requests) ||
       evidence.bytesCount >= Math.min(PUBLIC_POLICY_CRAWL_LIMITS.bytes, budget.bytes)
     ) {
@@ -272,6 +306,7 @@ export async function collectPublicPolicyEvidence(
     }
 
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    fetchAttempts += 1;
     let response: PublicPolicyDocumentResponse;
     try {
       response = await input.fetchDocument({
@@ -282,6 +317,7 @@ export async function collectPublicPolicyEvidence(
         timeoutMs,
       });
     } catch {
+      targetReceipts.set(publicUrl(link), { fetchStatus: "failed", sha256: null, failureCode: "auditor_error" });
       if (controller.signal.aborted && !input.signal.aborted) hadBudgetExhaustion = true;
       else hadAuditorError = true;
       clearTimeout(timeout);
@@ -290,11 +326,13 @@ export async function collectPublicPolicyEvidence(
     clearTimeout(timeout);
 
     if (now() - startedAt >= Math.min(budget.durationMs, PUBLIC_POLICY_CRAWL_LIMITS.durationMs)) {
+      targetReceipts.set(publicUrl(link), { fetchStatus: "failed", sha256: null, failureCode: "budget_exhausted" });
       hadBudgetExhaustion = true;
       break;
     }
 
     if (!isValidResponse(response)) {
+      targetReceipts.set(publicUrl(link), { fetchStatus: "failed", sha256: null, failureCode: "auditor_error" });
       hadAuditorError = true;
       break;
     }
@@ -308,18 +346,22 @@ export async function collectPublicPolicyEvidence(
       evidence.requestsCount > budget.requests ||
       evidence.bytesCount > budget.bytes
     ) {
+      targetReceipts.set(publicUrl(link), { fetchStatus: "failed", sha256: null, failureCode: "budget_exhausted" });
       hadBudgetExhaustion = true;
       break;
     }
     if (response.bytesCount > PUBLIC_POLICY_CRAWL_LIMITS.documentBytes) {
+      targetReceipts.set(publicUrl(link), { fetchStatus: "failed", sha256: null, failureCode: "response_too_large" });
       hadAuditorError = true;
       break;
     }
     if (response.redirectCount > PUBLIC_POLICY_CRAWL_LIMITS.redirectsPerDocument) {
+      targetReceipts.set(publicUrl(link), { fetchStatus: "failed", sha256: null, failureCode: "redirect_limit_exceeded" });
       hadBudgetExhaustion = true;
       break;
     }
     if (response.failureCode) {
+      targetReceipts.set(publicUrl(link), { fetchStatus: "failed", sha256: null, failureCode: response.failureCode });
       if (
         response.failureCode === "budget_exhausted" ||
         response.failureCode === "response_too_large" ||
@@ -331,19 +373,23 @@ export async function collectPublicPolicyEvidence(
     }
     const statusCode = response.statusCode;
     if (statusCode === undefined) {
+      targetReceipts.set(publicUrl(link), { fetchStatus: "failed", sha256: null, failureCode: "auditor_error" });
       hadAuditorError = true;
       continue;
     }
     if (ACCESS_DENIED_STATUSES.has(statusCode)) {
+      targetReceipts.set(publicUrl(link), { fetchStatus: "unavailable", sha256: null });
       denied += 1;
       continue;
     }
     if (UNAVAILABLE_STATUSES.has(statusCode)) {
+      targetReceipts.set(publicUrl(link), { fetchStatus: "unavailable", sha256: null });
       unavailable += 1;
       evidence.unavailablePages = unavailable;
       continue;
     }
     if (statusCode < 200 || statusCode >= 300) {
+      targetReceipts.set(publicUrl(link), { fetchStatus: "unavailable", sha256: null });
       unavailable += 1;
       evidence.unavailablePages = unavailable;
       continue;
@@ -352,21 +398,73 @@ export async function collectPublicPolicyEvidence(
       response.contentType.split(";", 1)[0]?.trim().toLowerCase() !== "text/html" ||
       Buffer.byteLength(response.html, "utf8") > PUBLIC_POLICY_CRAWL_LIMITS.documentBytes
     ) {
+      targetReceipts.set(publicUrl(link), {
+        fetchStatus: "failed", sha256: null,
+        failureCode: response.contentType.split(";", 1)[0]?.trim().toLowerCase() !== "text/html"
+          ? "unsupported_content_type"
+          : "response_too_large",
+      });
       hadAuditorError = true;
       continue;
     }
 
-    try {
-      const classification = input.classifyHtml(response.html);
-      if (classification.accessDenied === true) denied += 1;
-      mergeClassification(classification, providers, providersWithPurpose, purposes, categories, declaredServices);
-      mergeSiteStatements(classification, link, input.captureAt?.() ?? new Date(), declaredServices);
-    } catch {
-      hadAuditorError = true;
+    targetReceipts.set(publicUrl(link), {
+      fetchStatus: "fetched",
+      sha256: createHash("sha256").update(response.html, "utf8").digest("hex"),
+    });
+    if (link.documentRole !== "provider_document") {
+      for (const discovered of extractPublicPolicyLinks(link.hostname, response.html, link.path)) {
+        addDiscoveredDocument(
+          discoveredDocuments,
+          seenDiscoveredDocuments,
+          discovered,
+          publicUrl(link),
+        );
+      }
+
+      try {
+        const classification = input.classifyHtml(response.html);
+        if (classification.accessDenied === true) denied += 1;
+        mergeClassification(classification, providers, providersWithPurpose, purposes, categories, declaredServices);
+        const capturedAt = input.captureAt?.() ?? new Date();
+        mergeSiteStatements(classification, link, capturedAt, declaredServices);
+        mergeLegalContextClaims(classification, link, capturedAt, legalContext);
+      } catch {
+        hadAuditorError = true;
+      }
     }
   }
 
+  for (const document of discoveredDocuments) {
+    if (targetReceipts.has(document.href)) continue;
+    if (signal.aborted || fetchAttempts >= Math.min(PUBLIC_POLICY_CRAWL_LIMITS.pages, budget.pages) ||
+        evidence.requestsCount >= Math.min(PUBLIC_POLICY_CRAWL_LIMITS.requests, budget.requests) ||
+        evidence.bytesCount >= Math.min(PUBLIC_POLICY_CRAWL_LIMITS.bytes, budget.bytes)) break;
+    const elapsedMs = Math.max(0, now() - startedAt);
+    const timeoutMs = Math.min(budget.durationMs, PUBLIC_POLICY_CRAWL_LIMITS.durationMs) - elapsedMs;
+    if (timeoutMs <= 0) break;
+    const url = new URL(document.href);
+    fetchAttempts += 1;
+    const outcome = await fetchExplicitDocumentReceipt({
+      fetchDocument: input.fetchDocument,
+      hostname: url.hostname,
+      path: url.pathname,
+      documentRole: document.documentRole,
+      signal,
+      timeoutMs,
+    });
+    evidence.requestsCount += outcome.requestsCount;
+    evidence.bytesCount += outcome.bytesCount;
+    targetReceipts.set(document.href, outcome.receipt);
+    if (evidence.requestsCount > PUBLIC_POLICY_CRAWL_LIMITS.requests || evidence.requestsCount > budget.requests ||
+        evidence.bytesCount > PUBLIC_POLICY_CRAWL_LIMITS.bytes || evidence.bytesCount > budget.bytes) break;
+  }
+
   evidence.accessDeniedPages = denied;
+  evidence.discoveredDocuments = discoveredDocuments.map((document) => {
+    const receipt = targetReceipts.get(document.href);
+    return receipt ? { ...document, ...receipt } : document;
+  });
   evidence.unavailablePages = unavailable;
   evidence.providers = [...providers].sort(compareIdentifiers);
   evidence.providersWithPurpose = [...providersWithPurpose].sort(compareIdentifiers);
@@ -374,6 +472,13 @@ export async function collectPublicPolicyEvidence(
     providerId,
     purposeIds: [...service.purposes].sort(compareIdentifiers),
     ...(service.siteStatements.length > 0 ? { siteStatements: service.siteStatements } : {}),
+      ...(legalContext.dataOrigin || legalContext.controllerEvidence || legalContext.jurisdictionEvidence ? {
+      legalEvidenceContext: {
+        ...(legalContext.dataOrigin ? { dataOrigin: legalContext.dataOrigin } : {}),
+        ...(legalContext.controllerEvidence ? { auditedEntityIsController: { evidence: legalContext.controllerEvidence } } : {}),
+        ...(legalContext.jurisdictionEvidence ? { aepdJurisdictionIsEstablished: { evidence: legalContext.jurisdictionEvidence } } : {}),
+      },
+    } : {}),
   })).sort((left, right) => compareIdentifiers(left.providerId, right.providerId)).slice(0, MAX_CLASSIFIED_IDS);
   evidence.purposes = [...purposes].sort(compareIdentifiers);
   evidence.categories = [...categories].sort(compareIdentifiers);
@@ -486,6 +591,65 @@ function mergeSiteStatements(
   }
 }
 
+function mergeLegalContextClaims(
+  classification: PublicPolicyClassification,
+  link: PublicPolicyLink,
+  capturedAt: Date,
+  context: {
+    dataOrigin?: import("@desarrolloseguro/core").ProviderLegalEvidenceContext["dataOrigin"];
+    dataOriginConflict?: boolean;
+    controllerEvidence?: import("@desarrolloseguro/core").ProviderEvidenceSource[];
+    jurisdictionEvidence?: import("@desarrolloseguro/core").ProviderEvidenceSource[];
+  },
+): void {
+  const claims = classification.legalContextClaims ?? [];
+  if (!Array.isArray(claims) || claims.length > MAX_SITE_STATEMENTS || !Number.isFinite(capturedAt.getTime())) {
+    throw new Error("public_policy_classification_invalid");
+  }
+  const title = sanitizeDocumentTitle(classification.documentTitle, link.kind);
+  const baseSource = {
+    sourceId: createPolicySourceId(link),
+    version: SITE_SOURCE_VERSION,
+    title,
+    url: `https://${link.hostname}${link.path}`,
+    capturedAt: capturedAt.toISOString(),
+    documentKind: link.kind,
+    sourceKind: "audited_site" as const,
+  };
+  for (const claim of claims) {
+    if (typeof claim !== "object" || claim === null || Array.isArray(claim) ||
+        Object.getPrototypeOf(claim) !== Object.prototype || typeof claim.excerpt !== "string" ||
+        claim.excerpt.length === 0 || claim.excerpt.length > MAX_SITE_EXCERPT_LENGTH || containsSensitiveExcerpt(claim.excerpt)) {
+      throw new Error("public_policy_classification_invalid");
+    }
+    const keys = Reflect.ownKeys(claim).map(String);
+    const expectedKeys = claim.kind === "data_origin" ? ["kind", "value", "excerpt"] : ["kind", "excerpt"];
+    if (keys.length !== expectedKeys.length || expectedKeys.some((key) => !Object.hasOwn(claim, key)) ||
+        keys.some((key) => !expectedKeys.includes(key))) throw new Error("public_policy_classification_invalid");
+    const evidence = { ...baseSource, excerpt: claim.excerpt };
+    if (claim.kind === "data_origin" &&
+        (claim.value === "obtained_from_subject" || claim.value === "not_obtained_from_subject")) {
+      if (context.dataOriginConflict) continue;
+      if (context.dataOrigin && context.dataOrigin.value !== claim.value) {
+        delete context.dataOrigin;
+        context.dataOriginConflict = true;
+        continue;
+      }
+      const sources = [...(context.dataOrigin?.evidence ?? [])];
+      if (sources.length < 5) sources.push(evidence);
+      context.dataOrigin = { value: claim.value, evidence: sources };
+    } else if (claim.kind === "audited_entity_is_controller") {
+      const sources = context.controllerEvidence ?? (context.controllerEvidence = []);
+      if (sources.length < 5) sources.push(evidence);
+    } else if (claim.kind === "aepd_jurisdiction_is_established") {
+      const sources = context.jurisdictionEvidence ?? (context.jurisdictionEvidence = []);
+      if (sources.length < 5) sources.push(evidence);
+    } else {
+      throw new Error("public_policy_classification_invalid");
+    }
+  }
+}
+
 const FACT_IDENTIFIER = /^[a-z][a-z0-9_]{0,47}$/u;
 
 function createPolicySourceId(link: PublicPolicyLink): string {
@@ -514,7 +678,8 @@ function isSafeDiscoveredLink(link: unknown): link is PublicPolicyLink {
   try {
     if (typeof link !== "object" || link === null || Array.isArray(link) ||
         Object.getPrototypeOf(link) !== Object.prototype ||
-        Reflect.ownKeys(link).length !== 3 ||
+        Reflect.ownKeys(link).some((key) => !["hostname", "path", "kind", "href", "anchorText", "documentRole"].includes(String(key))) ||
+        Reflect.ownKeys(link).length < 3 || Reflect.ownKeys(link).length > 6 ||
         !Object.hasOwn(link, "hostname") || !Object.hasOwn(link, "path") ||
         !Object.hasOwn(link, "kind")) return false;
     const candidate = link as Record<string, unknown>;
@@ -525,7 +690,10 @@ function isSafeDiscoveredLink(link: unknown): link is PublicPolicyLink {
       candidate.path.length <= 512 &&
       !containsUnsafePathCharacter(candidate.path) &&
       typeof candidate.kind === "string" &&
-      ["privacy", "cookies", "terms", "legal"].includes(candidate.kind);
+      ["privacy", "cookies", "terms", "legal"].includes(candidate.kind) &&
+      (candidate.documentRole === undefined || candidate.documentRole === "audited_site_policy" || candidate.documentRole === "provider_document") &&
+      (candidate.href === undefined || candidate.href === `https://${hostname}${candidate.path}`) &&
+      (candidate.anchorText === undefined || typeof candidate.anchorText === "string" && candidate.anchorText.length <= 200);
   } catch {
     return false;
   }
@@ -624,8 +792,111 @@ function createEvidence(linksFound: number): PublicPolicyEvidence {
     purposes: [],
     categories: [],
     declaredServices: [],
+    discoveredDocuments: [],
     requestsCount: 0,
     bytesCount: 0,
+  };
+}
+
+function publicUrl(link: Pick<PublicPolicyLink, "hostname" | "path">): string {
+  return `https://${link.hostname}${link.path}`;
+}
+
+function addDiscoveredDocument(
+  documents: PublicPolicyDiscoveredDocument[],
+  seen: Set<string>,
+  link: PublicPolicyLink,
+  sourcePageUrl: string,
+): void {
+  const href = link.href ?? publicUrl(link);
+  const key = `${sourcePageUrl}\n${href}`;
+  if (seen.has(key) || documents.length >= MAX_DISCOVERED_DOCUMENT_LINKS) return;
+  seen.add(key);
+  documents.push({
+    href,
+    anchorText: (link.anchorText ?? "").replace(/\s+/gu, " ").trim().slice(0, 200),
+    kind: link.kind,
+    documentRole: link.documentRole ?? "audited_site_policy",
+    sourcePageUrl,
+    fetchStatus: "not_fetched",
+    sha256: null,
+  });
+}
+
+async function fetchExplicitDocumentReceipt(input: {
+  fetchDocument: PublicPolicyFetchDocument;
+  hostname: string;
+  path: string;
+  documentRole: PublicPolicyLink["documentRole"];
+  signal: AbortSignal;
+  timeoutMs: number;
+}): Promise<{
+  receipt: Pick<PublicPolicyDiscoveredDocument, "fetchStatus" | "sha256" | "failureCode" | "documentedFacts">;
+  requestsCount: number;
+  bytesCount: number;
+}> {
+  const requestController = new AbortController();
+  const requestSignal = AbortSignal.any([input.signal, requestController.signal]);
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    requestController.abort();
+  }, input.timeoutMs);
+  let response: PublicPolicyDocumentResponse;
+  try {
+    response = await input.fetchDocument({
+      method: "GET",
+      hostname: input.hostname,
+      path: input.path,
+      signal: requestSignal,
+      timeoutMs: input.timeoutMs,
+    });
+  } catch {
+    clearTimeout(timer);
+    return {
+      receipt: { fetchStatus: "failed", sha256: null, failureCode: timedOut ? "budget_exhausted" : "auditor_error" },
+      requestsCount: 0,
+      bytesCount: 0,
+    };
+  }
+  clearTimeout(timer);
+
+  if (!isValidResponse(response)) {
+    return { receipt: { fetchStatus: "failed", sha256: null, failureCode: "auditor_error" }, requestsCount: 0, bytesCount: 0 };
+  }
+  const counts = { requestsCount: response.requestsCount, bytesCount: response.bytesCount };
+  if (response.failureCode) {
+    return {
+      receipt: { fetchStatus: "failed", sha256: null, failureCode: response.failureCode },
+      ...counts,
+    };
+  }
+  if (response.statusCode === undefined) {
+    return { receipt: { fetchStatus: "failed", sha256: null, failureCode: "auditor_error" }, ...counts };
+  }
+  if (response.redirectCount > PUBLIC_POLICY_CRAWL_LIMITS.redirectsPerDocument) {
+    return { receipt: { fetchStatus: "failed", sha256: null, failureCode: "redirect_limit_exceeded" }, ...counts };
+  }
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    return { receipt: { fetchStatus: "unavailable", sha256: null }, ...counts };
+  }
+  if (response.contentType.split(";", 1)[0]?.trim().toLowerCase() !== "text/html") {
+    return { receipt: { fetchStatus: "failed", sha256: null, failureCode: "unsupported_content_type" }, ...counts };
+  }
+  if (response.bytesCount > PUBLIC_POLICY_CRAWL_LIMITS.documentBytes ||
+      Buffer.byteLength(response.html, "utf8") > PUBLIC_POLICY_CRAWL_LIMITS.documentBytes) {
+    return { receipt: { fetchStatus: "failed", sha256: null, failureCode: "response_too_large" }, ...counts };
+  }
+  const documentedFacts = input.documentRole === "provider_document"
+    ? classifyProviderDocumentHtml(response.html)
+    : [];
+  return {
+    receipt: {
+      fetchStatus: "fetched",
+      sha256: createHash("sha256").update(response.html, "utf8").digest("hex"),
+      ...(documentedFacts.length > 0 ? { documentedFacts } : {}),
+    },
+    ...counts,
   };
 }
 

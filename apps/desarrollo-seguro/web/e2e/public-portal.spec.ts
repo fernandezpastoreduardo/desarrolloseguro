@@ -140,9 +140,10 @@ test("shows the report and Grumphya's private review when an authorized analysis
         expiresAt: "2026-11-11T01:01:00.000Z",
         verdict: "fail",
         globalAssessment: {
-          policyVersion: "mvp-global-v1",
+          policyVersion: "mvp-global-v2",
           status: "review",
           score: null,
+          legalViolationAccredited: false,
           weights: { ethics: 50, privacy: 50 },
           ethicsCoverage: { assessedCriteria: 4, totalCriteria: 8 },
           privacyCoverage: {

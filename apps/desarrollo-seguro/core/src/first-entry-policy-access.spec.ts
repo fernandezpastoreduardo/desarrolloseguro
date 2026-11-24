@@ -21,6 +21,47 @@ function input(overrides: Partial<FirstEntryPolicyAccessInput> = {}): FirstEntry
 }
 
 describe("first-entry policy access", () => {
+  it("preserves separate policy-link visit snapshots without cookie values", () => {
+    const result = assessFirstEntryPolicyAccess(input({
+      consentPromptDetected: false,
+      thirdPartyCookieDetected: false,
+      nonEssentialThirdPartyStorageDetected: false,
+      consentComponentLink: null,
+      informationNoticeLink: privacyLink,
+      footerLink: null,
+      componentLinkDocumentAccess: "not_checked",
+      informationNoticeDocumentAccess: "accessible",
+    }));
+    const withVisit = {
+      ...result,
+      policyLinkVisit: {
+        status: "evaluated",
+        link: privacyLink,
+        documentAccess: "accessible",
+        navigationStartedAtMs: 120,
+        beforeNavigation: {
+          capturedAtMs: 80, cookies: [], storageKeys: [], cookieReadComplete: true, storageReadComplete: true,
+        },
+        afterNavigation: {
+          capturedAtMs: 420,
+          cookies: [{ name: "grumphya_anon", domain: "example.org", secure: true, httpOnly: true, sameSite: "Strict", expiresAtUnixSeconds: Date.parse("2027-12-29T00:00:00Z") / 1000 }],
+          storageKeys: [], cookieReadComplete: true, storageReadComplete: true,
+        },
+      },
+    };
+    expect(parseFirstEntryPolicyAccess(withVisit)).toEqual(withVisit);
+    expect(parseFirstEntryPolicyAccess({
+      ...withVisit,
+      policyLinkVisit: {
+        ...withVisit.policyLinkVisit,
+        afterNavigation: {
+          ...withVisit.policyLinkVisit.afterNavigation,
+          cookies: [{ name: "grumphya_anon", domain: "example.org", secure: true, httpOnly: true, sameSite: "Strict", expiresAtUnixSeconds: Date.parse("2027-12-29T00:00:00Z") / 1000, value: "secret" }],
+        },
+      },
+    })).toBeNull();
+  });
+
   it("requires an accessible policy link inside the consent component", () => {
     expect(assessFirstEntryPolicyAccess(input())).toMatchObject({
       status: "fail",

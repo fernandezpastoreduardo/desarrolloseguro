@@ -1,8 +1,10 @@
 import { PUBLIC_SERVICE_PROVIDER_INFO } from "./public-service-catalog.js";
 import {
   isProviderStatement,
+  isProviderLegalEvidenceContext,
   parseProviderDocumentationContradiction,
   type ProviderDocumentationContradiction,
+  type ProviderLegalEvidenceContext,
   type ProviderStatement,
 } from "./provider-documentation-contradictions.js";
 
@@ -22,6 +24,7 @@ export type PublicServiceDeclarationEvidence = {
   providerId: string;
   purposes: string[];
   siteStatements?: ProviderStatement[];
+  legalEvidenceContext?: ProviderLegalEvidenceContext;
 };
 
 /** Strict parser used at the runtime coordinator protocol boundary. */
@@ -31,9 +34,9 @@ export function parsePublicServiceDeclarations(value: unknown): PublicServiceDec
   const output: PublicServiceDeclarationEvidence[] = [];
   const providers = new Set<string>();
   for (const row of value) {
-    if (!isRecord(row) || !["providerId", "purposes", "siteStatements"]
-      .every((key) => key === "siteStatements" && !Object.hasOwn(row, key) || Object.hasOwn(row, key)) ||
-      Reflect.ownKeys(row).length !== (Object.hasOwn(row, "siteStatements") ? 3 : 2) ||
+    if (!isRecord(row) || !["providerId", "purposes", "siteStatements", "legalEvidenceContext"]
+      .every((key) => ["siteStatements", "legalEvidenceContext"].includes(key) && !Object.hasOwn(row, key) || Object.hasOwn(row, key)) ||
+      Reflect.ownKeys(row).length !== 2 + Number(Object.hasOwn(row, "siteStatements")) + Number(Object.hasOwn(row, "legalEvidenceContext")) ||
       typeof row.providerId !== "string" || !/^[a-z0-9][a-z0-9_-]{0,31}$/u.test(row.providerId) ||
       providers.has(row.providerId) || !Array.isArray(row.purposes) || row.purposes.length > 8 ||
       !row.purposes.every((purpose) => typeof purpose === "string" && /^[a-z0-9][a-z0-9_-]{0,31}$/u.test(purpose)) ||
@@ -47,10 +50,14 @@ export function parsePublicServiceDeclarations(value: unknown): PublicServiceDec
       if (statementCount > 30) return null;
       statements.push(...row.siteStatements);
     }
+    if (Object.hasOwn(row, "legalEvidenceContext") && !isProviderLegalEvidenceContext(row.legalEvidenceContext)) return null;
     output.push({
       providerId: row.providerId,
       purposes: [...row.purposes] as string[],
       ...(Object.hasOwn(row, "siteStatements") ? { siteStatements: statements } : {}),
+      ...(Object.hasOwn(row, "legalEvidenceContext")
+        ? { legalEvidenceContext: row.legalEvidenceContext as ProviderLegalEvidenceContext }
+        : {}),
     });
   }
   return output;

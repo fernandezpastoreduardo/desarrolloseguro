@@ -6,22 +6,32 @@ import {
   type ProviderFact,
 } from "@desarrolloseguro/core";
 import type { ProviderCatalogSnapshot } from "@desarrolloseguro/persistence/provider-catalog";
-import type { PublicServiceComparison, PublicServiceDeclarationEvidence } from "@desarrolloseguro/core";
+import type { PublicServiceComparison, PublicServiceDeclarationEvidence, ProviderLegalEvidenceContext as CoreProviderLegalEvidenceContext } from "@desarrolloseguro/core";
 import { buildProviderLegalEvidence, type ProviderLegalEvidenceContext } from "./provider-legal-evidence-builder.js";
 
 const MAX_DOCUMENTED_FACTS_PER_PROVIDER = 30;
 
+export function getProviderLegalEvidenceContexts(
+  declarations: readonly PublicServiceDeclarationEvidence[] | undefined,
+): Readonly<Record<string, CoreProviderLegalEvidenceContext>> {
+  return Object.fromEntries((declarations ?? []).flatMap((declaration) =>
+    declaration.legalEvidenceContext ? [[declaration.providerId, declaration.legalEvidenceContext] as const] : [],
+  ));
+}
+
 export function assessCatalogProviderDocumentation(input: {
   declarations: readonly PublicServiceDeclarationEvidence[] | undefined;
   observedProviderIds?: readonly string[];
+  linkedProviderIds?: readonly string[];
   legalEvidenceContexts?: Readonly<Record<string, ProviderLegalEvidenceContext>>;
   snapshot: ProviderCatalogSnapshot;
 }): ProviderDocumentationContradiction[] {
   const declarations = input.declarations ?? [];
   const observedProviderIds = input.observedProviderIds ?? [];
-  if (declarations.length > 30 || observedProviderIds.length > 30) return [];
+  const linkedProviderIds = input.linkedProviderIds ?? [];
+  if (declarations.length > 30 || observedProviderIds.length > 30 || linkedProviderIds.length > 40) return [];
   const declarationsByProvider = new Map(declarations.map((declaration) => [declaration.providerId, declaration]));
-  const providerIds = [...new Set([...observedProviderIds, ...declarations.map(({ providerId }) => providerId)])].slice(0, 30);
+  const providerIds = [...new Set([...observedProviderIds, ...linkedProviderIds, ...declarations.map(({ providerId }) => providerId)])].slice(0, 30);
   const output: ProviderDocumentationContradiction[] = [];
   for (const providerId of providerIds) {
     const declaration = declarationsByProvider.get(providerId);
@@ -73,7 +83,7 @@ export function mergeProviderDocumentationComparison(
 function readDocumentedFacts(provider: unknown, snapshot: ProviderCatalogSnapshot): ProviderFact[] {
   if (!isRecord(provider) || !Array.isArray(provider.documentedFacts) || provider.documentedFacts.length > MAX_DOCUMENTED_FACTS_PER_PROVIDER) return [];
   const documents = readOfficialDocuments(provider.officialDocuments);
-  const output: ProviderFact[] = [];
+  const candidates: ProviderFact[] = [];
   for (const entry of provider.documentedFacts) {
     if (!isRecord(entry) || typeof entry.factId !== "string" || typeof entry.value !== "boolean" ||
         typeof entry.documentId !== "string" || typeof entry.excerpt !== "string") continue;
@@ -91,7 +101,16 @@ function readDocumentedFacts(provider: unknown, snapshot: ProviderCatalogSnapsho
       documentKind: document.kind,
       sourceKind: "provider_official",
     };
-    output.push({ factId: entry.factId, value: entry.value, source });
+    candidates.push({ factId: entry.factId, value: entry.value, source });
+  }
+  const output: ProviderFact[] = [];
+  const factIds = [...new Set(candidates.map(({ factId }) => factId))];
+  for (const factId of factIds) {
+    const matches = candidates.filter((candidate) => candidate.factId === factId)
+      .sort((left, right) => left.source.sourceId.localeCompare(right.source.sourceId));
+    if (matches.length > 0 && matches.every(({ value }) => value === matches[0]?.value) && matches[0]) {
+      output.push(matches[0]);
+    }
   }
   return output;
 }

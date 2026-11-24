@@ -72,29 +72,37 @@ export function validateCompletedReport(status, previousReportId, hostname = VAL
   });
   const transportDiagnosticIsBounded = transportCriterion?.status !== "unknown" ||
     Boolean(completeTlsMatrix);
-  if (
-    !assessment ||
-    assessment.policyVersion !== "domain-ethics-v6" ||
-    !Number.isInteger(assessment.score) ||
-    assessment.score < 0 ||
-    assessment.score > 100 ||
-    assessment.assessedCriteria !== 8 ||
-    assessment.totalCriteria !== 8 ||
-    !publicPolicyAssessment ||
-    publicPolicyAssessment.policyVersion !== "public-policy-v1" ||
-    !processorAssessment ||
-    !report.publicServiceComparison ||
-    report.publicServiceComparison.policyVersion !== "public-service-comparison-v1" ||
-    report.publicServiceComparison.status !== "pass" ||
-    !["pass", "fail"].includes(processorAssessment.status) ||
-    assessment.criteria.find(({ id }) => id === "initial-cookie-risk")?.status ===
-      "unknown" ||
-    assessment.criteria.find(({ id }) => id === "tracking")?.status === "unknown" ||
-    assessment.criteria.find(({ id }) => id === "performance")?.status === "unknown"
-    || !transportDiagnosticIsBounded
-    || !completeTlsMatrix
-  ) {
-    throw new Error("public_scan_ethics_assessment_incomplete");
+  const ethicsFailures = [];
+  if (!assessment) ethicsFailures.push("assessment_missing");
+  if (assessment && assessment.policyVersion !== "domain-ethics-v6") ethicsFailures.push("policy_version_invalid");
+  if (!assessment || !Number.isInteger(assessment.score) || assessment.score < 0 || assessment.score > 100) {
+    ethicsFailures.push("score_invalid");
+  }
+  if (!assessment || assessment.assessedCriteria !== 8 || assessment.totalCriteria !== 8) {
+    ethicsFailures.push("coverage_incomplete");
+  }
+  if (!publicPolicyAssessment || publicPolicyAssessment.policyVersion !== "public-policy-v1") {
+    ethicsFailures.push("public_policy_assessment_invalid");
+  }
+  if (!processorAssessment || !["pass", "fail"].includes(processorAssessment.status)) {
+    ethicsFailures.push("processor_assessment_invalid");
+  }
+  const serviceComparison = report.publicServiceComparison;
+  if (!serviceComparison || serviceComparison.policyVersion !== "public-service-comparison-v1" ||
+      serviceComparison.status !== "pass") ethicsFailures.push("public_service_comparison_invalid");
+  if (assessment?.criteria.find(({ id }) => id === "initial-cookie-risk")?.status === "unknown") {
+    ethicsFailures.push("initial_cookie_risk_unknown");
+  }
+  if (assessment?.criteria.find(({ id }) => id === "tracking")?.status === "unknown") {
+    ethicsFailures.push("tracking_unknown");
+  }
+  if (assessment?.criteria.find(({ id }) => id === "performance")?.status === "unknown") {
+    ethicsFailures.push("performance_unknown");
+  }
+  if (!transportDiagnosticIsBounded) ethicsFailures.push("transport_diagnostic_incomplete");
+  if (!completeTlsMatrix) ethicsFailures.push("tls_matrix_incomplete");
+  if (ethicsFailures.length) {
+    throw new Error(`public_scan_ethics_assessment_incomplete_${ethicsFailures.join("_")}`);
   }
   if (hostname === CANONICAL_DOMAIN) {
     const privacy = report.privacyAssessment;

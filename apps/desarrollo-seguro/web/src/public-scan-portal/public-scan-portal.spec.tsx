@@ -25,9 +25,10 @@ const PUBLIC_REPORT = {
   expiresAt: "2026-11-03T08:01:00.000Z",
   verdict: "inconclusive",
   globalAssessment: {
-    policyVersion: "mvp-global-v1",
+    policyVersion: "mvp-global-v2",
     status: "not_available",
     score: null,
+    legalViolationAccredited: false,
     weights: { ethics: 50, privacy: 50 },
     ethicsCoverage: { assessedCriteria: 1, totalCriteria: 8 },
     privacyCoverage: null,
@@ -72,9 +73,10 @@ const PUBLIC_REPORT = {
 const SCORED_PUBLIC_REPORT = {
   ...PUBLIC_REPORT,
   globalAssessment: {
-    policyVersion: "mvp-global-v1",
+    policyVersion: "mvp-global-v2",
     status: "scored",
     score: 90,
+    legalViolationAccredited: false,
     weights: { ethics: 50, privacy: 50 },
     ethicsCoverage: { assessedCriteria: 8, totalCriteria: 8 },
     privacyCoverage: {
@@ -509,6 +511,18 @@ describe("PublicScanPortal", () => {
         linkLocation: "footer",
         link: { hostname: "example.com", path: "/privacy", kind: "privacy" },
         documentAccess: "accessible",
+        policyLinkVisit: {
+          status: "evaluated",
+          link: { hostname: "example.com", path: "/privacy", kind: "privacy" },
+          documentAccess: "accessible",
+          navigationStartedAtMs: 40,
+          beforeNavigation: { capturedAtMs: 30, cookies: [], storageKeys: [], cookieReadComplete: true, storageReadComplete: true },
+          afterNavigation: {
+            capturedAtMs: 180,
+            cookies: [{ name: "grumphya_anon", domain: "example.com", secure: true, httpOnly: true, sameSite: "Strict", expiresAtUnixSeconds: Date.parse("2027-12-29T00:00:00Z") / 1000 }],
+            storageKeys: [], cookieReadComplete: true, storageReadComplete: true,
+          },
+        },
       },
     };
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({
@@ -523,6 +537,9 @@ describe("PublicScanPortal", () => {
     expect(await screen.findByRole("heading", { name: "Acceso a información legal" })).toBeVisible();
     expect(screen.getByText("Enlace comprobado")).toBeVisible();
     expect(screen.getByText(/no se solicitó consentimiento ni se detectaron cookies de terceros/i)).toBeVisible();
+    expect(screen.getByText("Estado observado al abrir el enlace en un contexto nuevo")).toBeVisible();
+    await user.click(screen.getByText("Estado observado al abrir el enlace en un contexto nuevo"));
+    expect(screen.getByText(/Cookie grumphya_anon · example.com · Secure · HttpOnly · SameSite=Strict · expira 2027-12-29/iu)).toBeVisible();
     expect(screen.getByText(/se identificó almacenamiento de terceros no esencial.*hallazgo independiente/i)).toBeVisible();
     expect(screen.getByRole("link", { name: "example.com/privacy" })).toHaveAttribute("href", "https://example.com/privacy");
   });
@@ -732,6 +749,55 @@ describe("PublicScanPortal", () => {
     expect(screen.getByRole("img", { name: /Privacidad:/u })).toBeVisible();
     expect(screen.queryByText("90/100 · 50 % Ética + 50 % Privacidad")).toBeNull();
     expect(screen.getByText(/La nota global combina por igual Ética y Privacidad/i)).toBeVisible();
+  });
+
+  it("shows an accredited legal cookie finding and fixes the global score at zero", async () => {
+    const legalReport = {
+      ...SCORED_PUBLIC_REPORT,
+      globalAssessment: {
+        ...SCORED_PUBLIC_REPORT.globalAssessment,
+        score: 0,
+        legalViolationAccredited: true,
+      },
+      legalCookieFindings: [{
+        ruleId: "lssi-cookie-no-prior-consent-v1",
+        ruleVersion: "1.0.0",
+        status: "accredited",
+        title: "Cookie no esencial antes del consentimiento",
+        description: "Se observó una cookie de analítica antes de que se eligiera una opción.",
+        jurisdiction: "ES",
+        articles: ["22.2", "38.4.g", "39.1.c", "43.1"].map((article) => ({
+          law: "LSSI",
+          article,
+          url: "https://www.boe.es/buscar/act.php?id=BOE-A-2002-13758",
+        })),
+        infringementClass: "minor",
+        sanction: { type: "statutory_maximum", currency: "EUR", maximum: 30000 },
+        authority: "Agencia Española de Protección de Datos",
+        evidence: [{
+          flow: "initial",
+          phase: "before_choice",
+          capturedAtMs: 250,
+          cookieName: "_ga",
+          cookieDomain: "example.com",
+          provider: "Google Analytics",
+          purpose: "analytics",
+          attributionRuleId: "google-analytics-ga-v1",
+          correlatedRequestHosts: ["www.google-analytics.com"],
+        }],
+        evidenceComplete: true,
+      }],
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(legalReport)));
+    window.history.replaceState({}, "", `/?report=${REPORT_ID}`);
+
+    render(<PublicScanPortal />);
+
+    expect(await screen.findByRole("img", { name: "Puntuación global: 0 de 100 puntos" })).toBeVisible();
+    expect(screen.getByText("Incumplimientos legales acreditados")).toBeVisible();
+    expect(screen.getByText("Cookie no esencial antes del consentimiento")).toBeVisible();
+    expect(screen.getByText(/LSSI, artículos 22.2, 38.4.g, 39.1.c, 43.1/u)).toBeVisible();
+    expect(screen.getByText(/la puntuación global es 0\/100/i)).toBeVisible();
   });
 
   it("lets an authorized user request a fresh analysis when a historical report exists", async () => {

@@ -26,6 +26,7 @@ async function main(): Promise<void> {
       status: "unknown",
       context: { browser: "Chromium", locale: "es-ES", timezone: "Europe/Madrid", viewport: "desktop-1365x768" },
       initial: unknownFlow(),
+      policyLinkVisit: { status: "unknown", link: null, documentAccess: "unknown", navigationStartedAtMs: null, beforeNavigation: null, afterNavigation: null },
       accept: unknownFlow(),
       reject: unknownFlow(),
       vendorControlCoverage: "unknown",

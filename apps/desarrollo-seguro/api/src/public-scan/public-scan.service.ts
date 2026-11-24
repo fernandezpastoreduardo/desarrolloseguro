@@ -337,6 +337,11 @@ function toPublicReport(
       : assessDomainEthics(report.checks);
   const privacyAssessment = report.privacyAssessment ?? null;
   const legalCookieFindings = report.legalCookieFindings;
+  const legalViolationAccredited = Boolean(legalCookieFindings?.length) || Boolean(
+    publicServiceComparison?.providerDocumentation?.some(({ comparisons }) =>
+      comparisons.some(({ legalFinding }) => legalFinding?.status === "infraccion_legal_acreditada"),
+    ),
+  );
   const resolvedInternalAuditState = report.hostname !== "grumphya.com"
     ? null
     : internalAuditState ?? (report.internalAuditSummary?.status === "complete" ? "complete" : "review");
@@ -351,7 +356,7 @@ function toPublicReport(
     completedAt: report.completedAt.toISOString(),
     expiresAt: report.expiresAt.toISOString(),
     verdict: report.verdict,
-    globalAssessment: assessGlobalScore(ethicsAssessment, privacyAssessment),
+    globalAssessment: assessGlobalScore(ethicsAssessment, privacyAssessment, legalViolationAccredited),
     ethicsAssessment,
     privacyAssessment,
     processorTransparencyAssessment,

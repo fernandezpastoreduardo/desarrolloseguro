@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { observePrivacyBehavior, resolvePrivacyObservationStatus } from "./privacy-browser-observer.js";
+import { buildLegalCookieFindings } from "./privacy-legal-cookie-findings.js";
+import { assessFirstEntryPolicyAccessObservation } from "./privacy-first-entry-policy-access.js";
+
+const privacyLink = { hostname: "grumphya.com", path: "/privacidad", kind: "privacy" as const };
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -65,8 +69,62 @@ describe("observePrivacyBehavior", () => {
     expect(result.initial.signalHostsAfterChoice).toEqual(["grumphya.com"]);
     expect(result.accept.status).toBe("not_applicable");
     expect(result.reject.status).toBe("not_applicable");
+    expect(result.policyLinkVisit.status).toBe("unknown");
     expect(browser.newContext).toHaveBeenCalledTimes(3);
     expect(browser.close).toHaveBeenCalledOnce();
+  });
+
+  it("captures grumphya_anon only after opening the policy link without treating it as rejection failure", async () => {
+    const postLinkContext = makePolicyLinkVisitContext();
+    const contexts = [makeContext(), postLinkContext, makeContext(), makeContext()];
+    const browser = { newContext: vi.fn(async () => contexts.shift()!), close: vi.fn(async () => undefined) };
+    const inspectPolicyLinks = vi.fn(async () => ({
+      status: "evaluated" as const,
+      consentComponentDetected: false,
+      consentComponentLink: null,
+      consentComponentDocumentAccess: "not_checked" as const,
+      informationNoticeLink: privacyLink,
+      informationNoticeDocumentAccess: "not_checked" as const,
+      footerLink: null,
+      footerLinkDocumentAccess: "not_checked" as const,
+    }));
+
+    const result = await observePrivacyBehavior({
+      protocolVersion: 1,
+      requestId: "947dd0c9-564c-4a30-8ce3-efb4ecae9136",
+      hostname: "grumphya.com",
+    }, {
+      proxyUrl: "http://privacy-egress:3128",
+      launchBrowser: vi.fn(async () => browser as never) as never,
+      inspectPolicyLinks: inspectPolicyLinks as never,
+    });
+
+    expect(result.initial.phaseEvidence.beforeChoice?.cookies).toEqual([]);
+    expect(result.initial.rejectVisibleAtFirstLayer).toBe(false);
+    expect(result.policyLinkVisit).toMatchObject({
+      status: "evaluated",
+      link: privacyLink,
+      documentAccess: "accessible",
+      beforeNavigation: { cookies: [], cookieReadComplete: true },
+      afterNavigation: {
+        capturedAtMs: expect.any(Number),
+        cookies: [{
+          name: "grumphya_anon", domain: "grumphya.com", secure: true, httpOnly: true,
+          sameSite: "Strict", expiresAtUnixSeconds: Date.parse("2027-12-29T00:00:00Z") / 1000,
+        }],
+        storageKeys: [],
+      },
+    });
+    expect(postLinkContext.navigations).toEqual(["https://grumphya.com/privacidad"]);
+    expect(postLinkContext.clicked).not.toHaveBeenCalled();
+    expect(buildLegalCookieFindings(result)).toEqual([]);
+    expect(assessFirstEntryPolicyAccessObservation(result)).toMatchObject({
+      status: "pass",
+      reasonCode: "information_notice_link_accessible_without_consent",
+      policyLinkVisit: result.policyLinkVisit,
+    });
+    expect(JSON.stringify(result)).not.toContain("grumphya-cookie-value");
+    expect(result.initial.firstEntryPolicyLinks.informationNoticeDocumentAccess).toBe("accessible");
   });
 
   it("returns bounded unknown evidence after an invalid request or browser startup failure", async () => {
@@ -321,6 +379,51 @@ function makeVendorContext() {
     on: vi.fn(),
     cookies: vi.fn(async () => []),
     close: vi.fn(async () => undefined),
+  };
+}
+
+function makePolicyLinkVisitContext() {
+  let policyLoaded = false;
+  const clicked = vi.fn();
+  const navigations: string[] = [];
+  const page = {
+    setDefaultTimeout: vi.fn(),
+    setDefaultNavigationTimeout: vi.fn(),
+    on: vi.fn(),
+    goto: vi.fn(async (url: string) => {
+      navigations.push(url);
+      policyLoaded = true;
+      return {
+        status: () => 200,
+        headers: () => ({ "content-type": "text/html; charset=utf-8" }),
+        url: () => url,
+      };
+    }),
+    waitForTimeout: vi.fn(async () => undefined),
+    locator: vi.fn((selector: string) => selector === "body"
+      ? { innerText: vi.fn(async () => "Política de privacidad y tratamiento de datos personales de Grumphya.") }
+      : { evaluateAll: vi.fn(async () => []), nth: vi.fn(() => ({ click: clicked })) }),
+    frames: vi.fn(() => [{
+      url: () => policyLoaded ? "https://grumphya.com/privacidad" : "about:blank",
+      evaluate: vi.fn(async () => ({
+        entries: [],
+        complete: true,
+      })),
+    }]),
+    close: vi.fn(async () => undefined),
+  };
+  return {
+    newPage: vi.fn(async () => page),
+    route: vi.fn(async () => undefined),
+    routeWebSocket: vi.fn(async () => undefined),
+    cookies: vi.fn(async () => policyLoaded ? [{
+      name: "grumphya_anon", domain: "grumphya.com", secure: true, httpOnly: true,
+      sameSite: "Strict", expires: Date.parse("2027-12-29T00:00:00Z") / 1000,
+      value: "grumphya-cookie-value",
+    }] : []),
+    close: vi.fn(async () => undefined),
+    navigations,
+    clicked,
   };
 }
 

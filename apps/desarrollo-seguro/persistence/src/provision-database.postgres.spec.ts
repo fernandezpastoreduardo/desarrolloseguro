@@ -7,6 +7,7 @@ import {
   type ProvisioningSettings,
 } from "./provision-database.js";
 import { PostgresScanStore, type ScanCheck } from "./scan-store.js";
+import { DEVELOPMENT_SECURITY_MIGRATION_COUNT } from "./run-migrations.js";
 import {
   assertSafePostgresTestTarget,
   isSafePostgresTestTarget,
@@ -410,7 +411,7 @@ describePostgres.sequential(
       const result = await targetAdminPool?.query(
         "SELECT count(*)::integer AS migration_count FROM public.ds_schema_migrations",
       );
-      expect(result?.rows[0].migration_count).toBe(46);
+      expect(result?.rows[0].migration_count).toBe(DEVELOPMENT_SECURITY_MIGRATION_COUNT);
 
       const client = await targetAdminPool!.connect();
       try {

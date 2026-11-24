@@ -153,14 +153,13 @@ export async function inspectFirstEntryPolicyLinks(
   }
 }
 
-/** Performs a bounded read-only navigation to the relevant visible legal link. */
+/** Performs a bounded read-only navigation to the link in its caller's fresh context. */
 export async function verifyFirstEntryPolicyDocument(
   page: Page,
   link: FirstEntryPolicyLink | null,
 ): Promise<"accessible" | "unavailable" | "not_checked" | "unknown"> {
   if (!link) return "not_checked";
   try {
-    await page.context().clearCookies();
     const response = await page.goto(`https://${link.hostname}${link.path}`, { waitUntil: "domcontentloaded" });
     const status = response?.status();
     const contentType = response?.headers()["content-type"]?.split(";", 1)[0]?.trim().toLowerCase() ?? "";

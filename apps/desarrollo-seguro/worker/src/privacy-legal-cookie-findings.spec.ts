@@ -74,6 +74,7 @@ function makeObservation(
     status: "complete",
     context: { browser: "Chromium", locale: "es-ES", timezone: "Europe/Madrid", viewport: "desktop-1365x768" },
     initial: overrides.initial ?? makeFlow({}),
+    policyLinkVisit: { status: "not_applicable", link: null, documentAccess: "not_checked", navigationStartedAtMs: null, beforeNavigation: null, afterNavigation: null },
     accept: makeFlow({}),
     reject: overrides.reject ?? makeFlow({}),
     vendorControlCoverage: "not_applicable",

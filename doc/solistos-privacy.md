@@ -7,8 +7,7 @@ consentimiento. Una web sin seguimiento conocido puede recibir evidencia
 positiva aunque no muestre un banner. Solistos no emite conclusiones de
 conformidad legal ni modifica el estado del sello.
 
-En la puntuación global del MVP, Privacidad aporta el 50 % y Ética aporta el
-50 %. Ética usa `domain-ethics-v5` en informes nuevos `domain-v4`. Para clientes, la valoración de transparencia usa el inventario autenticado; para otros dominios usa la información pública sobre servicios externos. La evaluación pública complementaria y sus límites se explican en [Información pública sobre servicios externos](public-policy-transparency.md). Los informes históricos conservan la rúbrica con la que se generaron.
+La política global `mvp-global-v2` combina Ética y Privacidad al 50 % cuando ambas tienen cobertura suficiente. Si el informe acredita una infracción legal en cookies o en la comparación documental de proveedores, la nota global queda fijada en 0; las puntuaciones técnicas de Ética y Privacidad se conservan y muestran por separado. Una discrepancia factual sin todos los elementos de una regla legal no activa esta regla. Ética usa `domain-ethics-v5` en informes nuevos `domain-v4`. Para clientes, la valoración de transparencia usa el inventario autenticado; para otros dominios usa la información pública sobre servicios externos. La evaluación pública complementaria y sus límites se explican en [Información pública sobre servicios externos](public-policy-transparency.md). Los informes históricos conservan la rúbrica con la que se generaron.
 
 El resultado se redondea al entero más cercano. Ambas puntuaciones se presentan
 también por separado. Si alguna
@@ -55,8 +54,10 @@ ambos permisos con los roles de runtime.
 ## Cómo leer la nota
 
 La nota `Privacidad` es independiente del sello y aporta el 50 % de la nota
-global del MVP junto con la puntuación Ética vigente, que aporta el 50 %
-restante. Los informes nuevos usan Ética v5; los históricos conservan la versión que tenían.
+global ordinaria del MVP junto con la puntuación Ética vigente, que aporta el
+50 % restante. La excepción jurídica de `mvp-global-v2` fija la nota global en
+0 cuando el informe acredita una infracción legal, sin alterar las dos notas
+técnicas. Los informes nuevos usan Ética v5; los históricos conservan la versión que tenían.
 La nota Privacidad no concede, bloquea ni suspende una
 certificación. Se calcula con la política versionada `privacy-v1`:
 

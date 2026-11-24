@@ -88,7 +88,7 @@ describe("PostgresScanStore unit behavior", () => {
   });
 
   it("persists and reads the first-entry consent component policy link evidence", async () => {
-    const evidence = assessFirstEntryPolicyAccess({
+    const baseEvidence = assessFirstEntryPolicyAccess({
       consentPromptDetected: true,
       thirdPartyCookieDetected: true,
       nonEssentialThirdPartyStorageDetected: true,
@@ -97,6 +97,21 @@ describe("PostgresScanStore unit behavior", () => {
       componentLinkDocumentAccess: "accessible",
       footerLinkDocumentAccess: "accessible",
     });
+    const evidence = {
+      ...baseEvidence,
+      policyLinkVisit: {
+        status: "evaluated" as const,
+        link: { hostname: "example.org", path: "/privacy", kind: "privacy" as const },
+        documentAccess: "accessible" as const,
+        navigationStartedAtMs: 15,
+        beforeNavigation: { capturedAtMs: 10, cookies: [], storageKeys: [], cookieReadComplete: true, storageReadComplete: true },
+        afterNavigation: {
+          capturedAtMs: 200,
+          cookies: [{ name: "grumphya_anon", domain: "example.org", secure: true, httpOnly: true, sameSite: "Strict" as const, expiresAtUnixSeconds: Date.parse("2027-12-29T00:00:00Z") / 1000 }],
+          storageKeys: [], cookieReadComplete: true, storageReadComplete: true,
+        },
+      },
+    };
     const completeQuery = vi.fn().mockResolvedValue({ rows: [{ ds_complete_scan: "run-id" }] });
     const completeStore = new PostgresScanStore(makePool({ query: completeQuery }));
     await expect(completeStore.completeScan({ ...VALID_REPORT, firstEntryPolicyAccess: evidence })).resolves.toBe("run-id");

@@ -365,6 +365,7 @@ async function applyRuntimeGrants(pool: Pool): Promise<void> {
       public.ds_seed_provider_catalog_version(text, jsonb, jsonb, jsonb),
       public.ds_fail_provider_catalog_refresh(date, text, jsonb),
       public.ds_add_provider_catalog_discovery_version(text, text, jsonb, jsonb, jsonb, jsonb),
+      public.ds_add_provider_catalog_discovery_evidence_version(text, text, jsonb, jsonb, jsonb, jsonb),
       public.ds_complete_scan_with_provider_catalog(
         uuid, uuid, timestamptz, text, timestamptz, text, jsonb, jsonb, jsonb,
         jsonb, jsonb, jsonb, jsonb, jsonb, jsonb, text, jsonb

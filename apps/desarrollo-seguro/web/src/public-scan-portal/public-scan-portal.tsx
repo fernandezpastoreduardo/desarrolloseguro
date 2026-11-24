@@ -1,5 +1,6 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { parseFirstEntryPolicyAccess, type FirstEntryPolicyAccess } from "@desarrolloseguro/core/first-entry-policy-access";
+import { parseLegalCookieFindings, type LegalCookieFinding } from "@desarrolloseguro/core/legal-cookie-findings";
 import { parsePublicServiceComparison } from "@desarrolloseguro/core/public-service-comparison";
 import { PUBLIC_SERVICE_PROVIDER_INFO } from "@desarrolloseguro/core/public-service-catalog";
 import "./public-scan-portal.scss";
@@ -265,9 +266,10 @@ type PublicReport = {
   expiresAt: string;
   verdict: ScanVerdict;
   globalAssessment: {
-    policyVersion: "mvp-global-v1";
+    policyVersion: "mvp-global-v2";
     status: "scored" | "review" | "not_available";
     score: number | null;
+    legalViolationAccredited: boolean;
     weights: { ethics: 50; privacy: 50 };
     ethicsCoverage: { assessedCriteria: number; totalCriteria: number };
     privacyCoverage: {
@@ -314,6 +316,7 @@ type PublicReport = {
   processorTransparencyAssessment: PublicProcessorTransparencyAssessment | null;
   publicPolicyTransparencyAssessment: PublicPolicyTransparencyAssessment | null;
   publicServiceComparison?: PublicServiceComparison | null;
+  legalCookieFindings?: LegalCookieFinding[];
   providerCatalogVersion?: string | null;
   firstEntryPolicyAccess?: FirstEntryPolicyAccess | null;
   internalAuditSummary?: InternalAuditPublicSummary | null;
@@ -1204,6 +1207,9 @@ function ReportSummary({
         {report.publicServiceComparison && (
           <PublicServiceComparisonSection comparison={report.publicServiceComparison} observedDomains={report.privacyAssessment?.evidence.domains ?? []} catalogVersion={report.providerCatalogVersion} />
         )}
+        {report.legalCookieFindings && report.legalCookieFindings.length > 0 && (
+          <LegalCookieFindingsSection findings={report.legalCookieFindings} />
+        )}
         {report.firstEntryPolicyAccess && (
           <FirstEntryPolicyAccessSection access={report.firstEntryPolicyAccess} />
         )}
@@ -1479,6 +1485,82 @@ function FirstEntryPolicyAccessSection({ access }: { access: FirstEntryPolicyAcc
           Enlace registrado: <a href={linkUrl} target="_blank" rel="noopener noreferrer">{access.link?.hostname}{access.link?.path}</a>
         </p>
       )}
+      {access.policyLinkVisit && (
+        <details className="ds-portal__first-entry-policy-visit">
+          <summary>Estado observado al abrir el enlace en un contexto nuevo</summary>
+          <p>
+            {access.policyLinkVisit.status === "not_applicable" ? "No había un enlace pertinente que visitar." :
+              access.policyLinkVisit.status === "unknown" ? "La visita o su inventario no pudo comprobarse por completo." :
+                `Documento ${access.policyLinkVisit.documentAccess === "accessible" ? "accesible" : "no accesible"}.`}
+          </p>
+          {access.policyLinkVisit.navigationStartedAtMs !== null && (
+            <p>Inicio de navegación: {access.policyLinkVisit.navigationStartedAtMs} ms desde el inicio de esta fase.</p>
+          )}
+          {(["beforeNavigation", "afterNavigation"] as const).map((phase) => {
+            const snapshot = access.policyLinkVisit?.[phase];
+            if (!snapshot) return null;
+            return (
+              <div key={phase}>
+                <h4>{phase === "beforeNavigation" ? "Antes de abrir el documento" : "Después de abrir el documento"} · {snapshot.capturedAtMs} ms</h4>
+                <p>Lectura de cookies: {snapshot.cookieReadComplete ? "completa" : "incompleta"}; almacenamiento: {snapshot.storageReadComplete ? "completa" : "incompleta"}.</p>
+                <ul>
+                  {snapshot.cookies.map((cookie, index) => (
+                    <li key={`${phase}-cookie-${index}`}>
+                      Cookie {cookie.name} · {cookie.domain} · {cookie.secure ? "Secure" : "sin Secure"} · {cookie.httpOnly ? "HttpOnly" : "accesible desde JavaScript"} · SameSite={cookie.sameSite} · {cookie.expiresAtUnixSeconds === null ? "cookie de sesión" : `expira ${new Date(cookie.expiresAtUnixSeconds * 1000).toISOString().slice(0, 10)}`}
+                    </li>
+                  ))}
+                  {snapshot.storageKeys.map((entry, index) => (
+                    <li key={`${phase}-storage-${index}`}>
+                      Almacenamiento {entry.kind} · {entry.name} · {entry.domain}
+                    </li>
+                  ))}
+                  {snapshot.cookies.length === 0 && snapshot.storageKeys.length === 0 && (
+                    <li>No se observaron nombres de cookies ni claves de almacenamiento en esta instantánea.</li>
+                  )}
+                </ul>
+              </div>
+            );
+          })}
+        </details>
+      )}
+    </section>
+  );
+}
+
+function LegalCookieFindingsSection({ findings }: { findings: LegalCookieFinding[] }) {
+  return (
+    <section className="ds-portal__provider-contradiction" aria-labelledby="legal-cookie-findings-heading">
+      <h3 id="legal-cookie-findings-heading">Incumplimientos legales acreditados</h3>
+      {findings.map((finding) => (
+        <article key={finding.ruleId} data-status="infraccion_legal_acreditada">
+          <h4>{finding.title}</h4>
+          <p>{finding.description}</p>
+          <p>
+            Norma: LSSI, artículos {finding.articles.map(({ article }) => article).join(", ")}.
+            {" "}Autoridad competente: {finding.authority}.
+          </p>
+          <p>
+            Máximo legal previsto: {finding.sanction.maximum.toLocaleString("es-ES")} {finding.sanction.currency}.
+          </p>
+          <p>Hechos observados:</p>
+          <ul>
+            {finding.evidence.map((evidence, index) => (
+              <li key={finding.ruleId + "-" + index}>
+                Cookie {evidence.cookieName} en {evidence.cookieDomain}; {evidence.provider}, finalidad {evidence.purpose};
+                {" "}{evidence.flow === "initial" ? "antes de elegir" : evidence.phase === "after_choice" ? "después de rechazar" : "después de recargar el rechazo"}
+                {" "}({evidence.capturedAtMs} ms).
+              </li>
+            ))}
+          </ul>
+          <p>
+            Fuentes oficiales: {finding.articles.map((article, index) => (
+              <span key={finding.ruleId + "-" + article.article}>
+                {index > 0 ? " · " : ""}<a href={article.url} target="_blank" rel="noopener noreferrer">LSSI, artículo {article.article}</a>
+              </span>
+            ))}.
+          </p>
+        </article>
+      ))}
     </section>
   );
 }
@@ -2066,6 +2148,7 @@ function isPublicReport(value: unknown): value is PublicReport {
     !isProcessorTransparencyAssessment(value.processorTransparencyAssessment) ||
     !isPublicPolicyTransparencyAssessment(value.publicPolicyTransparencyAssessment) ||
     !isPublicServiceComparison(value.publicServiceComparison) ||
+    !(value.legalCookieFindings === undefined || parseLegalCookieFindings(value.legalCookieFindings) !== null) ||
     !(value.providerCatalogVersion === undefined || value.providerCatalogVersion === null || typeof value.providerCatalogVersion === "string" && /^[a-f0-9]{64}$/u.test(value.providerCatalogVersion)) ||
     !isFirstEntryPolicyAccess(value.firstEntryPolicyAccess) ||
     !isInternalAuditPublicSummary(value.internalAuditSummary) ||
@@ -2099,6 +2182,7 @@ function isPublicReport(value: unknown): value is PublicReport {
     value.globalAssessment as PublicReport["globalAssessment"],
     value.ethicsAssessment as PublicReport["ethicsAssessment"],
     value.privacyAssessment as PublicReport["privacyAssessment"],
+    hasAccreditedLegalViolation(value.legalCookieFindings, value.publicServiceComparison),
   )) return false;
   if (!isScope(value.scope)) return false;
   const scope = value.scope;
@@ -2179,9 +2263,10 @@ function isPrivacyAssessment(value: unknown): value is NonNullable<PublicReport[
 }
 
 function isGlobalAssessment(value: unknown): value is PublicReport["globalAssessment"] {
-  if (!isRecord(value) || value.policyVersion !== "mvp-global-v1" ||
+  if (!isRecord(value) || value.policyVersion !== "mvp-global-v2" ||
       !isOneOf(value.status, ["scored", "review", "not_available"] as const) ||
       (value.score !== null && (!isInteger(value.score) || value.score < 0 || value.score > 100)) ||
+      typeof value.legalViolationAccredited !== "boolean" ||
       !isRecord(value.weights) || value.weights.ethics !== 50 || value.weights.privacy !== 50 ||
       !isRecord(value.ethicsCoverage) || !isInteger(value.ethicsCoverage.assessedCriteria) ||
       !isInteger(value.ethicsCoverage.totalCriteria) ||
@@ -2194,13 +2279,35 @@ function isGlobalAssessment(value: unknown): value is PublicReport["globalAssess
   return value.score === null;
 }
 
+function hasAccreditedLegalViolation(cookieFindings: unknown, serviceComparison: unknown): boolean {
+  const parsedCookieFindings = parseLegalCookieFindings(cookieFindings);
+  const parsedServiceComparison = parsePublicServiceComparison(serviceComparison);
+  return Boolean(parsedCookieFindings?.length) || Boolean(
+    parsedServiceComparison?.providerDocumentation?.some(({ comparisons }) =>
+      comparisons.some(({ legalFinding }) => legalFinding?.status === "infraccion_legal_acreditada"),
+    ),
+  );
+}
+
 function isGlobalAssessmentConsistent(
   global: PublicReport["globalAssessment"],
   ethics: PublicReport["ethicsAssessment"],
   privacy: PublicReport["privacyAssessment"],
+  legalViolationAccredited: boolean,
 ): boolean {
+  if (global.legalViolationAccredited !== legalViolationAccredited) return false;
   if (global.ethicsCoverage.assessedCriteria !== ethics.assessedCriteria ||
       global.ethicsCoverage.totalCriteria !== ethics.totalCriteria) return false;
+  if (legalViolationAccredited) {
+    if (global.status !== "scored" || global.score !== 0) return false;
+    return privacy === null || privacy === undefined
+      ? global.privacyCoverage === null
+      : global.privacyCoverage !== null &&
+        global.privacyCoverage.assessedCriteria === privacy.assessedCriteria &&
+        global.privacyCoverage.unknownCriteria === privacy.unknownCriteria &&
+        global.privacyCoverage.notApplicableCriteria === privacy.notApplicableCriteria &&
+        global.privacyCoverage.totalCriteria === privacy.totalCriteria;
+  }
   if (privacy === null || privacy === undefined) {
     return global.status === "not_available" && global.score === null && global.privacyCoverage === null;
   }
@@ -2568,6 +2675,9 @@ function getReportTakeaway(report: PublicReport): string {
   const assessed = criteria.filter((criterion) => criterion.status !== "unknown");
   const problems = assessed.filter((criterion) => criterion.status === "fail").length;
   const unknown = criteria.length - assessed.length;
+  if (report.globalAssessment.legalViolationAccredited) {
+    return "Se ha acreditado un incumplimiento legal; la puntuación global es 0/100. Las valoraciones técnicas por área se muestran por separado.";
+  }
   if (report.globalAssessment.status === "not_available") {
     return "Este informe todavía no tiene información suficiente para una valoración global.";
   }
