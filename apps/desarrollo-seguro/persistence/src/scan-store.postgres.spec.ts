@@ -195,9 +195,9 @@ describePostgres.sequential("PostgresScanStore", () => {
       scannerVersion: TEST_SCANNER,
       startedAt: TEST_START,
       completedAt: TEST_NOW,
-      verdict: "inconclusive",
+      verdict: "pass",
       scope: ["/"],
-      checks: [],
+      checks: makePassingControls(),
       metrics: { requestsCount: 0, bytesCount: 0, durationMs: 1, pagesCount: 0 },
       providerCatalogVersion: version,
     });
@@ -1643,7 +1643,7 @@ describePostgres.sequential("PostgresScanStore", () => {
 
     const purge = await pool.query<{ ds_purge_inactive_public_reports: number }>(
       "SELECT public.ds_purge_inactive_public_reports($1)",
-      [new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)],
+      [new Date(Date.now() - 30 * 24 * 60 * 60 * 1000 - 60_000)],
     );
     expect(purge.rows[0].ds_purge_inactive_public_reports).toBe(9);
     const remaining = await pool.query(
