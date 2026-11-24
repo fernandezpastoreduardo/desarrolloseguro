@@ -1,4 +1,6 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
+import { parseFirstEntryPolicyAccess, type FirstEntryPolicyAccess } from "@desarrolloseguro/core/first-entry-policy-access";
+import { parsePublicServiceComparison } from "@desarrolloseguro/core/public-service-comparison";
 import { PUBLIC_SERVICE_PROVIDER_INFO } from "@desarrolloseguro/core/public-service-catalog";
 import "./public-scan-portal.scss";
 
@@ -209,12 +211,25 @@ type PublicPolicyTransparencyAssessment = {
 type PublicServiceComparison = {
   policyVersion: "public-service-comparison-v1";
   status: "pass" | "fail" | "unknown";
-  reasonCode: "services_disclosed" | "observed_service_undisclosed" | "public_policy_missing" | "auditor_error";
+  reasonCode: "services_disclosed" | "observed_service_undisclosed" | "provider_documentation_contradiction" | "public_policy_missing" | "auditor_error";
   items: Array<{
     providerId: string;
     observation: "observed" | "declared" | "observed_and_declared";
     observedDomains: string[];
     declaredPurposes: string[];
+  }>;
+  providerDocumentation?: Array<{
+    providerId: string;
+    status: "contradiction_confirmed" | "consistent" | "not_comparable" | "source_not_located" | "source_unavailable";
+    comparisons: Array<{
+      factId: string;
+      siteStatement: { title: string; url: string; excerpt: string };
+      siteValue: boolean;
+      providerFact: { title: string; url: string; excerpt: string };
+      providerValue: boolean;
+      relation: "opposes" | "supports";
+      legalFinding?: { status: "infraccion_legal_acreditada"; instrument: string; articles: string[]; authority: string; sanction: { alternatives: Array<{ type: string; amount?: number; percentage?: number; currency?: string }> } };
+    }>;
   }>;
 };
 type InternalAuditCriterionId =
@@ -290,6 +305,7 @@ type PublicReport = {
   processorTransparencyAssessment: PublicProcessorTransparencyAssessment | null;
   publicPolicyTransparencyAssessment: PublicPolicyTransparencyAssessment | null;
   publicServiceComparison?: PublicServiceComparison | null;
+  firstEntryPolicyAccess?: FirstEntryPolicyAccess | null;
   internalAuditSummary?: InternalAuditPublicSummary | null;
   internalAuditState?: "running" | "review" | "complete" | null;
   certification: {
@@ -1178,6 +1194,9 @@ function ReportSummary({
         {report.publicServiceComparison && (
           <PublicServiceComparisonSection comparison={report.publicServiceComparison} observedDomains={report.privacyAssessment?.evidence.domains ?? []} />
         )}
+        {report.firstEntryPolicyAccess && (
+          <FirstEntryPolicyAccessSection access={report.firstEntryPolicyAccess} />
+        )}
         {report.publicPolicyTransparencyAssessment && !report.publicServiceComparison && (
           <section className="ds-portal__public-policy" aria-labelledby="public-policy-transparency-heading">
             <h3 id="public-policy-transparency-heading">Servicios externos detectados</h3>
@@ -1267,7 +1286,9 @@ function PublicServiceComparisonSection({ comparison, observedDomains }: { compa
     : comparison.reasonCode === "public_policy_missing"
       ? "No se encontró información pública suficiente para conocer y contrastar los servicios externos del sitio."
       : comparison.reasonCode === "observed_service_undisclosed"
-        ? "Se detectó al menos un servicio externo que el sitio no identifica junto con su finalidad. Esto reduce la transparencia para sus visitantes."
+        ? "Incumplimiento observado: se detectó un servicio externo sin información pública del sitio que identifique su finalidad."
+        : comparison.reasonCode === "provider_documentation_contradiction"
+          ? "Se confirmó una contradicción entre lo que declara el sitio y la documentación oficial de un proveedor."
         : "Los servicios externos observados aparecen explicados por el sitio. Los servicios declarados que no se vieron durante esta revisión se muestran aparte y no se consideran actividad confirmada.";
   return (
     <section className="ds-portal__public-services" aria-labelledby="public-services-heading">
@@ -1281,7 +1302,7 @@ function PublicServiceComparisonSection({ comparison, observedDomains }: { compa
             const stateLabel = item.observation === "observed_and_declared"
               ? "Correcto · observado y explicado"
               : item.observation === "observed"
-                ? "Riesgo detectado · observado sin explicación pública suficiente"
+                ? "Servicio observado · sin finalidad declarada"
                 : "Declarado · no observado en esta revisión";
             return (
               <li key={item.providerId} data-observation={item.observation}>
@@ -1299,8 +1320,19 @@ function PublicServiceComparisonSection({ comparison, observedDomains }: { compa
                   <>
                     <p>{info.serviceSummary}</p>
                     <p className="ds-portal__public-service-sources">
-                      Fuentes del proveedor: <a href={info.serviceSourceUrl} target="_blank" rel="noopener noreferrer">descripción del servicio</a>
-                      {" · "}<a href={info.privacyPolicyUrl} target="_blank" rel="noopener noreferrer">política de privacidad</a>.
+                      Fuentes oficiales del proveedor: {info.officialDocuments?.length
+                        ? info.officialDocuments.map((document, index) => (
+                          <span key={document.documentId}>
+                            {index > 0 ? " · " : ""}
+                            <a href={document.url} target="_blank" rel="noopener noreferrer">
+                              {getOfficialDocumentLabel(document.kind)}
+                            </a>
+                          </span>
+                        ))
+                        : <>
+                          <a href={info.serviceSourceUrl} target="_blank" rel="noopener noreferrer">descripción del servicio</a>
+                          {" · "}<a href={info.privacyPolicyUrl} target="_blank" rel="noopener noreferrer">política de privacidad</a>
+                        </>}.
                     </p>
                   </>
                 )}
@@ -1309,6 +1341,28 @@ function PublicServiceComparisonSection({ comparison, observedDomains }: { compa
           })}
         </ul>
       )}
+      {comparison.providerDocumentation?.filter(({ status }) => status === "contradiction_confirmed").map((finding) => (
+        <article className="ds-portal__provider-contradiction" key={finding.providerId}>
+          <h4>{PUBLIC_SERVICE_PROVIDER_INFO[finding.providerId]?.displayName ?? finding.providerId}: contradicción documental confirmada</h4>
+          {finding.comparisons.filter(({ relation }) => relation === "opposes").map((item) => (
+            <div className="ds-portal__provider-contradiction-evidence" key={`${finding.providerId}-${item.factId}`}>
+              <p><b>Declaración del sitio:</b> {item.siteStatement.excerpt}</p>
+              <p><b>Fuente del sitio:</b> <a href={item.siteStatement.url} target="_blank" rel="noopener noreferrer">{item.siteStatement.title}</a></p>
+              <p><b>Hecho documentado por el proveedor:</b> {item.providerFact.excerpt}</p>
+              <p><b>Fuente oficial del proveedor:</b> <a href={item.providerFact.url} target="_blank" rel="noopener noreferrer">{item.providerFact.title}</a></p>
+              {item.legalFinding && (
+                <div className="ds-portal__provider-legal-finding" data-status="infraccion_legal_acreditada">
+                  <strong>Incumplimiento legal acreditado</strong>
+                  <p>{item.legalFinding.instrument}, artículos {item.legalFinding.articles.join(", ")}. Organismo competente: {item.legalFinding.authority}.</p>
+                  <p>Escala sancionadora prevista: {item.legalFinding.sanction.alternatives.map((scale) =>
+                    scale.type === "fixed_amount" ? `${scale.amount?.toLocaleString("es-ES")} ${scale.currency}` : `${scale.percentage} % del volumen de negocio mundial anual`,
+                  ).join(" o ")} (la cuantía concreta la determina el organismo competente).</p>
+                </div>
+              )}
+            </div>
+          ))}
+        </article>
+      ))}
       {otherObservedDomains.length > 0 && (
         <div className="ds-portal__unclassified-services">
           <h4>Otros dominios externos observados</h4>
@@ -1318,6 +1372,69 @@ function PublicServiceComparisonSection({ comparison, observedDomains }: { compa
       )}
     </section>
   );
+}
+
+function FirstEntryPolicyAccessSection({ access }: { access: FirstEntryPolicyAccess }) {
+  const statusLabel = access.status === "pass" ? "Enlace comprobado"
+    : access.status === "fail" ? "Comprobación incumplida"
+      : "No se pudo comprobar";
+  const summary = access.reasonCode === "consent_component_link_accessible"
+    ? "El aviso de consentimiento contiene un enlace visible y accesible a documentación legal."
+    : access.reasonCode === "consent_link_missing"
+      ? "El aviso de consentimiento no contiene un enlace visible a documentación legal. Un enlace que solo aparece en el footer no satisface esta comprobación."
+      : access.reasonCode === "consent_link_unavailable"
+        ? "El enlace legal visible no permitió abrir un documento accesible."
+        : access.reasonCode === "footer_link_accessible_without_consent"
+          ? "No se solicitó consentimiento ni se detectaron cookies de terceros en la entrada inicial; el enlace del footer permitió abrir la documentación."
+          : access.reasonCode === "footer_insufficient_with_third_party_cookies"
+            ? "Se detectó una cookie de un dominio de terceros en la entrada inicial. Un enlace que solo aparece en el footer no satisface esta comprobación."
+            : access.reasonCode === "policy_link_missing"
+              ? "No se encontró un enlace visible a documentación legal pertinente en el lugar requerido."
+              : "La evidencia del navegador está incompleta; no se califica como cumplimiento ni como incumplimiento.";
+  const locationLabel = access.linkLocation === "consent_component" ? "aviso de consentimiento"
+    : access.linkLocation === "footer" ? "footer"
+      : access.linkLocation === "none" ? "ningún lugar requerido" : "ubicación no determinada";
+  const linkUrl = access.link ? `https://${access.link.hostname}${access.link.path}` : null;
+  return (
+    <section className="ds-portal__first-entry-policy-access" data-status={access.status} aria-labelledby="first-entry-policy-access-heading">
+      <div className="ds-portal__first-entry-policy-heading">
+        <div>
+          <p className="ds-portal__eyebrow">Entrada inicial</p>
+          <h3 id="first-entry-policy-access-heading">Acceso a información legal</h3>
+        </div>
+        <strong>{statusLabel}</strong>
+      </div>
+      <p>{summary}</p>
+      <dl>
+        <div><dt>Consentimiento</dt><dd>{access.consentPromptDetected === true ? "Solicitado" : access.consentPromptDetected === false ? "No solicitado" : "No determinado"}</dd></div>
+        <div><dt>Cookie de terceros</dt><dd>{access.thirdPartyCookieDetected === true ? "Detectada" : access.thirdPartyCookieDetected === false ? "No detectada en una lectura completa" : "No se pudo determinar"}</dd></div>
+        <div><dt>Ubicación del enlace</dt><dd>{locationLabel}</dd></div>
+        <div><dt>Acceso al documento</dt><dd>{access.documentAccess === "accessible" ? "Accesible" : access.documentAccess === "unavailable" ? "No accesible" : access.documentAccess === "not_checked" ? "No comprobado" : "No se pudo determinar"}</dd></div>
+      </dl>
+      {access.nonEssentialThirdPartyStorageDetected === true && (
+        <p className="ds-portal__first-entry-policy-separate-finding">Se identificó almacenamiento de terceros no esencial. Se evalúa como hallazgo independiente de la ubicación del enlace legal.</p>
+      )}
+      {access.nonEssentialThirdPartyStorageDetected === null && (
+        <p className="ds-portal__first-entry-policy-note">No se pudo atribuir todo el almacenamiento observado a una finalidad no esencial.</p>
+      )}
+      {linkUrl && (
+        <p className="ds-portal__first-entry-policy-link">
+          Enlace registrado: <a href={linkUrl} target="_blank" rel="noopener noreferrer">{access.link?.hostname}{access.link?.path}</a>
+        </p>
+      )}
+    </section>
+  );
+}
+
+function getOfficialDocumentLabel(kind: string): string {
+  const labels: Record<string, string> = {
+    privacy: "información de privacidad",
+    terms: "términos y condiciones",
+    dpa: "acuerdo de tratamiento de datos",
+    subprocessors: "lista de subencargados",
+    "service-documentation": "documentación del servicio",
+  };
+  return labels[kind] ?? "documentación oficial";
 }
 
 function getPublicPurposeLabel(purposeId: string): string {
@@ -1880,6 +1997,7 @@ function isPublicReport(value: unknown): value is PublicReport {
     !isProcessorTransparencyAssessment(value.processorTransparencyAssessment) ||
     !isPublicPolicyTransparencyAssessment(value.publicPolicyTransparencyAssessment) ||
     !isPublicServiceComparison(value.publicServiceComparison) ||
+    !isFirstEntryPolicyAccess(value.firstEntryPolicyAccess) ||
     !isInternalAuditPublicSummary(value.internalAuditSummary) ||
     value.internalAuditState !== undefined && value.internalAuditState !== null &&
       !isOneOf(value.internalAuditState, ["running", "review", "complete"] as const) ||
@@ -1936,6 +2054,10 @@ function isPublicReport(value: unknown): value is PublicReport {
     return false;
   }
   return true;
+}
+
+function isFirstEntryPolicyAccess(value: unknown): value is FirstEntryPolicyAccess | null | undefined {
+  return value === undefined || value === null || parseFirstEntryPolicyAccess(value) !== null;
 }
 
 function isInternalAuditPublicSummary(value: unknown): value is InternalAuditPublicSummary | null | undefined {
@@ -2127,38 +2249,7 @@ function isPublicPolicyTransparencyAssessment(value: unknown): value is PublicPo
 }
 
 function isPublicServiceComparison(value: unknown): value is PublicServiceComparison | null | undefined {
-  if (value === undefined || value === null) return true;
-  if (!isRecord(value) || value.policyVersion !== "public-service-comparison-v1" ||
-      !isOneOf(value.status, ["pass", "fail", "unknown"] as const) ||
-      !isOneOf(value.reasonCode, ["services_disclosed", "observed_service_undisclosed", "public_policy_missing", "auditor_error"] as const) ||
-      !Array.isArray(value.items) || value.items.length > 30) return false;
-  const ids = new Set<string>();
-  for (const item of value.items) {
-    if (!isRecord(item) || typeof item.providerId !== "string" || !/^[a-z0-9][a-z0-9_-]{0,31}$/u.test(item.providerId) || ids.has(item.providerId) ||
-        !isOneOf(item.observation, ["observed", "declared", "observed_and_declared"] as const) ||
-        !isSafeStringList(item.observedDomains, 8, 253) ||
-        !item.observedDomains.every(isHostname) ||
-        !isSafeStringList(item.declaredPurposes, 8, 32) ||
-        !item.declaredPurposes.every((purpose) => /^[a-z0-9][a-z0-9_-]{0,31}$/u.test(purpose))) return false;
-    ids.add(item.providerId);
-    const expected = item.observedDomains.length > 0 && item.declaredPurposes.length > 0
-      ? "observed_and_declared" : item.observedDomains.length > 0 ? "observed" : "declared";
-    if (item.observation !== expected) return false;
-  }
-  if (value.reasonCode === "auditor_error") return value.status === "unknown" && value.items.length === 0;
-  if (value.reasonCode === "public_policy_missing") return value.status === "fail" && !value.items.some(({ observation }) => observation === "observed");
-  if (value.reasonCode === "observed_service_undisclosed") return value.status === "fail" && value.items.some(({ observation }) => observation === "observed");
-  return value.status === "pass" && !value.items.some(({ observation }) => observation === "observed");
-}
-
-function isHostname(value: string): boolean {
-  return value.length <= 253 && /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))*$/iu.test(value);
-}
-
-function isSafeStringList(value: unknown, maximumItems: number, maximumLength: number): value is string[] {
-  return Array.isArray(value) && value.length <= maximumItems &&
-    value.every((item) => typeof item === "string" && item.length > 0 && item.length <= maximumLength) &&
-    new Set(value).size === value.length;
+  return value === undefined || value === null || parsePublicServiceComparison(value) !== null;
 }
 
 function isProcessorTransparencyAssessment(value: unknown): value is PublicProcessorTransparencyAssessment | null {

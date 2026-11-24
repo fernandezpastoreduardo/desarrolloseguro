@@ -5,6 +5,19 @@ export type PublicServiceProviderInfo = {
   serviceSourceUrl: string;
   privacyPolicyUrl: string;
   reviewedAt: string;
+  officialDocuments?: readonly {
+    documentId: string;
+    kind: "privacy" | "terms" | "dpa" | "subprocessors" | "service-documentation";
+    title: string;
+    url: string;
+    reviewedAt: string;
+  }[];
+  documentedFacts?: readonly {
+    factId: string;
+    value: boolean;
+    documentId: string;
+    excerpt: string;
+  }[];
 };
 
 export const PUBLIC_SERVICE_PROVIDER_INFO: Readonly<Record<string, PublicServiceProviderInfo>> = {
@@ -91,13 +104,39 @@ export const PUBLIC_SERVICE_PROVIDER_INFO: Readonly<Record<string, PublicService
     serviceSourceUrl: "https://developers.openai.com/api/docs/guides/your-data",
     privacyPolicyUrl: "https://openai.com/policies/privacy-policy/",
     reviewedAt: "2026-11-24",
+    officialDocuments: [
+      { documentId: "openai-api-data-controls", kind: "service-documentation", title: "Data controls in the OpenAI platform", url: "https://developers.openai.com/api/docs/guides/your-data", reviewedAt: "2026-11-24" },
+      { documentId: "openai-api-dpa", kind: "dpa", title: "OpenAI Data Processing Addendum", url: "https://openai.com/policies/data-processing-addendum/", reviewedAt: "2026-11-24" },
+      { documentId: "openai-api-subprocessors", kind: "subprocessors", title: "OpenAI Sub-processor list", url: "https://openai.com/policies/sub-processor-list/", reviewedAt: "2026-11-24" },
+    ],
+    documentedFacts: [
+      {
+        factId: "provider_receives_content",
+        value: true,
+        documentId: "openai-api-data-controls",
+        excerpt: "OpenAI describes API inputs and outputs and states that abuse monitoring logs can include submitted content under its standard retention controls.",
+      },
+    ],
   },
   ionos: {
     displayName: "IONOS",
     serviceSummary: "IONOS explica que SMTP envía correo y documenta su servidor de salida con cifrado SSL/TLS en el puerto 465. Esa página técnica no concreta cuánto tiempo conserva los mensajes enviados.",
-    serviceSourceUrl: "https://www.ionos.com/help/index.php?id=2490",
+    serviceSourceUrl: "https://www.ionos.es/ayuda/correo/temas-generales/datos-necesarios-para-configurar-clientes-de-correo/",
     privacyPolicyUrl: "https://www.ionos.com/terms-gtc/privacy-policy/",
     reviewedAt: "2026-11-24",
+    officialDocuments: [
+      { documentId: "ionos-product-data-hosting", kind: "privacy", title: "Tratamiento de datos por producto: Hosting", url: "https://www.ionos.es/ayuda/proteccion-de-datos/tratamiento-de-datos-por-su-producto-ionos/hosting/", reviewedAt: "2026-11-24" },
+      { documentId: "ionos-data-processing-agreement", kind: "dpa", title: "Contrato de tratamiento de datos", url: "https://www.ionos.es/ayuda/proteccion-de-datos/informacion-general-sobre-el-rgpd/contrato-de-tratamiento-de-datos/", reviewedAt: "2026-11-24" },
+      { documentId: "ionos-smtp-configuration", kind: "service-documentation", title: "Datos de servidores IMAP, POP3 y SMTP", url: "https://www.ionos.es/ayuda/correo/temas-generales/datos-necesarios-para-configurar-clientes-de-correo/", reviewedAt: "2026-11-24" },
+    ],
+    documentedFacts: [
+      {
+        factId: "provider_receives_content",
+        value: true,
+        documentId: "ionos-smtp-configuration",
+        excerpt: "IONOS documents SMTP as its outgoing mail service, which processes the message submitted to that service for delivery.",
+      },
+    ],
   },
 };
 

@@ -85,6 +85,7 @@ function unknownFlow(): PrivacyBrowserObservation["initial"] {
     storageKeysAfterChoice: [],
     cookieReadComplete: false,
     storageReadComplete: false,
+    firstEntryPolicyLinks: { status: "unknown", consentComponentDetected: null, consentComponentLink: null, consentComponentDocumentAccess: "unknown", footerLink: null, footerLinkDocumentAccess: "unknown" },
     phaseEvidence: {
       beforeChoice: null,
       choiceActionAtMs: null,

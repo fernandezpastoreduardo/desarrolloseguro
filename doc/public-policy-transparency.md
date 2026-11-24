@@ -1,60 +1,61 @@
 # Información pública sobre servicios externos
 
-Los informes de `domain-ethics-v5` incorporan una comprobación de lo que el
-propio sitio explica públicamente sobre los servicios que utiliza. El análisis
-busca enlaces a privacidad, cookies, condiciones e información legal en la
-portada y consulta solo esos destinos mediante el lector de red aislado.
+## Acceso legal en la primera entrada
 
-La comprobación identifica nombres de proveedores y finalidades cuando ambos
-aparecen expresamente en el texto de la política. Conserva el resultado, el
-número de páginas revisadas, las menciones de proveedores y las categorías
-reconocidas; no guarda las páginas, sus textos ni las direcciones externas.
-El informe público muestra cuántos proveedores se reconocieron y cuántos no
-tenían una finalidad explicada en el mismo fragmento de la política.
+El informe revisa la primera página en un contexto de navegador limpio. Si se
+muestra un aviso de cookies, CMP u otro mecanismo que solicita consentimiento,
+el enlace a privacidad, cookies, condiciones o aviso legal debe estar visible
+dentro de ese mismo componente. Un enlace únicamente en el footer no cumple.
+El auditor pulsa el enlace con navegación de solo lectura y registra si el
+documento carga, junto con el host y la ruta, sin guardar query strings ni
+fragmentos.
 
-## Qué significa el resultado
+Si no se solicita consentimiento y la lectura inicial completa no detecta
+cookies de terceros, un enlace pertinente del footer satisface esta comprobación.
+Una solicitud de red a un tercero por sí sola no invalida esa excepción; la
+recepción de datos por ese proveedor se evalúa aparte. Si la lectura no es
+completa, el resultado es «no se pudo comprobar», no un aprobado ni un fallo del
+sitio. El almacenamiento de terceros no esencial conserva su comprobación
+separada.
 
-- **Información encontrada:** el sitio publica información reconocible sobre
-  servicios externos y sus finalidades. Esto acredita que se encontró una
-  declaración; no demuestra que sea completa, verdadera o que coincida con la
-  actividad interna.
-- **Información insuficiente:** el análisis pudo leer la portada y los enlaces
-  pertinentes, pero no encontró una política o no pudo identificar en ella
-  proveedores y finalidades. Este resultado afecta a la transparencia pública.
-- **Acceso denegado o página no disponible:** el sitio bloqueó el acceso o el
-  enlace publicado no pudo abrirse. Es un hallazgo de transparencia, no una
-  conclusión legal automática.
-- **En revisión:** el lector tuvo un error técnico propio, agotó un límite o no
-  pudo procesar el formato. No se penaliza esa comprobación incompleta. Si el
-  lector conoce la causa, el informe la resume en lenguaje sencillo. Solo se
-  conserva un código técnico de una lista cerrada; nunca se publican errores
-  crudos, direcciones, cabeceras, páginas ni valores de cookies. El resumen y
-  el código se guardan con una lista cerrada validada por la base de datos y
-  aparecen en la evidencia pública del criterio correspondiente.
+## Proveedores, fuentes y contradicciones
 
-Los nombres de proveedores y finalidades salen de un catálogo local revisado.
-El catálogo puede no reconocer todas las marcas o expresiones. En ese caso,
-el sistema deja el punto en revisión mientras se corrige el catálogo o el
-lector; no inventa una finalidad.
+El auditor identifica los proveedores que aparecen en la política y en los
+flujos observados, incluidos servicios backend que no dejan cookies. Compara
+las declaraciones explícitas del sitio con hechos que constan en documentos
+oficiales del proveedor. El informe presenta por separado ambas fuentes,
+versiones, fechas y fragmentos breves para que la contradicción pueda
+reproducirse.
 
-## Clientes y otros dominios
+Una contradicción documental confirmada se incorpora al resultado y afecta a
+la puntuación de transparencia. Cuando la evidencia satisface todos los
+elementos de una regla jurídica versionada, el informe identifica la
+infracción legal acreditada, los artículos, la autoridad competente y la
+escala sancionadora establecida por la norma. La escala legal no predice la
+multa concreta que impondrá una autoridad. Si falta un elemento legal, el
+informe conserva la contradicción y muestra qué estado del mapeo jurídico se
+aplicó; no inventa artículos ni cuantías.
 
-Para los dominios cliente con inventario autenticado, el criterio ético de 10
-puntos se calcula con el inventario privado firmado. La revisión de políticas
-públicas se conserva como información complementaria y no reemplaza el
-inventario. Para los demás dominios, el criterio se calcula con la evidencia
-pública descrita arriba. Los informes históricos conservan su versión de
-política y no se recalculan.
+La ausencia de documentación pertinente, una fuente oficial no localizada y
+un fallo técnico al abrir un enlace son resultados diferentes. No encontrar
+una URL con las fuentes permitidas no demuestra que el proveedor carezca de
+documentación.
 
-La verificación es de solo lectura. Las solicitudes de política no incluyen
-cookies, credenciales ni `Referer`, solo aceptan HTTPS en el puerto 443 y no
-siguen redirecciones a otro host. El lector limita el tiempo, las solicitudes,
-el volumen de datos y la cantidad de páginas. Al agotar un límite, deja el
-resultado en revisión.
+## Catálogo y actualización
 
-En cada respuesta de página, el lector puede combinar cabeceras, señales
-pasivas y contadores de políticas públicas. El intercambio interno admite hasta
-64 campos de evidencia derivados; conserva límites de tamaño y descarta la
-respuesta si excede el máximo. No transporta ni publica el HTML ni valores de
-cookies. La evaluación de cabeceras conserva además el esquema de la respuesta:
-solo una respuesta final HTTPS puede dar por comprobado ese control.
+El catálogo guarda documentos oficiales conocidos, hechos documentados,
+versiones, huellas SHA-256 y fechas de consulta. Si una fuente oficial falla,
+el sistema registra el fallo y conserva la versión activa. Cada informe queda
+asociado a la versión inmutable que utilizó; un refresco posterior no cambia
+informes históricos.
+
+El worker actualiza las fuentes oficiales catalogadas el día 1 de cada mes a
+las 03:00, hora de `Europe/Madrid`, con reintentos si una fuente no está
+disponible. Usa únicamente URLs oficiales obtenidas del sitio auditado o ya
+registradas en el catálogo; no usa buscadores externos. La versión actualizada
+se utiliza en auditorías posteriores.
+
+El lector de red no envía cookies, credenciales ni `Referer`, solo accede por
+HTTPS y limita el tiempo, el número de solicitudes y el volumen de datos.
+Guarda evidencia mínima para respaldar el resultado, no copias completas de
+páginas ni datos personales.

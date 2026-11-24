@@ -9,6 +9,7 @@ function flow(overrides: Partial<PrivacyBrowserFlowObservation> = {}): PrivacyBr
     actionsToAccept: 0, actionsToReject: 0, preferenceWriteAllowed: false,
     rejectionPersistedAfterReload: null, signalHostsAfterChoice: [], completedHostsAfterChoice: [],
     cookiesAfterChoice: [], storageKeysAfterChoice: [], cookieReadComplete: true, storageReadComplete: true,
+    firstEntryPolicyLinks: { status: "unknown", consentComponentDetected: null, consentComponentLink: null, consentComponentDocumentAccess: "unknown", footerLink: null, footerLinkDocumentAccess: "unknown" },
     phaseEvidence: { beforeChoice: null, choiceActionAtMs: null, afterChoice: null, reloadStartedAtMs: null,
       afterReload: null, rejectionChoiceStateAfterReload: "unknown", rejectionChoiceEvidence: null,
       networkRequests: [], networkRequestsComplete: true },

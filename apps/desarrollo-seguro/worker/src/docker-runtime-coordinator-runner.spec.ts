@@ -188,6 +188,97 @@ describe("createDockerRuntimeCoordinatorRunner", () => {
     expect(close).toHaveBeenCalledOnce();
   });
 
+  it("builds the public service comparison from provider declarations", async () => {
+    const base = makeResult();
+    const request = { ...REQUEST, profileVersion: "domain-v4" as const };
+    const executorResult = {
+      ...base,
+      scannerVersion: "domain-v4-network-adapter-3",
+      checks: [...base.checks, ...base.checks],
+      publicPolicyTransparencyAssessment: {
+        policyVersion: "public-policy-v1",
+        status: "pass",
+        reasonCode: "disclosure_found",
+        evidence: {
+          linksFound: 1,
+          pagesInspected: 1,
+          unavailablePages: 0,
+          accessDeniedPages: 0,
+          providerMentions: 2,
+          providersMissingPurpose: 0,
+          categories: ["other"],
+        },
+      },
+      publicServiceDeclarations: [
+        { providerId: "openai-api", purposes: ["ai_processing"] },
+        { providerId: "ionos", purposes: ["infrastructure", "email_delivery"] },
+      ],
+    };
+    const close = vi.fn().mockResolvedValue(undefined);
+    const factory: DockerRuntimeSessionFactory = {
+      create: vi.fn().mockResolvedValue({
+        execute: vi.fn().mockResolvedValue({
+          protocolVersion: 1,
+          requestId: request.requestId,
+          result: JSON.parse(JSON.stringify(executorResult)) as unknown,
+        }),
+        observePrivacy: vi.fn().mockResolvedValue(makePrivacyObservation()),
+        close,
+      }),
+    };
+
+    const result = await createDockerRuntimeCoordinatorRunner(factory).execute(request, new AbortController().signal);
+
+    expect(result.publicServiceComparison).toMatchObject({
+      status: "pass",
+      items: [
+        { providerId: "ionos", observation: "declared" },
+        { providerId: "openai-api", observation: "declared" },
+      ],
+    });
+    expect(close).toHaveBeenCalledOnce();
+  });
+
+  it("persists an explicit first-entry failure when consent has only a footer link", async () => {
+    const request = REQUEST;
+    const observation = makePrivacyObservation();
+    observation.initial = {
+      ...observation.initial,
+      consentPromptDetected: true,
+      firstEntryPolicyLinks: {
+        status: "evaluated",
+        consentComponentDetected: true,
+        consentComponentLink: null,
+        consentComponentDocumentAccess: "not_checked",
+        footerLink: { hostname: "example.org", path: "/privacy", kind: "privacy" },
+        footerLinkDocumentAccess: "accessible",
+      },
+      phaseEvidence: {
+        ...observation.initial.phaseEvidence,
+        beforeChoice: { capturedAtMs: 1, cookies: [], storageKeys: [], cookieReadComplete: true, storageReadComplete: true },
+      },
+    };
+    const factory: DockerRuntimeSessionFactory = {
+      create: vi.fn().mockResolvedValue({
+        execute: vi.fn().mockResolvedValue({
+          protocolVersion: 1, requestId: request.requestId, result: JSON.parse(JSON.stringify(makeResult())) as unknown,
+        }),
+        observePrivacy: vi.fn().mockResolvedValue(observation),
+        close: vi.fn().mockResolvedValue(undefined),
+      }),
+    };
+
+    const result = await createDockerRuntimeCoordinatorRunner(factory).execute(request, new AbortController().signal);
+
+    expect(result.firstEntryPolicyAccess).toMatchObject({
+      status: "fail",
+      reasonCode: "consent_link_missing",
+      consentPromptDetected: true,
+      linkLocation: "none",
+      link: null,
+    });
+  });
+
   it("rejects a mismatched executor response and still closes the runtime", async () => {
     const close = vi.fn().mockResolvedValue(undefined);
     const factory: DockerRuntimeSessionFactory = {
@@ -624,6 +715,7 @@ function makePrivacyObservation(): PrivacyBrowserObservation {
     actionsToAccept: 0, actionsToReject: 0, preferenceWriteAllowed: false,
     rejectionPersistedAfterReload: null, signalHostsAfterChoice: [], completedHostsAfterChoice: [],
     cookiesAfterChoice: [], storageKeysAfterChoice: [], cookieReadComplete: true, storageReadComplete: true,
+    firstEntryPolicyLinks: { status: "unknown", consentComponentDetected: null, consentComponentLink: null, consentComponentDocumentAccess: "unknown", footerLink: null, footerLinkDocumentAccess: "unknown" },
     phaseEvidence: { beforeChoice: null, choiceActionAtMs: null, afterChoice: null, reloadStartedAtMs: null,
       afterReload: null, rejectionChoiceStateAfterReload: "unknown", rejectionChoiceEvidence: null,
       networkRequests: [], networkRequestsComplete: true },

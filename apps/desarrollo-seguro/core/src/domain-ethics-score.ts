@@ -39,6 +39,8 @@ export function assessDomainEthicsV6(checks: unknown, publicServiceInput: unknow
     .reduce((sum, criterion) => sum + criterion.weight, 0);
   const reason = comparison?.reasonCode === "observed_service_undisclosed"
     ? "Se observó un servicio externo que la información pública no identifica junto con su finalidad."
+    : comparison?.reasonCode === "provider_documentation_contradiction"
+      ? "La información pública del sitio contradice un hecho documentado por el proveedor del servicio."
     : comparison?.reasonCode === "public_policy_missing"
       ? "No se encontró información pública suficiente para saber qué servicios externos utiliza el sitio."
       : comparison?.reasonCode === "auditor_error"

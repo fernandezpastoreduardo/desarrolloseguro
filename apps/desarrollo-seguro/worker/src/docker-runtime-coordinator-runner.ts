@@ -12,6 +12,7 @@ import {
 import type { RuntimeCoordinatorRunner } from "./runtime-coordinator-server.js";
 import { assessPrivacyObservation, getObservedPublicServices } from "./privacy-assessment-builder.js";
 import { buildLegalCookieFindings } from "./privacy-legal-cookie-findings.js";
+import { assessFirstEntryPolicyAccessObservation } from "./privacy-first-entry-policy-access.js";
 import type { PrivacyBrowserObservation } from "./privacy-browser-observer.js";
 import {
   createJsonLineRuntimeDiagnostic,
@@ -171,12 +172,13 @@ export function createDockerRuntimeCoordinatorRunner(
                 .some(({ status }) => status === "unknown"),
             })
           : null;
+        const firstEntryPolicyAccess = assessFirstEntryPolicyAccessObservation(observation ?? null);
         const completedResult = { ...result };
-        delete completedResult.publicServiceDeclarations;
         result = {
           ...completedResult,
           privacyAssessment,
           legalCookieFindings,
+          firstEntryPolicyAccess,
           ...(publicServiceComparison ? { publicServiceComparison } : {}),
         };
       } catch (error) {

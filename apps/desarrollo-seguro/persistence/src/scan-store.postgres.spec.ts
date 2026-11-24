@@ -9,6 +9,7 @@ import {
 } from "./scan-store.js";
 import { runDevelopmentSecurityMigrations } from "./run-migrations.js";
 import { isSafePostgresTestTarget } from "./postgres-test-safety.js";
+import { PostgresProviderCatalogStore } from "./provider-catalog-store.js";
 
 const TEST_DATABASE_URL = process.env.DS_TEST_DATABASE_URL;
 const TEST_POSTGRES_ISOLATED = process.env.DS_TEST_POSTGRES_ISOLATED;
@@ -42,7 +43,8 @@ describePostgres.sequential("PostgresScanStore", () => {
     if (!pool) return;
     await pool.query(
       `TRUNCATE ds_scan_metrics, ds_check_results, ds_scan_runs,
-       ds_scan_jobs, ds_domains CASCADE`,
+       ds_scan_jobs, ds_domains, ds_scan_provider_catalog_versions,
+       ds_provider_catalog_active, ds_provider_catalog_refresh_runs CASCADE`,
     );
     await store.ensureDomain(TEST_HOSTNAME, "monitored", TEST_PROFILE);
   });
@@ -160,6 +162,51 @@ describePostgres.sequential("PostgresScanStore", () => {
       [reportId],
     );
     expect(persistedComparison.rows[0]?.comparison_json).toEqual(serviceComparison);
+  });
+
+  it("pins each report to the active provider catalog version", async () => {
+    const catalog = new PostgresProviderCatalogStore(pool);
+    const scheduledAt = new Date("2026-11-01T02:00:00.000Z");
+    expect(await catalog.beginRefresh(scheduledAt)).toBe(true);
+    const version = await catalog.activate({
+      providerFacts: [{ providerId: "sample-provider", facts: [] }],
+      legalRules: [],
+      sources: [{
+        providerId: "sample-provider",
+        documentId: "sample-privacy",
+        title: "Sample privacy documentation",
+        url: "https://sample-provider.example/privacy",
+        status: "fetched",
+        sha256: "a".repeat(64),
+        checkedAt: "2026-11-01T02:00:00.000Z",
+      }],
+      scheduledAt,
+    });
+    expect((await catalog.readActive())?.catalogVersion).toBe(version);
+
+    await store.ensureFreshScan({ hostname: TEST_HOSTNAME, profileVersion: TEST_PROFILE, trigger: "requested" });
+    const job = await store.claimNextScan(new Date(), TEST_LEASE_MS);
+    if (!job) throw new Error("expected_claimed_catalog_scan");
+    const reportId = await store.completeScan({
+      jobId: job.id,
+      leaseToken: job.leaseToken,
+      hostname: TEST_HOSTNAME,
+      profileVersion: TEST_PROFILE,
+      scannerVersion: TEST_SCANNER,
+      startedAt: TEST_START,
+      completedAt: TEST_NOW,
+      verdict: "pass",
+      scope: ["/"],
+      checks: makePassingControls(),
+      metrics: { requestsCount: 0, bytesCount: 0, durationMs: 1, pagesCount: 0 },
+      providerCatalogVersion: version,
+    });
+    expect((await store.readPublicReport(reportId))?.providerCatalogVersion).toBe(version);
+    const link = await pool.query<{ catalog_version: string }>(
+      "SELECT catalog_version FROM ds_scan_provider_catalog_versions WHERE run_id = $1",
+      [reportId],
+    );
+    expect(link.rows[0]?.catalog_version).toBe(version);
   });
 
   it("keeps domain enrollment stable when on-demand requests repeat", async () => {
@@ -1596,7 +1643,7 @@ describePostgres.sequential("PostgresScanStore", () => {
 
     const purge = await pool.query<{ ds_purge_inactive_public_reports: number }>(
       "SELECT public.ds_purge_inactive_public_reports($1)",
-      [new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)],
+      [new Date(Date.now() - 30 * 24 * 60 * 60 * 1000 - 60_000)],
     );
     expect(purge.rows[0].ds_purge_inactive_public_reports).toBe(9);
     const remaining = await pool.query(

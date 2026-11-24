@@ -7,6 +7,11 @@ import {
 } from "./privacy-request-timeline.js";
 import { PRIVACY_KNOWLEDGE_RULES } from "./privacy-knowledge-catalog.js";
 import {
+  inspectFirstEntryPolicyLinks,
+  verifyFirstEntryPolicyDocument,
+  type FirstEntryPolicyLinkDiscovery,
+} from "./privacy-first-entry-policy-link.js";
+import {
   areVendorTogglesOff,
   clickConsentControl,
   findConsentControl,
@@ -52,6 +57,7 @@ export type PrivacyBrowserFlowObservation = {
   }>;
   cookieReadComplete: boolean;
   storageReadComplete: boolean;
+  firstEntryPolicyLinks: FirstEntryPolicyLinkDiscovery;
   phaseEvidence: {
     beforeChoice: PrivacyBrowserStateSnapshot | null;
     choiceActionAtMs: number | null;
@@ -148,6 +154,7 @@ const UNKNOWN_FLOW: PrivacyBrowserFlowObservation = {
   storageKeysAfterChoice: [],
   cookieReadComplete: false,
   storageReadComplete: false,
+  firstEntryPolicyLinks: { status: "unknown", consentComponentDetected: null, consentComponentLink: null, consentComponentDocumentAccess: "unknown", footerLink: null, footerLinkDocumentAccess: "unknown" },
   phaseEvidence: {
     beforeChoice: null,
     choiceActionAtMs: null,
@@ -324,11 +331,14 @@ async function runFlow(
     });
     const controls = await inspectConsentControls(page);
     const hasConsentControls = controls.length > 0;
+    const firstEntryPolicyLinks = action === "initial"
+      ? await inspectFirstEntryPolicyLinks(page, hasConsentControls)
+      : UNKNOWN_FLOW.firstEntryPolicyLinks;
     const acceptVisibleAtFirstLayer = controls.some(({ kind }) => kind === "accept");
     const rejectVisibleAtFirstLayer = controls.some(({ kind }) => kind === "reject");
     const firstLayerSnapshot = await captureStateSnapshot(context, page, timeline.elapsed());
     if (action === "initial") {
-      return await captureFlow(context, page, {
+      const captured = await captureFlow(context, page, {
         status: "evaluated",
         pageLoaded,
         consentPromptDetected: hasConsentControls,
@@ -344,8 +354,22 @@ async function runFlow(
         storageKeysAfterChoice: [],
         cookieReadComplete: false,
         storageReadComplete: false,
+        firstEntryPolicyLinks,
         phaseEvidence: { ...EMPTY_PHASE_EVIDENCE, beforeChoice: firstLayerSnapshot },
       }, timeline, ledger, flowHosts, completedHosts);
+      const relevantLink = hasConsentControls ? firstEntryPolicyLinks.consentComponentLink : firstEntryPolicyLinks.footerLink;
+      const documentAccess = firstEntryPolicyLinks.status === "unknown"
+        ? "unknown"
+        : await verifyFirstEntryPolicyDocument(page, relevantLink);
+      return {
+        ...captured,
+        firstEntryPolicyLinks: {
+          ...firstEntryPolicyLinks,
+          ...(hasConsentControls
+            ? { consentComponentDocumentAccess: documentAccess }
+            : { footerLinkDocumentAccess: documentAccess }),
+        },
+      };
     }
 
     if (!hasConsentControls) {
@@ -431,6 +455,7 @@ async function runFlow(
       storageKeysAfterChoice: [],
       cookieReadComplete: false,
       storageReadComplete: false,
+      firstEntryPolicyLinks: UNKNOWN_FLOW.firstEntryPolicyLinks,
       phaseEvidence: { beforeChoice, choiceActionAtMs, afterChoice, reloadStartedAtMs, afterReload,
         rejectionChoiceStateAfterReload: rejectionChoiceEvidence?.state ?? "unknown",
         rejectionChoiceEvidence,

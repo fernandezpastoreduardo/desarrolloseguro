@@ -201,6 +201,51 @@ describe("collectPublicPolicyEvidence", () => {
     });
   });
 
+  it("attaches a stable first-party document source to each explicit site statement", async () => {
+    const capturedAt = new Date("2026-11-24T03:00:00.000Z");
+    const evidence = await collectPublicPolicyEvidence({
+      hostname: "example.com",
+      links: [{ hostname: "privacy.example.com", path: "/privacy", kind: "privacy" }],
+      initialPageInspectable: true,
+      initialStatusCode: 200,
+      signal: new AbortController().signal,
+      fetchDocument: async () => response(),
+      classifyHtml: () => ({
+        providerIds: ["vendor-example"],
+        providersWithPurpose: [],
+        purposeIds: [],
+        categories: [],
+        documentTitle: "Privacy Notice",
+        siteStatements: [{
+          providerId: "vendor-example",
+          factId: "provider_receives_personal_data",
+          value: true,
+          basis: "explicit_claim",
+          excerpt: "Vendor Example receives personal data submitted by account holders.",
+        }],
+      }),
+      captureAt: () => capturedAt,
+    });
+
+    const statement = evidence.declaredServices[0]?.siteStatements?.[0];
+    expect(statement).toMatchObject({
+      factId: "provider_receives_personal_data",
+      value: true,
+      basis: "explicit_claim",
+      source: {
+        version: "public-policy-source-v1",
+        title: "Privacy Notice",
+        url: "https://privacy.example.com/privacy",
+        capturedAt: "2026-11-24T03:00:00.000Z",
+        documentKind: "privacy",
+        sourceKind: "audited_site",
+        excerpt: "Vendor Example receives personal data submitted by account holders.",
+      },
+    });
+    expect(statement?.source.sourceId).toMatch(/^policy-[a-f0-9]{32}$/u);
+    expect(JSON.stringify(evidence)).not.toContain("?user=");
+  });
+
   it.each([
     { ...CLASSIFICATION, accessDenied: "false" },
     { ...CLASSIFICATION, providersWithPurpose: ["unlisted-provider"] },

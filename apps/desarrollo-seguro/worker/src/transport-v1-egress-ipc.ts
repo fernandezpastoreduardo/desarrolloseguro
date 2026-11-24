@@ -19,6 +19,7 @@ import type { ScanProfileVersion } from "./transport-v1-executor.js";
 
 const MAX_IPC_REQUEST_BYTES = 4 * 1024;
 const MAX_IPC_RESPONSE_BYTES = 32 * 1024;
+const MAX_PUBLIC_POLICY_DECLARATIONS_CHARS = 24 * 1024;
 // Allow one short-lived connection per bounded probe. Completed client sockets
 // can remain open briefly while their close events propagate; the broker still
 // limits active network observations to two at a time.
@@ -217,7 +218,8 @@ async function requestOperation(
         key.length > 64 ||
         FORBIDDEN_EVIDENCE_KEYS.has(key) ||
         (typeof value !== "boolean" && typeof value !== "string" && typeof value !== "number") ||
-        (typeof value === "string" && value.length > 256) ||
+        (typeof value === "string" &&
+          value.length > (key === "publicPolicyDeclaredServices" ? MAX_PUBLIC_POLICY_DECLARATIONS_CHARS : 256)) ||
         (typeof value === "number" && !Number.isFinite(value)),
     )
   ) {

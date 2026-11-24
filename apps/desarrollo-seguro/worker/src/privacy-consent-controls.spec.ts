@@ -34,6 +34,15 @@ describe("privacy consent controls", () => {
     expect(await clickConsentControl(page as never, controls[0]!)).toBe(true);
   });
 
+  it("does not classify a generic permission button as a cookie-consent prompt", async () => {
+    installDomGlobals();
+    const permissionButton = new MockButton("Allow notifications");
+    Object.defineProperty(permissionButton, "parentElement", {
+      value: { tagName: "DIV", className: "notification-permissions", textContent: "Allow notifications", getAttribute: () => null },
+    });
+    expect(await inspectConsentControls(makePage([permissionButton]) as never)).toEqual([]);
+  });
+
   it("attributes visible provider switches by row and records declared legitimate interest", async () => {
     installDomGlobals();
     const page = makePage([

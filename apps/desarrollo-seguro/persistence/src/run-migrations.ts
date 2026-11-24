@@ -148,6 +148,9 @@ const MIGRATIONS = [
     file: "042_public_service_comparisons.sql",
   },
   { version: "043_legal_cookie_findings", file: "043_legal_cookie_findings.sql" },
+  { version: "044_provider_catalog_versions", file: "044_provider_catalog_versions.sql" },
+  { version: "045_first_entry_policy_access", file: "045_first_entry_policy_access.sql" },
+  { version: "046_provider_catalog_discoveries", file: "046_provider_catalog_discoveries.sql" },
 ] as const;
 
 const MIGRATION_LOCK_ID = 728194032;

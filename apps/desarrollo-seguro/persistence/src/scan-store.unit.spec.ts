@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
 import { describe, expect, it, vi } from "vitest";
-import { assessProcessorTransparency } from "@desarrolloseguro/core";
+import { assessFirstEntryPolicyAccess, assessProcessorTransparency } from "@desarrolloseguro/core";
 import { PostgresScanStore, type ScanRunInput } from "./scan-store.js";
 
 const VALID_REPORT: ScanRunInput = {
@@ -74,6 +74,49 @@ describe("PostgresScanStore unit behavior", () => {
     expect(JSON.stringify(report)).not.toContain("<private response body>");
     expect(JSON.stringify(report)).not.toContain("database-detail");
     expect(query.mock.calls[0][0]).not.toMatch(/SELECT\s+evidence_json/iu);
+  });
+
+  it("projects the immutable provider catalog version used by a report", async () => {
+    const version = "a".repeat(64);
+    const query = vi.fn().mockResolvedValue({
+      rows: [makePublicReportRow({ report_provider_catalog_version: version })],
+    });
+    const report = await new PostgresScanStore(makePool({ query })).readPublicReport(
+      "8d140e17-68d6-489a-b451-7e87408187ae",
+    );
+    expect(report?.providerCatalogVersion).toBe(version);
+  });
+
+  it("persists and reads the first-entry consent component policy link evidence", async () => {
+    const evidence = assessFirstEntryPolicyAccess({
+      consentPromptDetected: true,
+      thirdPartyCookieDetected: true,
+      nonEssentialThirdPartyStorageDetected: true,
+      consentComponentLink: { hostname: "example.org", path: "/privacy", kind: "privacy" },
+      footerLink: { hostname: "example.org", path: "/legal", kind: "legal" },
+      componentLinkDocumentAccess: "accessible",
+      footerLinkDocumentAccess: "accessible",
+    });
+    const completeQuery = vi.fn().mockResolvedValue({ rows: [{ ds_complete_scan: "run-id" }] });
+    const completeStore = new PostgresScanStore(makePool({ query: completeQuery }));
+    await expect(completeStore.completeScan({ ...VALID_REPORT, firstEntryPolicyAccess: evidence })).resolves.toBe("run-id");
+    expect(completeQuery.mock.calls[0]?.[0]).toContain("ds_complete_scan_with_provider_catalog");
+    expect(JSON.parse(completeQuery.mock.calls[0]?.[1]?.[16] as string)).toEqual(evidence);
+
+    const readQuery = vi.fn().mockResolvedValue({
+      rows: [makePublicReportRow({ report_first_entry_policy_access: evidence })],
+    });
+    const report = await new PostgresScanStore(makePool({ query: readQuery })).readPublicReport("8d140e17-68d6-489a-b451-7e87408187ae");
+    expect(report?.firstEntryPolicyAccess).toEqual(evidence);
+  });
+
+  it("rejects a malformed provider catalog version on a report", async () => {
+    const query = vi.fn().mockResolvedValue({
+      rows: [makePublicReportRow({ report_provider_catalog_version: "not-a-version" })],
+    });
+    await expect(new PostgresScanStore(makePool({ query })).readPublicReport(
+      "8d140e17-68d6-489a-b451-7e87408187ae",
+    )).rejects.toThrow("invalid_public_report_row");
   });
 
   it("reads the bounded public-policy assessment for both public domains and clients", async () => {
@@ -477,7 +520,7 @@ describe("PostgresScanStore unit behavior", () => {
       publicPolicyTransparencyAssessment,
     })).resolves.toBe("run-id");
 
-    expect(query.mock.calls[0]?.[0]).toContain("ds_complete_scan_with_legal_cookie_findings");
+    expect(query.mock.calls[0]?.[0]).toContain("ds_complete_scan_with_provider_catalog");
     expect(JSON.parse(query.mock.calls[0]?.[1]?.[12] as string)).toEqual(publicPolicyTransparencyAssessment);
     expect(JSON.stringify(query.mock.calls[0]?.[1])).not.toContain("https://");
   });
@@ -503,7 +546,7 @@ describe("PostgresScanStore unit behavior", () => {
       ...VALID_REPORT,
       publicServiceComparison: comparison,
     })).resolves.toBe("run-id");
-    expect(query.mock.calls[0]?.[0]).toContain("ds_complete_scan_with_legal_cookie_findings");
+    expect(query.mock.calls[0]?.[0]).toContain("ds_complete_scan_with_provider_catalog");
     expect(JSON.parse(query.mock.calls[0]?.[1]?.[13] as string)).toEqual(comparison);
 
     const report = await store.readPublicReport("8d140e17-68d6-489a-b451-7e87408187ae");
@@ -555,7 +598,7 @@ describe("PostgresScanStore unit behavior", () => {
       publicPolicyTransparencyAssessment: assessment,
       processorTransparencyAssessment: assessProcessorTransparency({ status: "auditor_error" }),
     })).resolves.toBe("run-id");
-    expect(query.mock.calls[0]?.[0]).toContain("ds_complete_scan_with_legal_cookie_findings");
+    expect(query.mock.calls[0]?.[0]).toContain("ds_complete_scan_with_provider_catalog");
     expect(JSON.parse(query.mock.calls[0]?.[1]?.[10] as string)).toMatchObject({ status: "unknown" });
     expect(JSON.parse(query.mock.calls[0]?.[1]?.[12] as string)).toEqual(assessment);
   });

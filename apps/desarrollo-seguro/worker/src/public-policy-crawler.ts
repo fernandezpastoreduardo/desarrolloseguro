@@ -1,4 +1,6 @@
+import { createHash } from "node:crypto";
 import { normalizeHostname } from "@desarrolloseguro/core";
+import type { ProviderStatement } from "@desarrolloseguro/core";
 import type { LookupFunction } from "node:net";
 import {
   extractPublicPolicyLinks,
@@ -15,7 +17,7 @@ export const PUBLIC_POLICY_CRAWL_LIMITS = Object.freeze({
   requests: 300,
   bytes: 20 * 1024 * 1024,
   pages: 30,
-  documentBytes: 64 * 1024,
+  documentBytes: 1_024 * 1024,
   redirectsPerDocument: 3,
 });
 
@@ -35,6 +37,10 @@ const ACCESS_DENIED_STATUSES = new Set([401, 403, 429, 451]);
 const UNAVAILABLE_STATUSES = new Set([404, 410]);
 const IDENTIFIER = /^[a-z0-9][a-z0-9_-]{0,31}$/u;
 const MAX_CLASSIFIED_IDS = 30;
+const MAX_SITE_STATEMENTS = 30;
+const MAX_SITE_EXCERPT_LENGTH = 500;
+const SITE_SOURCE_VERSION = "public-policy-source-v1";
+const MAX_SITE_STATEMENT_BYTES = 20 * 1024;
 
 export type PublicPolicyFetchFailureCode =
   | "auditor_error"
@@ -77,6 +83,15 @@ export type PublicPolicyClassification = {
   categories: readonly string[];
   /** Provider-specific purpose identifiers found in the same visible text block. */
   declaredServices?: readonly { providerId: string; purposeIds: readonly string[] }[];
+  /** Source text excerpt and explicit site-side facts; crawler adds document provenance. */
+  siteStatements?: readonly {
+    providerId: string;
+    factId: string;
+    value: boolean;
+    basis: "explicit_claim";
+    excerpt: string;
+  }[];
+  documentTitle?: string;
   /** True only for an explicit, cataloged anti-bot or access-denied page. */
   accessDenied?: boolean;
 };
@@ -100,7 +115,7 @@ export type PublicPolicyEvidence = {
   unavailablePages: number;
   providers: string[];
   providersWithPurpose: string[];
-  declaredServices: Array<{ providerId: string; purposeIds: string[] }>;
+  declaredServices: Array<{ providerId: string; purposeIds: string[]; siteStatements?: ProviderStatement[] }>;
   purposes: string[];
   categories: string[];
   requestsCount: number;
@@ -135,6 +150,7 @@ export type CollectPublicPolicyEvidenceInput = {
     bytes: number;
   };
   now?: () => number;
+  captureAt?: () => Date;
 };
 
 /** A lookup pinned to one discovered HTTPS policy host and its public DNS answers. */
@@ -223,7 +239,7 @@ export async function collectPublicPolicyEvidence(
   const categories = new Set<string>();
   const providers = new Set<string>();
   const providersWithPurpose = new Set<string>();
-  const declaredServices = new Map<string, Set<string>>();
+  const declaredServices = new Map<string, { purposes: Set<string>; siteStatements: ProviderStatement[] }>();
   const purposes = new Set<string>();
   let denied = 0;
   let unavailable = 0;
@@ -344,6 +360,7 @@ export async function collectPublicPolicyEvidence(
       const classification = input.classifyHtml(response.html);
       if (classification.accessDenied === true) denied += 1;
       mergeClassification(classification, providers, providersWithPurpose, purposes, categories, declaredServices);
+      mergeSiteStatements(classification, link, input.captureAt?.() ?? new Date(), declaredServices);
     } catch {
       hadAuditorError = true;
     }
@@ -353,9 +370,10 @@ export async function collectPublicPolicyEvidence(
   evidence.unavailablePages = unavailable;
   evidence.providers = [...providers].sort(compareIdentifiers);
   evidence.providersWithPurpose = [...providersWithPurpose].sort(compareIdentifiers);
-  evidence.declaredServices = [...declaredServices].map(([providerId, purposeIds]) => ({
+  evidence.declaredServices = [...declaredServices].map(([providerId, service]) => ({
     providerId,
-    purposeIds: [...purposeIds].sort(compareIdentifiers),
+    purposeIds: [...service.purposes].sort(compareIdentifiers),
+    ...(service.siteStatements.length > 0 ? { siteStatements: service.siteStatements } : {}),
   })).sort((left, right) => compareIdentifiers(left.providerId, right.providerId)).slice(0, MAX_CLASSIFIED_IDS);
   evidence.purposes = [...purposes].sort(compareIdentifiers);
   evidence.categories = [...categories].sort(compareIdentifiers);
@@ -384,7 +402,7 @@ function mergeClassification(
   providersWithPurpose: Set<string>,
   purposes: Set<string>,
   categories: Set<string>,
-  declaredServices: Map<string, Set<string>>,
+  declaredServices: Map<string, { purposes: Set<string>; siteStatements: ProviderStatement[] }>,
 ): void {
   if (input.accessDenied !== undefined && typeof input.accessDenied !== "boolean") {
     throw new Error("public_policy_classification_invalid");
@@ -402,9 +420,9 @@ function mergeClassification(
     if (typeof item.providerId !== "string" || !IDENTIFIER.test(item.providerId)) {
       throw new Error("public_policy_classification_invalid");
     }
-    const providerPurposes = declaredServices.get(item.providerId) ?? new Set<string>();
-    for (const purpose of normalizeIdentifiers(item.purposeIds)) providerPurposes.add(purpose);
-    declaredServices.set(item.providerId, providerPurposes);
+    const providerService = declaredServices.get(item.providerId) ?? { purposes: new Set<string>(), siteStatements: [] };
+    for (const purpose of normalizeIdentifiers(item.purposeIds)) providerService.purposes.add(purpose);
+    declaredServices.set(item.providerId, providerService);
   }
   if (
     providers.size > MAX_CLASSIFIED_IDS ||
@@ -412,8 +430,84 @@ function mergeClassification(
     purposes.size > MAX_CLASSIFIED_IDS ||
     categories.size > MAX_CLASSIFIED_IDS ||
     declaredServices.size > MAX_CLASSIFIED_IDS ||
-    [...declaredServices.values()].some((values) => values.size > MAX_CLASSIFIED_IDS)
+    [...declaredServices.values()].some(({ purposes }) => purposes.size > MAX_CLASSIFIED_IDS)
   ) throw new Error("public_policy_classification_invalid");
+}
+
+function mergeSiteStatements(
+  classification: PublicPolicyClassification,
+  link: PublicPolicyLink,
+  capturedAt: Date,
+  declaredServices: Map<string, { purposes: Set<string>; siteStatements: ProviderStatement[] }>,
+): void {
+  const statements = classification.siteStatements ?? [];
+  if (!Array.isArray(statements) || statements.length > MAX_SITE_STATEMENTS ||
+      !Number.isFinite(capturedAt.getTime())) throw new Error("public_policy_classification_invalid");
+  const documentTitle = sanitizeDocumentTitle(classification.documentTitle, link.kind);
+  const source = {
+    sourceId: createPolicySourceId(link),
+    version: SITE_SOURCE_VERSION,
+    title: documentTitle,
+    url: `https://${link.hostname}${link.path}`,
+    capturedAt: capturedAt.toISOString(),
+    documentKind: link.kind,
+    sourceKind: "audited_site" as const,
+  };
+  for (const candidate of statements) {
+    if (typeof candidate !== "object" || candidate === null ||
+        !IDENTIFIER.test(candidate.providerId) || !FACT_IDENTIFIER.test(candidate.factId) ||
+        typeof candidate.value !== "boolean" || candidate.basis !== "explicit_claim" ||
+        typeof candidate.excerpt !== "string" || candidate.excerpt.length === 0 ||
+        candidate.excerpt.length > MAX_SITE_EXCERPT_LENGTH || containsSensitiveExcerpt(candidate.excerpt)) {
+      throw new Error("public_policy_classification_invalid");
+    }
+    const providerService = declaredServices.get(candidate.providerId) ?? { purposes: new Set<string>(), siteStatements: [] };
+    const statementCount = [...declaredServices.values()].reduce((total, service) => total + service.siteStatements.length, 0);
+    if (statementCount >= MAX_SITE_STATEMENTS || providerService.siteStatements.length >= MAX_SITE_STATEMENTS) continue;
+    const statement: ProviderStatement = {
+      factId: candidate.factId,
+      value: candidate.value,
+      basis: candidate.basis,
+      source: { ...source, excerpt: candidate.excerpt },
+    };
+    providerService.siteStatements.push(statement);
+    declaredServices.set(candidate.providerId, providerService);
+    const serializedEvidence = [...declaredServices.entries()].map(([providerId, service]) => ({
+      providerId,
+      purposeIds: [...service.purposes],
+      ...(service.siteStatements.length ? { siteStatements: service.siteStatements } : {}),
+    }));
+    if (Buffer.byteLength(JSON.stringify(serializedEvidence), "utf8") > MAX_SITE_STATEMENT_BYTES) {
+      providerService.siteStatements.pop();
+      if (providerService.siteStatements.length === 0 && providerService.purposes.size === 0) {
+        declaredServices.delete(candidate.providerId);
+      }
+    }
+  }
+}
+
+const FACT_IDENTIFIER = /^[a-z][a-z0-9_]{0,47}$/u;
+
+function createPolicySourceId(link: PublicPolicyLink): string {
+  const url = `https://${link.hostname}${link.path}`;
+  const digest = createHash("sha256").update(url).digest("hex").slice(0, 32);
+  return `policy-${digest}`;
+}
+
+function sanitizeDocumentTitle(value: unknown, kind: PublicPolicyLink["kind"]): string {
+  const fallback: Record<PublicPolicyLink["kind"], string> = {
+    privacy: "Información de privacidad",
+    cookies: "Información sobre cookies",
+    terms: "Términos y condiciones",
+    legal: "Aviso legal",
+  };
+  if (typeof value !== "string") return fallback[kind];
+  const title = value.replace(/\s+/gu, " ").trim().slice(0, 200);
+  return title && !containsSensitiveExcerpt(title) ? title : fallback[kind];
+}
+
+function containsSensitiveExcerpt(value: string): boolean {
+  return /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b|\b(?:sk|key|token)[-_][A-Z0-9_-]{12,}\b/iu.test(value);
 }
 
 function isSafeDiscoveredLink(link: unknown): link is PublicPolicyLink {
