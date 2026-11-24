@@ -174,6 +174,45 @@ describe("collectPublicPolicyEvidence", () => {
     expect(evidence.providersWithPurpose).toEqual([]);
   });
 
+  it("combines provider-specific declarations from each public policy page", async () => {
+    const evidence = await collectPublicPolicyEvidence({
+      hostname: "example.com",
+      links: [
+        { hostname: "privacy.example.com", path: "/privacy", kind: "privacy" },
+        { hostname: "vendor.example.net", path: "/terms", kind: "legal" },
+      ],
+      initialPageInspectable: true,
+      initialStatusCode: 200,
+      signal: new AbortController().signal,
+      fetchDocument: async () => response(),
+      classifyHtml: () => ({
+        providerIds: ["vendor-example"],
+        providersWithPurpose: ["vendor-example"],
+        purposeIds: ["analytics"],
+        categories: ["analytics"],
+        declaredServices: [{ providerId: "vendor-example", purposeIds: ["analytics"] }],
+      }),
+    });
+
+    expect(evidence).toMatchObject({
+      status: "pass",
+      pagesInspected: 2,
+      declaredServices: [{ providerId: "vendor-example", purposeIds: ["analytics"] }],
+    });
+  });
+
+  it.each([
+    { ...CLASSIFICATION, accessDenied: "false" },
+    { ...CLASSIFICATION, providersWithPurpose: ["unlisted-provider"] },
+    { ...CLASSIFICATION, declaredServices: [{ providerId: "Provider Name", purposeIds: ["analytics"] }] },
+  ])("keeps malformed classifier metadata in review", async (classification) => {
+    const evidence = await collect(async () => response(), {
+      classifyHtml: () => classification as unknown as PublicPolicyClassification,
+    });
+
+    expect(evidence).toMatchObject({ status: "unknown", reasonCode: "auditor_error" });
+  });
+
   it.each([401, 403, 429, 451])("treats HTTP %s as explicit access denial", async (statusCode) => {
     const evidence = await collect(async () => response({ statusCode, html: "" }));
 

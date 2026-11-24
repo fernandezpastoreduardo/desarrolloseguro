@@ -409,6 +409,61 @@ describe("PublicScanPortal", () => {
     expect(screen.getByText(/la información pública del sitio explica servicios externos y para qué se usan/i)).toBeVisible();
   });
 
+  it("explains observed, undeclared and declaration-only services with public sources", async () => {
+    const report = {
+      ...SCORED_PUBLIC_REPORT,
+      profileVersion: "domain-v4",
+      scannerVersion: "domain-v4-network-adapter-3",
+      ethicsAssessment: {
+        ...SCORED_PUBLIC_REPORT.ethicsAssessment,
+        policyVersion: "domain-ethics-v6",
+        criteria: SCORED_PUBLIC_REPORT.ethicsAssessment.criteria.map((criterion) => criterion.id === "third-party-data-use"
+          ? { ...criterion, id: "external-service-transparency" }
+          : criterion),
+      },
+      privacyAssessment: {
+        ...SCORED_PUBLIC_REPORT.privacyAssessment,
+        evidence: { cookieNames: [], providers: [], domains: ["static.unclassified.example"] },
+      },
+      publicServiceComparison: {
+        policyVersion: "public-service-comparison-v1",
+        status: "fail",
+        reasonCode: "observed_service_undisclosed",
+        items: [
+          { providerId: "openai-api", observation: "observed_and_declared", observedDomains: ["api.openai.com"], declaredPurposes: ["ai_processing"] },
+          { providerId: "google-analytics", observation: "observed", observedDomains: ["www.google-analytics.com"], declaredPurposes: [] },
+          { providerId: "ionos", observation: "declared", observedDomains: [], declaredPurposes: ["support", "mystery"] },
+          { providerId: "unlisted-vendor", observation: "observed", observedDomains: ["edge.unlisted.example"], declaredPurposes: [] },
+        ],
+      },
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({
+      hostname: "example.com",
+      enrollment: "on_demand",
+      state: "fresh",
+      failureCode: null,
+      activeJobId: null,
+      lastReport: report,
+      checkedAt: "2026-11-03T10:01:00.000Z",
+    })));
+    const user = userEvent.setup();
+
+    render(<PublicScanPortal />);
+    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "example.com");
+    await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
+
+    expect(await screen.findByRole("heading", { name: "Servicios externos detectados" })).toBeVisible();
+    expect(screen.getByText(/se detectó al menos un servicio externo que el sitio no identifica/i)).toBeVisible();
+    expect(screen.getByText("Correcto · observado y explicado")).toBeVisible();
+    expect(screen.getAllByText("Riesgo detectado · observado sin explicación pública suficiente")).toHaveLength(2);
+    expect(screen.getByText("Declarado · no observado en esta revisión")).toBeVisible();
+    expect(screen.getAllByRole("link", { name: "política de privacidad" })
+      .some((link) => link.getAttribute("href") === "https://openai.com/policies/privacy-policy/")).toBe(true);
+    expect(screen.getByText(/edge\.unlisted\.example/iu)).toBeVisible();
+    expect(screen.getAllByText("static.unclassified.example").length).toBeGreaterThan(0);
+    expect(screen.getByText(/una finalidad que el sitio identifica en su política/i)).toBeVisible();
+  });
+
   it("stops after one poll when an accepted request has no active job", async () => {
     const status = {
       hostname: "example.com",
