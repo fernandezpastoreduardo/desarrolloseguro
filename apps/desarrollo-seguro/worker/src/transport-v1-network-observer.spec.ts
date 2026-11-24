@@ -367,7 +367,7 @@ describe("createTransportV1NetworkObserver", () => {
       publicPolicyAuditorError: false,
       publicPolicyBudgetExhausted: false,
     });
-    expect(JSON.stringify(result)).not.toContain(policyBody);
+    expect(result.evidence.publicPolicyDeclaredServices).toContain(policyBody);
     expect(JSON.stringify(result)).not.toContain("campaign=secret");
     expect(JSON.stringify(result)).not.toContain("tracking");
   });

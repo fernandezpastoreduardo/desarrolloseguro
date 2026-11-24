@@ -57,7 +57,25 @@ describe("TransportV1 executors", () => {
       publicPolicyProvidersMissingPurpose: 0,
       publicPolicyCategories: "analytics",
       publicPolicyDeclaredServices: JSON.stringify([
-        { providerId: "google-analytics", purposeIds: ["analytics"] },
+        {
+          providerId: "google-analytics",
+          purposeIds: ["analytics"],
+          siteStatements: [{
+            factId: "provider_receives_personal_data",
+            value: true,
+            basis: "explicit_claim",
+            source: {
+              sourceId: "policy-0123456789abcdef0123456789abcdef",
+              version: "public-policy-source-v1",
+              title: "Privacy notice",
+              url: "https://example.com/privacy",
+              capturedAt: "2026-11-24T03:00:00.000Z",
+              documentKind: "privacy",
+              sourceKind: "audited_site",
+              excerpt: "Google Analytics receives personal data from users.",
+            },
+          }],
+        },
       ]),
     };
     const source: TransportV1ObservationSource = {
@@ -74,7 +92,25 @@ describe("TransportV1 executors", () => {
     );
 
     expect(result.publicServiceDeclarations).toEqual([
-      { providerId: "google-analytics", purposes: ["analytics"] },
+      {
+        providerId: "google-analytics",
+        purposes: ["analytics"],
+        siteStatements: [{
+          factId: "provider_receives_personal_data",
+          value: true,
+          basis: "explicit_claim",
+          source: {
+            sourceId: "policy-0123456789abcdef0123456789abcdef",
+            version: "public-policy-source-v1",
+            title: "Privacy notice",
+            url: "https://example.com/privacy",
+            capturedAt: "2026-11-24T03:00:00.000Z",
+            documentKind: "privacy",
+            sourceKind: "audited_site",
+            excerpt: "Google Analytics receives personal data from users.",
+          },
+        }],
+      },
     ]);
   });
 

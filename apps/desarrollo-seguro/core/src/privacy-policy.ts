@@ -31,11 +31,12 @@ export type PrivacyCriterionId = (typeof PRIVACY_CRITERIA)[number]["id"];
 export type PrivacySeverity = keyof typeof PRIVACY_SEVERITY_FACTOR;
 export type PrivacyCoverageStatus = "evaluated" | "unknown" | "not_applicable";
 
-/** Treats only the explicit www alias as the same site; other hosts remain third parties. */
+/** Treats the same host and parent/child subdomains as one site. */
 export function isThirdPartyPrivacyHost(requestedHostname: string, observedHostname: string): boolean {
   const requested = normalizeOwnershipHostname(requestedHostname);
   const observed = normalizeOwnershipHostname(observedHostname);
-  return requested.length === 0 || observed.length === 0 || requested !== observed;
+  if (requested.length === 0 || observed.length === 0) return true;
+  return requested !== observed && !requested.endsWith(`.${observed}`) && !observed.endsWith(`.${requested}`);
 }
 
 function normalizeOwnershipHostname(hostname: string): string {

@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { parsePublicServiceComparison } from "@desarrolloseguro/core";
 import { PublicScanPortal } from "../index.js";
 
 const DOMAIN_INPUT_NAME = "Dominio que quieres consultar";
@@ -437,6 +438,7 @@ describe("PublicScanPortal", () => {
         ],
       },
     };
+    expect(parsePublicServiceComparison(report.publicServiceComparison)).not.toBeNull();
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({
       hostname: "example.com",
       enrollment: "on_demand",
@@ -453,15 +455,76 @@ describe("PublicScanPortal", () => {
     await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
 
     expect(await screen.findByRole("heading", { name: "Servicios externos detectados" })).toBeVisible();
-    expect(screen.getByText(/se detectó al menos un servicio externo que el sitio no identifica/i)).toBeVisible();
+    expect(screen.getByText(/incumplimiento observado: se detectó un servicio externo sin información pública/i)).toBeVisible();
     expect(screen.getByText("Correcto · observado y explicado")).toBeVisible();
-    expect(screen.getAllByText("Riesgo detectado · observado sin explicación pública suficiente")).toHaveLength(2);
+    expect(screen.getAllByText("Servicio observado · sin finalidad declarada")).toHaveLength(2);
     expect(screen.getByText("Declarado · no observado en esta revisión")).toBeVisible();
-    expect(screen.getAllByRole("link", { name: "política de privacidad" })
-      .some((link) => link.getAttribute("href") === "https://openai.com/policies/privacy-policy/")).toBe(true);
+    expect(screen.getAllByRole("link", { name: "acuerdo de tratamiento de datos" })
+      .some((link) => link.getAttribute("href") === "https://openai.com/policies/data-processing-addendum/")).toBe(true);
     expect(screen.getByText(/edge\.unlisted\.example/iu)).toBeVisible();
     expect(screen.getAllByText("static.unclassified.example").length).toBeGreaterThan(0);
     expect(screen.getByText(/una finalidad que el sitio identifica en su política/i)).toBeVisible();
+  });
+
+  it("shows a consent failure when the legal link is only in the footer", async () => {
+    const report = {
+      ...SCORED_PUBLIC_REPORT,
+      firstEntryPolicyAccess: {
+        policyVersion: "first-entry-policy-access-v1",
+        status: "fail",
+        reasonCode: "consent_link_missing",
+        consentPromptDetected: true,
+        thirdPartyCookieDetected: true,
+        nonEssentialThirdPartyStorageDetected: true,
+        linkLocation: "none",
+        link: null,
+        documentAccess: "not_checked",
+      },
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({
+      hostname: "example.com", enrollment: "on_demand", state: "fresh", failureCode: null,
+      activeJobId: null, lastReport: report, checkedAt: "2026-11-03T10:01:00.000Z",
+    })));
+    const user = userEvent.setup();
+    render(<PublicScanPortal />);
+    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "example.com");
+    await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
+
+    expect(await screen.findByRole("heading", { name: "Acceso a información legal" })).toBeVisible();
+    expect(screen.getByText("Comprobación incumplida")).toBeVisible();
+    expect(screen.getByText(/el aviso de consentimiento no contiene un enlace visible/i)).toBeVisible();
+    expect(screen.getByText("Cookie de terceros").parentElement).toHaveTextContent("Detectada");
+  });
+
+  it("shows a footer link as valid only when no consent and no third-party cookies were observed", async () => {
+    const report = {
+      ...SCORED_PUBLIC_REPORT,
+      firstEntryPolicyAccess: {
+        policyVersion: "first-entry-policy-access-v1",
+        status: "pass",
+        reasonCode: "footer_link_accessible_without_consent",
+        consentPromptDetected: false,
+        thirdPartyCookieDetected: false,
+        nonEssentialThirdPartyStorageDetected: true,
+        linkLocation: "footer",
+        link: { hostname: "example.com", path: "/privacy", kind: "privacy" },
+        documentAccess: "accessible",
+      },
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({
+      hostname: "example.com", enrollment: "on_demand", state: "fresh", failureCode: null,
+      activeJobId: null, lastReport: report, checkedAt: "2026-11-03T10:01:00.000Z",
+    })));
+    const user = userEvent.setup();
+    render(<PublicScanPortal />);
+    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "example.com");
+    await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
+
+    expect(await screen.findByRole("heading", { name: "Acceso a información legal" })).toBeVisible();
+    expect(screen.getByText("Enlace comprobado")).toBeVisible();
+    expect(screen.getByText(/no se solicitó consentimiento ni se detectaron cookies de terceros/i)).toBeVisible();
+    expect(screen.getByText(/se identificó almacenamiento de terceros no esencial.*hallazgo independiente/i)).toBeVisible();
+    expect(screen.getByRole("link", { name: "example.com/privacy" })).toHaveAttribute("href", "https://example.com/privacy");
   });
 
   it("stops after one poll when an accepted request has no active job", async () => {

@@ -12,6 +12,7 @@ const MAX_BROKER_OPERATIONS = 5;
 const MAX_CONCURRENT_BROKER_OPERATIONS = 2;
 const PROBE_OPERATIONS = ["dns", "tls", "http-head", "http-get", "headers"] as const;
 const FORBIDDEN_EVIDENCE_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+const MAX_PUBLIC_POLICY_DECLARATIONS_CHARS = 24 * 1024;
 const SAFE_PROBE_ERROR_CODES = new Set<PinnedTransportErrorCode>([
   "dns_resolution_failed", "connection_failed", "broker_failed",
   "request_aborted", "request_timeout", "response_size_limit_exceeded",
@@ -232,7 +233,8 @@ function validateEvidence(input: unknown): TransportV1Evidence {
       (typeof value !== "boolean" &&
         (typeof value !== "number" || !Number.isFinite(value)) &&
         typeof value !== "string") ||
-      (typeof value === "string" && value.length > 256)
+      (typeof value === "string" &&
+        value.length > (key === "publicPolicyDeclaredServices" ? MAX_PUBLIC_POLICY_DECLARATIONS_CHARS : 256))
     ) {
       throw createBrokerRequestError();
     }

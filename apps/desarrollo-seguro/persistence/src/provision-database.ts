@@ -319,6 +319,12 @@ async function applyRuntimeGrants(pool: Pool): Promise<void> {
       ON public.ds_scan_public_service_comparisons TO ds_read;
     GRANT SELECT (run_id, findings_json, created_at)
       ON public.ds_scan_legal_cookie_findings TO ds_read;
+    GRANT SELECT (run_id, catalog_version, created_at)
+      ON public.ds_scan_provider_catalog_versions TO ds_read;
+    GRANT SELECT (run_id, assessment_json, created_at)
+      ON public.ds_scan_first_entry_policy_access TO ds_read;
+    GRANT SELECT ON public.ds_provider_catalog_versions,
+      public.ds_provider_catalog_active TO ds_worker;
     GRANT SELECT (run_id, summary_json, created_at)
       ON public.ds_scan_internal_audit_public_summaries TO ds_read;
 
@@ -350,10 +356,23 @@ async function applyRuntimeGrants(pool: Pool): Promise<void> {
       ds_complete_scan_with_transparency(uuid, uuid, timestamptz, text,
         timestamptz, text, jsonb, jsonb, jsonb, jsonb, jsonb, jsonb, jsonb)
       TO ds_worker;
-    GRANT EXECUTE ON FUNCTION ds_complete_scan_with_legal_cookie_findings(
+    REVOKE EXECUTE ON FUNCTION ds_complete_scan_with_legal_cookie_findings(
       uuid, uuid, timestamptz, text, timestamptz, text, jsonb, jsonb, jsonb,
       jsonb, jsonb, jsonb, jsonb, jsonb, jsonb
-    ) TO ds_worker;
+    ) FROM ds_worker;
+    GRANT EXECUTE ON FUNCTION public.ds_begin_provider_catalog_refresh(date),
+      public.ds_activate_provider_catalog_version(text, jsonb, jsonb, jsonb, date),
+      public.ds_seed_provider_catalog_version(text, jsonb, jsonb, jsonb),
+      public.ds_fail_provider_catalog_refresh(date, text, jsonb),
+      public.ds_add_provider_catalog_discovery_version(text, text, jsonb, jsonb, jsonb, jsonb),
+      public.ds_complete_scan_with_provider_catalog(
+        uuid, uuid, timestamptz, text, timestamptz, text, jsonb, jsonb, jsonb,
+        jsonb, jsonb, jsonb, jsonb, jsonb, jsonb, text, jsonb
+      ) TO ds_worker;
+    REVOKE EXECUTE ON FUNCTION public.ds_complete_scan_with_provider_catalog(
+      uuid, uuid, timestamptz, text, timestamptz, text, jsonb, jsonb, jsonb,
+      jsonb, jsonb, jsonb, jsonb, jsonb, jsonb, text
+    ) FROM ds_worker;
     ALTER DEFAULT PRIVILEGES FOR ROLE ds_migrator IN SCHEMA public
       REVOKE SELECT ON TABLES FROM ds_read;
     ALTER DEFAULT PRIVILEGES FOR ROLE ds_migrator IN SCHEMA public

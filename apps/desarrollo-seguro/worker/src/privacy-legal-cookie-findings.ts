@@ -124,7 +124,10 @@ function makeFinding(
 }
 
 function normalizeHostname(value: string): string {
-  return value.trim().toLowerCase().replace(/^\.+|\.+$/gu, "");
+  let normalized = value.trim().toLowerCase();
+  while (normalized.startsWith(".")) normalized = normalized.slice(1);
+  while (normalized.endsWith(".")) normalized = normalized.slice(0, -1);
+  return normalized;
 }
 
 function normalizeDomain(value: string): string {

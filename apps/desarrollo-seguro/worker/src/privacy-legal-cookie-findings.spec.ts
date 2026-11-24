@@ -99,6 +99,7 @@ function makeFlow(overrides: {
     storageKeysAfterChoice: [],
     cookieReadComplete: true,
     storageReadComplete: true,
+    firstEntryPolicyLinks: { status: "unknown", consentComponentDetected: null, consentComponentLink: null, consentComponentDocumentAccess: "unknown", footerLink: null, footerLinkDocumentAccess: "unknown" },
     phaseEvidence: {
       beforeChoice: overrides.beforeChoice ?? null,
       choiceActionAtMs: overrides.choiceActionAtMs ?? null,

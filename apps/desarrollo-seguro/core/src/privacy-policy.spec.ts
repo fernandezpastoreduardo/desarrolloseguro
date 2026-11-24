@@ -2,10 +2,11 @@ import { describe, expect, it } from "vitest";
 import { isThirdPartyPrivacyHost, PRIVACY_BROWSER_BUDGET, PRIVACY_EXCESS_THRESHOLDS } from "./privacy-policy.js";
 
 describe("privacy policy v1", () => {
-  it("treats www as the root hostname alias but other hosts as third parties", () => {
+  it("treats parent and child subdomains as the same site", () => {
     expect(isThirdPartyPrivacyHost("grumphya.com", "www.grumphya.com")).toBe(false);
     expect(isThirdPartyPrivacyHost("www.grumphya.com", "grumphya.com")).toBe(false);
-    expect(isThirdPartyPrivacyHost("grumphya.com", "img.grumphya.com")).toBe(true);
+    expect(isThirdPartyPrivacyHost("grumphya.com", "img.grumphya.com")).toBe(false);
+    expect(isThirdPartyPrivacyHost("tenant-one.github.io", "tenant-two.github.io")).toBe(true);
     expect(isThirdPartyPrivacyHost("grumphya.com", "google-analytics.com")).toBe(true);
   });
 

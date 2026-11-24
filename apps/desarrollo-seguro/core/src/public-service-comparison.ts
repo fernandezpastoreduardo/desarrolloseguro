@@ -1,4 +1,10 @@
 import { PUBLIC_SERVICE_PROVIDER_INFO } from "./public-service-catalog.js";
+import {
+  isProviderStatement,
+  parseProviderDocumentationContradiction,
+  type ProviderDocumentationContradiction,
+  type ProviderStatement,
+} from "./provider-documentation-contradictions.js";
 
 export const PUBLIC_SERVICE_COMPARISON_VERSION = "public-service-comparison-v1" as const;
 export const PUBLIC_SERVICE_MAX_ITEMS = 30;
@@ -12,13 +18,50 @@ export type PublicServiceItem = {
   declaredPurposes: string[];
 };
 
-export type PublicServiceDeclarationEvidence = { providerId: string; purposes: string[] };
+export type PublicServiceDeclarationEvidence = {
+  providerId: string;
+  purposes: string[];
+  siteStatements?: ProviderStatement[];
+};
+
+/** Strict parser used at the runtime coordinator protocol boundary. */
+export function parsePublicServiceDeclarations(value: unknown): PublicServiceDeclarationEvidence[] | null {
+  if (!Array.isArray(value) || value.length > PUBLIC_SERVICE_MAX_ITEMS) return null;
+  let statementCount = 0;
+  const output: PublicServiceDeclarationEvidence[] = [];
+  const providers = new Set<string>();
+  for (const row of value) {
+    if (!isRecord(row) || !["providerId", "purposes", "siteStatements"]
+      .every((key) => key === "siteStatements" && !Object.hasOwn(row, key) || Object.hasOwn(row, key)) ||
+      Reflect.ownKeys(row).length !== (Object.hasOwn(row, "siteStatements") ? 3 : 2) ||
+      typeof row.providerId !== "string" || !/^[a-z0-9][a-z0-9_-]{0,31}$/u.test(row.providerId) ||
+      providers.has(row.providerId) || !Array.isArray(row.purposes) || row.purposes.length > 8 ||
+      !row.purposes.every((purpose) => typeof purpose === "string" && /^[a-z0-9][a-z0-9_-]{0,31}$/u.test(purpose)) ||
+      new Set(row.purposes).size !== row.purposes.length) return null;
+    providers.add(row.providerId);
+    const statements: ProviderStatement[] = [];
+    if (Object.hasOwn(row, "siteStatements")) {
+      if (!Array.isArray(row.siteStatements) || row.siteStatements.length > 30 ||
+          !row.siteStatements.every(isProviderStatement)) return null;
+      statementCount += row.siteStatements.length;
+      if (statementCount > 30) return null;
+      statements.push(...row.siteStatements);
+    }
+    output.push({
+      providerId: row.providerId,
+      purposes: [...row.purposes] as string[],
+      ...(Object.hasOwn(row, "siteStatements") ? { siteStatements: statements } : {}),
+    });
+  }
+  return output;
+}
 
 export type PublicServiceComparison = {
   policyVersion: typeof PUBLIC_SERVICE_COMPARISON_VERSION;
   status: "pass" | "fail" | "unknown";
-  reasonCode: "services_disclosed" | "observed_service_undisclosed" | "public_policy_missing" | "auditor_error";
+  reasonCode: "services_disclosed" | "observed_service_undisclosed" | "provider_documentation_contradiction" | "public_policy_missing" | "auditor_error";
   items: PublicServiceItem[];
+  providerDocumentation?: ProviderDocumentationContradiction[];
 };
 
 /** Builds a small, privacy-safe service list from reviewed identifiers only. */
@@ -27,6 +70,7 @@ export function assessPublicServiceComparison(input: {
   declared: readonly { providerId: string; purposes: readonly string[] }[];
   policyStatus: "pass" | "fail" | "unknown";
   auditorError?: boolean;
+  providerDocumentation?: readonly ProviderDocumentationContradiction[];
 }): PublicServiceComparison {
   if (input.auditorError || input.policyStatus === "unknown") return {
     policyVersion: PUBLIC_SERVICE_COMPARISON_VERSION,
@@ -65,25 +109,30 @@ export function assessPublicServiceComparison(input: {
   });
   const missing = items.some((item) => item.observation === "observed");
   const policyMissing = input.policyStatus === "fail";
+  const hasContradiction = input.providerDocumentation?.some(({ status }) => status === "contradiction_confirmed") ?? false;
   return {
     policyVersion: PUBLIC_SERVICE_COMPARISON_VERSION,
-    status: missing || policyMissing ? "fail" : "pass",
-    reasonCode: missing ? "observed_service_undisclosed" : policyMissing ? "public_policy_missing" : "services_disclosed",
+    status: missing || hasContradiction || policyMissing ? "fail" : "pass",
+    reasonCode: missing ? "observed_service_undisclosed"
+      : hasContradiction ? "provider_documentation_contradiction"
+        : policyMissing ? "public_policy_missing" : "services_disclosed",
     items,
+    ...(input.providerDocumentation?.length ? { providerDocumentation: [...input.providerDocumentation] } : {}),
   };
 }
 
 export function parsePublicServiceComparison(value: unknown): PublicServiceComparison | null {
-  if (!isRecord(value) || !exactKeys(value, ["policyVersion", "status", "reasonCode", "items"]) ||
+  if (!isRecord(value) || !["policyVersion", "status", "reasonCode", "items"].every((key) => Object.hasOwn(value, key)) ||
+      Object.keys(value).some((key) => !["policyVersion", "status", "reasonCode", "items", "providerDocumentation"].includes(key)) ||
       value.policyVersion !== PUBLIC_SERVICE_COMPARISON_VERSION ||
       !["pass", "fail", "unknown"].includes(String(value.status)) ||
-      !["services_disclosed", "observed_service_undisclosed", "public_policy_missing", "auditor_error"].includes(String(value.reasonCode)) ||
+      !["services_disclosed", "observed_service_undisclosed", "provider_documentation_contradiction", "public_policy_missing", "auditor_error"].includes(String(value.reasonCode)) ||
       !Array.isArray(value.items) || value.items.length > PUBLIC_SERVICE_MAX_ITEMS) return null;
   const items: PublicServiceItem[] = [];
   const seen = new Set<string>();
   for (const item of value.items) {
     if (!isRecord(item) || !exactKeys(item, ["providerId", "observation", "observedDomains", "declaredPurposes"]) ||
-        !isProviderId(item.providerId) || seen.has(item.providerId) ||
+        !isProviderIdentifier(item.providerId) || seen.has(item.providerId) ||
         !["observed", "declared", "observed_and_declared"].includes(String(item.observation)) ||
         !stringList(item.observedDomains, 8, isSafeHostname) || !stringList(item.declaredPurposes, 8, isPurposeId)) return null;
     seen.add(item.providerId);
@@ -100,11 +149,24 @@ export function parsePublicServiceComparison(value: unknown): PublicServiceCompa
   }
   const status = value.status;
   const reasonCode = value.reasonCode;
+  const providerDocumentation = value.providerDocumentation === undefined ? []
+    : Array.isArray(value.providerDocumentation) && value.providerDocumentation.length <= PUBLIC_SERVICE_MAX_ITEMS
+      ? value.providerDocumentation.map(parseProviderDocumentationContradiction)
+      : null;
+  if (!providerDocumentation || providerDocumentation.some((item) => item === null)) return null;
+  const confirmedContradiction = providerDocumentation.some((item) => item?.status === "contradiction_confirmed");
   if ((reasonCode === "auditor_error") !== (status === "unknown") ||
       reasonCode === "observed_service_undisclosed" && (status !== "fail" || !items.some(({ observation }) => observation === "observed")) ||
+      reasonCode === "provider_documentation_contradiction" && (status !== "fail" || !confirmedContradiction) ||
       reasonCode === "public_policy_missing" && (status !== "fail" || items.some(({ observation }) => observation === "observed")) ||
-      reasonCode === "services_disclosed" && (status !== "pass" || items.some(({ observation }) => observation === "observed"))) return null;
-  return { policyVersion: PUBLIC_SERVICE_COMPARISON_VERSION, status: status as PublicServiceComparison["status"], reasonCode: reasonCode as PublicServiceComparison["reasonCode"], items };
+      reasonCode === "services_disclosed" && (status !== "pass" || items.some(({ observation }) => observation === "observed") || confirmedContradiction)) return null;
+  return {
+    policyVersion: PUBLIC_SERVICE_COMPARISON_VERSION,
+    status: status as PublicServiceComparison["status"],
+    reasonCode: reasonCode as PublicServiceComparison["reasonCode"],
+    items,
+    ...(providerDocumentation.length ? { providerDocumentation: providerDocumentation as ProviderDocumentationContradiction[] } : {}),
+  };
 }
 
 export function getPublicServiceProviderInfo(providerId: string) {
@@ -134,6 +196,7 @@ function compareIdentifiers(left: string, right: string): number {
 }
 
 function isProviderId(value: unknown): value is string { return typeof value === "string" && PROVIDER_ID.test(value) && Object.hasOwn(PUBLIC_SERVICE_PROVIDER_INFO, value); }
+function isProviderIdentifier(value: unknown): value is string { return typeof value === "string" && PROVIDER_ID.test(value); }
 function isPurposeId(value: unknown): value is string { return typeof value === "string" && PURPOSE_ID.test(value); }
 function isSafeHostname(value: unknown): value is string { return typeof value === "string" && value.length <= 253 && /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))*$/iu.test(value); }
 function stringList<T extends string>(value: unknown, max: number, predicate: (item: unknown) => item is T): value is T[] { return Array.isArray(value) && value.length <= max && value.every(predicate) && new Set(value).size === value.length; }

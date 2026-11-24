@@ -8,6 +8,7 @@ import type { HttpsRequestFactory } from "./pinned-https-transport.js";
 import {
   createPublicPolicyHttpsFetcher,
 } from "./public-policy-https-fetcher.js";
+import { PUBLIC_POLICY_CRAWL_LIMITS } from "./public-policy-crawler.js";
 import type { PublicPolicyDocumentRequest } from "./public-policy-crawler.js";
 
 const HOSTNAME = "privacy.vendor.example.com";
@@ -171,7 +172,7 @@ describe("createPublicPolicyHttpsFetcher", () => {
     const fetchDocument = createPublicPolicyHttpsFetcher({
       dnsResolver: async () => [PUBLIC_IPV4],
       requestFactory: createRequestFactory([
-        { statusCode: 200, body: Buffer.alloc(64 * 1024 + 1, 0x61) },
+        { statusCode: 200, body: Buffer.alloc(PUBLIC_POLICY_CRAWL_LIMITS.documentBytes + 1, 0x61) },
       ]),
     });
 

@@ -489,6 +489,12 @@ async function applyRuntimeGrants(pool: Pool): Promise<void> {
       ON public.ds_scan_public_service_comparisons TO ${READ_ROLE};
     GRANT SELECT (run_id, findings_json)
       ON public.ds_scan_legal_cookie_findings TO ${READ_ROLE};
+    GRANT SELECT (run_id, catalog_version)
+      ON public.ds_scan_provider_catalog_versions TO ${READ_ROLE};
+    GRANT SELECT (run_id, assessment_json)
+      ON public.ds_scan_first_entry_policy_access TO ${READ_ROLE};
+    GRANT SELECT ON public.ds_provider_catalog_versions,
+      public.ds_provider_catalog_active TO ${WORKER_ROLE};
     GRANT SELECT (run_id, summary_json)
       ON public.ds_scan_internal_audit_public_summaries TO ${READ_ROLE};
 
@@ -519,10 +525,23 @@ async function applyRuntimeGrants(pool: Pool): Promise<void> {
       public.ds_complete_scan_with_transparency(uuid, uuid, timestamptz, text,
         timestamptz, text, jsonb, jsonb, jsonb, jsonb, jsonb, jsonb, jsonb)
       TO ${WORKER_ROLE};
-    GRANT EXECUTE ON FUNCTION public.ds_complete_scan_with_legal_cookie_findings(
+    REVOKE EXECUTE ON FUNCTION public.ds_complete_scan_with_legal_cookie_findings(
       uuid, uuid, timestamptz, text, timestamptz, text, jsonb, jsonb, jsonb,
       jsonb, jsonb, jsonb, jsonb, jsonb, jsonb
-    ) TO ${WORKER_ROLE};
+    ) FROM ${WORKER_ROLE};
+    GRANT EXECUTE ON FUNCTION public.ds_complete_scan_with_provider_catalog(
+      uuid, uuid, timestamptz, text, timestamptz, text, jsonb, jsonb, jsonb,
+      jsonb, jsonb, jsonb, jsonb, jsonb, jsonb, text, jsonb
+    ), public.ds_begin_provider_catalog_refresh(date),
+      public.ds_activate_provider_catalog_version(text, jsonb, jsonb, jsonb, date),
+      public.ds_seed_provider_catalog_version(text, jsonb, jsonb, jsonb),
+      public.ds_fail_provider_catalog_refresh(date, text, jsonb),
+      public.ds_add_provider_catalog_discovery_version(text, text, jsonb, jsonb, jsonb, jsonb)
+      TO ${WORKER_ROLE};
+    REVOKE EXECUTE ON FUNCTION public.ds_complete_scan_with_provider_catalog(
+      uuid, uuid, timestamptz, text, timestamptz, text, jsonb, jsonb, jsonb,
+      jsonb, jsonb, jsonb, jsonb, jsonb, jsonb, text
+    ) FROM ${WORKER_ROLE};
     GRANT EXECUTE ON FUNCTION public.ds_purge_expired_reports(timestamptz),
       public.ds_purge_inactive_public_reports(timestamptz),
       public.ds_enqueue_due_certification_scans(timestamptz)

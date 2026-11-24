@@ -20,6 +20,8 @@ import {
   type PublicPolicyTransparencyAssessment,
   parsePublicServiceComparison,
   type PublicServiceComparison,
+  parseFirstEntryPolicyAccess,
+  type FirstEntryPolicyAccess,
   type PublicServiceDeclarationEvidence,
   type ScanFailureDiagnostic,
 } from "@desarrolloseguro/core";
@@ -58,6 +60,8 @@ const PUBLIC_REPORT_COLUMNS = `
   reports.expires_at AS report_expires_at,
   reports.verdict AS report_verdict,
   reports.scope_json AS report_scope,
+  first_entry_policy_row.assessment_json AS report_first_entry_policy_access,
+  catalog_version_row.catalog_version AS report_provider_catalog_version,
   internal_audit_row.summary_json AS report_internal_audit_summary,
   privacy_row.assessment_json AS report_privacy_assessment,
   processor_row.assessment_json AS report_processor_transparency,
@@ -112,6 +116,12 @@ const PUBLIC_SERVICE_COMPARISON_LATERAL = `LEFT JOIN LATERAL (
 const PUBLIC_LEGAL_COOKIE_FINDINGS_LATERAL = `LEFT JOIN LATERAL (
   SELECT findings_json FROM public.ds_scan_legal_cookie_findings WHERE run_id = reports.id
 ) AS legal_cookie_row ON true`;
+const PUBLIC_PROVIDER_CATALOG_VERSION_LATERAL = `LEFT JOIN LATERAL (
+  SELECT catalog_version FROM public.ds_scan_provider_catalog_versions WHERE run_id = reports.id
+) AS catalog_version_row ON true`;
+const PUBLIC_FIRST_ENTRY_POLICY_ACCESS_LATERAL = `LEFT JOIN LATERAL (
+  SELECT assessment_json FROM public.ds_scan_first_entry_policy_access WHERE run_id = reports.id
+) AS first_entry_policy_row ON true`;
 const PUBLIC_INTERNAL_AUDIT_LATERAL = `LEFT JOIN LATERAL (
   SELECT summary_json
   FROM public.ds_scan_internal_audit_public_summaries
@@ -158,6 +168,8 @@ export type PublicScanReport = {
   processorTransparencyAssessment?: ProcessorTransparencyAssessment | null;
   publicPolicyTransparencyAssessment?: PublicPolicyTransparencyAssessment | null;
   publicServiceComparison?: PublicServiceComparison | null;
+  providerCatalogVersion: string | null;
+  firstEntryPolicyAccess?: FirstEntryPolicyAccess | null;
   legalCookieFindings?: LegalCookieFinding[];
   internalAuditSummary?: InternalAuditPublicSummary | null;
 };
@@ -249,6 +261,9 @@ export type ScanRunInput = {
   legalCookieFindings?: LegalCookieFinding[] | null;
   /** Short-lived worker evidence; persisted only after combining with browser observations. */
   publicServiceDeclarations?: PublicServiceDeclarationEvidence[];
+  /** Immutable catalog snapshot loaded by the worker for this scan. */
+  providerCatalogVersion?: string | null;
+  firstEntryPolicyAccess?: FirstEntryPolicyAccess | null;
   internalAuditSummary?: InternalAuditPublicSummary | null;
   metrics: {
     requestsCount: number;
@@ -448,6 +463,8 @@ export class PostgresScanStore implements ScanJobStore {
        ${PUBLIC_POLICY_TRANSPARENCY_LATERAL}
        ${PUBLIC_SERVICE_COMPARISON_LATERAL}
        ${PUBLIC_LEGAL_COOKIE_FINDINGS_LATERAL}
+       ${PUBLIC_PROVIDER_CATALOG_VERSION_LATERAL}
+       ${PUBLIC_FIRST_ENTRY_POLICY_ACCESS_LATERAL}
        ${PUBLIC_INTERNAL_AUDIT_LATERAL}
        WHERE domains.hostname = $1`,
       [hostname],
@@ -495,6 +512,8 @@ export class PostgresScanStore implements ScanJobStore {
        ${PUBLIC_POLICY_TRANSPARENCY_LATERAL}
        ${PUBLIC_SERVICE_COMPARISON_LATERAL}
        ${PUBLIC_LEGAL_COOKIE_FINDINGS_LATERAL}
+       ${PUBLIC_PROVIDER_CATALOG_VERSION_LATERAL}
+       ${PUBLIC_FIRST_ENTRY_POLICY_ACCESS_LATERAL}
        ${PUBLIC_INTERNAL_AUDIT_LATERAL}
        WHERE reports.id = $1::uuid
          AND domains.opted_out_at IS NULL`,
@@ -522,6 +541,8 @@ export class PostgresScanStore implements ScanJobStore {
        ${PUBLIC_POLICY_TRANSPARENCY_LATERAL}
        ${PUBLIC_SERVICE_COMPARISON_LATERAL}
        ${PUBLIC_LEGAL_COOKIE_FINDINGS_LATERAL}
+       ${PUBLIC_PROVIDER_CATALOG_VERSION_LATERAL}
+       ${PUBLIC_FIRST_ENTRY_POLICY_ACCESS_LATERAL}
        ${PUBLIC_INTERNAL_AUDIT_LATERAL}
        WHERE reports.hostname = $1
          AND reports.profile_version IN ('domain-v1', 'domain-v2', 'domain-v3', 'domain-v4')
@@ -711,6 +732,15 @@ export class PostgresScanStore implements ScanJobStore {
     if (input.publicServiceComparison != null && !publicServiceComparison) {
       throw new Error("invalid_public_service_comparison");
     }
+    if (input.providerCatalogVersion != null && !/^[a-f0-9]{64}$/u.test(input.providerCatalogVersion)) {
+      throw new Error("invalid_provider_catalog_version");
+    }
+    const firstEntryPolicyAccess = input.firstEntryPolicyAccess == null
+      ? null
+      : parseFirstEntryPolicyAccess(input.firstEntryPolicyAccess);
+    if (input.firstEntryPolicyAccess != null && !firstEntryPolicyAccess) {
+      throw new Error("invalid_first_entry_policy_access");
+    }
     const legalCookieFindings = input.legalCookieFindings == null
       ? []
       : parseLegalCookieFindings(input.legalCookieFindings);
@@ -719,9 +749,9 @@ export class PostgresScanStore implements ScanJobStore {
     }
     try {
       const result = await this.pool.query<{ ds_complete_scan: string }>(
-        `SELECT ds_complete_scan_with_legal_cookie_findings(
+        `SELECT ds_complete_scan_with_provider_catalog(
           $1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9::jsonb,
-          $10::jsonb, $11::jsonb, $12::jsonb, $13::jsonb, $14::jsonb, $15::jsonb
+          $10::jsonb, $11::jsonb, $12::jsonb, $13::jsonb, $14::jsonb, $15::jsonb, $16, $17::jsonb
         ) AS ds_complete_scan`,
         [
           input.jobId,
@@ -739,6 +769,8 @@ export class PostgresScanStore implements ScanJobStore {
           publicPolicyTransparencyAssessment === null ? null : JSON.stringify(publicPolicyTransparencyAssessment),
           publicServiceComparison === null ? null : JSON.stringify(publicServiceComparison),
           JSON.stringify(legalCookieFindings),
+          input.providerCatalogVersion ?? null,
+          firstEntryPolicyAccess === null ? null : JSON.stringify(firstEntryPolicyAccess),
         ],
       );
       const runId = result.rows[0]?.ds_complete_scan;
@@ -815,6 +847,17 @@ function parsePublicScanReport(row: Record<string, unknown>): PublicScanReport {
   if (row.report_legal_cookie_findings != null && !legalCookieFindings) {
     throw new Error(INVALID_PUBLIC_REPORT_ROW);
   }
+  const providerCatalogVersion = row.report_provider_catalog_version ?? null;
+  if (providerCatalogVersion !== null &&
+      (typeof providerCatalogVersion !== "string" || !/^[a-f0-9]{64}$/u.test(providerCatalogVersion))) {
+    throw new Error(INVALID_PUBLIC_REPORT_ROW);
+  }
+  const firstEntryPolicyAccess = row.report_first_entry_policy_access == null
+    ? null
+    : parseFirstEntryPolicyAccess(row.report_first_entry_policy_access);
+  if (row.report_first_entry_policy_access != null && !firstEntryPolicyAccess) {
+    throw new Error(INVALID_PUBLIC_REPORT_ROW);
+  }
   const internalAuditSummary = row.report_internal_audit_summary == null
     ? null
     : parseInternalAuditPublicSummary(row.report_internal_audit_summary);
@@ -844,6 +887,8 @@ function parsePublicScanReport(row: Record<string, unknown>): PublicScanReport {
     processorTransparencyAssessment,
     publicPolicyTransparencyAssessment,
     publicServiceComparison,
+    providerCatalogVersion,
+    firstEntryPolicyAccess,
     ...(legalCookieFindings?.length ? { legalCookieFindings } : {}),
     internalAuditSummary,
   };

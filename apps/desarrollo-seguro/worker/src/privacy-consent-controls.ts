@@ -28,6 +28,7 @@ export type VendorToggleInspection = {
 
 export async function inspectConsentControls(page: Page): Promise<ConsentControl[]> {
   return page.locator(CONSENT_CONTROL_SELECTOR).evaluateAll((elements) => {
+    const consentContextPattern = /(?:cookie|cookies|consent|consentimiento|privacidad|privacy|protecci[oó]n\s+(?:de\s+)?datos|data\s+protection|rgpd|gdpr|preferencias\s+de\s+cookies|solo\s+(?:las\s+)?esenciales|non-essential\s+cookies)/iu;
     const controls: ConsentControl[] = [];
     for (const [index, element] of elements.entries()) {
       if (!(element instanceof HTMLElement)) continue;
@@ -36,6 +37,23 @@ export async function inspectConsentControls(page: Page): Promise<ConsentControl
       if (rect.width <= 0 || rect.height <= 0 || style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0) continue;
       const label = `${element.getAttribute("aria-label") ?? ""} ${element.innerText ?? element.textContent ?? ""}`.trim().slice(0, 200);
       const normalized = label.toLowerCase();
+      let context = element.parentElement;
+      const documentBody = typeof document === "undefined" ? null : document.body;
+      let hasConsentContext = false;
+      let contextDepth = 0;
+      while (context && context !== documentBody && contextDepth < 8) {
+        const attrs = `${context.getAttribute("id") ?? ""} ${String(context.className ?? "")}`;
+        const marker = /(?:cookie|consent|privacy|privacidad|cmp|gdpr|rgpd)/iu.test(attrs);
+        const text = context.textContent ?? "";
+        if (marker || text.length <= 3_000 && consentContextPattern.test(text)) {
+          hasConsentContext = true;
+          break;
+        }
+        context = context.parentElement;
+        contextDepth += 1;
+      }
+      if (!hasConsentContext && consentContextPattern.test(label)) hasConsentContext = true;
+      if (!hasConsentContext) continue;
       let kind: ConsentControl["kind"] | null = null;
       if (/\b(aceptar|accept|allow|consentir|permitir|agree)\b/iu.test(normalized)) kind = "accept";
       else if (/\b(rechazar|reject|decline|denegar|solo necesarias|solo esenciales|essential only)\b/iu.test(normalized)) kind = "reject";

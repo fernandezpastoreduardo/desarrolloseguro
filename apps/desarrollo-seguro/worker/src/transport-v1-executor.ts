@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import {
   assessPublicPolicyTransparency,
+  parsePublicServiceDeclarations,
   type PublicServiceDeclarationEvidence,
   evaluateVerdict,
   sanitizeScanObservations,
@@ -317,20 +318,24 @@ export class TransportV1NetworkExecutor {
 
 function buildPublicServiceDeclarations(evidence: TransportV1Evidence): PublicServiceDeclarationEvidence[] {
   const raw = evidence.publicPolicyDeclaredServices;
-  if (typeof raw !== "string" || raw.length > 4096) return [];
+  if (typeof raw !== "string" || Buffer.byteLength(raw, "utf8") > 24 * 1024) return [];
   try {
     const value: unknown = JSON.parse(raw);
     if (!Array.isArray(value) || value.length > 30) return [];
-    const result: PublicServiceDeclarationEvidence[] = [];
+    const declarations: unknown[] = [];
     for (const item of value) {
       if (typeof item !== "object" || item === null || Array.isArray(item) ||
-          Object.keys(item).sort((left, right) => left.localeCompare(right, "en")).join(",") !== "providerId,purposeIds" ||
-          typeof item.providerId !== "string" || !/^[a-z0-9][a-z0-9_-]{0,31}$/u.test(item.providerId) ||
-          !Array.isArray(item.purposeIds) || item.purposeIds.length > 8 ||
-          !item.purposeIds.every((purpose: unknown) => typeof purpose === "string" && /^[a-z0-9][a-z0-9_-]{0,31}$/u.test(purpose))) return [];
-      result.push({ providerId: item.providerId, purposes: [...new Set(item.purposeIds as string[])].slice(0, 8) });
+          Object.getPrototypeOf(item) !== Object.prototype) return [];
+      const row = item as Record<string, unknown>;
+      if (Object.keys(row).some((key) => !["providerId", "purposeIds", "siteStatements"].includes(key)) ||
+          !Object.hasOwn(row, "providerId") || !Object.hasOwn(row, "purposeIds")) return [];
+      declarations.push({
+        providerId: row.providerId,
+        purposes: row.purposeIds,
+        ...(Object.hasOwn(row, "siteStatements") ? { siteStatements: row.siteStatements } : {}),
+      });
     }
-    return result;
+    return parsePublicServiceDeclarations(declarations) ?? [];
   } catch {
     return [];
   }
