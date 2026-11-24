@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { assessPrivacyObservation, getObservedPublicServices } from "./privacy-assessment-builder.js";
+import { identifyUnattributedProviderDestination } from "./provider-destination-identity.js";
 import type { PrivacyBrowserFlowObservation, PrivacyBrowserObservation } from "./privacy-browser-observer.js";
 
 function flow(overrides: Partial<PrivacyBrowserFlowObservation> = {}): PrivacyBrowserFlowObservation {
@@ -21,7 +22,8 @@ function observation(overrides: Partial<PrivacyBrowserObservation> = {}): Privac
   return {
     protocolVersion: 1, requestId: "947dd0c9-564c-4a30-8ce3-efb4ecae9136", hostname: "grumphya.com",
     status: "complete", context: { browser: "Chromium", locale: "es-ES", timezone: "Europe/Madrid", viewport: "desktop-1365x768" },
-    initial: flow(), accept: flow(), reject: flow(), requestCount: 1, blockedRequestCount: 0,
+    initial: flow(), policyLinkVisit: { status: "not_applicable", link: null, documentAccess: "not_checked", navigationStartedAtMs: null, beforeNavigation: null, afterNavigation: null },
+    accept: flow(), reject: flow(), requestCount: 1, blockedRequestCount: 0,
     vendorControlCoverage: "not_applicable", vendorControlCount: 0, vendorControls: [],
     requestBudgetExceeded: false, thirdPartyRequestHosts: [], receivedBytes: null,
     ...overrides,
@@ -29,14 +31,17 @@ function observation(overrides: Partial<PrivacyBrowserObservation> = {}): Privac
 }
 
 describe("assessPrivacyObservation", () => {
-  it("returns only confirmed third-party service and domain pairs", () => {
+  it("retains confirmed services and completed third-party destinations without assigning unknown companies", () => {
     const result = getObservedPublicServices(observation({
       initial: flow({
-        completedHostsAfterChoice: ["www.google-analytics.com", "grumphya.com", "unknown.example"],
+        completedHostsAfterChoice: ["www.google-analytics.com", "grumphya.com", "unknown-destination.net"],
         cookiesAfterChoice: [{ name: "_ga", domain: ".grumphya.com", secure: true, httpOnly: false }],
       }),
     }));
-    expect(result).toEqual([{ providerId: "google-analytics", domain: "www.google-analytics.com" }]);
+    expect(result).toEqual([
+      { providerId: "google-analytics", domain: "www.google-analytics.com" },
+      { providerId: identifyUnattributedProviderDestination("unknown-destination.net").providerId, domain: "unknown-destination.net" },
+    ]);
   });
 
   it("gives a full score when the homepage has no consent prompt or observed tracking", () => {

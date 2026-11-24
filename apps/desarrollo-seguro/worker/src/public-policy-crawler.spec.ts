@@ -1,4 +1,5 @@
 import type { LookupAddress } from "node:dns";
+import { createHash } from "node:crypto";
 import type { LookupFunction } from "node:net";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -135,11 +136,109 @@ describe("collectPublicPolicyEvidence", () => {
       purposes: ["analytics", "hosting"],
       categories: ["analytics", "infrastructure"],
     });
-    expect(JSON.stringify(evidence)).not.toContain("privacy.vendor.example.com");
+    expect(evidence.discoveredDocuments).toContainEqual(expect.objectContaining({
+      href: "https://privacy.vendor.example.com/privacy",
+      anchorText: "Privacy policy",
+      sourcePageUrl: "https://example.com/",
+      fetchStatus: "fetched",
+      sha256: expect.stringMatching(/^[a-f0-9]{64}$/u),
+    }));
     expect(JSON.stringify(evidence)).not.toContain("user=private");
     expect(JSON.stringify(evidence)).not.toContain(DISCLOSURE_HTML);
     expect(evidence).not.toHaveProperty("html");
-    expect(evidence).not.toHaveProperty("url");
+  });
+
+  it("fetches explicit provider document links with provenance without classifying provider HTML as site claims", async () => {
+    const dpaHtml = "<p>Vendor Example processes data.</p>";
+    const serviceHtml = "<p>Service documentation.</p>";
+    const classifyHtml = vi.fn(() => CLASSIFICATION);
+    const fetchDocument = vi.fn(async (request: PublicPolicyDocumentRequest) => request.path === "/privacy"
+      ? response({
+        html: `<a href="https://vendor.example.net/dpa?session=private#terms">Data Processing Addendum</a>
+          <a href="/docs/service">Service documentation</a>`,
+      })
+      : response({ html: request.path === "/dpa" ? dpaHtml : serviceHtml }));
+
+    const evidence = await collectPublicPolicyEvidence({
+      hostname: "example.com",
+      links: [{ hostname: "privacy.example.com", path: "/privacy", kind: "privacy" }],
+      initialPageInspectable: true,
+      initialStatusCode: 200,
+      signal: new AbortController().signal,
+      fetchDocument,
+      classifyHtml,
+    });
+
+    expect(evidence.discoveredDocuments).toContainEqual(expect.objectContaining({
+      href: "https://vendor.example.net/dpa",
+      anchorText: "Data Processing Addendum",
+      kind: "legal",
+      sourcePageUrl: "https://privacy.example.com/privacy",
+      fetchStatus: "fetched",
+      sha256: createHash("sha256").update(dpaHtml).digest("hex"),
+    }));
+    expect(evidence.discoveredDocuments).toContainEqual(expect.objectContaining({
+      href: "https://privacy.example.com/docs/service",
+      anchorText: "Service documentation",
+      sourcePageUrl: "https://privacy.example.com/privacy",
+      fetchStatus: "fetched",
+      sha256: createHash("sha256").update(serviceHtml).digest("hex"),
+    }));
+    expect(JSON.stringify(evidence)).not.toContain("session=private");
+    expect(fetchDocument).toHaveBeenCalledTimes(3);
+    expect(classifyHtml).toHaveBeenCalledTimes(1);
+    expect(classifyHtml).toHaveBeenCalledWith(expect.stringContaining("Data Processing Addendum"));
+    expect(classifyHtml).not.toHaveBeenCalledWith(dpaHtml);
+    expect(classifyHtml).not.toHaveBeenCalledWith(serviceHtml);
+  });
+
+  it("keeps discovered documents not fetched when the shared request budget is exhausted", async () => {
+    const fetchDocument = vi.fn(async () => response({
+      html: `<a href="https://vendor.example.net/dpa">Data Processing Addendum</a>`,
+    }));
+    const evidence = await collectPublicPolicyEvidence({
+      hostname: "example.com",
+      links: [{ hostname: "privacy.example.com", path: "/privacy", kind: "privacy" }],
+      initialPageInspectable: true,
+      initialStatusCode: 200,
+      signal: new AbortController().signal,
+      fetchDocument,
+      classifyHtml: () => CLASSIFICATION,
+      budget: { durationMs: 30_000, requests: 1, bytes: 64 * 1024 },
+    });
+
+    expect(fetchDocument).toHaveBeenCalledTimes(1);
+    expect(evidence.discoveredDocuments).toContainEqual(expect.objectContaining({
+      href: "https://vendor.example.net/dpa",
+      fetchStatus: "not_fetched",
+      sha256: null,
+    }));
+  });
+
+  it.each([
+    { label: "HTTP unavailable", response: response({ statusCode: 404, html: "" }), fetchStatus: "unavailable", failureCode: undefined },
+    { label: "unsupported content type", response: response({ contentType: "application/pdf", html: "" }), fetchStatus: "failed", failureCode: "unsupported_content_type" },
+  ])("preserves $label receipt for a linked provider document", async ({ response: documentResponse, fetchStatus, failureCode }) => {
+    const fetchDocument = vi.fn(async (request: PublicPolicyDocumentRequest) => request.path === "/privacy"
+      ? response({ html: `<a href="https://vendor.example.net/dpa">Data Processing Addendum</a>` })
+      : documentResponse);
+    const linkEvidence = await collectPublicPolicyEvidence({
+      hostname: "example.com",
+      links: [{ hostname: "privacy.example.com", path: "/privacy", kind: "privacy" }],
+      initialPageInspectable: true,
+      initialStatusCode: 200,
+      signal: new AbortController().signal,
+      fetchDocument,
+      classifyHtml: () => CLASSIFICATION,
+    });
+
+    expect(linkEvidence.status).toBe("pass");
+    expect(linkEvidence.discoveredDocuments).toContainEqual(expect.objectContaining({
+      href: "https://vendor.example.net/dpa",
+      fetchStatus,
+      sha256: null,
+      ...(failureCode ? { failureCode } : {}),
+    }));
   });
 
   it("marks a missing public policy link as a transparency failure", async () => {
@@ -246,6 +345,43 @@ describe("collectPublicPolicyEvidence", () => {
     expect(JSON.stringify(evidence)).not.toContain("?user=");
   });
 
+  it("attaches audited-site provenance to each literal legal-context claim and omits absent elements", async () => {
+    const evidence = await collect(async () => response(), {
+      classifyHtml: () => ({
+        providerIds: ["vendor-example"],
+        providersWithPurpose: ["vendor-example"],
+        purposeIds: ["analytics"],
+        categories: ["analytics"],
+        declaredServices: [{ providerId: "vendor-example", purposeIds: ["analytics"] }],
+        documentTitle: "Privacy Notice",
+        legalContextClaims: [
+          { kind: "data_origin", value: "obtained_from_subject", excerpt: "We collect personal data directly from the data subject." },
+          { kind: "audited_entity_is_controller", excerpt: "We are the data controller." },
+          { kind: "aepd_jurisdiction_is_established", excerpt: "Our competent supervisory authority is the AEPD." },
+        ],
+      }),
+      now: () => 100,
+    });
+    const context = evidence.declaredServices[0]?.legalEvidenceContext;
+    expect(context?.dataOrigin).toMatchObject({
+      value: "obtained_from_subject",
+      evidence: [{
+        sourceKind: "audited_site",
+        title: "Privacy Notice",
+        url: "https://privacy.vendor.example.com/privacy",
+        excerpt: "We collect personal data directly from the data subject.",
+      }],
+    });
+    expect(context?.auditedEntityIsController?.evidence[0]).toMatchObject({
+      sourceKind: "audited_site",
+      excerpt: "We are the data controller.",
+    });
+    expect(context?.aepdJurisdictionIsEstablished?.evidence[0]).toMatchObject({
+      sourceKind: "audited_site",
+      excerpt: "Our competent supervisory authority is the AEPD.",
+    });
+  });
+
   it.each([
     { ...CLASSIFICATION, accessDenied: "false" },
     { ...CLASSIFICATION, providersWithPurpose: ["unlisted-provider"] },
@@ -262,12 +398,14 @@ describe("collectPublicPolicyEvidence", () => {
     const evidence = await collect(async () => response({ statusCode, html: "" }));
 
     expect(evidence).toMatchObject({ status: "fail", reasonCode: "access_denied", accessDeniedPages: 1 });
+    expect(evidence.discoveredDocuments[0]).toMatchObject({ fetchStatus: "unavailable", sha256: null });
   });
 
   it.each([404, 410, 500])("treats HTTP %s as an unavailable public policy page", async (statusCode) => {
     const evidence = await collect(async () => response({ statusCode, html: "" }));
 
     expect(evidence).toMatchObject({ status: "fail", reasonCode: "policy_page_unavailable" });
+    expect(evidence.discoveredDocuments[0]).toMatchObject({ fetchStatus: "unavailable", sha256: null });
   });
 
   it("keeps a transport failure in review without blaming the domain", async () => {

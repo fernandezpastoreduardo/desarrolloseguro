@@ -151,7 +151,12 @@ const MIGRATIONS = [
   { version: "044_provider_catalog_versions", file: "044_provider_catalog_versions.sql" },
   { version: "045_first_entry_policy_access", file: "045_first_entry_policy_access.sql" },
   { version: "046_provider_catalog_discoveries", file: "046_provider_catalog_discoveries.sql" },
+  { version: "047_provider_discovery_optional_path", file: "047_provider_discovery_optional_path.sql" },
+  { version: "048_provider_catalog_discovery_evidence_merge", file: "048_provider_catalog_discovery_evidence_merge.sql" },
+  { version: "049_provider_discovery_document_facts", file: "049_provider_discovery_document_facts.sql" },
 ] as const;
+
+export const DEVELOPMENT_SECURITY_MIGRATION_COUNT = MIGRATIONS.length;
 
 const MIGRATION_LOCK_ID = 728194032;
 

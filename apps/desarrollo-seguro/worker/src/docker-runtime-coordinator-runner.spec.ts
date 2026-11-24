@@ -723,7 +723,8 @@ function makePrivacyObservation(): PrivacyBrowserObservation {
   return {
     protocolVersion: 1, requestId: REQUEST.requestId, hostname: REQUEST.hostname, status: "complete",
     context: { browser: "Chromium", locale: "es-ES", timezone: "Europe/Madrid", viewport: "desktop-1365x768" },
-    initial: flow(), accept: flow(), reject: flow(), requestCount: 1, blockedRequestCount: 0,
+    initial: flow(), policyLinkVisit: { status: "not_applicable", link: null, documentAccess: "not_checked", navigationStartedAtMs: null, beforeNavigation: null, afterNavigation: null },
+    accept: flow(), reject: flow(), requestCount: 1, blockedRequestCount: 0,
     vendorControlCoverage: "not_applicable", vendorControlCount: 0, vendorControls: [],
     requestBudgetExceeded: false, thirdPartyRequestHosts: [], receivedBytes: null,
   };

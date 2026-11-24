@@ -11,18 +11,16 @@ import {
   ScanLeaseLostError,
   type ClaimedScanJob,
   type ScanJobStore,
-  type ScanRunInput,
 } from "@desarrolloseguro/persistence";
 import { performance } from "node:perf_hooks";
+import type { ScanExecutorResult } from "./public-policy-document-boundary.js";
 
 export type ScanExecutor = {
   assertReady?(): Promise<void>;
   execute(
     job: ClaimedScanJob,
     signal: AbortSignal,
-  ): Promise<
-    Omit<ScanRunInput, "jobId" | "leaseToken" | "hostname" | "profileVersion">
-  >;
+  ): Promise<ScanExecutorResult>;
 };
 
 export type ScanJobOutcome =
@@ -131,10 +129,7 @@ export class ScanJobProcessor {
     }, this.heartbeatIntervalMs);
     heartbeatTimer.unref?.();
 
-    let result: Omit<
-      ScanRunInput,
-      "jobId" | "leaseToken" | "hostname" | "profileVersion"
-    > | undefined;
+    let result: ScanExecutorResult | undefined;
     let executorFailed = false;
     let executorError: unknown;
     try {
@@ -172,8 +167,10 @@ export class ScanJobProcessor {
     }
 
     try {
+      const persistedResult = { ...result };
+      delete persistedResult.publicPolicyDiscoveredDocuments;
       await this.store.completeScan({
-        ...result,
+        ...persistedResult,
         ...observations,
         jobId: claimed.id,
         leaseToken: claimed.leaseToken,

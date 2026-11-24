@@ -1,14 +1,13 @@
 import { normalizeHostname, type FirstEntryPolicyLink } from "@desarrolloseguro/core";
 import type { Page } from "playwright";
 
-const CONTROL_SELECTOR = 'button,[role="button"],input[type="button"],input[type="submit"]';
-const POLICY_REFERENCE = /(?:privacy|privacidad|protecci[oó]n\s+(?:de\s+)?datos|data\s+protection|cookie|cookies|pol[ií]tica\s+(?:de\s+)?(?:privacidad|datos|cookies)|t[eé]rminos|terms|conditions|condiciones|aviso\s+legal|legal\s+notice|imprint)/iu;
-
 export type FirstEntryPolicyLinkDiscovery = {
   status: "evaluated" | "unknown";
   consentComponentDetected: boolean | null;
   consentComponentLink: FirstEntryPolicyLink | null;
   consentComponentDocumentAccess: "accessible" | "unavailable" | "not_checked" | "unknown";
+  informationNoticeLink?: FirstEntryPolicyLink | null;
+  informationNoticeDocumentAccess?: "accessible" | "unavailable" | "not_checked" | "unknown";
   footerLink: FirstEntryPolicyLink | null;
   footerLinkDocumentAccess: "accessible" | "unavailable" | "not_checked" | "unknown";
 };
@@ -45,6 +44,8 @@ export async function inspectFirstEntryPolicyLinks(
 ): Promise<FirstEntryPolicyLinkDiscovery> {
   try {
     const result = await page.locator("a[href]").evaluateAll((anchors, promptDetected) => {
+      const controlSelector = 'button,[role="button"],input[type="button"],input[type="submit"]';
+      const policyReference = /(?:privacy|privacidad|protecci[oó]n\s+(?:de\s+)?datos|data\s+protection|cookie|cookies|pol[ií]tica\s+(?:de\s+)?(?:privacidad|datos|cookies)|t[eé]rminos|terms|conditions|condiciones|aviso\s+legal|legal\s+notice|imprint)/iu;
       const visible = (element: Element): boolean => {
         if (!(element instanceof HTMLElement) || element.hidden || element.getAttribute("aria-hidden") === "true") return false;
         const rect = element.getBoundingClientRect();
@@ -65,7 +66,7 @@ export async function inspectFirstEntryPolicyLinks(
         const code = character.codePointAt(0) ?? 0;
         return character === "\\" || code <= 0x20 || code === 0x7f;
       });
-      const visibleControls = Array.from(document.querySelectorAll(CONTROL_SELECTOR)).filter((element) => visible(element) && consentKind(element));
+      const visibleControls = Array.from(document.querySelectorAll(controlSelector)).filter((element) => visible(element) && consentKind(element));
       const mark = (element: Element): boolean => {
         const attrs = `${element.getAttribute("id") ?? ""} ${typeof element.className === "string" ? element.className : ""}`;
         return /(?:cookie|consent|privacy|privacidad|cmp|gdpr|rgpd)/iu.test(attrs);
@@ -98,7 +99,7 @@ export async function inspectFirstEntryPolicyLinks(
       const publicLink = (anchor: Element): FirstEntryPolicyLink | null => {
         const href = anchor.getAttribute("href");
         const text = `${href ?? ""} ${(anchor as HTMLElement).innerText ?? anchor.textContent ?? ""}`;
-        if (!href || !POLICY_REFERENCE.test(text) || hasUnsafeUrlCharacter(href)) return null;
+        if (!href || !policyReference.test(text) || hasUnsafeUrlCharacter(href)) return null;
         let url: URL;
         try { url = new URL(href, document.location.href); } catch { return null; }
         if (url.protocol !== "https:" || url.username || url.password || url.port || url.pathname.length > 512 || /%(?:0[0-9a-f]|1[0-9a-f]|7f)/iu.test(url.pathname)) return null;
@@ -124,11 +125,23 @@ export async function inspectFirstEntryPolicyLinks(
         }
         return false;
       })?.link ?? null;
+      const informationNoticeLink = promptDetected === false ? links.find(({ anchor }) => {
+        let current: Element | null = anchor;
+        let depth = 0;
+        while (current && current !== document.body && depth < 10) {
+          if (mark(current) || current.getAttribute("role") === "dialog" || current.getAttribute("aria-modal") === "true") return true;
+          current = current.parentElement;
+          depth += 1;
+        }
+        return false;
+      })?.link ?? null : null;
       return {
         status: promptDetected === true && visibleControls.length > 0 && !consentRoot ? "unknown" as const : "evaluated" as const,
         consentComponentDetected: promptDetected === true ? consentRoot !== null : promptDetected === false ? false : null,
         consentComponentLink: consentLink,
         consentComponentDocumentAccess: "not_checked" as const,
+        informationNoticeLink,
+        informationNoticeDocumentAccess: "not_checked" as const,
         footerLink,
         footerLinkDocumentAccess: "not_checked" as const,
       };
@@ -140,14 +153,13 @@ export async function inspectFirstEntryPolicyLinks(
   }
 }
 
-/** Performs a bounded read-only navigation to the relevant visible legal link. */
+/** Performs a bounded read-only navigation to the link in its caller's fresh context. */
 export async function verifyFirstEntryPolicyDocument(
   page: Page,
   link: FirstEntryPolicyLink | null,
 ): Promise<"accessible" | "unavailable" | "not_checked" | "unknown"> {
   if (!link) return "not_checked";
   try {
-    await page.context().clearCookies();
     const response = await page.goto(`https://${link.hostname}${link.path}`, { waitUntil: "domcontentloaded" });
     const status = response?.status();
     const contentType = response?.headers()["content-type"]?.split(";", 1)[0]?.trim().toLowerCase() ?? "";
@@ -175,6 +187,8 @@ function isDiscovery(value: unknown): value is FirstEntryPolicyLinkDiscovery {
     (candidate.consentComponentDetected === true || candidate.consentComponentDetected === false || candidate.consentComponentDetected === null) &&
     (candidate.consentComponentLink === null || isLink(candidate.consentComponentLink)) &&
     isDocumentAccess(candidate.consentComponentDocumentAccess) &&
+    (candidate.informationNoticeLink === undefined || candidate.informationNoticeLink === null || isLink(candidate.informationNoticeLink)) &&
+    (candidate.informationNoticeDocumentAccess === undefined || isDocumentAccess(candidate.informationNoticeDocumentAccess)) &&
     (candidate.footerLink === null || isLink(candidate.footerLink)) &&
     isDocumentAccess(candidate.footerLinkDocumentAccess);
 }
@@ -189,7 +203,7 @@ function isLink(value: unknown): value is FirstEntryPolicyLink {
 }
 
 function unknownDiscovery(consentPromptDetected: boolean | null): FirstEntryPolicyLinkDiscovery {
-  return { status: "unknown", consentComponentDetected: consentPromptDetected === false ? false : null, consentComponentLink: null, consentComponentDocumentAccess: "unknown", footerLink: null, footerLinkDocumentAccess: "unknown" };
+  return { status: "unknown", consentComponentDetected: consentPromptDetected === false ? false : null, consentComponentLink: null, consentComponentDocumentAccess: "unknown", informationNoticeLink: null, informationNoticeDocumentAccess: "unknown", footerLink: null, footerLinkDocumentAccess: "unknown" };
 }
 
 function hasUnsafeUrlCharacter(value: string): boolean {

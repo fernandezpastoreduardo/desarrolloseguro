@@ -31,9 +31,10 @@ describe("PublicScanService", () => {
         hostname: "example.com",
         profileVersion: "controls-v3",
         globalAssessment: expect.objectContaining({
-          policyVersion: "mvp-global-v1",
+          policyVersion: "mvp-global-v2",
           status: "not_available",
           score: null,
+          legalViolationAccredited: false,
         }),
         score: null,
         assessedCriteria: 0,
@@ -617,6 +618,7 @@ describe("PublicScanService", () => {
         items: [{ providerId: "google-analytics", observation: "observed", observedDomains: ["google-analytics.com"], declaredPurposes: [] }],
       },
       firstEntryPolicyAccess,
+      providerCatalogVersion: "a".repeat(64),
     });
     const service = new PublicScanService({
       scanStore: {
@@ -634,6 +636,7 @@ describe("PublicScanService", () => {
       weight: 10,
     }));
     expect(result.firstEntryPolicyAccess).toEqual(firstEntryPolicyAccess);
+    expect(result.providerCatalogVersion).toBe("a".repeat(64));
   });
 
   it("publishes the equal-weight MVP score only when both dimensions have full coverage", async () => {
@@ -670,9 +673,10 @@ describe("PublicScanService", () => {
 
     await expect(service.getReport(REPORT_ID)).resolves.toMatchObject({
       globalAssessment: {
-        policyVersion: "mvp-global-v1",
+        policyVersion: "mvp-global-v2",
         status: "scored",
         score: 100,
+        legalViolationAccredited: false,
         weights: { ethics: 50, privacy: 50 },
         ethicsCoverage: { assessedCriteria: 8, totalCriteria: 8 },
         privacyCoverage: {
@@ -684,6 +688,55 @@ describe("PublicScanService", () => {
       },
       ethicsAssessment: { score: 100 },
       privacyAssessment: { score: 100 },
+    });
+  });
+
+  it("fixes the public global score at zero when a legal cookie finding is accredited", async () => {
+    const report = makeReport({
+      legalCookieFindings: [{
+        ruleId: "lssi-cookie-no-prior-consent-v1",
+        ruleVersion: "1.0.0",
+        status: "accredited",
+        title: "Uso de cookies analíticas o de seguimiento antes del consentimiento",
+        description: "El navegador limpio registró una cookie no exenta antes de cualquier elección.",
+        jurisdiction: "ES",
+        articles: (["22.2", "38.4.g", "39.1.c", "43.1"] as const).map((article) => ({
+          law: "LSSI",
+          article,
+          url: "https://www.boe.es/buscar/act.php?id=BOE-A-2002-13758",
+        })),
+        infringementClass: "minor",
+        sanction: { type: "statutory_maximum", currency: "EUR", maximum: 30000 },
+        authority: "Agencia Española de Protección de Datos",
+        evidence: [{
+          flow: "initial",
+          phase: "before_choice",
+          capturedAtMs: 250,
+          cookieName: "_ga",
+          cookieDomain: "example.com",
+          provider: "Google Analytics",
+          purpose: "analytics",
+          attributionRuleId: "google-analytics-ga-v1",
+          correlatedRequestHosts: ["www.google-analytics.com"],
+        }],
+        evidenceComplete: true,
+      }],
+    });
+    const service = new PublicScanService({
+      scanStore: {
+        readPublicDomainSnapshot: vi.fn(),
+        readPublicReport: vi.fn().mockResolvedValue(report),
+      },
+    });
+
+    await expect(service.getReport(REPORT_ID)).resolves.toMatchObject({
+      globalAssessment: {
+        policyVersion: "mvp-global-v2",
+        status: "scored",
+        score: 0,
+        legalViolationAccredited: true,
+      },
+      legalCookieFindings: [{ status: "accredited", ruleId: "lssi-cookie-no-prior-consent-v1" }],
     });
   });
 
@@ -882,6 +935,7 @@ describe("PublicScanService", () => {
         "publicPolicyTransparencyAssessment",
         "publicServiceComparison",
         "firstEntryPolicyAccess",
+        "providerCatalogVersion",
         "betaCertification",
         "internalAuditState",
         "internalAuditSummary",

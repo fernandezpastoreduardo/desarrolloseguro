@@ -26,6 +26,7 @@ async function main(): Promise<void> {
       status: "unknown",
       context: { browser: "Chromium", locale: "es-ES", timezone: "Europe/Madrid", viewport: "desktop-1365x768" },
       initial: unknownFlow(),
+      policyLinkVisit: { status: "unknown", link: null, documentAccess: "unknown", navigationStartedAtMs: null, beforeNavigation: null, afterNavigation: null },
       accept: unknownFlow(),
       reject: unknownFlow(),
       vendorControlCoverage: "unknown",
@@ -85,7 +86,7 @@ function unknownFlow(): PrivacyBrowserObservation["initial"] {
     storageKeysAfterChoice: [],
     cookieReadComplete: false,
     storageReadComplete: false,
-    firstEntryPolicyLinks: { status: "unknown", consentComponentDetected: null, consentComponentLink: null, consentComponentDocumentAccess: "unknown", footerLink: null, footerLinkDocumentAccess: "unknown" },
+    firstEntryPolicyLinks: { status: "unknown", consentComponentDetected: null, consentComponentLink: null, consentComponentDocumentAccess: "unknown", informationNoticeLink: null, informationNoticeDocumentAccess: "unknown", footerLink: null, footerLinkDocumentAccess: "unknown" },
     phaseEvidence: {
       beforeChoice: null,
       choiceActionAtMs: null,

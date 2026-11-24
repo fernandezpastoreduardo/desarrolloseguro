@@ -9,6 +9,34 @@ import {
 import { compareProviderDocumentation } from "./provider-documentation-contradictions.js";
 
 describe("public service comparison", () => {
+  it("preserves only bounded audited-site sources for explicit legal context", () => {
+    const source = {
+      sourceId: "policy-context",
+      version: "public-policy-source-v1",
+      title: "Privacy notice",
+      url: "https://site.example/privacy",
+      capturedAt: "2026-11-24T03:00:00Z",
+      excerpt: "We are the data controller.",
+      documentKind: "privacy",
+      sourceKind: "audited_site",
+    };
+    const declaration = {
+      providerId: "openai-api",
+      purposes: ["ai_processing"],
+      legalEvidenceContext: {
+        dataOrigin: { value: "obtained_from_subject", evidence: [source] },
+        auditedEntityIsController: { evidence: [source] },
+      },
+    };
+    expect(parsePublicServiceDeclarations([declaration])).toEqual([declaration]);
+    expect(parsePublicServiceDeclarations([{
+      ...declaration,
+      legalEvidenceContext: {
+        auditedEntityIsController: { evidence: [{ ...source, sourceKind: "provider_official" }] },
+      },
+    }])).toBeNull();
+  });
+
   it("parses bounded declarations and preserves explicit source evidence", () => {
     const statement = {
       factId: "provider_receives_content",

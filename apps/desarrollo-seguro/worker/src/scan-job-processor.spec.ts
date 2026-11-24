@@ -280,6 +280,28 @@ describe("ScanJobProcessor", () => {
     });
   });
 
+  it("keeps provider-document discovery ephemeral until cataloging is wired", async () => {
+    const store = makeStore(JOB);
+    const executor = {
+      execute: vi.fn().mockResolvedValue({
+        ...RESULT,
+        publicPolicyDiscoveredDocuments: [{
+          href: "https://vendor.example.net/dpa",
+          anchorText: "Data Processing Addendum",
+          kind: "legal",
+          sourcePageUrl: "https://sample.example.net/privacy",
+          fetchStatus: "fetched",
+          sha256: "a".repeat(64),
+        }],
+      }),
+    };
+    const processor = new ScanJobProcessor(store, executor);
+
+    await expect(processor.processNext()).resolves.toBe("completed");
+    expect(store.completeScan).toHaveBeenCalledOnce();
+    expect(store.completeScan.mock.calls[0]?.[0]).not.toHaveProperty("publicPolicyDiscoveredDocuments");
+  });
+
   it("does not persist executor results outside the profile scope", async () => {
     const store = makeStore(JOB);
     const executor = {

@@ -19,8 +19,10 @@ export function assessFirstEntryPolicyAccessObservation(
       thirdPartyCookieDetected: null,
       nonEssentialThirdPartyStorageDetected: null,
       consentComponentLink: null,
+      informationNoticeLink: null,
       footerLink: null,
       componentLinkDocumentAccess: "unknown",
+      informationNoticeDocumentAccess: "unknown",
       footerLinkDocumentAccess: "unknown",
       auditorError: true,
     });
@@ -35,16 +37,19 @@ export function assessFirstEntryPolicyAccessObservation(
         complete: snapshot.cookieReadComplete,
       })
     : null;
-  return assessFirstEntryPolicyAccess({
+  const access = assessFirstEntryPolicyAccess({
     consentPromptDetected: initial.consentPromptDetected,
     thirdPartyCookieDetected,
     nonEssentialThirdPartyStorageDetected: detectNonEssentialThirdPartyStorage(observation, initial),
     consentComponentLink: links.consentComponentLink,
+    informationNoticeLink: links.informationNoticeLink ?? null,
     footerLink: links.footerLink,
     componentLinkDocumentAccess: links.consentComponentDocumentAccess,
+    informationNoticeDocumentAccess: links.informationNoticeDocumentAccess,
     footerLinkDocumentAccess: links.footerLinkDocumentAccess,
     auditorError: links.status === "unknown",
   });
+  return { ...access, policyLinkVisit: observation.policyLinkVisit };
 }
 
 function detectNonEssentialThirdPartyStorage(

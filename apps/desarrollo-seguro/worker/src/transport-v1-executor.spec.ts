@@ -49,6 +49,15 @@ function makeSource(): TransportV1FixtureObservationSource {
 
 describe("TransportV1 executors", () => {
   it("preserves domain-v4 privacy evidence across the executor response boundary", () => {
+    const discoveredDocuments = [{
+      href: "https://vendor.example.net/dpa",
+      anchorText: "Data Processing Addendum",
+      kind: "legal",
+      documentRole: "provider_document",
+      sourcePageUrl: "https://example.net/privacy",
+      fetchStatus: "fetched",
+      sha256: "a".repeat(64),
+    }];
     const firstEntryPolicyAccess = {
       policyVersion: "first-entry-policy-access-v1",
       status: "fail",
@@ -80,6 +89,7 @@ describe("TransportV1 executors", () => {
         evidence: { linksFound: 1, pagesInspected: 1, unavailablePages: 0, accessDeniedPages: 0, providerMentions: 1, providersMissingPurpose: 0, categories: ["other"] },
       },
       publicServiceComparison: null,
+      publicPolicyDiscoveredDocuments: discoveredDocuments,
       legalCookieFindings: [],
       firstEntryPolicyAccess,
     };
@@ -88,9 +98,16 @@ describe("TransportV1 executors", () => {
 
     expect("result" in response && response.result).toMatchObject({
       publicServiceComparison: null,
+      publicPolicyDiscoveredDocuments: discoveredDocuments,
       legalCookieFindings: [],
       firstEntryPolicyAccess,
     });
+
+    expect(() => parseTransportV1ExecutorResponse({
+      protocolVersion: 1,
+      requestId: JOB.id,
+      result: { ...result, publicPolicyDiscoveredDocuments: [{ ...discoveredDocuments[0], sha256: null }] },
+    }, JOB.id, "domain-v4")).toThrow("executor_result_invalid");
   });
 
   it("retains normalized provider-purpose declarations from the public policy", async () => {
@@ -121,8 +138,44 @@ describe("TransportV1 executors", () => {
               excerpt: "Google Analytics receives personal data from users.",
             },
           }],
+          legalEvidenceContext: {
+            dataOrigin: {
+              value: "obtained_from_subject",
+              evidence: [{
+                sourceId: "policy-context-0123456789abcdef0123456789abcdef",
+                version: "public-policy-source-v1",
+                title: "Privacy notice",
+                url: "https://example.com/privacy",
+                capturedAt: "2026-11-24T03:00:00.000Z",
+                documentKind: "privacy",
+                sourceKind: "audited_site",
+                excerpt: "We collect personal data directly from the data subject.",
+              }],
+            },
+            auditedEntityIsController: {
+              evidence: [{
+                sourceId: "policy-context-0123456789abcdef0123456789abcdef",
+                version: "public-policy-source-v1",
+                title: "Privacy notice",
+                url: "https://example.com/privacy",
+                capturedAt: "2026-11-24T03:00:00.000Z",
+                documentKind: "privacy",
+                sourceKind: "audited_site",
+                excerpt: "We are the data controller.",
+              }],
+            },
+          },
         },
       ]),
+      publicPolicyDiscoveredDocuments: JSON.stringify([{
+        href: "https://vendor.example.net/dpa",
+        anchorText: "Data Processing Addendum",
+        kind: "legal",
+        documentRole: "provider_document",
+        sourcePageUrl: "https://example.com/privacy",
+        fetchStatus: "fetched",
+        sha256: "b".repeat(64),
+      }]),
     };
     const source: TransportV1ObservationSource = {
       sourceKind: "network",
@@ -156,8 +209,21 @@ describe("TransportV1 executors", () => {
             excerpt: "Google Analytics receives personal data from users.",
           },
         }],
+        legalEvidenceContext: {
+          dataOrigin: expect.objectContaining({ value: "obtained_from_subject", evidence: [expect.objectContaining({ sourceKind: "audited_site" })] }),
+          auditedEntityIsController: { evidence: [expect.objectContaining({ excerpt: "We are the data controller." })] },
+        },
       },
     ]);
+    expect(result.publicPolicyDiscoveredDocuments).toEqual([{
+      href: "https://vendor.example.net/dpa",
+      anchorText: "Data Processing Addendum",
+      kind: "legal",
+      documentRole: "provider_document",
+      sourcePageUrl: "https://example.com/privacy",
+      fetchStatus: "fetched",
+      sha256: "b".repeat(64),
+    }]);
   });
 
   it("assembles the exact reduced profile from observed evidence", async () => {

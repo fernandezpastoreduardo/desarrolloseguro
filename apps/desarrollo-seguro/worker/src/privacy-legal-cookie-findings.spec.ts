@@ -51,6 +51,17 @@ describe("buildLegalCookieFindings", () => {
 
     expect(buildLegalCookieFindings(observation)).toEqual([]);
   });
+
+  it("does not create an LSSI finding for a technical first-party session cookie or absent rejection action", () => {
+    const observation = makeObservation({
+      initial: makeFlow({ beforeChoice: {
+        capturedAtMs: 40,
+        cookies: [{ name: "sessionid", domain: "example.es", secure: true, httpOnly: true }],
+        storageKeys: [], cookieReadComplete: true, storageReadComplete: true,
+      } }),
+    });
+    expect(buildLegalCookieFindings(observation)).toEqual([]);
+  });
 });
 
 function makeObservation(
@@ -63,6 +74,7 @@ function makeObservation(
     status: "complete",
     context: { browser: "Chromium", locale: "es-ES", timezone: "Europe/Madrid", viewport: "desktop-1365x768" },
     initial: overrides.initial ?? makeFlow({}),
+    policyLinkVisit: { status: "not_applicable", link: null, documentAccess: "not_checked", navigationStartedAtMs: null, beforeNavigation: null, afterNavigation: null },
     accept: makeFlow({}),
     reject: overrides.reject ?? makeFlow({}),
     vendorControlCoverage: "not_applicable",

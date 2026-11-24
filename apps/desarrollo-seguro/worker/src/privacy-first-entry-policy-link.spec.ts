@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { runInNewContext } from "node:vm";
 import { detectThirdPartyCookiePresence, inspectFirstEntryPolicyLinks, verifyFirstEntryPolicyDocument } from "./privacy-first-entry-policy-link.js";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -35,7 +36,7 @@ describe("first-entry third-party cookie detection", () => {
 
 describe("visible policy link placement", () => {
   it("accepts a visible policy link inside the consent component", async () => {
-    const page = makePage({ prompt: true, consentLink: true, footerLink: true });
+    const page = makePage({ prompt: true, consentLink: true, footerLink: true, isolatedExecution: true });
     const result = await inspectFirstEntryPolicyLinks(page as never, true);
     expect(result).toMatchObject({
       status: "evaluated",
@@ -55,32 +56,37 @@ describe("visible policy link placement", () => {
     expect(result).toMatchObject({ status: "evaluated", consentComponentDetected: false, consentComponentLink: null, footerLink: { path: "/footer-privacy" } });
   });
 
+  it("finds the policy link inside an informational cookie notice without consent controls", async () => {
+    const result = await inspectFirstEntryPolicyLinks(makePage({ prompt: false, consentLink: true, footerLink: false }) as never, false);
+    expect(result).toMatchObject({
+      status: "evaluated",
+      consentComponentDetected: false,
+      informationNoticeLink: { hostname: "example.org", path: "/privacy", kind: "privacy" },
+    });
+  });
+
   it("keeps a detected consent interface with an unidentifiable component unknown", async () => {
     const result = await inspectFirstEntryPolicyLinks({ locator: () => { throw new Error("DOM unavailable"); } } as never, true);
     expect(result).toMatchObject({ status: "unknown", consentComponentDetected: null });
   });
 
-  it("checks the visible link destination with a read-only navigation after clearing cookies", async () => {
-    const clearCookies = vi.fn(async () => undefined);
+  it("checks the visible link destination with a read-only navigation in the caller's fresh context", async () => {
     const goto = vi.fn(async () => ({
       status: () => 200,
       headers: () => ({ "content-type": "text/html; charset=utf-8" }),
       url: () => "https://example.org/privacy",
     }));
     const result = await verifyFirstEntryPolicyDocument({
-      context: () => ({ clearCookies }),
       goto,
       locator: () => ({ innerText: async () => "Política de privacidad: información sobre el tratamiento de datos personales." }),
       url: () => "https://example.org/",
     } as never, privacyLink);
     expect(result).toBe("accessible");
-    expect(clearCookies).toHaveBeenCalledOnce();
     expect(goto).toHaveBeenCalledWith("https://example.org/privacy", { waitUntil: "domcontentloaded" });
   });
 
   it("marks an unavailable legal destination as inaccessible", async () => {
     const result = await verifyFirstEntryPolicyDocument({
-      context: () => ({ clearCookies: vi.fn(async () => undefined) }),
       goto: vi.fn(async () => ({ status: () => 404, headers: () => ({ "content-type": "text/html" }), url: () => "https://example.org/privacy" })),
       url: () => "https://example.org/",
     } as never, privacyLink);
@@ -89,7 +95,6 @@ describe("visible policy link placement", () => {
 
   it("does not call an empty 200 HTML response an accessible legal document", async () => {
     const result = await verifyFirstEntryPolicyDocument({
-      context: () => ({ clearCookies: vi.fn(async () => undefined) }),
       goto: vi.fn(async () => ({
         status: () => 200,
         headers: () => ({ "content-type": "text/html; charset=utf-8" }),
@@ -102,7 +107,7 @@ describe("visible policy link placement", () => {
   });
 });
 
-function makePage(options: { prompt: boolean; consentLink: boolean; footerLink: boolean }) {
+function makePage(options: { prompt: boolean; consentLink: boolean; footerLink: boolean; isolatedExecution?: boolean }) {
   class TestElement {
     readonly tagName: string;
     readonly hidden = false;
@@ -133,6 +138,7 @@ function makePage(options: { prompt: boolean; consentLink: boolean; footerLink: 
   if (options.consentLink) anchors.push(new TestHTMLElement("a", { href: "/privacy?session=private" }, banner, "Política de privacidad"));
   if (options.footerLink) anchors.push(new TestHTMLElement("a", { href: "/footer-privacy#section" }, footer, "Privacidad"));
   vi.stubGlobal("HTMLElement", TestHTMLElement);
+  vi.stubGlobal("Element", TestElement);
   vi.stubGlobal("getComputedStyle", () => ({ display: "block", visibility: "visible", opacity: "1" }));
   vi.stubGlobal("document", {
     body,
@@ -141,6 +147,19 @@ function makePage(options: { prompt: boolean; consentLink: boolean; footerLink: 
     querySelectorAll: () => controls,
   });
   return {
-    locator: () => ({ evaluateAll: (callback: (anchors: TestElement[], promptDetected: boolean) => unknown, promptDetected: boolean) => callback(anchors, promptDetected) }),
+    locator: () => ({ evaluateAll: <Result, Argument>(callback: (anchors: Element[], argument: Argument) => Result, argument: Argument) => {
+      if (options.isolatedExecution) {
+        return runInNewContext(`(${callback.toString()})(anchors, argument)`, {
+          anchors: anchors as unknown as Element[],
+          argument,
+          Element: TestElement,
+          HTMLElement: TestHTMLElement,
+          getComputedStyle: globalThis.getComputedStyle,
+          document: globalThis.document,
+          URL,
+        }) as Result;
+      }
+      return callback(anchors as unknown as Element[], argument);
+    } }),
   };
 }

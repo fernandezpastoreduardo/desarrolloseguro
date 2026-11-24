@@ -2,6 +2,7 @@ import { normalizeHostname, SCAN_FAILURE_CODES, parseFirstEntryPolicyAccess, par
 import type { ScanCheck, ScanRunInput } from "@desarrolloseguro/persistence";
 import { isNetworkProbeFailureList, type NetworkProbeFailure, type ScanProfileVersion } from "./transport-v1-executor.js";
 import { getTransportBudget } from "./transport-budget.js";
+import { parsePublicPolicyDiscoveredDocuments, type ScanExecutorResult } from "./public-policy-document-boundary.js";
 
 export const TRANSPORT_V1_EXECUTOR_PROTOCOL_VERSION = 1;
 export const MAX_EXECUTOR_REQUEST_BYTES = 4 * 1024;
@@ -25,10 +26,7 @@ export type TransportV1ExecutorResponse =
   | {
       protocolVersion: 1;
       requestId: string;
-      result: Omit<
-        ScanRunInput,
-        "jobId" | "leaseToken" | "hostname" | "profileVersion"
-      >;
+      result: ScanExecutorResult;
     }
   | {
       protocolVersion: 1;
@@ -127,7 +125,7 @@ function isScanFailureCode(value: unknown): value is ScanFailureCode {
 function parseExecutorResult(
   value: unknown,
   profileVersion: ScanProfileVersion,
-): Omit<ScanRunInput, "jobId" | "leaseToken" | "hostname" | "profileVersion"> {
+): ScanExecutorResult {
   if (!isRecord(value)) throw new Error("executor_result_invalid");
   const startedAt = parseDate(value.startedAt);
   const completedAt = parseDate(value.completedAt);
@@ -147,7 +145,7 @@ function parseExecutorResult(
   if (completedAt.getTime() < startedAt.getTime()) {
     throw new Error("executor_result_invalid");
   }
-  const result: Omit<ScanRunInput, "jobId" | "leaseToken" | "hostname" | "profileVersion"> = {
+  const result: ScanExecutorResult = {
     scannerVersion: value.scannerVersion,
     startedAt,
     completedAt,
@@ -181,6 +179,14 @@ function parseExecutorResult(
     const declarations = parsePublicServiceDeclarations(value.publicServiceDeclarations);
     if (!declarations) throw new Error("executor_result_invalid");
     result.publicServiceDeclarations = declarations;
+  }
+  if (value.publicPolicyDiscoveredDocuments !== undefined) {
+    if (profileVersion !== "domain-v4" || value.scannerVersion !== "domain-v4-network-adapter-3") {
+      throw new Error("executor_result_invalid");
+    }
+    const documents = parsePublicPolicyDiscoveredDocuments(value.publicPolicyDiscoveredDocuments);
+    if (!documents) throw new Error("executor_result_invalid");
+    result.publicPolicyDiscoveredDocuments = documents;
   }
   if (
     value.publicServiceComparison !== undefined ||

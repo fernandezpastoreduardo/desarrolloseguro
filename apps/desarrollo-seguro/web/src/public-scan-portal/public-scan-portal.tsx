@@ -1,5 +1,6 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { parseFirstEntryPolicyAccess, type FirstEntryPolicyAccess } from "@desarrolloseguro/core/first-entry-policy-access";
+import { parseLegalCookieFindings, type LegalCookieFinding } from "@desarrolloseguro/core/legal-cookie-findings";
 import { parsePublicServiceComparison } from "@desarrolloseguro/core/public-service-comparison";
 import { PUBLIC_SERVICE_PROVIDER_INFO } from "@desarrolloseguro/core/public-service-catalog";
 import "./public-scan-portal.scss";
@@ -221,6 +222,7 @@ type PublicServiceComparison = {
   providerDocumentation?: Array<{
     providerId: string;
     status: "contradiction_confirmed" | "consistent" | "not_comparable" | "source_not_located" | "source_unavailable";
+    sourceEvidence?: Array<{ documentId: string; title: string; url: string; status: "seeded" | "fetched" | "unavailable" | "failed" | "not_localized"; sha256: string | null; checkedAt: string }>;
     comparisons: Array<{
       factId: string;
       siteStatement: { title: string; url: string; excerpt: string };
@@ -228,7 +230,15 @@ type PublicServiceComparison = {
       providerFact: { title: string; url: string; excerpt: string };
       providerValue: boolean;
       relation: "opposes" | "supports";
-      legalFinding?: { status: "infraccion_legal_acreditada"; instrument: string; articles: string[]; authority: string; sanction: { alternatives: Array<{ type: string; amount?: number; percentage?: number; currency?: string }> } };
+      legalFinding?: {
+        status: "infraccion_legal_acreditada";
+        instrument: string;
+        articles: string[];
+        authority: string;
+        sanction: { alternatives: Array<{ type: string; amount?: number; percentage?: number; currency?: string }> };
+        officialSources?: Array<{ sourceId: string; title: string; url: string; issuer: string; version: string; checkedAt: string }>;
+        supportingSources?: Record<string, Array<{ sourceId: string; title: string; url: string; excerpt: string }>>;
+      };
     }>;
   }>;
 };
@@ -256,9 +266,10 @@ type PublicReport = {
   expiresAt: string;
   verdict: ScanVerdict;
   globalAssessment: {
-    policyVersion: "mvp-global-v1";
+    policyVersion: "mvp-global-v2";
     status: "scored" | "review" | "not_available";
     score: number | null;
+    legalViolationAccredited: boolean;
     weights: { ethics: 50; privacy: 50 };
     ethicsCoverage: { assessedCriteria: number; totalCriteria: number };
     privacyCoverage: {
@@ -305,6 +316,8 @@ type PublicReport = {
   processorTransparencyAssessment: PublicProcessorTransparencyAssessment | null;
   publicPolicyTransparencyAssessment: PublicPolicyTransparencyAssessment | null;
   publicServiceComparison?: PublicServiceComparison | null;
+  legalCookieFindings?: LegalCookieFinding[];
+  providerCatalogVersion?: string | null;
   firstEntryPolicyAccess?: FirstEntryPolicyAccess | null;
   internalAuditSummary?: InternalAuditPublicSummary | null;
   internalAuditState?: "running" | "review" | "complete" | null;
@@ -1192,7 +1205,10 @@ function ReportSummary({
           </section>
         )}
         {report.publicServiceComparison && (
-          <PublicServiceComparisonSection comparison={report.publicServiceComparison} observedDomains={report.privacyAssessment?.evidence.domains ?? []} />
+          <PublicServiceComparisonSection comparison={report.publicServiceComparison} observedDomains={report.privacyAssessment?.evidence.domains ?? []} catalogVersion={report.providerCatalogVersion} />
+        )}
+        {report.legalCookieFindings && report.legalCookieFindings.length > 0 && (
+          <LegalCookieFindingsSection findings={report.legalCookieFindings} />
         )}
         {report.firstEntryPolicyAccess && (
           <FirstEntryPolicyAccessSection access={report.firstEntryPolicyAccess} />
@@ -1278,7 +1294,7 @@ function ReportSummary({
   );
 }
 
-function PublicServiceComparisonSection({ comparison, observedDomains }: { comparison: PublicServiceComparison; observedDomains: string[] }) {
+function PublicServiceComparisonSection({ comparison, observedDomains, catalogVersion }: { comparison: PublicServiceComparison; observedDomains: string[]; catalogVersion?: string | null }) {
   const classifiedDomains = new Set(comparison.items.flatMap(({ observedDomains: domains }) => domains));
   const otherObservedDomains = observedDomains.filter((domain) => !classifiedDomains.has(domain));
   const summary = comparison.reasonCode === "auditor_error"
@@ -1294,11 +1310,12 @@ function PublicServiceComparisonSection({ comparison, observedDomains }: { compa
     <section className="ds-portal__public-services" aria-labelledby="public-services-heading">
       <h3 id="public-services-heading">Servicios externos detectados</h3>
       <p>{summary}</p>
+      {catalogVersion && <p>Versión del catálogo oficial aplicado: <code>{catalogVersion}</code></p>}
       {comparison.items.length > 0 && (
         <ul className="ds-portal__public-service-list">
           {comparison.items.map((item) => {
             const info = PUBLIC_SERVICE_PROVIDER_INFO[item.providerId] ?? null;
-            const label = info?.displayName ?? item.providerId;
+            const label = info?.displayName ?? (item.providerId.startsWith("dst_") ? "Destino externo sin proveedor atribuido" : item.providerId);
             const stateLabel = item.observation === "observed_and_declared"
               ? "Correcto · observado y explicado"
               : item.observation === "observed"
@@ -1354,19 +1371,60 @@ function PublicServiceComparisonSection({ comparison, observedDomains }: { compa
                 <div className="ds-portal__provider-legal-finding" data-status="infraccion_legal_acreditada">
                   <strong>Incumplimiento legal acreditado</strong>
                   <p>{item.legalFinding.instrument}, artículos {item.legalFinding.articles.join(", ")}. Organismo competente: {item.legalFinding.authority}.</p>
+                  {item.legalFinding.officialSources && (
+                    <p>Fuentes jurídicas oficiales: {item.legalFinding.officialSources.map((source, index) => (
+                      <span key={source.sourceId}>
+                        {index > 0 ? " · " : ""}<a href={source.url} target="_blank" rel="noopener noreferrer">{source.title}</a>
+                        {` (${source.issuer}; ${source.checkedAt.slice(0, 10)})`}
+                      </span>
+                    ))}.</p>
+                  )}
                   <p>Escala sancionadora prevista: {item.legalFinding.sanction.alternatives.map((scale) =>
                     scale.type === "fixed_amount" ? `${scale.amount?.toLocaleString("es-ES")} ${scale.currency}` : `${scale.percentage} % del volumen de negocio mundial anual`,
                   ).join(" o ")} (la cuantía concreta la determina el organismo competente).</p>
+                  {item.legalFinding.supportingSources && (
+                    <details>
+                      <summary>Fuentes de los elementos legales</summary>
+                      <ul>
+                        {Object.entries(item.legalFinding.supportingSources).flatMap(([element, sources]) =>
+                          sources.map((source) => (
+                            <li key={`${element}-${source.sourceId}`}>
+                              <b>{getLegalEvidenceElementLabel(element)}:</b>{" "}
+                              <a href={source.url} target="_blank" rel="noopener noreferrer">{source.title}</a>
+                              {source.excerpt ? <blockquote>{source.excerpt}</blockquote> : null}
+                            </li>
+                          )),
+                        )}
+                      </ul>
+                    </details>
+                  )}
                 </div>
               )}
             </div>
           ))}
         </article>
       ))}
+      {comparison.providerDocumentation?.filter(({ status }) => status === "source_not_located" || status === "source_unavailable" || status === "not_comparable").map((finding) => (
+        <article className="ds-portal__provider-contradiction" key={`documentation-${finding.providerId}`}>
+          <h4>{PUBLIC_SERVICE_PROVIDER_INFO[finding.providerId]?.displayName ?? (finding.providerId.startsWith("dst_") ? "Destino externo sin proveedor atribuido" : finding.providerId)}: documentación oficial</h4>
+          {finding.status === "source_not_located" && <p>No se localizó documentación oficial con las fuentes permitidas. Esto no demuestra que el proveedor carezca de documentación.</p>}
+          {finding.status === "source_unavailable" && <p>La documentación oficial localizada no pudo recuperarse; se conserva su enlace y estado técnico.</p>}
+          {finding.status === "not_comparable" && <p>Hay documentación oficial catalogada, pero no se pudo comparar con una declaración explícita equivalente del sitio.</p>}
+          {finding.sourceEvidence && finding.sourceEvidence.length > 0 && (
+            <ul>{finding.sourceEvidence.map((source) => (
+              <li key={source.documentId}>
+                <a href={source.url} target="_blank" rel="noopener noreferrer">{source.title}</a>
+                {` · ${source.status} · ${source.checkedAt}`}
+                {source.sha256 ? ` · SHA-256 ${source.sha256}` : ""}
+              </li>
+            ))}</ul>
+          )}
+        </article>
+      ))}
       {otherObservedDomains.length > 0 && (
         <div className="ds-portal__unclassified-services">
           <h4>Otros dominios externos observados</h4>
-          <p>La conexión con estos dominios se observó, pero no hay una identificación fiable de su proveedor o función. Por eso se muestran como indicio y no se penalizan automáticamente.</p>
+          <p>Estos dominios se registraron en la observación; no se atribuyen a una empresa ni a un tratamiento sin evidencia que los vincule.</p>
           <ul>{otherObservedDomains.map((domain) => <li key={domain}>{domain}</li>)}</ul>
         </div>
       )}
@@ -1380,6 +1438,8 @@ function FirstEntryPolicyAccessSection({ access }: { access: FirstEntryPolicyAcc
       : "No se pudo comprobar";
   const summary = access.reasonCode === "consent_component_link_accessible"
     ? "El aviso de consentimiento contiene un enlace visible y accesible a documentación legal."
+    : access.reasonCode === "information_notice_link_accessible_without_consent"
+      ? "El aviso informativo de primera entrada contiene un enlace visible y accesible a la política. No se solicitó consentimiento y no se detectaron cookies de terceros."
     : access.reasonCode === "consent_link_missing"
       ? "El aviso de consentimiento no contiene un enlace visible a documentación legal. Un enlace que solo aparece en el footer no satisface esta comprobación."
       : access.reasonCode === "consent_link_unavailable"
@@ -1388,10 +1448,13 @@ function FirstEntryPolicyAccessSection({ access }: { access: FirstEntryPolicyAcc
           ? "No se solicitó consentimiento ni se detectaron cookies de terceros en la entrada inicial; el enlace del footer permitió abrir la documentación."
           : access.reasonCode === "footer_insufficient_with_third_party_cookies"
             ? "Se detectó una cookie de un dominio de terceros en la entrada inicial. Un enlace que solo aparece en el footer no satisface esta comprobación."
+            : access.reasonCode === "information_notice_insufficient_with_third_party_cookies"
+              ? "Se detectó una cookie de un dominio de terceros en la entrada inicial. El enlace del aviso informativo no sustituye el consentimiento requerido."
             : access.reasonCode === "policy_link_missing"
               ? "No se encontró un enlace visible a documentación legal pertinente en el lugar requerido."
               : "La evidencia del navegador está incompleta; no se califica como cumplimiento ni como incumplimiento.";
   const locationLabel = access.linkLocation === "consent_component" ? "aviso de consentimiento"
+    : access.linkLocation === "information_notice" ? "aviso informativo de primera entrada"
     : access.linkLocation === "footer" ? "footer"
       : access.linkLocation === "none" ? "ningún lugar requerido" : "ubicación no determinada";
   const linkUrl = access.link ? `https://${access.link.hostname}${access.link.path}` : null;
@@ -1422,8 +1485,96 @@ function FirstEntryPolicyAccessSection({ access }: { access: FirstEntryPolicyAcc
           Enlace registrado: <a href={linkUrl} target="_blank" rel="noopener noreferrer">{access.link?.hostname}{access.link?.path}</a>
         </p>
       )}
+      {access.policyLinkVisit && (
+        <details className="ds-portal__first-entry-policy-visit">
+          <summary>Estado observado al abrir el enlace en un contexto nuevo</summary>
+          <p>
+            {access.policyLinkVisit.status === "not_applicable" ? "No había un enlace pertinente que visitar." :
+              access.policyLinkVisit.status === "unknown" ? "La visita o su inventario no pudo comprobarse por completo." :
+                `Documento ${access.policyLinkVisit.documentAccess === "accessible" ? "accesible" : "no accesible"}.`}
+          </p>
+          {access.policyLinkVisit.navigationStartedAtMs !== null && (
+            <p>Inicio de navegación: {access.policyLinkVisit.navigationStartedAtMs} ms desde el inicio de esta fase.</p>
+          )}
+          {(["beforeNavigation", "afterNavigation"] as const).map((phase) => {
+            const snapshot = access.policyLinkVisit?.[phase];
+            if (!snapshot) return null;
+            return (
+              <div key={phase}>
+                <h4>{phase === "beforeNavigation" ? "Antes de abrir el documento" : "Después de abrir el documento"} · {snapshot.capturedAtMs} ms</h4>
+                <p>Lectura de cookies: {snapshot.cookieReadComplete ? "completa" : "incompleta"}; almacenamiento: {snapshot.storageReadComplete ? "completa" : "incompleta"}.</p>
+                <ul>
+                  {snapshot.cookies.map((cookie, index) => (
+                    <li key={`${phase}-cookie-${index}`}>
+                      Cookie {cookie.name} · {cookie.domain} · {cookie.secure ? "Secure" : "sin Secure"} · {cookie.httpOnly ? "HttpOnly" : "accesible desde JavaScript"} · SameSite={cookie.sameSite} · {cookie.expiresAtUnixSeconds === null ? "cookie de sesión" : `expira ${new Date(cookie.expiresAtUnixSeconds * 1000).toISOString().slice(0, 10)}`}
+                    </li>
+                  ))}
+                  {snapshot.storageKeys.map((entry, index) => (
+                    <li key={`${phase}-storage-${index}`}>
+                      Almacenamiento {entry.kind} · {entry.name} · {entry.domain}
+                    </li>
+                  ))}
+                  {snapshot.cookies.length === 0 && snapshot.storageKeys.length === 0 && (
+                    <li>No se observaron nombres de cookies ni claves de almacenamiento en esta instantánea.</li>
+                  )}
+                </ul>
+              </div>
+            );
+          })}
+        </details>
+      )}
     </section>
   );
+}
+
+function LegalCookieFindingsSection({ findings }: { findings: LegalCookieFinding[] }) {
+  return (
+    <section className="ds-portal__provider-contradiction" aria-labelledby="legal-cookie-findings-heading">
+      <h3 id="legal-cookie-findings-heading">Incumplimientos legales acreditados</h3>
+      {findings.map((finding) => (
+        <article key={finding.ruleId} data-status="infraccion_legal_acreditada">
+          <h4>{finding.title}</h4>
+          <p>{finding.description}</p>
+          <p>
+            Norma: LSSI, artículos {finding.articles.map(({ article }) => article).join(", ")}.
+            {" "}Autoridad competente: {finding.authority}.
+          </p>
+          <p>
+            Máximo legal previsto: {finding.sanction.maximum.toLocaleString("es-ES")} {finding.sanction.currency}.
+          </p>
+          <p>Hechos observados:</p>
+          <ul>
+            {finding.evidence.map((evidence, index) => (
+              <li key={finding.ruleId + "-" + index}>
+                Cookie {evidence.cookieName} en {evidence.cookieDomain}; {evidence.provider}, finalidad {evidence.purpose};
+                {" "}{evidence.flow === "initial" ? "antes de elegir" : evidence.phase === "after_choice" ? "después de rechazar" : "después de recargar el rechazo"}
+                {" "}({evidence.capturedAtMs} ms).
+              </li>
+            ))}
+          </ul>
+          <p>
+            Fuentes oficiales: {finding.articles.map((article, index) => (
+              <span key={finding.ruleId + "-" + article.article}>
+                {index > 0 ? " · " : ""}<a href={article.url} target="_blank" rel="noopener noreferrer">LSSI, artículo {article.article}</a>
+              </span>
+            ))}.
+          </p>
+        </article>
+      ))}
+    </section>
+  );
+}
+
+function getLegalEvidenceElementLabel(element: string): string {
+  const labels: Record<string, string> = {
+    site_denies_or_omits_recipient: "Lo que declara el sitio sobre el destinatario",
+    provider_receives_matching_data: "Lo que documenta el proveedor sobre la recepción",
+    personal_data_in_flow: "Datos personales identificados en el flujo",
+    audited_entity_is_controller: "Identificación de la entidad responsable",
+    data_origin_is_established: "Origen de los datos",
+    aepd_jurisdiction_is_established: "Competencia de la AEPD",
+  };
+  return labels[element] ?? "Elemento legal acreditado";
 }
 
 function getOfficialDocumentLabel(kind: string): string {
@@ -1997,6 +2148,8 @@ function isPublicReport(value: unknown): value is PublicReport {
     !isProcessorTransparencyAssessment(value.processorTransparencyAssessment) ||
     !isPublicPolicyTransparencyAssessment(value.publicPolicyTransparencyAssessment) ||
     !isPublicServiceComparison(value.publicServiceComparison) ||
+    !(value.legalCookieFindings === undefined || parseLegalCookieFindings(value.legalCookieFindings) !== null) ||
+    !(value.providerCatalogVersion === undefined || value.providerCatalogVersion === null || typeof value.providerCatalogVersion === "string" && /^[a-f0-9]{64}$/u.test(value.providerCatalogVersion)) ||
     !isFirstEntryPolicyAccess(value.firstEntryPolicyAccess) ||
     !isInternalAuditPublicSummary(value.internalAuditSummary) ||
     value.internalAuditState !== undefined && value.internalAuditState !== null &&
@@ -2029,6 +2182,7 @@ function isPublicReport(value: unknown): value is PublicReport {
     value.globalAssessment as PublicReport["globalAssessment"],
     value.ethicsAssessment as PublicReport["ethicsAssessment"],
     value.privacyAssessment as PublicReport["privacyAssessment"],
+    hasAccreditedLegalViolation(value.legalCookieFindings, value.publicServiceComparison),
   )) return false;
   if (!isScope(value.scope)) return false;
   const scope = value.scope;
@@ -2109,9 +2263,10 @@ function isPrivacyAssessment(value: unknown): value is NonNullable<PublicReport[
 }
 
 function isGlobalAssessment(value: unknown): value is PublicReport["globalAssessment"] {
-  if (!isRecord(value) || value.policyVersion !== "mvp-global-v1" ||
+  if (!isRecord(value) || value.policyVersion !== "mvp-global-v2" ||
       !isOneOf(value.status, ["scored", "review", "not_available"] as const) ||
       (value.score !== null && (!isInteger(value.score) || value.score < 0 || value.score > 100)) ||
+      typeof value.legalViolationAccredited !== "boolean" ||
       !isRecord(value.weights) || value.weights.ethics !== 50 || value.weights.privacy !== 50 ||
       !isRecord(value.ethicsCoverage) || !isInteger(value.ethicsCoverage.assessedCriteria) ||
       !isInteger(value.ethicsCoverage.totalCriteria) ||
@@ -2124,13 +2279,35 @@ function isGlobalAssessment(value: unknown): value is PublicReport["globalAssess
   return value.score === null;
 }
 
+function hasAccreditedLegalViolation(cookieFindings: unknown, serviceComparison: unknown): boolean {
+  const parsedCookieFindings = parseLegalCookieFindings(cookieFindings);
+  const parsedServiceComparison = parsePublicServiceComparison(serviceComparison);
+  return Boolean(parsedCookieFindings?.length) || Boolean(
+    parsedServiceComparison?.providerDocumentation?.some(({ comparisons }) =>
+      comparisons.some(({ legalFinding }) => legalFinding?.status === "infraccion_legal_acreditada"),
+    ),
+  );
+}
+
 function isGlobalAssessmentConsistent(
   global: PublicReport["globalAssessment"],
   ethics: PublicReport["ethicsAssessment"],
   privacy: PublicReport["privacyAssessment"],
+  legalViolationAccredited: boolean,
 ): boolean {
+  if (global.legalViolationAccredited !== legalViolationAccredited) return false;
   if (global.ethicsCoverage.assessedCriteria !== ethics.assessedCriteria ||
       global.ethicsCoverage.totalCriteria !== ethics.totalCriteria) return false;
+  if (legalViolationAccredited) {
+    if (global.status !== "scored" || global.score !== 0) return false;
+    return privacy === null || privacy === undefined
+      ? global.privacyCoverage === null
+      : global.privacyCoverage !== null &&
+        global.privacyCoverage.assessedCriteria === privacy.assessedCriteria &&
+        global.privacyCoverage.unknownCriteria === privacy.unknownCriteria &&
+        global.privacyCoverage.notApplicableCriteria === privacy.notApplicableCriteria &&
+        global.privacyCoverage.totalCriteria === privacy.totalCriteria;
+  }
   if (privacy === null || privacy === undefined) {
     return global.status === "not_available" && global.score === null && global.privacyCoverage === null;
   }
@@ -2498,6 +2675,9 @@ function getReportTakeaway(report: PublicReport): string {
   const assessed = criteria.filter((criterion) => criterion.status !== "unknown");
   const problems = assessed.filter((criterion) => criterion.status === "fail").length;
   const unknown = criteria.length - assessed.length;
+  if (report.globalAssessment.legalViolationAccredited) {
+    return "Se ha acreditado un incumplimiento legal; la puntuación global es 0/100. Las valoraciones técnicas por área se muestran por separado.";
+  }
   if (report.globalAssessment.status === "not_available") {
     return "Este informe todavía no tiene información suficiente para una valoración global.";
   }

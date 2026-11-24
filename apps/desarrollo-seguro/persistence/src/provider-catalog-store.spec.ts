@@ -120,7 +120,6 @@ describe("PostgresProviderCatalogStore", () => {
         capturedAt: "2026-11-24T03:00:00Z",
         excerpt: "The site sends a message to New Mail Vendor using newmail.io.",
         destinationHostname: "newmail.io",
-        destinationPath: "/v1/send?token=remove#fragment",
       },
       officialDocuments: [],
     });
@@ -138,8 +137,8 @@ describe("PostgresProviderCatalogStore", () => {
     expect(discovery.evidence).toMatchObject({
       url: "https://audited-site.io/privacy",
       destinationHostname: "newmail.io",
-      destinationPath: "/v1/send",
     });
+    expect(discovery.evidence).not.toHaveProperty("destinationPath");
     const facts = JSON.parse(String(call?.[1]?.[2])) as Array<Record<string, unknown>>;
     expect(facts.some((fact) => fact.providerId === "new-mail-vendor" && fact.documentationStatus === "source_not_localized")).toBe(true);
   });
@@ -184,25 +183,133 @@ describe("PostgresProviderCatalogStore", () => {
     }));
   });
 
-  it("does not repeat catalog work when a provider already exists", async () => {
+  it("adds new evidence and official documents to an existing provider version", async () => {
     const current = snapshot();
-    const providerFacts = [...current.providerFacts, { providerId: "new-mail-vendor", documentationStatus: "source_not_localized" }];
+    const firstEvidence = explicitDiscoveryEvidence();
+    const providerFacts = [...current.providerFacts, {
+      providerId: "new-mail-vendor",
+      displayName: "New Mail Vendor",
+      aliases: [], products: [],
+      documentationStatus: "source_not_localized",
+      discoveryEvidence: [firstEvidence],
+      officialDocuments: [], documentedFacts: [],
+    }];
     const existingProviderSnapshot = {
       ...current,
       providerFacts,
       catalogVersion: computeProviderCatalogVersion(providerFacts, current.legalRules, current.sources),
     };
-    const query = vi.fn().mockResolvedValue({ rows: [snapshotRow(existingProviderSnapshot)] });
+    let nextVersion = "";
+    const query = vi.fn(async (sql: string, values?: unknown[]) => {
+      if (sql.includes("ds_add_provider_catalog_discovery_evidence_version")) {
+        nextVersion = String(values?.[1]);
+        return { rows: [{ ds_add_provider_catalog_discovery_evidence_version: nextVersion }] };
+      }
+      return { rows: [snapshotRow(existingProviderSnapshot)] };
+    });
     const store = new PostgresProviderCatalogStore({ query } as never);
     const result = await store.recordDiscoveredProvider({
       providerId: "new-mail-vendor",
       displayName: "New Mail Vendor",
-      aliases: [], products: [],
-      evidence: explicitDiscoveryEvidence(),
-      officialDocuments: [],
+      aliases: ["mailvendor.example"], products: ["Transactional email"],
+      evidence: { ...explicitDiscoveryEvidence(), sourceId: "terms-page" },
+      officialDocuments: [{
+        documentId: "mail-vendor-terms",
+        kind: "terms",
+        title: "Terms of Service",
+        url: "https://vendor-sample.io/terms",
+        discoveryMethod: "audited_site_link",
+        status: "fetched",
+        sha256: "c".repeat(64),
+        checkedAt: "2026-11-24T03:02:00Z",
+      }],
     });
-    expect(result).toMatchObject({ catalogVersion: expect.any(String), created: false, documentationStatus: "source_not_localized" });
+
+    expect(result).toEqual({ catalogVersion: nextVersion, created: true, documentationStatus: "located" });
+    const call = query.mock.calls.find(([sql]) => sql.includes("ds_add_provider_catalog_discovery_evidence_version"));
+    expect(call).toBeDefined();
+    const mergedFacts = JSON.parse(String(call?.[1]?.[2])) as Array<Record<string, unknown>>;
+    const mergedProvider = mergedFacts.find(({ providerId }) => providerId === "new-mail-vendor");
+    expect(mergedProvider).toMatchObject({
+      aliases: ["mailvendor.example"],
+      products: ["Transactional email"],
+      documentationStatus: "located",
+    });
+    expect(mergedProvider?.discoveryEvidence).toEqual([firstEvidence, { ...firstEvidence, sourceId: "terms-page" }]);
+    expect(mergedProvider?.officialDocuments).toContainEqual(expect.objectContaining({
+      documentId: "mail-vendor-terms", url: "https://vendor-sample.io/terms",
+    }));
+    const mergedSources = JSON.parse(String(call?.[1]?.[4])) as ProviderCatalogSourceReceipt[];
+    expect(mergedSources).toContainEqual(expect.objectContaining({
+      providerId: "new-mail-vendor", documentId: "mail-vendor-terms", status: "fetched",
+    }));
+  });
+
+  it("does not create another version when a discovery is repeated exactly", async () => {
+    const current = snapshot();
+    const evidence = explicitDiscoveryEvidence();
+    const document = {
+      documentId: "mail-vendor-privacy", kind: "privacy", title: "Privacy policy",
+      url: "https://vendor-sample.io/privacy", discoveryMethod: "audited_site_link",
+      status: "fetched", sha256: "d".repeat(64), checkedAt: "2026-11-24T03:01:00.000Z",
+    } as const;
+    const providerFacts = [...current.providerFacts, {
+      providerId: "new-mail-vendor", displayName: "New Mail Vendor", aliases: [], products: [],
+      documentationStatus: "located", discoveryEvidence: [evidence],
+      officialDocuments: [{ documentId: document.documentId, kind: document.kind, title: document.title,
+        url: document.url, reviewedAt: "2026-11-24" }], documentedFacts: [],
+    }];
+    const sources = [...current.sources, {
+      providerId: "new-mail-vendor", documentId: document.documentId, title: document.title,
+      url: document.url, status: "fetched" as const, sha256: document.sha256, checkedAt: document.checkedAt,
+    }];
+    const existingProviderSnapshot = {
+      ...current, providerFacts, sources,
+      catalogVersion: computeProviderCatalogVersion(providerFacts, current.legalRules, sources),
+    };
+    const query = vi.fn().mockResolvedValue({ rows: [snapshotRow(existingProviderSnapshot)] });
+    const store = new PostgresProviderCatalogStore({ query } as never);
+    const result = await store.recordDiscoveredProvider({
+      providerId: "new-mail-vendor", displayName: "New Mail Vendor", aliases: [], products: [],
+      evidence, officialDocuments: [document],
+    });
+
+    expect(result).toEqual({ catalogVersion: existingProviderSnapshot.catalogVersion, created: false, documentationStatus: "located" });
     expect(query).toHaveBeenCalledTimes(2);
+    expect(query.mock.calls.some(([sql]) => sql.includes("ds_add_provider_catalog_discovery_"))).toBe(false);
+  });
+
+  it("rejects a conflicting reuse of an existing document identifier", async () => {
+    const current = snapshot();
+    const providerFacts = [...current.providerFacts, {
+      providerId: "new-mail-vendor", displayName: "New Mail Vendor", aliases: [], products: [],
+      documentationStatus: "located", discoveryEvidence: [explicitDiscoveryEvidence()],
+      officialDocuments: [{ documentId: "mail-vendor-privacy", kind: "privacy", title: "Privacy policy",
+        url: "https://vendor-sample.io/privacy", reviewedAt: "2026-11-24" }], documentedFacts: [],
+    }];
+    const sources = [...current.sources, {
+      providerId: "new-mail-vendor", documentId: "mail-vendor-privacy", title: "Privacy policy",
+      url: "https://vendor-sample.io/privacy", status: "fetched" as const,
+      sha256: "d".repeat(64), checkedAt: "2026-11-24T03:01:00.000Z",
+    }];
+    const existingProviderSnapshot = {
+      ...current, providerFacts, sources,
+      catalogVersion: computeProviderCatalogVersion(providerFacts, current.legalRules, sources),
+    };
+    const query = vi.fn().mockResolvedValue({ rows: [snapshotRow(existingProviderSnapshot)] });
+    const store = new PostgresProviderCatalogStore({ query } as never);
+
+    await expect(store.recordDiscoveredProvider({
+      providerId: "new-mail-vendor", displayName: "New Mail Vendor", aliases: [], products: [],
+      evidence: explicitDiscoveryEvidence(),
+      officialDocuments: [{
+        documentId: "mail-vendor-privacy", kind: "privacy", title: "Privacy policy",
+        url: "https://vendor-sample.io/legal/privacy", discoveryMethod: "audited_site_link",
+        status: "fetched", sha256: "e".repeat(64), checkedAt: "2026-11-24T03:01:00Z",
+      }],
+    })).rejects.toThrow("provider_catalog_discovery_document_conflict");
+    expect(query).toHaveBeenCalledTimes(2);
+    expect(query.mock.calls.some(([sql]) => sql.includes("ds_add_provider_catalog_discovery_"))).toBe(false);
   });
 
   it("rejects private source URLs and malformed discovery evidence before persistence", async () => {
@@ -258,7 +365,7 @@ function explicitDiscoveryEvidence() {
     sourceId: "privacy-page",
     title: "Privacy policy",
     url: "https://audited-site.io/privacy",
-    capturedAt: "2026-11-24T03:00:00Z",
+    capturedAt: "2026-11-24T03:00:00.000Z",
     excerpt: "The site identifies New Telemetry Vendor as a service provider.",
   };
 }

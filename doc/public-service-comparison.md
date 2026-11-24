@@ -8,6 +8,14 @@ separado y no cambia esta comparación ni su nota.
 
 ## Cómo se lee
 
+Una solicitud externa completada cuyo proveedor no se pudo atribuir aparece
+como **Destino externo sin proveedor atribuido**, con el dominio observado y
+una entrada persistente en la versión del catálogo. Si las fuentes permitidas
+no localizaron documentación oficial, el informe lo dice expresamente; ese
+estado no afirma que la documentación no exista. Cuando un enlace oficial se
+localizó pero no respondió, conserva el enlace y el estado técnico. La sección
+de catálogo muestra la versión y la fecha/hash de las fuentes recuperadas.
+
 - **Correcto · observado y explicado:** se observó una conexión con un
   proveedor y la información pública del sitio identifica ese servicio y
   explica para qué se usa. La ficha enlaza la descripción y la política de

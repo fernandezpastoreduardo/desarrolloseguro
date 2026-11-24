@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   compareProviderDocumentation,
+  isProviderLegalEvidenceContext,
   parseProviderDocumentationContradiction,
   type ProviderEvidenceSource,
   type ProviderLegalEvidence,
 } from "./provider-documentation-contradictions.js";
+import { PROVIDER_LEGAL_RULES } from "./provider-legal-rules.js";
 
 const siteSource: ProviderEvidenceSource = {
   sourceId: "audited-privacy-policy",
@@ -91,6 +93,19 @@ function legalEvidence(dataOrigin: "obtained_from_subject" | "not_obtained_from_
 }
 
 describe("provider documentation contradictions", () => {
+  it("accepts legal context only when each supporting source is an audited-site source", () => {
+    const source = legalEvidence().dataOrigin.evidence[0];
+    expect(isProviderLegalEvidenceContext({
+      dataOrigin: { value: "obtained_from_subject", evidence: [source] },
+      auditedEntityIsController: { evidence: [siteSource] },
+    })).toBe(true);
+    expect(isProviderLegalEvidenceContext({
+      dataOrigin: { value: "obtained_from_subject", evidence: [providerSource] },
+    })).toBe(false);
+    expect(isProviderLegalEvidenceContext({})).toBe(false);
+    expect(isProviderLegalEvidenceContext({ unrelated: true })).toBe(false);
+  });
+
   it("preserves independent sources and maps directly evidenced recipient mismatch to GDPR art. 13", () => {
     const result = compareProviderDocumentation({
       providerId: "openai-api",
@@ -117,6 +132,10 @@ describe("provider documentation contradictions", () => {
             personal_data_in_flow: ["observed-personal-data-category"],
             audited_entity_is_controller: ["controller-declaration"],
           },
+          supportingSources: {
+            personal_data_in_flow: [{ sourceId: "observed-personal-data-category", sourceKind: "auditor_observation" }],
+            audited_entity_is_controller: [{ sourceId: "controller-declaration", sourceKind: "audited_site" }],
+          },
         },
       }],
     });
@@ -126,6 +145,10 @@ describe("provider documentation contradictions", () => {
     ]);
     expect(parseProviderDocumentationContradiction(result)).toEqual(result);
     if (!result) throw new Error("expected_contradiction");
+    const legacy = JSON.parse(JSON.stringify(result)) as typeof result;
+    if (!legacy) throw new Error("expected_legacy_fixture");
+    delete legacy.comparisons[0]?.legalFinding?.supportingSources;
+    expect(parseProviderDocumentationContradiction(legacy)).toEqual(legacy);
     const forged = JSON.parse(JSON.stringify(result)) as {
       comparisons: Array<{ legalFinding: { sanction: { alternatives: Array<Record<string, unknown>> } } }>;
     };
@@ -137,6 +160,30 @@ describe("provider documentation contradictions", () => {
       };
     }
     expect(parseProviderDocumentationContradiction(forged)).toBeNull();
+  });
+
+  it("uses the cataloged legal rule and sanction scale, rejecting malformed catalog replacements", () => {
+    const rule = PROVIDER_LEGAL_RULES["gdpr-recipient-disclosure-article-13-v1"];
+    if (!rule) throw new Error("provider_legal_rule_missing");
+    const changedSanction = {
+      ...rule.sanction,
+      alternatives: [
+        { type: "fixed_amount", currency: "EUR", amount: 25_000_000 },
+        { type: "global_annual_turnover_percentage", percentage: 4 },
+      ],
+    } as const;
+    const dynamic = compareProviderDocumentation({
+      providerId: "openai-api", sourceStatus: "located", siteStatements: [statement], providerFacts: [providerFact],
+      legalEvidence: legalEvidence(), legalRules: [{ ...rule, sanction: changedSanction }],
+    });
+    expect(dynamic?.comparisons[0]?.legalFinding?.sanction.alternatives[0]).toEqual(changedSanction.alternatives[0]);
+
+    const invalid = compareProviderDocumentation({
+      providerId: "openai-api", sourceStatus: "located", siteStatements: [statement], providerFacts: [providerFact],
+      legalEvidence: legalEvidence(), legalRules: [{ ...rule, sanction: { ...rule.sanction, alternatives: [] } }],
+    });
+    expect(invalid?.comparisons[0]).toMatchObject({ relation: "opposes", legalMappingStatus: "not_available" });
+    expect(invalid?.comparisons[0]?.legalFinding).toBeUndefined();
   });
 
   it("selects article 14 only when the evidence says data were not obtained from the person", () => {
@@ -217,5 +264,29 @@ describe("provider documentation contradictions", () => {
       providerId: "openai-api", sourceStatus: "located", siteStatements: [statement], providerFacts: [providerFact],
       legalEvidence: malformed as unknown as ProviderLegalEvidence,
     })?.comparisons[0]?.legalFinding).toBeUndefined();
+  });
+
+  it("validates official-source receipts and rejects duplicate or malformed entries", () => {
+    const comparison = compareProviderDocumentation({
+      providerId: "openai-api", sourceStatus: "located", siteStatements: [statement], providerFacts: [providerFact],
+    });
+    if (!comparison) throw new Error("expected_comparison");
+    const receipt = {
+      documentId: "openai-privacy",
+      title: "Privacy documentation",
+      url: "https://provider.example/privacy",
+      status: "fetched",
+      sha256: "a".repeat(64),
+      checkedAt: "2026-11-24T03:00:00Z",
+    };
+    expect(parseProviderDocumentationContradiction({ ...comparison, sourceEvidence: [receipt] }))
+      .toMatchObject({ sourceEvidence: [receipt] });
+    expect(parseProviderDocumentationContradiction({ ...comparison, sourceEvidence: [receipt, receipt] })).toBeNull();
+    expect(parseProviderDocumentationContradiction({ ...comparison, sourceEvidence: [{ ...receipt, url: "http://provider.example/privacy" }] })).toBeNull();
+    const invalidMapping = JSON.parse(JSON.stringify({
+      ...comparison,
+      comparisons: [{ ...comparison.comparisons[0], legalMappingStatus: "unknown_mapping" }],
+    })) as unknown;
+    expect(parseProviderDocumentationContradiction(invalidMapping)).toBeNull();
   });
 });

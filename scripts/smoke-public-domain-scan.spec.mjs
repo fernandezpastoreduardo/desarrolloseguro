@@ -153,7 +153,7 @@ test("keeps eight-criterion coverage required when TLS has a diagnostic unknown"
 
   assert.throws(
     () => validateCompletedReport(status, "previous-report-id"),
-    { message: "public_scan_ethics_assessment_incomplete" },
+    /public_scan_ethics_assessment_incomplete_.*coverage_incomplete/u,
   );
 });
 
@@ -171,7 +171,7 @@ test("rejects a TLS unknown without a complete boolean-or-diagnostic matrix", ()
 
   assert.throws(
     () => validateCompletedReport(status, "previous-report-id"),
-    { message: "public_scan_ethics_assessment_incomplete" },
+    /public_scan_ethics_assessment_incomplete_.*(?:coverage_incomplete|tls_matrix_incomplete|transport_diagnostic_incomplete)/u,
   );
 });
 
@@ -181,7 +181,7 @@ test("rejects an auditor-owned unknown for the backend inventory criterion", () 
   status.lastReport.ethicsAssessment.assessedCriteria = 7;
   assert.throws(
     () => validateCompletedReport(status, "previous-report-id"),
-    { message: "public_scan_ethics_assessment_incomplete" },
+    /public_scan_ethics_assessment_incomplete_.*(?:coverage_incomplete|processor_assessment_invalid)/u,
   );
 });
 
@@ -331,6 +331,6 @@ test("rejects reports missing the initial cookie assessment", () => {
 
   assert.throws(
     () => validateCompletedReport(status, "previous-report-id"),
-    { message: "public_scan_ethics_assessment_incomplete" },
+    /public_scan_ethics_assessment_incomplete_.*initial_cookie_risk_unknown/u,
   );
 });

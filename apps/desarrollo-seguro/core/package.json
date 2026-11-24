@@ -19,6 +19,10 @@
     "./first-entry-policy-access": {
       "types": "./dist/first-entry-policy-access.d.ts",
       "import": "./dist/first-entry-policy-access.js"
+    },
+    "./legal-cookie-findings": {
+      "types": "./dist/legal-cookie-findings.d.ts",
+      "import": "./dist/legal-cookie-findings.js"
     }
   },
   "scripts": {

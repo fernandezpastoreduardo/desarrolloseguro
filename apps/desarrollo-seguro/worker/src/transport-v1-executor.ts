@@ -9,6 +9,11 @@ import {
 import type { ClaimedScanJob, ScanCheck, ScanRunInput } from "@desarrolloseguro/persistence";
 import { createTransportV1EgressBroker } from "./transport-v1-egress-broker.js";
 import { safeTransportErrorCode, type PinnedTransportErrorCode } from "./pinned-transport-error.js";
+import {
+  parsePublicPolicyDiscoveredDocumentsJson,
+  type PublicPolicyDiscoveredDocument,
+  type ScanExecutorResult,
+} from "./public-policy-document-boundary.js";
 
 const TRANSPORT_PROFILE_VERSION = "transport-v1";
 const DOMAIN_PROFILE_VERSION = "domain-v1";
@@ -135,9 +140,7 @@ export class TransportV1FixtureExecutor {
   async execute(
     job: TransportV1ScanJob,
     signal: AbortSignal,
-  ): Promise<
-    Omit<ScanRunInput, "jobId" | "leaseToken" | "hostname" | "profileVersion">
-  > {
+  ): Promise<Omit<ScanRunInput, "jobId" | "leaseToken" | "hostname" | "profileVersion">> {
     if (!isSupportedProfile(job.profileVersion)) {
       throw new Error("unsupported_scan_profile");
     }
@@ -209,9 +212,7 @@ export class TransportV1NetworkExecutor {
   async execute(
     job: TransportV1ScanJob,
     signal: AbortSignal,
-  ): Promise<
-    Omit<ScanRunInput, "jobId" | "leaseToken" | "hostname" | "profileVersion">
-  > {
+  ): Promise<ScanExecutorResult> {
     if (!isSupportedProfile(job.profileVersion)) {
       throw new Error("unsupported_scan_profile");
     }
@@ -306,6 +307,9 @@ export class TransportV1NetworkExecutor {
       ...(publicPolicyTransparencyAssessment
         ? { publicServiceDeclarations: buildPublicServiceDeclarations(probes[4]?.evidence ?? {}) }
         : {}),
+      ...(publicPolicyTransparencyAssessment
+        ? { publicPolicyDiscoveredDocuments: buildPublicPolicyDiscoveredDocuments(probes[4]?.evidence ?? {}) }
+        : {}),
       metrics: {
         requestsCount: probes.reduce((sum, probe) => sum + (probe?.requestsCount ?? 0), 0),
         bytesCount: probes.reduce((sum, probe) => sum + (probe?.bytesCount ?? 0), 0),
@@ -314,6 +318,14 @@ export class TransportV1NetworkExecutor {
       },
     };
   }
+}
+
+function buildPublicPolicyDiscoveredDocuments(evidence: TransportV1Evidence): PublicPolicyDiscoveredDocument[] {
+  const raw = evidence.publicPolicyDiscoveredDocuments;
+  if (raw === undefined) return [];
+  const documents = parsePublicPolicyDiscoveredDocumentsJson(raw);
+  if (!documents) throw new Error("public_policy_discovered_documents_invalid");
+  return documents;
 }
 
 function buildPublicServiceDeclarations(evidence: TransportV1Evidence): PublicServiceDeclarationEvidence[] {
@@ -327,12 +339,13 @@ function buildPublicServiceDeclarations(evidence: TransportV1Evidence): PublicSe
       if (typeof item !== "object" || item === null || Array.isArray(item) ||
           Object.getPrototypeOf(item) !== Object.prototype) return [];
       const row = item as Record<string, unknown>;
-      if (Object.keys(row).some((key) => !["providerId", "purposeIds", "siteStatements"].includes(key)) ||
+      if (Object.keys(row).some((key) => !["providerId", "purposeIds", "siteStatements", "legalEvidenceContext"].includes(key)) ||
           !Object.hasOwn(row, "providerId") || !Object.hasOwn(row, "purposeIds")) return [];
       declarations.push({
         providerId: row.providerId,
         purposes: row.purposeIds,
         ...(Object.hasOwn(row, "siteStatements") ? { siteStatements: row.siteStatements } : {}),
+        ...(Object.hasOwn(row, "legalEvidenceContext") ? { legalEvidenceContext: row.legalEvidenceContext } : {}),
       });
     }
     return parsePublicServiceDeclarations(declarations) ?? [];

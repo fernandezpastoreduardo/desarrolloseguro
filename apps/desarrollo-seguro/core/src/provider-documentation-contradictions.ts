@@ -50,6 +50,41 @@ export type ProviderLegalEvidence = {
   elements: Readonly<Partial<Record<ProviderLegalElementId, ProviderLegalElementEvidence>>>;
 };
 
+/** Explicit audited-site legal context carried from the public-policy crawl. */
+export type ProviderLegalEvidenceContext = {
+  dataOrigin?: {
+    value: ProviderLegalDataOrigin;
+    evidence: ProviderEvidenceSource[];
+  };
+  auditedEntityIsController?: { evidence: ProviderEvidenceSource[] };
+  aepdJurisdictionIsEstablished?: { evidence: ProviderEvidenceSource[] };
+};
+
+export function isProviderLegalEvidenceContext(value: unknown): value is ProviderLegalEvidenceContext {
+  if (!isRecord(value) || Object.keys(value).length === 0 || Object.keys(value).some((key) =>
+    !["dataOrigin", "auditedEntityIsController", "aepdJurisdictionIsEstablished"].includes(key))) return false;
+  if (Object.hasOwn(value, "dataOrigin")) {
+    const origin = value.dataOrigin;
+    if (!isRecord(origin) || Object.keys(origin).length !== 2 ||
+        !["value", "evidence"].every((key) => Object.hasOwn(origin, key)) ||
+        !["obtained_from_subject", "not_obtained_from_subject"].includes(String(origin.value)) ||
+        !isAuditedSiteSourceList(origin.evidence)) return false;
+  }
+  for (const key of ["auditedEntityIsController", "aepdJurisdictionIsEstablished"] as const) {
+    if (!Object.hasOwn(value, key)) continue;
+    const claim = value[key];
+    if (!isRecord(claim) || Object.keys(claim).length !== 1 || !Object.hasOwn(claim, "evidence") ||
+        !isAuditedSiteSourceList(claim.evidence)) return false;
+  }
+  return true;
+}
+
+function isAuditedSiteSourceList(value: unknown): value is ProviderEvidenceSource[] {
+  return Array.isArray(value) && value.length > 0 && value.length <= 5 &&
+    value.every((source) => isRecord(source) && isValidSource(source as unknown as ProviderEvidenceSource) &&
+      source.sourceKind === "audited_site");
+}
+
 export type ProviderLegalFinding = {
   status: "infraccion_legal_acreditada";
   ruleId: string;
@@ -62,6 +97,16 @@ export type ProviderLegalFinding = {
   sanction: ProviderLegalRule["sanction"];
   officialSources: ProviderLegalRule["references"];
   supportingEvidence: Partial<Record<ProviderLegalElementId, string[]>>;
+  supportingSources?: Partial<Record<ProviderLegalElementId, ProviderEvidenceSource[]>>;
+};
+
+export type ProviderDocumentationSourceReceipt = {
+  documentId: string;
+  title: string;
+  url: string;
+  status: "seeded" | "fetched" | "unavailable" | "failed" | "not_localized";
+  sha256: string | null;
+  checkedAt: string;
 };
 
 export type ProviderDocumentationContradiction = {
@@ -84,11 +129,12 @@ export type ProviderDocumentationContradiction = {
     legalFinding?: ProviderLegalFinding;
     legalMappingStatus?: "not_available" | "elements_not_satisfied";
   }>;
+  sourceEvidence?: ProviderDocumentationSourceReceipt[];
 };
 
 /** Validates contradiction data before it crosses a report or persistence boundary. */
 export function parseProviderDocumentationContradiction(value: unknown): ProviderDocumentationContradiction | null {
-  if (!isRecord(value) || !exactKeys(value, ["providerId", "status", "reasonCode", "comparisons"]) ||
+  if (!isRecord(value) || !exactKeys(value, ["providerId", "status", "reasonCode", "comparisons"], ["sourceEvidence"]) ||
       typeof value.providerId !== "string" || !PROVIDER_ID.test(value.providerId) ||
       !["contradiction_confirmed", "consistent", "not_comparable", "source_not_located", "source_unavailable"].includes(String(value.status)) ||
       !["opposing_explicit_statements", "matching_explicit_statements", "site_statement_missing", "provider_fact_missing", "official_source_not_located", "official_source_unavailable"].includes(String(value.reasonCode)) ||
@@ -117,12 +163,32 @@ export function parseProviderDocumentationContradiction(value: unknown): Provide
       ...(entry.legalMappingStatus ? { legalMappingStatus: entry.legalMappingStatus as "not_available" | "elements_not_satisfied" } : {}),
     });
   }
+  const sourceEvidence = value.sourceEvidence === undefined ? undefined : parseSourceEvidence(value.sourceEvidence);
+  if (value.sourceEvidence !== undefined && !sourceEvidence) return null;
   return {
     providerId: value.providerId,
     status: value.status as ProviderDocumentationContradiction["status"],
     reasonCode: value.reasonCode as ProviderDocumentationContradiction["reasonCode"],
     comparisons,
+    ...(sourceEvidence ? { sourceEvidence } : {}),
   };
+}
+
+function parseSourceEvidence(value: unknown): ProviderDocumentationSourceReceipt[] | null {
+  if (!Array.isArray(value) || value.length > 50) return null;
+  const output: ProviderDocumentationSourceReceipt[] = [];
+  const seen = new Set<string>();
+  for (const entry of value) {
+    if (!isRecord(entry) || !exactKeys(entry, ["documentId", "title", "url", "status", "sha256", "checkedAt"]) ||
+        typeof entry.documentId !== "string" || !/^[a-z0-9][a-z0-9_-]{0,95}$/u.test(entry.documentId) || seen.has(entry.documentId) ||
+        !bounded(entry.title, 1, 240) || !isValidHttpsUrl(entry.url) ||
+        !["seeded", "fetched", "unavailable", "failed", "not_localized"].includes(String(entry.status)) ||
+        !(entry.sha256 === null || typeof entry.sha256 === "string" && /^[a-f0-9]{64}$/u.test(entry.sha256)) ||
+        !isIsoDateTime(String(entry.checkedAt))) return null;
+    seen.add(entry.documentId);
+    output.push(entry as ProviderDocumentationSourceReceipt);
+  }
+  return output;
 }
 
 /**
@@ -265,11 +331,24 @@ function isValidLegalFinding(value: unknown): value is ProviderLegalFinding {
       !isValidSanctionScale(value.sanction) ||
       value.authority !== rule.authority) return false;
   const evidence = value.supportingEvidence;
-  return Object.keys(evidence).length === PROVIDER_RECIPIENT_DISCLOSURE_ELEMENT_IDS.length &&
+  const supportingEvidenceValid = Object.keys(evidence).length === PROVIDER_RECIPIENT_DISCLOSURE_ELEMENT_IDS.length &&
     PROVIDER_RECIPIENT_DISCLOSURE_ELEMENT_IDS.every((key) => Object.hasOwn(evidence, key)) &&
     Object.keys(evidence).every((key) => PROVIDER_RECIPIENT_DISCLOSURE_ELEMENT_IDS.includes(key as ProviderLegalElementId)) &&
     Object.values(evidence).every((sources) => Array.isArray(sources) && sources.length > 0 && sources.length <= 10 &&
       sources.every((sourceId) => typeof sourceId === "string" && sourceId.length <= 96));
+  if (!supportingEvidenceValid) return false;
+  if (value.supportingSources === undefined) return true;
+  const supportingSources = value.supportingSources;
+  if (!isRecord(supportingSources) ||
+      Object.keys(supportingSources).length !== PROVIDER_RECIPIENT_DISCLOSURE_ELEMENT_IDS.length ||
+      !PROVIDER_RECIPIENT_DISCLOSURE_ELEMENT_IDS.every((key) => Object.hasOwn(supportingSources, key))) return false;
+  return PROVIDER_RECIPIENT_DISCLOSURE_ELEMENT_IDS.every((key) => {
+    const sources = supportingSources[key];
+    const sourceIds = evidence[key];
+    return Array.isArray(sources) && sources.length > 0 && sources.length <= 10 &&
+      sources.every(isValidSource) &&
+      deepEqual(sources.map(({ sourceId }) => sourceId), sourceIds);
+  });
 }
 
 function isIndependentEvidencePair(site: ProviderEvidenceSource, provider: ProviderEvidenceSource): boolean {
@@ -397,8 +476,12 @@ function elementIsSatisfied(item: ProviderLegalElementEvidence | undefined): ite
 
 function toLegalFinding(rule: ProviderLegalRule, evidence: ProviderLegalEvidence): ProviderLegalFinding {
   const supportingEvidence: Partial<Record<ProviderLegalElementId, string[]>> = {};
+  const supportingSources: Partial<Record<ProviderLegalElementId, ProviderEvidenceSource[]>> = {};
   for (const [elementId, item] of Object.entries(evidence.elements)) {
-    if (elementIsSatisfied(item)) supportingEvidence[elementId as ProviderLegalElementId] = item.evidence.map(({ sourceId }) => sourceId);
+    if (elementIsSatisfied(item)) {
+      supportingEvidence[elementId as ProviderLegalElementId] = item.evidence.map(({ sourceId }) => sourceId);
+      supportingSources[elementId as ProviderLegalElementId] = [...item.evidence];
+    }
   }
   return {
     status: "infraccion_legal_acreditada",
@@ -412,6 +495,7 @@ function toLegalFinding(rule: ProviderLegalRule, evidence: ProviderLegalEvidence
     sanction: rule.sanction,
     officialSources: rule.references,
     supportingEvidence,
+    supportingSources,
   };
 }
 
@@ -444,8 +528,10 @@ function bounded(value: unknown, minimum: number, maximum: number): value is str
   return typeof value === "string" && value.trim().length >= minimum && value.length <= maximum;
 }
 
-function exactKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
-  return Reflect.ownKeys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
+function exactKeys(value: Record<string, unknown>, keys: readonly string[], optional: readonly string[] = []): boolean {
+  const allowed = [...keys, ...optional];
+  return keys.every((key) => Object.hasOwn(value, key)) &&
+    Reflect.ownKeys(value).every((key) => typeof key === "string" && allowed.includes(key));
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

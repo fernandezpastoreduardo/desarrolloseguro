@@ -3,7 +3,7 @@ import type { Page, Request } from "playwright";
 const MAX_REQUESTS = 30;
 const MAX_COOKIE_NAMES_PER_REQUEST = 3;
 
-export type PrivacyRequestPhase = "before_choice" | "after_choice" | "after_reload" | "cmp_inspection";
+export type PrivacyRequestPhase = "before_choice" | "after_choice" | "after_reload" | "cmp_inspection" | "after_policy_link";
 
 export type PrivacyRequestEvidence = {
   phaseAtStart: PrivacyRequestPhase;
@@ -170,6 +170,7 @@ function safeRequestUrl(input: string): { url: string; hostname: string } | null
 }
 
 function normalizePathSegment(segment: string): string {
+  if (segment === "") return "";
   if (segment.length > 80 || /^\d{6,}$/u.test(segment) || /^[0-9a-f]{20,}$/iu.test(segment) ||
       /^[0-9a-f]{8}-[0-9a-f-]{27,}$/iu.test(segment)) return ":redacted";
   return /^[\p{L}\p{N}_.~%-]+$/u.test(segment) ? segment : ":redacted";

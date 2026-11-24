@@ -28,9 +28,10 @@ const PRIVACY: PrivacyAssessment = {
 describe("assessGlobalScore", () => {
   it("combines complete dimensions with equal published weights and rounds to an integer", () => {
     expect(assessGlobalScore(ETHICS, PRIVACY)).toMatchObject({
-      policyVersion: "mvp-global-v1",
+      policyVersion: "mvp-global-v2",
       status: "scored",
       score: 95,
+      legalViolationAccredited: false,
       weights: { ethics: 50, privacy: 50 },
     });
   });
@@ -50,6 +51,15 @@ describe("assessGlobalScore", () => {
       status: "not_available",
       score: null,
       privacyCoverage: null,
+    });
+  });
+
+  it("fixes the global score at zero for an accredited legal finding even when technical coverage is partial", () => {
+    expect(assessGlobalScore({ ...ETHICS, assessedCriteria: 7 }, null, true)).toMatchObject({
+      policyVersion: "mvp-global-v2",
+      status: "scored",
+      score: 0,
+      legalViolationAccredited: true,
     });
   });
 });

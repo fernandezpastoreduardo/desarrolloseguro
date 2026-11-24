@@ -1,34 +1,65 @@
 import {
   compareProviderDocumentation,
   type ProviderDocumentationContradiction,
+  type ProviderDocumentationSourceReceipt,
   type ProviderEvidenceSource,
   type ProviderFact,
 } from "@desarrolloseguro/core";
 import type { ProviderCatalogSnapshot } from "@desarrolloseguro/persistence/provider-catalog";
-import type { PublicServiceComparison, PublicServiceDeclarationEvidence } from "@desarrolloseguro/core";
+import type { PublicServiceComparison, PublicServiceDeclarationEvidence, ProviderLegalEvidenceContext as CoreProviderLegalEvidenceContext } from "@desarrolloseguro/core";
+import { buildProviderLegalEvidence, type ProviderLegalEvidenceContext } from "./provider-legal-evidence-builder.js";
 
 const MAX_DOCUMENTED_FACTS_PER_PROVIDER = 30;
 
+export function getProviderLegalEvidenceContexts(
+  declarations: readonly PublicServiceDeclarationEvidence[] | undefined,
+): Readonly<Record<string, CoreProviderLegalEvidenceContext>> {
+  return Object.fromEntries((declarations ?? []).flatMap((declaration) =>
+    declaration.legalEvidenceContext ? [[declaration.providerId, declaration.legalEvidenceContext] as const] : [],
+  ));
+}
+
 export function assessCatalogProviderDocumentation(input: {
   declarations: readonly PublicServiceDeclarationEvidence[] | undefined;
+  observedProviderIds?: readonly string[];
+  linkedProviderIds?: readonly string[];
+  legalEvidenceContexts?: Readonly<Record<string, ProviderLegalEvidenceContext>>;
   snapshot: ProviderCatalogSnapshot;
 }): ProviderDocumentationContradiction[] {
-  if (!input.declarations || input.declarations.length > 30) return [];
+  const declarations = input.declarations ?? [];
+  const observedProviderIds = input.observedProviderIds ?? [];
+  const linkedProviderIds = input.linkedProviderIds ?? [];
+  if (declarations.length > 30 || observedProviderIds.length > 30 || linkedProviderIds.length > 40) return [];
+  const declarationsByProvider = new Map(declarations.map((declaration) => [declaration.providerId, declaration]));
+  const providerIds = [...new Set([...observedProviderIds, ...linkedProviderIds, ...declarations.map(({ providerId }) => providerId)])].slice(0, 30);
   const output: ProviderDocumentationContradiction[] = [];
-  for (const declaration of input.declarations) {
-    if (!declaration.siteStatements?.length) continue;
+  for (const providerId of providerIds) {
+    const declaration = declarationsByProvider.get(providerId);
     const catalogProvider = input.snapshot.providerFacts.find((candidate) =>
-      isRecord(candidate) && candidate.providerId === declaration.providerId,
+      isRecord(candidate) && candidate.providerId === providerId,
     );
     const providerFacts = readDocumentedFacts(catalogProvider, input.snapshot);
+    const disputedSiteStatement = declaration?.siteStatements?.find(({ factId }) => factId === "provider_receives_personal_data");
+    const disputedProviderFact = providerFacts.find(({ factId }) => factId === "provider_receives_personal_data");
+    const legalEvidence = disputedSiteStatement && disputedProviderFact
+      ? buildProviderLegalEvidence(disputedSiteStatement, disputedProviderFact, input.legalEvidenceContexts?.[providerId])
+      : undefined;
+    const documentationStatus = isRecord(catalogProvider) && isDocumentationStatus(catalogProvider.documentationStatus)
+      ? catalogProvider.documentationStatus
+      : "source_not_localized";
     const comparison = compareProviderDocumentation({
-      providerId: declaration.providerId,
-      sourceStatus: "located",
-      siteStatements: declaration.siteStatements,
-      providerFacts,
+      providerId,
+      sourceStatus: documentationStatus === "located" ? "located"
+        : documentationStatus === "source_unavailable" ? "unavailable" : "not_located",
+      siteStatements: declaration?.siteStatements ?? [],
+      providerFacts: documentationStatus === "located" ? providerFacts : [],
+      ...(legalEvidence ? { legalEvidence } : {}),
       legalRules: input.snapshot.legalRules,
     });
-    if (comparison) output.push(comparison);
+    if (comparison) {
+      const sourceEvidence = readSourceEvidence(providerId, catalogProvider, input.snapshot);
+      output.push({ ...comparison, ...(sourceEvidence.length ? { sourceEvidence } : {}) });
+    }
   }
   return output;
 }
@@ -52,7 +83,7 @@ export function mergeProviderDocumentationComparison(
 function readDocumentedFacts(provider: unknown, snapshot: ProviderCatalogSnapshot): ProviderFact[] {
   if (!isRecord(provider) || !Array.isArray(provider.documentedFacts) || provider.documentedFacts.length > MAX_DOCUMENTED_FACTS_PER_PROVIDER) return [];
   const documents = readOfficialDocuments(provider.officialDocuments);
-  const output: ProviderFact[] = [];
+  const candidates: ProviderFact[] = [];
   for (const entry of provider.documentedFacts) {
     if (!isRecord(entry) || typeof entry.factId !== "string" || typeof entry.value !== "boolean" ||
         typeof entry.documentId !== "string" || typeof entry.excerpt !== "string") continue;
@@ -70,9 +101,43 @@ function readDocumentedFacts(provider: unknown, snapshot: ProviderCatalogSnapsho
       documentKind: document.kind,
       sourceKind: "provider_official",
     };
-    output.push({ factId: entry.factId, value: entry.value, source });
+    candidates.push({ factId: entry.factId, value: entry.value, source });
+  }
+  const output: ProviderFact[] = [];
+  const factIds = [...new Set(candidates.map(({ factId }) => factId))];
+  for (const factId of factIds) {
+    const matches = candidates.filter((candidate) => candidate.factId === factId)
+      .sort((left, right) => left.source.sourceId.localeCompare(right.source.sourceId));
+    if (matches.length > 0 && matches.every(({ value }) => value === matches[0]?.value) && matches[0]) {
+      output.push(matches[0]);
+    }
   }
   return output;
+}
+
+function readSourceEvidence(
+  providerId: string,
+  provider: unknown,
+  snapshot: ProviderCatalogSnapshot,
+): ProviderDocumentationSourceReceipt[] {
+  if (!isRecord(provider) || !Array.isArray(provider.officialDocuments) || provider.officialDocuments.length > 50) return [];
+  const documents = new Map<string, { title: string; url: string }>();
+  for (const entry of provider.officialDocuments) {
+    if (!isRecord(entry) || typeof entry.documentId !== "string" || typeof entry.title !== "string" || typeof entry.url !== "string") continue;
+    documents.set(entry.documentId, { title: entry.title, url: entry.url });
+  }
+  return snapshot.sources.flatMap((receipt) => {
+    const document = receipt.providerId === providerId ? documents.get(receipt.documentId) : undefined;
+    if (!document || !["seeded", "fetched", "unavailable", "failed", "not_localized"].includes(receipt.status)) return [];
+    return [{
+      documentId: receipt.documentId,
+      title: document.title,
+      url: document.url,
+      status: receipt.status,
+      sha256: receipt.sha256,
+      checkedAt: receipt.checkedAt,
+    }];
+  }).slice(0, 50);
 }
 
 function readOfficialDocuments(value: unknown): Map<string, { title: string; url: string; kind: ProviderEvidenceSource["documentKind"] }> {
@@ -92,4 +157,8 @@ function readOfficialDocuments(value: unknown): Map<string, { title: string; url
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isDocumentationStatus(value: unknown): value is "located" | "source_unavailable" | "source_not_localized" {
+  return value === "located" || value === "source_unavailable" || value === "source_not_localized";
 }

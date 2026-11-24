@@ -76,6 +76,33 @@ describe("classifyPublicPolicyHtml", () => {
     expect(result.documentTitle).toBeUndefined();
   });
 
+  it("captures only literal legal-context claims from visible policy sentences", () => {
+    const result = classifyPublicPolicyHtml(`
+      <p>Obtenemos los datos personales directamente del interesado.</p>
+      <p>Somos responsables del tratamiento.</p>
+      <p>Nuestra autoridad de control competente es la Agencia Española de Protección de Datos (AEPD).</p>
+      <p>La web está alojada en España y envía solicitudes a OpenAI.</p>
+    `);
+    expect(result.legalContextClaims).toEqual(expect.arrayContaining([
+      { kind: "data_origin", value: "obtained_from_subject", excerpt: "Obtenemos los datos personales directamente del interesado." },
+      { kind: "audited_entity_is_controller", excerpt: "Somos responsables del tratamiento." },
+      { kind: "aepd_jurisdiction_is_established", excerpt: "Nuestra autoridad de control competente es la Agencia Española de Protección de Datos (AEPD)." },
+    ]));
+    expect(result.legalContextClaims).toHaveLength(3);
+  });
+
+  it("captures explicit third-party data origin and leaves absent legal context unasserted", () => {
+    const fromThirdParties = classifyPublicPolicyHtml("<p>Obtenemos datos personales de terceros.</p>");
+    expect(fromThirdParties.legalContextClaims).toEqual([{
+      kind: "data_origin", value: "not_obtained_from_subject", excerpt: "Obtenemos datos personales de terceros.",
+    }]);
+    const noExplicitContext = classifyPublicPolicyHtml(`
+      <p>La empresa opera desde España.</p>
+      <p>Se utilizan cookies para medir visitas.</p>
+    `);
+    expect(noExplicitContext.legalContextClaims).toBeUndefined();
+  });
+
   it("does not read provider names or purposes from scripts and styles", () => {
     expect(classifyPublicPolicyHtml(`
       <script>Google Analytics, estadísticas y medición</script>

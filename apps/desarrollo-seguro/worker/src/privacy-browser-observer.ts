@@ -1,5 +1,5 @@
 import { chromium, type Browser, type BrowserContext, type Page, type Request } from "playwright";
-import { normalizeHostname, isThirdPartyPrivacyHost, PRIVACY_BROWSER_BUDGET } from "@desarrolloseguro/core";
+import { normalizeHostname, isThirdPartyPrivacyHost, PRIVACY_BROWSER_BUDGET, type FirstEntryPolicyLinkVisit } from "@desarrolloseguro/core";
 import { PrivacyBrowserRequestGate } from "./privacy-browser-request-gate.js";
 import {
   PrivacyRequestTimeline,
@@ -99,6 +99,7 @@ export type PrivacyBrowserObservation = {
   status: "complete" | "partial" | "unknown";
   context: { browser: "Chromium"; locale: "es-ES"; timezone: "Europe/Madrid"; viewport: "desktop-1365x768" };
   initial: PrivacyBrowserFlowObservation;
+  policyLinkVisit: FirstEntryPolicyLinkVisit;
   accept: PrivacyBrowserFlowObservation;
   reject: PrivacyBrowserFlowObservation;
   vendorControlCoverage: "complete" | "partial" | "unknown" | "not_applicable";
@@ -154,7 +155,7 @@ const UNKNOWN_FLOW: PrivacyBrowserFlowObservation = {
   storageKeysAfterChoice: [],
   cookieReadComplete: false,
   storageReadComplete: false,
-  firstEntryPolicyLinks: { status: "unknown", consentComponentDetected: null, consentComponentLink: null, consentComponentDocumentAccess: "unknown", footerLink: null, footerLinkDocumentAccess: "unknown" },
+  firstEntryPolicyLinks: { status: "unknown", consentComponentDetected: null, consentComponentLink: null, consentComponentDocumentAccess: "unknown", informationNoticeLink: null, informationNoticeDocumentAccess: "unknown", footerLink: null, footerLinkDocumentAccess: "unknown" },
   phaseEvidence: {
     beforeChoice: null,
     choiceActionAtMs: null,
@@ -166,6 +167,15 @@ const UNKNOWN_FLOW: PrivacyBrowserFlowObservation = {
     networkRequests: [],
     networkRequestsComplete: true,
   },
+};
+
+const UNKNOWN_POLICY_LINK_VISIT: FirstEntryPolicyLinkVisit = {
+  status: "unknown",
+  link: null,
+  documentAccess: "unknown",
+  navigationStartedAtMs: null,
+  beforeNavigation: null,
+  afterNavigation: null,
 };
 
 const EMPTY_PHASE_EVIDENCE: PrivacyBrowserFlowObservation["phaseEvidence"] = {
@@ -183,7 +193,12 @@ const EMPTY_PHASE_EVIDENCE: PrivacyBrowserFlowObservation["phaseEvidence"] = {
 /** Runs one read-only baseline and isolated accept/reject flows through the egress proxy. */
 export async function observePrivacyBehavior(
   input: PrivacyBrowserInput,
-  options: { proxyUrl: string; signal?: AbortSignal; launchBrowser?: typeof chromium.launch } ,
+  options: {
+    proxyUrl: string;
+    signal?: AbortSignal;
+    launchBrowser?: typeof chromium.launch;
+    inspectPolicyLinks?: typeof inspectFirstEntryPolicyLinks;
+  },
 ): Promise<PrivacyBrowserObservation> {
   const hostname = normalizeHostname(input.hostname);
   if (input.protocolVersion !== 1 || !/^[0-9a-f-]{36}$/iu.test(input.requestId)) throw new Error("privacy_browser_request_invalid");
@@ -211,7 +226,9 @@ export async function observePrivacyBehavior(
       proxy: { server: options.proxyUrl, bypass: "<-loopback>" },
       args: ["--disable-background-networking", "--disable-component-update", "--disable-sync", "--no-first-run", "--disable-dev-shm-usage"],
     });
-    const initial = await runFlow(browser, hostname, "initial", gate, ledger, signal);
+    const initialBase = await runFlow(browser, hostname, "initial", gate, ledger, signal, options.inspectPolicyLinks);
+    const policyLinkVisit = await runPolicyLinkVisit(browser, initialBase, gate, ledger, signal);
+    const initial = applyPolicyLinkDocumentAccess(initialBase, policyLinkVisit);
     const accept = await runFlow(browser, hostname, "accept", gate, ledger, signal);
     const reject = await runFlow(browser, hostname, "reject", gate, ledger, signal);
     const discovery = await discoverVendorControls(browser, hostname, initial, gate, ledger, signal);
@@ -237,6 +254,7 @@ export async function observePrivacyBehavior(
       status,
       context: { browser: "Chromium", locale: "es-ES", timezone: "Europe/Madrid", viewport: "desktop-1365x768" },
       initial,
+      policyLinkVisit,
       accept,
       reject,
       vendorControlCoverage,
@@ -256,6 +274,7 @@ export async function observePrivacyBehavior(
       status: "unknown",
       context: { browser: "Chromium", locale: "es-ES", timezone: "Europe/Madrid", viewport: "desktop-1365x768" },
       initial: UNKNOWN_FLOW,
+      policyLinkVisit: UNKNOWN_POLICY_LINK_VISIT,
       accept: UNKNOWN_FLOW,
       reject: UNKNOWN_FLOW,
       vendorControlCoverage: "unknown",
@@ -287,6 +306,98 @@ export function resolvePrivacyObservationStatus(input: {
   return input.requestCount > 0 ? "partial" : "unknown";
 }
 
+async function runPolicyLinkVisit(
+  browser: Browser,
+  initial: PrivacyBrowserFlowObservation,
+  gate: PrivacyBrowserRequestGate,
+  ledger: RequestLedger,
+  signal?: AbortSignal,
+): Promise<FirstEntryPolicyLinkVisit> {
+  const initialLink = selectFirstEntryPolicyLink(initial.firstEntryPolicyLinks);
+  if (!initialLink) {
+    return {
+      status: initial.firstEntryPolicyLinks.status === "unknown" ? "unknown" : "not_applicable",
+      link: null,
+      documentAccess: initial.firstEntryPolicyLinks.status === "unknown" ? "unknown" : "not_checked",
+      navigationStartedAtMs: null,
+      beforeNavigation: null,
+      afterNavigation: null,
+    };
+  }
+  if (signal?.aborted || gate.hasExceededBudget()) return { ...UNKNOWN_POLICY_LINK_VISIT, link: initialLink };
+
+  const context = await browser.newContext({
+    acceptDownloads: false,
+    colorScheme: "light",
+    javaScriptEnabled: true,
+    locale: "es-ES",
+    serviceWorkers: "block",
+    timezoneId: "Europe/Madrid",
+    viewport: { width: 1365, height: 768 },
+  });
+  try {
+    const timeline = new PrivacyRequestTimeline();
+    await installRequestGate(context, gate, ledger, (request) => timeline.markBlocked(request));
+    const page = await context.newPage();
+    page.setDefaultTimeout(ACTION_TIMEOUT_MS);
+    page.setDefaultNavigationTimeout(NAVIGATION_TIMEOUT_MS);
+    timeline.attach(page);
+    const beforeNavigation = await capturePolicyLinkStateSnapshot(context, page, timeline.elapsed());
+    if (signal?.aborted || gate.hasExceededBudget()) {
+      return {
+        status: "unknown",
+        link: initialLink,
+        documentAccess: "unknown",
+        navigationStartedAtMs: null,
+        beforeNavigation,
+        afterNavigation: null,
+      };
+    }
+    const navigationStartedAtMs = timeline.setPhase("after_policy_link");
+    const documentAccess = await verifyFirstEntryPolicyDocument(page, initialLink);
+    await page.waitForTimeout(CONSENT_SETTLE_MS);
+    const afterNavigation = await capturePolicyLinkStateSnapshot(context, page, timeline.elapsed());
+    const complete = beforeNavigation.cookieReadComplete && beforeNavigation.storageReadComplete &&
+      afterNavigation.cookieReadComplete && afterNavigation.storageReadComplete;
+    return {
+      status: complete ? "evaluated" : "unknown",
+      link: initialLink,
+      documentAccess,
+      navigationStartedAtMs,
+      beforeNavigation,
+      afterNavigation,
+    };
+  } catch {
+    return { ...UNKNOWN_POLICY_LINK_VISIT, link: initialLink };
+  } finally {
+    await context.close().catch(() => undefined);
+  }
+}
+
+function selectFirstEntryPolicyLink(discovery: FirstEntryPolicyLinkDiscovery) {
+  if (discovery.consentComponentDetected === true) return discovery.consentComponentLink;
+  return discovery.informationNoticeLink ?? discovery.footerLink;
+}
+
+function applyPolicyLinkDocumentAccess(
+  initial: PrivacyBrowserFlowObservation,
+  visit: FirstEntryPolicyLinkVisit,
+): PrivacyBrowserFlowObservation {
+  const links = initial.firstEntryPolicyLinks;
+  const access = visit.documentAccess;
+  return {
+    ...initial,
+    firstEntryPolicyLinks: {
+      ...links,
+      ...(links.consentComponentDetected === true
+        ? { consentComponentDocumentAccess: access }
+        : links.informationNoticeLink
+          ? { informationNoticeDocumentAccess: access }
+          : { footerLinkDocumentAccess: access }),
+    },
+  };
+}
+
 async function runFlow(
   browser: Browser,
   hostname: string,
@@ -294,6 +405,7 @@ async function runFlow(
   gate: PrivacyBrowserRequestGate,
   ledger: RequestLedger,
   signal?: AbortSignal,
+  inspectPolicyLinks: typeof inspectFirstEntryPolicyLinks = inspectFirstEntryPolicyLinks,
 ): Promise<PrivacyBrowserFlowObservation> {
   if (signal?.aborted || gate.hasExceededBudget()) return UNKNOWN_FLOW;
   const context = await browser.newContext({
@@ -332,7 +444,7 @@ async function runFlow(
     const controls = await inspectConsentControls(page);
     const hasConsentControls = controls.length > 0;
     const firstEntryPolicyLinks = action === "initial"
-      ? await inspectFirstEntryPolicyLinks(page, hasConsentControls)
+      ? await inspectPolicyLinks(page, hasConsentControls)
       : UNKNOWN_FLOW.firstEntryPolicyLinks;
     const acceptVisibleAtFirstLayer = controls.some(({ kind }) => kind === "accept");
     const rejectVisibleAtFirstLayer = controls.some(({ kind }) => kind === "reject");
@@ -357,19 +469,7 @@ async function runFlow(
         firstEntryPolicyLinks,
         phaseEvidence: { ...EMPTY_PHASE_EVIDENCE, beforeChoice: firstLayerSnapshot },
       }, timeline, ledger, flowHosts, completedHosts);
-      const relevantLink = hasConsentControls ? firstEntryPolicyLinks.consentComponentLink : firstEntryPolicyLinks.footerLink;
-      const documentAccess = firstEntryPolicyLinks.status === "unknown"
-        ? "unknown"
-        : await verifyFirstEntryPolicyDocument(page, relevantLink);
-      return {
-        ...captured,
-        firstEntryPolicyLinks: {
-          ...firstEntryPolicyLinks,
-          ...(hasConsentControls
-            ? { consentComponentDocumentAccess: documentAccess }
-            : { footerLinkDocumentAccess: documentAccess }),
-        },
-      };
+      return captured;
     }
 
     if (!hasConsentControls) {
@@ -799,6 +899,39 @@ async function captureStateSnapshot(
     cookies: cookies.items,
     storageKeys: storage.items,
     cookieReadComplete: cookies.complete,
+    storageReadComplete: storage.complete,
+  };
+}
+
+async function capturePolicyLinkStateSnapshot(
+  context: BrowserContext,
+  page: Page,
+  capturedAtMs: number,
+): Promise<NonNullable<FirstEntryPolicyLinkVisit["afterNavigation"]>> {
+  let cookies: NonNullable<FirstEntryPolicyLinkVisit["afterNavigation"]>["cookies"] = [];
+  let cookieReadComplete: boolean;
+  try {
+    const captured = await context.cookies();
+    cookieReadComplete = captured.length <= MAX_RECORDED_NAMES;
+    cookies = captured.slice(0, MAX_RECORDED_NAMES).map((cookie) => ({
+      name: safeName(cookie.name),
+      domain: safeName(cookie.domain.replace(/^\.+/u, "").toLowerCase()),
+      secure: cookie.secure,
+      httpOnly: cookie.httpOnly,
+      sameSite: cookie.sameSite === "Strict" || cookie.sameSite === "Lax" || cookie.sameSite === "None"
+        ? cookie.sameSite
+        : "unspecified" as const,
+      expiresAtUnixSeconds: Number.isSafeInteger(cookie.expires) && cookie.expires > 0 ? cookie.expires : null,
+    })).filter(({ name, domain }) => name !== "" && domain !== "");
+  } catch {
+    cookieReadComplete = false;
+  }
+  const storage = await captureStorageKeys(page, MAX_RECORDED_NAMES);
+  return {
+    capturedAtMs,
+    cookies,
+    storageKeys: storage.items,
+    cookieReadComplete,
     storageReadComplete: storage.complete,
   };
 }

@@ -1,13 +1,14 @@
 import type { DomainEthicsAssessment } from "./domain-ethics-score.js";
 import type { PrivacyAssessment } from "./privacy-score.js";
 
-export const GLOBAL_SCORE_POLICY_VERSION = "mvp-global-v1" as const;
+export const GLOBAL_SCORE_POLICY_VERSION = "mvp-global-v2" as const;
 export const GLOBAL_SCORE_WEIGHTS = { ethics: 50, privacy: 50 } as const;
 
 export type GlobalScoreAssessment = {
   policyVersion: typeof GLOBAL_SCORE_POLICY_VERSION;
   status: "scored" | "review" | "not_available";
   score: number | null;
+  legalViolationAccredited: boolean;
   weights: typeof GLOBAL_SCORE_WEIGHTS;
   ethicsCoverage: { assessedCriteria: number; totalCriteria: number };
   privacyCoverage: {
@@ -22,6 +23,7 @@ export type GlobalScoreAssessment = {
 export function assessGlobalScore(
   ethics: DomainEthicsAssessment,
   privacy: PrivacyAssessment | null,
+  legalViolationAccredited = false,
 ): GlobalScoreAssessment {
   const ethicsCoverage = {
     assessedCriteria: ethics.assessedCriteria,
@@ -35,10 +37,15 @@ export function assessGlobalScore(
   };
   const base = {
     policyVersion: GLOBAL_SCORE_POLICY_VERSION,
+    legalViolationAccredited,
     weights: GLOBAL_SCORE_WEIGHTS,
     ethicsCoverage,
     privacyCoverage,
   } as const;
+
+  if (legalViolationAccredited) {
+    return { ...base, status: "scored", score: 0 };
+  }
 
   if (privacy === null) {
     return { ...base, status: "not_available", score: null };
