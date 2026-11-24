@@ -120,6 +120,17 @@ describePostgres.sequential("PostgresScanStore", () => {
         categories: ["analytics", "advertising"],
       },
     } satisfies import("@desarrolloseguro/core").PublicPolicyTransparencyAssessment;
+    const serviceComparison = {
+      policyVersion: "public-service-comparison-v1",
+      status: "pass",
+      reasonCode: "services_disclosed",
+      items: [{
+        providerId: "openai-api",
+        observation: "declared",
+        observedDomains: [],
+        declaredPurposes: ["ai_processing"],
+      }],
+    } satisfies import("@desarrolloseguro/core").PublicServiceComparison;
     const reportId = await store.completeScan({
       jobId: job.id,
       leaseToken: job.leaseToken,
@@ -133,15 +144,22 @@ describePostgres.sequential("PostgresScanStore", () => {
       checks: makeEligibleDomainV3Checks(),
       metrics: { requestsCount: 0, bytesCount: 0, durationMs: 1, pagesCount: 0 },
       publicPolicyTransparencyAssessment: assessment,
+      publicServiceComparison: serviceComparison,
     });
 
     const report = await store.readPublicReport(reportId);
     expect(report?.publicPolicyTransparencyAssessment).toEqual(assessment);
+    expect(report?.publicServiceComparison).toEqual(serviceComparison);
     const persisted = await pool.query<{ assessment_json: unknown }>(
       "SELECT assessment_json FROM ds_scan_public_policy_transparency WHERE run_id = $1",
       [reportId],
     );
     expect(persisted.rows[0]?.assessment_json).toEqual(assessment);
+    const persistedComparison = await pool.query<{ comparison_json: unknown }>(
+      "SELECT comparison_json FROM ds_scan_public_service_comparisons WHERE run_id = $1",
+      [reportId],
+    );
+    expect(persistedComparison.rows[0]?.comparison_json).toEqual(serviceComparison);
   });
 
   it("keeps domain enrollment stable when on-demand requests repeat", async () => {

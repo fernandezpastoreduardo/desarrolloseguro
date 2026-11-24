@@ -297,7 +297,7 @@ test("shows the report and Grumphya's private review when an authorized analysis
 
   await expect(page.getByRole("heading", { name: "Informe vigente" })).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Dimensiones de evaluación" }),
+    page.getByRole("heading", { name: "Qué significa esta valoración" }),
   ).toBeVisible();
   await expect(page.getByRole("img", { name: "Puntuación global: en revisión" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Ética" })).toBeVisible();
@@ -371,6 +371,15 @@ test("shows the report and Grumphya's private review when an authorized analysis
   await expect(internalAudit.getByRole("heading", { name: "Datos e información" })).toBeVisible();
   await expect(internalAudit.getByText("Atención")).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("grumphya-internal-audit-desktop.png"), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobileHorizontalPadding = await page.locator(".ds-portal__result").evaluate((element) => ({
+    left: getComputedStyle(element).paddingLeft,
+    right: getComputedStyle(element).paddingRight,
+    width: getComputedStyle(element).width,
+  }));
+  expect(mobileHorizontalPadding).toMatchObject({ left: "10px", right: "10px" });
+  await expect(page.locator(".ds-portal__ethics")).toHaveCSS("padding-left", "10px");
+  await expect(page.locator(".ds-portal__ethics")).toHaveCSS("padding-right", "10px");
 });
 
 test("stops polling and reports an admission mismatch when no scan job appears", async ({

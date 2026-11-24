@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { isAbsolute } from "node:path";
 import type { ScanRunInput } from "@desarrolloseguro/persistence";
-import { assessPrivacy } from "@desarrolloseguro/core";
+import { assessPrivacy, assessPublicServiceComparison } from "@desarrolloseguro/core";
 import { SCAN_FAILURE_CODES, type ScanFailureCode } from "@desarrolloseguro/core";
 import {
   MAX_EXECUTOR_RESPONSE_BYTES,
@@ -10,7 +10,7 @@ import {
   type TransportV1ExecutorRequest,
 } from "./transport-v1-executor-protocol.js";
 import type { RuntimeCoordinatorRunner } from "./runtime-coordinator-server.js";
-import { assessPrivacyObservation } from "./privacy-assessment-builder.js";
+import { assessPrivacyObservation, getObservedPublicServices } from "./privacy-assessment-builder.js";
 import type { PrivacyBrowserObservation } from "./privacy-browser-observer.js";
 import {
   createJsonLineRuntimeDiagnostic,
@@ -150,13 +150,29 @@ export function createDockerRuntimeCoordinatorRunner(
         }
         result = response.result;
         let privacyAssessment = assessPrivacy({ criteria: [] });
+        let observation: PrivacyBrowserObservation | undefined;
         try {
-          const observation = await session.observePrivacy?.(request, signal);
+          observation = await session.observePrivacy?.(request, signal);
           if (observation) privacyAssessment = assessPrivacyObservation(observation);
         } catch {
           // Privacy browser failures lower coverage but never block the established scan or certification.
         }
-        result = { ...result, privacyAssessment };
+        const publicServiceComparison = result.publicPolicyTransparencyAssessment
+          ? assessPublicServiceComparison({
+              observed: observation ? getObservedPublicServices(observation) : [],
+              declared: result.publicServiceDeclarations ?? [],
+              policyStatus: result.publicPolicyTransparencyAssessment?.status ?? "unknown",
+              auditorError: result.publicServiceDeclarations === undefined || !observation || [observation.initial, observation.accept, observation.reject]
+                .some(({ status }) => status === "unknown"),
+            })
+          : null;
+        const completedResult = { ...result };
+        delete completedResult.publicServiceDeclarations;
+        result = {
+          ...completedResult,
+          privacyAssessment,
+          ...(publicServiceComparison ? { publicServiceComparison } : {}),
+        };
       } catch (error) {
         executionError = error;
       }

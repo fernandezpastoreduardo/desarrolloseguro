@@ -29,7 +29,7 @@ function completedStatus() {
     { id: "transport-security", status: "pass" },
     { id: "http-availability", status: "pass" },
     { id: "security-headers", status: "fail" },
-    { id: "backend-processor-transparency", status: "pass" },
+    { id: "external-service-transparency", status: "pass" },
     { id: "initial-cookie-risk", status: "pass" },
     { id: "tracking", status: "pass" },
     { id: "performance", status: "pass" },
@@ -39,11 +39,11 @@ function completedStatus() {
     lastReport: {
       id: "f7490d2d-2976-4a89-a9a7-001690e873ef",
       profileVersion: "domain-v4",
-      scannerVersion: "domain-v4-network-adapter-2",
+      scannerVersion: "domain-v4-network-adapter-3",
       completedAt: "2026-11-11T20:00:00.000Z",
       checks,
       ethicsAssessment: {
-        policyVersion: "domain-ethics-v5",
+        policyVersion: "domain-ethics-v6",
         score: 75,
         assessedCriteria: 8,
         totalCriteria: 8,
@@ -59,6 +59,12 @@ function completedStatus() {
         status: "pass",
         reasonCode: "disclosure_found",
       },
+      publicServiceComparison: {
+        policyVersion: "public-service-comparison-v1",
+        status: "pass",
+        reasonCode: "services_disclosed",
+        items: [],
+      },
     },
   };
 }
@@ -67,7 +73,7 @@ test("bounds the live scan smoke wait to fifteen minutes for the serial queue", 
   assert.equal(SCAN_TIMEOUT_MS, 15 * 60 * 1000);
 });
 
-test("accepts a refreshed report with all eight v5 ethics criteria and both transparency assessments", () => {
+test("accepts a refreshed report with all eight v6 ethics criteria and service evidence", () => {
   const status = completedStatus();
   const report = validateCompletedReport(
     status,

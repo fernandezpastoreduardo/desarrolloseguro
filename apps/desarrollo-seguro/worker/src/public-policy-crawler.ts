@@ -75,6 +75,8 @@ export type PublicPolicyClassification = {
   purposeIds: readonly string[];
   /** Only normalized category IDs from the locally reviewed knowledge catalog. */
   categories: readonly string[];
+  /** Provider-specific purpose identifiers found in the same visible text block. */
+  declaredServices?: readonly { providerId: string; purposeIds: readonly string[] }[];
   /** True only for an explicit, cataloged anti-bot or access-denied page. */
   accessDenied?: boolean;
 };
@@ -98,6 +100,7 @@ export type PublicPolicyEvidence = {
   unavailablePages: number;
   providers: string[];
   providersWithPurpose: string[];
+  declaredServices: Array<{ providerId: string; purposeIds: string[] }>;
   purposes: string[];
   categories: string[];
   requestsCount: number;
@@ -220,6 +223,7 @@ export async function collectPublicPolicyEvidence(
   const categories = new Set<string>();
   const providers = new Set<string>();
   const providersWithPurpose = new Set<string>();
+  const declaredServices = new Map<string, Set<string>>();
   const purposes = new Set<string>();
   let denied = 0;
   let unavailable = 0;
@@ -339,7 +343,7 @@ export async function collectPublicPolicyEvidence(
     try {
       const classification = input.classifyHtml(response.html);
       if (classification.accessDenied === true) denied += 1;
-      mergeClassification(classification, providers, providersWithPurpose, purposes, categories);
+      mergeClassification(classification, providers, providersWithPurpose, purposes, categories, declaredServices);
     } catch {
       hadAuditorError = true;
     }
@@ -349,6 +353,10 @@ export async function collectPublicPolicyEvidence(
   evidence.unavailablePages = unavailable;
   evidence.providers = [...providers].sort(compareIdentifiers);
   evidence.providersWithPurpose = [...providersWithPurpose].sort(compareIdentifiers);
+  evidence.declaredServices = [...declaredServices].map(([providerId, purposeIds]) => ({
+    providerId,
+    purposeIds: [...purposeIds].sort(compareIdentifiers),
+  })).sort((left, right) => compareIdentifiers(left.providerId, right.providerId)).slice(0, MAX_CLASSIFIED_IDS);
   evidence.purposes = [...purposes].sort(compareIdentifiers);
   evidence.categories = [...categories].sort(compareIdentifiers);
   if (links.length >= PUBLIC_POLICY_CRAWL_LIMITS.pages &&
@@ -376,6 +384,7 @@ function mergeClassification(
   providersWithPurpose: Set<string>,
   purposes: Set<string>,
   categories: Set<string>,
+  declaredServices: Map<string, Set<string>>,
 ): void {
   if (input.accessDenied !== undefined && typeof input.accessDenied !== "boolean") {
     throw new Error("public_policy_classification_invalid");
@@ -389,11 +398,21 @@ function mergeClassification(
   for (const provider of documentProvidersWithPurpose) providersWithPurpose.add(provider);
   for (const purpose of normalizeIdentifiers(input.purposeIds)) purposes.add(purpose);
   for (const category of normalizeIdentifiers(input.categories)) categories.add(category);
+  for (const item of input.declaredServices ?? []) {
+    if (typeof item.providerId !== "string" || !IDENTIFIER.test(item.providerId)) {
+      throw new Error("public_policy_classification_invalid");
+    }
+    const providerPurposes = declaredServices.get(item.providerId) ?? new Set<string>();
+    for (const purpose of normalizeIdentifiers(item.purposeIds)) providerPurposes.add(purpose);
+    declaredServices.set(item.providerId, providerPurposes);
+  }
   if (
     providers.size > MAX_CLASSIFIED_IDS ||
     providersWithPurpose.size > MAX_CLASSIFIED_IDS ||
     purposes.size > MAX_CLASSIFIED_IDS ||
-    categories.size > MAX_CLASSIFIED_IDS
+    categories.size > MAX_CLASSIFIED_IDS ||
+    declaredServices.size > MAX_CLASSIFIED_IDS ||
+    [...declaredServices.values()].some((values) => values.size > MAX_CLASSIFIED_IDS)
   ) throw new Error("public_policy_classification_invalid");
 }
 
@@ -510,6 +529,7 @@ function createEvidence(linksFound: number): PublicPolicyEvidence {
     providersWithPurpose: [],
     purposes: [],
     categories: [],
+    declaredServices: [],
     requestsCount: 0,
     bytesCount: 0,
   };

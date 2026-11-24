@@ -580,11 +580,11 @@ describe("PublicScanService", () => {
     expect(JSON.stringify(result)).not.toContain("signature");
   });
 
-  it("uses domain ethics v5 for public policy evidence on non-clients", async () => {
+  it("uses the common service comparison for non-clients", async () => {
     const report = makeReport({
       hostname: "example.com",
       profileVersion: "domain-v4",
-      scannerVersion: "domain-v4-network-adapter-2",
+      scannerVersion: "domain-v4-network-adapter-3",
       publicPolicyTransparencyAssessment: {
         policyVersion: "public-policy-v1",
         status: "fail",
@@ -599,6 +599,12 @@ describe("PublicScanService", () => {
           categories: [],
         },
       },
+      publicServiceComparison: {
+        policyVersion: "public-service-comparison-v1",
+        status: "fail",
+        reasonCode: "observed_service_undisclosed",
+        items: [{ providerId: "google-analytics", observation: "observed", observedDomains: ["google-analytics.com"], declaredPurposes: [] }],
+      },
     });
     const service = new PublicScanService({
       scanStore: {
@@ -609,7 +615,7 @@ describe("PublicScanService", () => {
 
     const result = await service.getReport(REPORT_ID);
 
-    expect(result.ethicsAssessment.policyVersion).toBe("domain-ethics-v5");
+    expect(result.ethicsAssessment.policyVersion).toBe("domain-ethics-v6");
     expect(result.ethicsAssessment.criteria).toContainEqual(expect.objectContaining({
       id: "external-service-transparency",
       status: "fail",
@@ -861,6 +867,7 @@ describe("PublicScanService", () => {
         "privacyAssessment",
         "processorTransparencyAssessment",
         "publicPolicyTransparencyAssessment",
+        "publicServiceComparison",
         "betaCertification",
         "internalAuditState",
         "internalAuditSummary",

@@ -1,6 +1,7 @@
 import {
   assessPrivacy,
   isThirdPartyPrivacyHost,
+  normalizePublicServiceProviderId,
   PRIVACY_EXCESS_THRESHOLDS,
   type PrivacyAssessment,
   type PrivacyCriterionId,
@@ -22,6 +23,39 @@ export function assessPrivacyObservation(observation: PrivacyBrowserObservation)
   const vendorControls = assessVendorControls(observation);
   const evidence = summarizePublicEvidence(observation);
   return assessPrivacy({ criteria: [initial, excess, parity, rejection, vendorControls], evidence });
+}
+
+/** Returns only high-confidence provider and host pairs actually seen in the browser. */
+export function getObservedPublicServices(
+  observation: PrivacyBrowserObservation,
+): Array<{ providerId: string; domain: string }> {
+  const services = new Map<string, Set<string>>();
+  for (const flow of [observation.initial, observation.accept, observation.reject]) {
+    for (const hostname of flow.completedHostsAfterChoice) {
+      if (!isThirdPartyPrivacyHost(observation.hostname, hostname) || !isSafeHostname(hostname)) continue;
+      for (const match of matchRequestHost(hostname).filter(isConfirmedMatch)) {
+        const providerId = normalizePublicServiceProviderId(match.provider);
+        if (!providerId) continue;
+        const domains = services.get(providerId) ?? new Set<string>();
+        domains.add(normalizeHostname(hostname));
+        services.set(providerId, domains);
+      }
+    }
+    for (const cookie of flow.cookiesAfterChoice) {
+      if (!isThirdPartyPrivacyHost(observation.hostname, cookie.domain) || !isSafeHostname(cookie.domain)) continue;
+      for (const match of matchCookie(cookie.name, cookie.domain, flow.completedHostsAfterChoice).filter(isConfirmedMatch)) {
+        const providerId = normalizePublicServiceProviderId(match.provider);
+        if (!providerId) continue;
+        const domains = services.get(providerId) ?? new Set<string>();
+        domains.add(normalizeHostname(cookie.domain));
+        services.set(providerId, domains);
+      }
+    }
+  }
+  return [...services.entries()].flatMap(([providerId, domains]) =>
+    [...domains].sort((left, right) => left.localeCompare(right, "en")).slice(0, 8)
+      .map((domain) => ({ providerId, domain })),
+  ).slice(0, 30);
 }
 
 function summarizePublicEvidence(observation: PrivacyBrowserObservation): PrivacyAssessment["evidence"] {

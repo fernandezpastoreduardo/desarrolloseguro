@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import {
   assessPublicPolicyTransparency,
+  type PublicServiceDeclarationEvidence,
   evaluateVerdict,
   sanitizeScanObservations,
 } from "@desarrolloseguro/core";
@@ -23,7 +24,7 @@ const DOMAIN_SCANNER_VERSION = "domain-v1-network-adapter-1";
 const DOMAIN_V2_SCANNER_VERSION = "domain-v2-network-adapter-1";
 const DOMAIN_V3_SCANNER_VERSION = "domain-v3-network-adapter-1";
 const DOMAIN_V4_SCANNER_VERSION = "domain-v4-network-adapter-1";
-const DOMAIN_V4_PUBLIC_POLICY_SCANNER_VERSION = "domain-v4-network-adapter-2";
+const DOMAIN_V4_PUBLIC_POLICY_SCANNER_VERSION = "domain-v4-network-adapter-3";
 const MAX_CONCURRENT_NETWORK_PROBES = 2;
 const CHECKS = [
   { controlId: "DS-DNS-01", method: "DNS", severity: "high" },
@@ -301,6 +302,9 @@ export class TransportV1NetworkExecutor {
       ...(publicPolicyTransparencyAssessment
         ? { publicPolicyTransparencyAssessment }
         : {}),
+      ...(publicPolicyTransparencyAssessment
+        ? { publicServiceDeclarations: buildPublicServiceDeclarations(probes[4]?.evidence ?? {}) }
+        : {}),
       metrics: {
         requestsCount: probes.reduce((sum, probe) => sum + (probe?.requestsCount ?? 0), 0),
         bytesCount: probes.reduce((sum, probe) => sum + (probe?.bytesCount ?? 0), 0),
@@ -308,6 +312,27 @@ export class TransportV1NetworkExecutor {
         pagesCount: 0,
       },
     };
+  }
+}
+
+function buildPublicServiceDeclarations(evidence: TransportV1Evidence): PublicServiceDeclarationEvidence[] {
+  const raw = evidence.publicPolicyDeclaredServices;
+  if (typeof raw !== "string" || raw.length > 4096) return [];
+  try {
+    const value: unknown = JSON.parse(raw);
+    if (!Array.isArray(value) || value.length > 30) return [];
+    const result: PublicServiceDeclarationEvidence[] = [];
+    for (const item of value) {
+      if (typeof item !== "object" || item === null || Array.isArray(item) ||
+          Object.keys(item).sort((left, right) => left.localeCompare(right, "en")).join(",") !== "providerId,purposeIds" ||
+          typeof item.providerId !== "string" || !/^[a-z0-9][a-z0-9_-]{0,31}$/u.test(item.providerId) ||
+          !Array.isArray(item.purposeIds) || item.purposeIds.length > 8 ||
+          !item.purposeIds.every((purpose: unknown) => typeof purpose === "string" && /^[a-z0-9][a-z0-9_-]{0,31}$/u.test(purpose))) return [];
+      result.push({ providerId: item.providerId, purposes: [...new Set(item.purposeIds as string[])].slice(0, 8) });
+    }
+    return result;
+  } catch {
+    return [];
   }
 }
 

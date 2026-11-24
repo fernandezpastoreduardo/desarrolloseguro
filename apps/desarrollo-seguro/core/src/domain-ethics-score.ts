@@ -1,5 +1,6 @@
 import type { ProcessorTransparencyAssessment } from "./processor-inventory.js";
 import { parsePublicPolicyTransparencyAssessment } from "./public-policy-assessment.js";
+import { parsePublicServiceComparison } from "./public-service-comparison.js";
 
 export type EthicsCheck = {
   controlId: string;
@@ -15,7 +16,7 @@ export type EthicsCriterion = {
 };
 
 export type DomainEthicsAssessment = {
-  policyVersion: "domain-ethics-v3" | "domain-ethics-v4" | "domain-ethics-v5";
+  policyVersion: "domain-ethics-v3" | "domain-ethics-v4" | "domain-ethics-v5" | "domain-ethics-v6";
   score: number | null;
   assessedCriteria: number;
   totalCriteria: number;
@@ -24,6 +25,39 @@ export type DomainEthicsAssessment = {
   reasons: string[];
   interpretation: string;
 };
+
+export function assessDomainEthicsV6(checks: unknown, publicServiceInput: unknown): DomainEthicsAssessment {
+  const comparison = parsePublicServiceComparison(publicServiceInput);
+  const base = assessDomainEthics(checks);
+  const status = comparison?.status ?? "unknown";
+  const criteria = base.criteria.map((criterion): EthicsCriterion => criterion.id === "third-party-data-use"
+    ? { id: "external-service-transparency", label: "Información pública sobre servicios externos", weight: 10, status }
+    : criterion);
+  const assessed = criteria.filter(({ status: criterionStatus }) => criterionStatus !== "unknown");
+  const assessedWeight = assessed.reduce((sum, criterion) => sum + criterion.weight, 0);
+  const passedWeight = assessed.filter(({ status: criterionStatus }) => criterionStatus === "pass")
+    .reduce((sum, criterion) => sum + criterion.weight, 0);
+  const reason = comparison?.reasonCode === "observed_service_undisclosed"
+    ? "Se observó un servicio externo que la información pública no identifica junto con su finalidad."
+    : comparison?.reasonCode === "public_policy_missing"
+      ? "No se encontró información pública suficiente para saber qué servicios externos utiliza el sitio."
+      : comparison?.reasonCode === "auditor_error"
+        ? "La comparación de servicios sigue en revisión porque falló una comprobación técnica."
+        : "";
+  return {
+    policyVersion: "domain-ethics-v6",
+    score: assessedWeight === 0 ? null : Math.round((passedWeight / assessedWeight) * 100),
+    assessedCriteria: assessed.length,
+    totalCriteria: criteria.length,
+    maturity: assessed.length < 4 ? "preliminary" : assessed.length < criteria.length ? "partial" : "broad",
+    criteria,
+    reasons: criteria.flatMap((criterion) => criterion.id === "external-service-transparency"
+      ? criterion.status === "pass" ? [] : [reason]
+      : criterion.status === "fail" ? [`${criterion.label}: el control observado presenta fallos.`]
+        : criterion.status === "unknown" && UNKNOWN_REASONS[criterion.id] ? [UNKNOWN_REASONS[criterion.id]] : []),
+    interpretation: "Todos los dominios se valoran con las mismas señales públicas: los servicios observados, lo que el sitio declara y la información que publican los propios proveedores. La información interna que algunos titulares comparten aparece aparte y no altera esta nota.",
+  };
+}
 
 export function assessDomainEthicsV4(
   checks: unknown,
@@ -86,11 +120,11 @@ export function assessDomainEthicsV5(
   };
   }
   const base = assessDomainEthics(checks);
-  const publicPolicy = processorTransparency
-    ? null
-    : parsePublicPolicyTransparencyAssessment(publicPolicyInput);
-  const transparencyStatus = processorTransparency?.status ?? publicPolicy?.status ?? "unknown";
-  const transparencyReason = getV5TransparencyReason(processorTransparency, publicPolicy);
+  // The public comparison is the same for every domain. A signed private
+  // inventory is supplementary evidence and must never replace this score.
+  const publicPolicy = parsePublicPolicyTransparencyAssessment(publicPolicyInput);
+  const transparencyStatus = publicPolicy?.status ?? "unknown";
+  const transparencyReason = getV5TransparencyReason(null, publicPolicy);
   const criteria = base.criteria.map((criterion): EthicsCriterion => criterion.id === "third-party-data-use"
     ? {
         id: "external-service-transparency",
@@ -120,7 +154,7 @@ export function assessDomainEthicsV5(
     maturity: assessed.length < 4 ? "preliminary" : assessed.length < criteria.length ? "partial" : "broad",
     criteria,
     reasons,
-    interpretation: "Ética valora señales públicas y la transparencia de los servicios externos. En clientes se usa el inventario backend autenticado; en otros dominios se comprueba la información publicada sobre servicios y finalidades. Las declaraciones se atribuyen al titular y no prueban contratos ni prácticas internas.",
+    interpretation: "Ética resume señales públicas que pueden afectar a quienes usan el sitio. Todos los dominios se valoran con la misma información pública sobre sus servicios externos. Algunos titulares comparten además datos internos en un bloque separado; ese aporte no cambia esta nota.",
   };
 }
 

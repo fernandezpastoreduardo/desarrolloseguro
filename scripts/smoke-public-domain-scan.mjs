@@ -30,7 +30,7 @@ export function validateCompletedReport(status, previousReportId, hostname = VAL
   }
   if (
     report.profileVersion !== "domain-v4" ||
-    report.scannerVersion !== "domain-v4-network-adapter-2" ||
+    report.scannerVersion !== "domain-v4-network-adapter-3" ||
 
     !Array.isArray(report.checks) ||
     report.checks.length !== 10
@@ -74,7 +74,7 @@ export function validateCompletedReport(status, previousReportId, hostname = VAL
     Boolean(completeTlsMatrix);
   if (
     !assessment ||
-    assessment.policyVersion !== "domain-ethics-v5" ||
+    assessment.policyVersion !== "domain-ethics-v6" ||
     !Number.isInteger(assessment.score) ||
     assessment.score < 0 ||
     assessment.score > 100 ||
@@ -83,6 +83,9 @@ export function validateCompletedReport(status, previousReportId, hostname = VAL
     !publicPolicyAssessment ||
     publicPolicyAssessment.policyVersion !== "public-policy-v1" ||
     !processorAssessment ||
+    !report.publicServiceComparison ||
+    report.publicServiceComparison.policyVersion !== "public-service-comparison-v1" ||
+    report.publicServiceComparison.status !== "pass" ||
     !["pass", "fail"].includes(processorAssessment.status) ||
     assessment.criteria.find(({ id }) => id === "initial-cookie-risk")?.status ===
       "unknown" ||

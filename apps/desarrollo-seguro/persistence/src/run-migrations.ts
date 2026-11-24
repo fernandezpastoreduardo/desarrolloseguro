@@ -143,6 +143,10 @@ const MIGRATIONS = [
     version: "041_privacy_probe_error_summary",
     file: "041_privacy_probe_error_summary.sql",
   },
+  {
+    version: "042_public_service_comparisons",
+    file: "042_public_service_comparisons.sql",
+  },
 ] as const;
 
 const MIGRATION_LOCK_ID = 728194032;

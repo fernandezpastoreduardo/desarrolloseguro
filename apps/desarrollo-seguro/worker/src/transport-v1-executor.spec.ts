@@ -46,7 +46,38 @@ function makeSource(): TransportV1FixtureObservationSource {
   };
 }
 
-describe("TransportV1FixtureExecutor", () => {
+describe("TransportV1 executors", () => {
+  it("retains normalized provider-purpose declarations from the public policy", async () => {
+    const policyEvidence = {
+      publicPolicyLinksFound: 1,
+      publicPolicyPagesInspected: 1,
+      publicPolicyUnavailablePages: 0,
+      publicPolicyAccessDeniedPages: 0,
+      publicPolicyProviderMentions: 1,
+      publicPolicyProvidersMissingPurpose: 0,
+      publicPolicyCategories: "analytics",
+      publicPolicyDeclaredServices: JSON.stringify([
+        { providerId: "google-analytics", purposeIds: ["analytics"] },
+      ]),
+    };
+    const source: TransportV1ObservationSource = {
+      sourceKind: "network",
+      observeDns: async () => ({ evidence: { addressClass: "public", aRecordCount: 1, aaaaRecordCount: 0 }, requestsCount: 0, bytesCount: 0 }),
+      observeTls: async () => ({ evidence: { protocol: "TLSv1.3", certificateValid: true, hostnameMatches: true }, requestsCount: 1, bytesCount: 1 }),
+      observeHttp: async () => ({ evidence: { statusCode: 200, redirectedToHttps: true, finalScheme: "https" }, requestsCount: 1, bytesCount: 1 }),
+      observeHeaders: async () => ({ evidence: policyEvidence, requestsCount: 1, bytesCount: 100 }),
+    };
+
+    const result = await new TransportV1NetworkExecutor(source).execute(
+      { ...JOB, profileVersion: "domain-v4" },
+      new AbortController().signal,
+    );
+
+    expect(result.publicServiceDeclarations).toEqual([
+      { providerId: "google-analytics", purposes: ["analytics"] },
+    ]);
+  });
+
   it("assembles the exact reduced profile from observed evidence", async () => {
     const source = makeSource();
     const executor = new TransportV1FixtureExecutor(source);

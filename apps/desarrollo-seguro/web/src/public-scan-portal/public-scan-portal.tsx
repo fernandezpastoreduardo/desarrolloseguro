@@ -1,4 +1,5 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
+import { PUBLIC_SERVICE_PROVIDER_INFO } from "@desarrolloseguro/core/public-service-catalog";
 import "./public-scan-portal.scss";
 
 const API_ROOT = "/api/desarrollo-seguro/v1";
@@ -104,7 +105,7 @@ const CRITERION_EXPLANATIONS: Record<string, string> = {
   "http-availability": "Comprobamos si la página principal responde y si termina en una conexión cifrada.",
   "security-headers": "Revisamos instrucciones que ayudan al navegador a proteger a quienes visitan el sitio.",
   "third-party-data-use": "Buscamos información pública sobre qué servicios externos participan y qué explican sobre el uso de datos.",
-  "external-service-transparency": "Buscamos información pública sobre los servicios externos, sus proveedores y sus finalidades. No confirma contratos ni prácticas internas.",
+  "external-service-transparency": "Comparamos los servicios externos que se observaron con los que el sitio identifica y la finalidad que declara para cada uno.",
   "backend-processor-transparency": "Comparamos los servicios que el titular declara con su lista interna de sistemas activos. No podemos comprobar aquí si cada proveedor cumple lo declarado.",
   "initial-cookie-risk": "Revisamos los datos que la página guarda en el navegador al abrirla. Esta comprobación no cubre lo que ocurre después.",
   tracking: "Buscamos en el contenido inicial referencias a herramientas de seguimiento conocidas. Esto no confirma que se conecten o se ejecuten.",
@@ -116,7 +117,7 @@ const CRITERION_FAIL_MEANINGS: Record<string, string> = {
   "http-availability": "La página principal no respondió como se esperaba o no terminó en una conexión cifrada.",
   "security-headers": "Falta al menos una indicación que ayuda al navegador a proteger la visita.",
   "third-party-data-use": "Falta información pública necesaria sobre los servicios externos o el acceso a esa información fue denegado.",
-  "external-service-transparency": "La información pública necesaria sobre servicios externos y sus finalidades no se encontró o no estaba disponible.",
+  "external-service-transparency": "Se observó un servicio externo que no aparece explicado junto con su finalidad en la información pública.",
   "initial-cookie-risk": "El nombre de un dato guardado coincide con los que suelen usar herramientas de análisis o publicidad. Esto no basta por sí solo para confirmar un incumplimiento.",
   tracking: "El contenido inicial menciona herramientas de seguimiento conocidas, pero esta prueba no confirma que se conecten o se ejecuten.",
   performance: "La primera respuesta tardó más de lo esperado en esta medición puntual.",
@@ -205,6 +206,17 @@ type PublicPolicyTransparencyAssessment = {
     categories: Array<"analytics" | "advertising" | "social" | "consent" | "other">;
   };
 };
+type PublicServiceComparison = {
+  policyVersion: "public-service-comparison-v1";
+  status: "pass" | "fail" | "unknown";
+  reasonCode: "services_disclosed" | "observed_service_undisclosed" | "public_policy_missing" | "auditor_error";
+  items: Array<{
+    providerId: string;
+    observation: "observed" | "declared" | "observed_and_declared";
+    observedDomains: string[];
+    declaredPurposes: string[];
+  }>;
+};
 type InternalAuditCriterionId =
   | "infrastructure.tls" | "infrastructure.headers" | "infrastructure.network"
   | "application.dependencies" | "application.secrets" | "authentication.authorization"
@@ -242,7 +254,7 @@ type PublicReport = {
     } | null;
   };
   ethicsAssessment: {
-    policyVersion: "domain-ethics-v3" | "domain-ethics-v4" | "domain-ethics-v5";
+    policyVersion: "domain-ethics-v3" | "domain-ethics-v4" | "domain-ethics-v5" | "domain-ethics-v6";
     score: number | null;
     assessedCriteria: number;
     totalCriteria: number;
@@ -277,6 +289,7 @@ type PublicReport = {
   } | null;
   processorTransparencyAssessment: PublicProcessorTransparencyAssessment | null;
   publicPolicyTransparencyAssessment: PublicPolicyTransparencyAssessment | null;
+  publicServiceComparison?: PublicServiceComparison | null;
   internalAuditSummary?: InternalAuditPublicSummary | null;
   internalAuditState?: "running" | "review" | "complete" | null;
   certification: {
@@ -1026,18 +1039,18 @@ function ReportSummary({
       <CertificationStatus certification={report.certification} />
       <section className="ds-portal__ethics" aria-labelledby="ethics-summary-heading">
         <div className="ds-portal__score-lead">
-        <div className="ds-portal__score-copy">
-            <p className="ds-portal__eyebrow">Resultado de la evaluación</p>
-            <h3 id="ethics-summary-heading">Dimensiones de evaluación</h3>
-            <p className="ds-portal__ethics-score">{getGlobalScoreSummary(report)}</p>
-          </div>
           <GlobalScoreRing score={report.globalAssessment.score} status={report.globalAssessment.status} />
+          <div className="ds-portal__score-copy">
+            <p className="ds-portal__eyebrow">Resultado de la evaluación</p>
+            <h3 id="ethics-summary-heading">Qué significa esta valoración</h3>
+            <p className="ds-portal__report-takeaway">{getReportTakeaway(report)}</p>
+          </div>
         </div>
-      <p className="ds-portal__ethics-score">
+        <p className="ds-portal__ethics-score">
           <strong>Ética</strong><br />
           {report.ethicsAssessment.score === null
-            ? `Sin nota · ${report.ethicsAssessment.assessedCriteria} de ${report.ethicsAssessment.totalCriteria} criterios evaluados`
-            : `${report.ethicsAssessment.score}/100 · ${report.ethicsAssessment.assessedCriteria} de ${report.ethicsAssessment.totalCriteria} criterios evaluados`}
+            ? `En revisión · ${report.ethicsAssessment.assessedCriteria} de ${report.ethicsAssessment.totalCriteria} comprobaciones completas`
+            : `${report.ethicsAssessment.score}/100 · ${report.ethicsAssessment.assessedCriteria} de ${report.ethicsAssessment.totalCriteria} comprobaciones completas`}
         </p>
         <BetaEvaluationCharts criteria={report.ethicsAssessment.criteria} />
         <div className="ds-portal__report-categories">
@@ -1108,16 +1121,13 @@ function ReportSummary({
         {report.processorTransparencyAssessment && (
           <section className="ds-portal__processors" aria-labelledby="processor-transparency-heading">
             <h3 id="processor-transparency-heading">
-            Servicios externos declarados por {(report.processorTransparencyAssessment.inventory?.hostname ?? report.hostname) === "desarrolloseguro.org" ? "Desarrollo Seguro" : "Grumphya"}
+                Información adicional compartida por {(report.processorTransparencyAssessment.inventory?.hostname ?? report.hostname) === "desarrolloseguro.org" ? "Desarrollo Seguro" : "Grumphya"}
             </h3>
             <p>
               {getProcessorTransparencySummary(report.processorTransparencyAssessment)}
             </p>
             {report.processorTransparencyAssessment.inventory && (
               <>
-                <p className="ds-portal__processors-meta">
-                  Información revisada el {formatDate(report.processorTransparencyAssessment.inventory.observedAt)}.
-                </p>
                 {report.processorTransparencyAssessment.inventory.processors.length > 0 ? (
                   <ul className="ds-portal__processor-list">
                     {report.processorTransparencyAssessment.inventory.processors.map((processor) => (
@@ -1165,22 +1175,15 @@ function ReportSummary({
             )}
           </section>
         )}
-        {report.publicPolicyTransparencyAssessment && (
+        {report.publicServiceComparison && (
+          <PublicServiceComparisonSection comparison={report.publicServiceComparison} observedDomains={report.privacyAssessment?.evidence.domains ?? []} />
+        )}
+        {report.publicPolicyTransparencyAssessment && !report.publicServiceComparison && (
           <section className="ds-portal__public-policy" aria-labelledby="public-policy-transparency-heading">
-            <h3 id="public-policy-transparency-heading">Qué cuenta la política sobre servicios externos</h3>
+            <h3 id="public-policy-transparency-heading">Servicios externos detectados</h3>
             <p>{getPublicPolicyTransparencySummary(report.publicPolicyTransparencyAssessment)}</p>
-            <dl>
-              <div><dt>Enlaces relacionados encontrados</dt><dd>{report.publicPolicyTransparencyAssessment.evidence.linksFound}</dd></div>
-              <div><dt>Páginas consultadas</dt><dd>{report.publicPolicyTransparencyAssessment.evidence.pagesInspected}</dd></div>
-              <div><dt>Páginas no disponibles</dt><dd>{report.publicPolicyTransparencyAssessment.evidence.unavailablePages + report.publicPolicyTransparencyAssessment.evidence.accessDeniedPages}</dd></div>
-              <div><dt>Proveedores reconocidos en la información</dt><dd>{report.publicPolicyTransparencyAssessment.evidence.providerMentions}</dd></div>
-              <div><dt>Sin finalidad explicada</dt><dd>{report.publicPolicyTransparencyAssessment.evidence.providersMissingPurpose}</dd></div>
-            </dl>
-            {report.publicPolicyTransparencyAssessment.evidence.categories.length > 0 && (
-              <p><strong>Temas identificados:</strong> {report.publicPolicyTransparencyAssessment.evidence.categories.map(getPublicPolicyCategoryLabel).join(", ")}.</p>
-            )}
             <p className="ds-portal__public-policy-note">
-              Esto resume la información publicada por el sitio. El análisis no puede comprobar contratos privados ni confirmar cómo actúan los proveedores.
+              Esta parte compara los servicios visibles desde fuera con los que el sitio explica en su información pública. Las declaraciones de cada proveedor se enlazan como fuente.
             </p>
           </section>
         )}
@@ -1250,11 +1253,86 @@ function ReportSummary({
         <p className="ds-portal__score-method">
           La nota global combina por igual Ética y Privacidad. Las categorías describen aspectos distintos que pueden afectar a las personas; no son una opinión moral. Ética valora lo que el sitio explica sobre sus prácticas y los indicios públicos observados. Si falta información que debería ser pública, se señala como falta de transparencia. Si falla una comprobación técnica del auditor, el resultado queda en revisión. Una nota alta no garantiza que nunca vaya a ocurrir un problema.
         </p>
-        <p className="ds-portal__report-takeaway">{getReportTakeaway(report.ethicsAssessment.criteria)}</p>
         <p>{report.ethicsAssessment.interpretation}</p>
       </section>
     </>
   );
+}
+
+function PublicServiceComparisonSection({ comparison, observedDomains }: { comparison: PublicServiceComparison; observedDomains: string[] }) {
+  const classifiedDomains = new Set(comparison.items.flatMap(({ observedDomains: domains }) => domains));
+  const otherObservedDomains = observedDomains.filter((domain) => !classifiedDomains.has(domain));
+  const summary = comparison.reasonCode === "auditor_error"
+    ? "La comparación de servicios sigue en revisión porque falló una comprobación técnica."
+    : comparison.reasonCode === "public_policy_missing"
+      ? "No se encontró información pública suficiente para conocer y contrastar los servicios externos del sitio."
+      : comparison.reasonCode === "observed_service_undisclosed"
+        ? "Se detectó al menos un servicio externo que el sitio no identifica junto con su finalidad. Esto reduce la transparencia para sus visitantes."
+        : "Los servicios externos observados aparecen explicados por el sitio. Los servicios declarados que no se vieron durante esta revisión se muestran aparte y no se consideran actividad confirmada.";
+  return (
+    <section className="ds-portal__public-services" aria-labelledby="public-services-heading">
+      <h3 id="public-services-heading">Servicios externos detectados</h3>
+      <p>{summary}</p>
+      {comparison.items.length > 0 && (
+        <ul className="ds-portal__public-service-list">
+          {comparison.items.map((item) => {
+            const info = PUBLIC_SERVICE_PROVIDER_INFO[item.providerId] ?? null;
+            const label = info?.displayName ?? item.providerId;
+            const stateLabel = item.observation === "observed_and_declared"
+              ? "Correcto · observado y explicado"
+              : item.observation === "observed"
+                ? "Riesgo detectado · observado sin explicación pública suficiente"
+                : "Declarado · no observado en esta revisión";
+            return (
+              <li key={item.providerId} data-observation={item.observation}>
+                <div className="ds-portal__public-service-heading">
+                  <h4>{label}</h4>
+                  <strong>{stateLabel}</strong>
+                </div>
+                {item.declaredPurposes.length > 0 && (
+                  <p><b>Qué explica el sitio:</b> {item.declaredPurposes.map(getPublicPurposeLabel).join(", ")}.</p>
+                )}
+                {item.observedDomains.length > 0 && (
+                  <p><b>Conexiones observadas:</b> {item.observedDomains.join(", ")}.</p>
+                )}
+                {info && (
+                  <>
+                    <p>{info.serviceSummary}</p>
+                    <p className="ds-portal__public-service-sources">
+                      Fuentes del proveedor: <a href={info.serviceSourceUrl} target="_blank" rel="noopener noreferrer">descripción del servicio</a>
+                      {" · "}<a href={info.privacyPolicyUrl} target="_blank" rel="noopener noreferrer">política de privacidad</a>.
+                    </p>
+                  </>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {otherObservedDomains.length > 0 && (
+        <div className="ds-portal__unclassified-services">
+          <h4>Otros dominios externos observados</h4>
+          <p>La conexión con estos dominios se observó, pero no hay una identificación fiable de su proveedor o función. Por eso se muestran como indicio y no se penalizan automáticamente.</p>
+          <ul>{otherObservedDomains.map((domain) => <li key={domain}>{domain}</li>)}</ul>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function getPublicPurposeLabel(purposeId: string): string {
+  const labels: Record<string, string> = {
+    analytics: "medición de visitas y uso",
+    advertising: "publicidad y medición de campañas",
+    social: "integración con redes sociales",
+    consent: "gestión de preferencias de privacidad",
+    payments: "gestión de pagos",
+    hosting: "alojamiento e infraestructura",
+    support: "atención y soporte",
+    security: "seguridad y prevención del fraude",
+    ai_processing: "procesamiento de solicitudes de inteligencia artificial",
+  };
+  return labels[purposeId] ?? "una finalidad que el sitio identifica en su política";
 }
 
 const INTERNAL_AUDIT_COPY: Record<InternalAuditCriterionId, { label: string; pass: string; fail: string }> = {
@@ -1801,6 +1879,7 @@ function isPublicReport(value: unknown): value is PublicReport {
     !isPrivacyAssessment(value.privacyAssessment) ||
     !isProcessorTransparencyAssessment(value.processorTransparencyAssessment) ||
     !isPublicPolicyTransparencyAssessment(value.publicPolicyTransparencyAssessment) ||
+    !isPublicServiceComparison(value.publicServiceComparison) ||
     !isInternalAuditPublicSummary(value.internalAuditSummary) ||
     value.internalAuditState !== undefined && value.internalAuditState !== null &&
       !isOneOf(value.internalAuditState, ["running", "review", "complete"] as const) ||
@@ -1816,11 +1895,16 @@ function isPublicReport(value: unknown): value is PublicReport {
   }
   const hasProcessorAssessment = value.processorTransparencyAssessment !== null;
   const hasPublicPolicyAssessment = value.publicPolicyTransparencyAssessment !== null;
+  const hasPublicServiceComparison = value.publicServiceComparison != null;
   const usesV5PublicPolicy = value.ethicsAssessment.policyVersion === "domain-ethics-v5" &&
     value.profileVersion === "domain-v4" && value.scannerVersion === "domain-v4-network-adapter-2";
+  const usesV6ServiceComparison = value.ethicsAssessment.policyVersion === "domain-ethics-v6" &&
+    value.profileVersion === "domain-v4" && value.scannerVersion === "domain-v4-network-adapter-3";
   if ((value.ethicsAssessment.policyVersion === "domain-ethics-v3" && (hasProcessorAssessment || hasPublicPolicyAssessment)) ||
       (value.ethicsAssessment.policyVersion === "domain-ethics-v4" && (!hasProcessorAssessment || hasPublicPolicyAssessment)) ||
       usesV5PublicPolicy && !hasPublicPolicyAssessment ||
+      usesV6ServiceComparison && !hasPublicServiceComparison ||
+      hasPublicServiceComparison && !usesV6ServiceComparison ||
       value.ethicsAssessment.policyVersion === "domain-ethics-v5" && !hasProcessorAssessment && !hasPublicPolicyAssessment ||
       hasProcessorAssessment && !["grumphya.com", "desarrolloseguro.org"].includes(value.hostname)) return false;
   if (!isGlobalAssessmentConsistent(
@@ -1988,7 +2072,7 @@ function isPublicCertification(value: unknown): value is PublicReport["certifica
 function isEthicsAssessment(value: unknown): value is PublicReport["ethicsAssessment"] {
   if (!isRecord(value)) return false;
   if (
-    !isOneOf(value.policyVersion, ["domain-ethics-v3", "domain-ethics-v4", "domain-ethics-v5"] as const) ||
+    !isOneOf(value.policyVersion, ["domain-ethics-v3", "domain-ethics-v4", "domain-ethics-v5", "domain-ethics-v6"] as const) ||
     (value.score !== null && (!isInteger(value.score) || value.score < 0 || value.score > 100)) ||
     !isInteger(value.assessedCriteria) || value.assessedCriteria < 0 ||
     !isInteger(value.totalCriteria) || value.totalCriteria <= 0 ||
@@ -2040,6 +2124,41 @@ function isPublicPolicyTransparencyAssessment(value: unknown): value is PublicPo
   if (value.reasonCode === "policy_content_missing") return value.status === "fail" && evidence.linksFound > 0 && evidence.pagesInspected === 0;
   if (value.reasonCode === "service_purpose_missing") return value.status === "fail" && evidence.pagesInspected > 0 && (evidence.providerMentions === 0 || evidence.providersMissingPurpose > 0 || evidence.categories.length === 0);
   return value.status === "pass" && evidence.linksFound > 0 && evidence.pagesInspected > 0 && evidence.providerMentions > 0 && evidence.providersMissingPurpose === 0 && evidence.categories.length > 0;
+}
+
+function isPublicServiceComparison(value: unknown): value is PublicServiceComparison | null | undefined {
+  if (value === undefined || value === null) return true;
+  if (!isRecord(value) || value.policyVersion !== "public-service-comparison-v1" ||
+      !isOneOf(value.status, ["pass", "fail", "unknown"] as const) ||
+      !isOneOf(value.reasonCode, ["services_disclosed", "observed_service_undisclosed", "public_policy_missing", "auditor_error"] as const) ||
+      !Array.isArray(value.items) || value.items.length > 30) return false;
+  const ids = new Set<string>();
+  for (const item of value.items) {
+    if (!isRecord(item) || typeof item.providerId !== "string" || !/^[a-z0-9][a-z0-9_-]{0,31}$/u.test(item.providerId) || ids.has(item.providerId) ||
+        !isOneOf(item.observation, ["observed", "declared", "observed_and_declared"] as const) ||
+        !isSafeStringList(item.observedDomains, 8, 253) ||
+        !item.observedDomains.every(isHostname) ||
+        !isSafeStringList(item.declaredPurposes, 8, 32) ||
+        !item.declaredPurposes.every((purpose) => /^[a-z0-9][a-z0-9_-]{0,31}$/u.test(purpose))) return false;
+    ids.add(item.providerId);
+    const expected = item.observedDomains.length > 0 && item.declaredPurposes.length > 0
+      ? "observed_and_declared" : item.observedDomains.length > 0 ? "observed" : "declared";
+    if (item.observation !== expected) return false;
+  }
+  if (value.reasonCode === "auditor_error") return value.status === "unknown" && value.items.length === 0;
+  if (value.reasonCode === "public_policy_missing") return value.status === "fail" && !value.items.some(({ observation }) => observation === "observed");
+  if (value.reasonCode === "observed_service_undisclosed") return value.status === "fail" && value.items.some(({ observation }) => observation === "observed");
+  return value.status === "pass" && !value.items.some(({ observation }) => observation === "observed");
+}
+
+function isHostname(value: string): boolean {
+  return value.length <= 253 && /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))*$/iu.test(value);
+}
+
+function isSafeStringList(value: unknown, maximumItems: number, maximumLength: number): value is string[] {
+  return Array.isArray(value) && value.length <= maximumItems &&
+    value.every((item) => typeof item === "string" && item.length > 0 && item.length <= maximumLength) &&
+    new Set(value).size === value.length;
 }
 
 function isProcessorTransparencyAssessment(value: unknown): value is PublicProcessorTransparencyAssessment | null {
@@ -2273,28 +2392,37 @@ function getCategorySummary(criteria: Array<{ status: string }>): string {
   const assessed = criteria.filter((criterion) => criterion.status !== "unknown");
   const problems = assessed.filter((criterion) => criterion.status === "fail").length;
   const unknown = criteria.length - assessed.length;
-  if (assessed.length === 0) return "Todavía no hay datos suficientes para valorar esta categoría.";
+  if (assessed.length === 0) return "Esta parte aún se está comprobando.";
   if (problems > 0) {
-    return `Hay ${problems} aspecto${problems === 1 ? "" : "s"} que conviene revisar de ${assessed.length} evaluado${assessed.length === 1 ? "" : "s"}.`;
+    return `${problems} comprobación${problems === 1 ? "" : "es"} señala${problems === 1 ? "" : "n"} un riesgo para las personas que visitan el sitio.`;
   }
   if (unknown > 0) {
-    return `Se revisaron ${assessed.length} de ${criteria.length} aspectos; no se detectaron problemas en el observado. Faltan datos de ${unknown}.`;
+    return `La revisión de esta parte todavía no ha terminado.`;
   }
-  return `No se detectaron problemas en los ${assessed.length} aspectos evaluados.`;
+  return "Las comprobaciones de esta parte no encontraron riesgos.";
 }
 
-function getReportTakeaway(criteria: Array<{ status: string }>): string {
+function getReportTakeaway(report: PublicReport): string {
+  const criteria = report.ethicsAssessment.criteria;
   const assessed = criteria.filter((criterion) => criterion.status !== "unknown");
   const problems = assessed.filter((criterion) => criterion.status === "fail").length;
   const unknown = criteria.length - assessed.length;
-  if (assessed.length === 0) return "Aún no hay comprobaciones suficientes para valorar el dominio.";
+  if (report.globalAssessment.status === "not_available") {
+    return "Este informe todavía no tiene información suficiente para una valoración global.";
+  }
+  if (report.globalAssessment.status === "review") {
+    return problems > 0
+      ? "La revisión encontró señales de riesgo y aún está comprobando otros aspectos."
+      : "La revisión sigue en curso; todavía falta completar algunas comprobaciones.";
+  }
+  if (assessed.length === 0) return "La revisión aún no ha reunido información suficiente para ofrecer una valoración.";
   if (problems > 0) {
-    return `Se detectaron problemas en ${problems} de ${assessed.length} aspectos evaluados. Revisa los detalles por categoría.`;
+    return `La revisión encontró ${problems} señal${problems === 1 ? "" : "es"} que puede${problems === 1 ? "" : "n"} afectar a quienes usan este sitio. Los detalles explican qué se observó.`;
   }
   if (unknown > 0) {
-    return `No se detectaron problemas en ${assessed.length} aspecto${assessed.length === 1 ? "" : "s"} evaluado${assessed.length === 1 ? "" : "s"}. ${unknown} aspecto${unknown === 1 ? "" : "s"} quedó${unknown === 1 ? "" : "n"} en revisión porque el análisis no pudo completar esa comprobación.`;
+    return "Las comprobaciones terminadas no señalan riesgos; una parte de la revisión sigue en curso.";
   }
-  return `No se detectaron problemas en los ${assessed.length} aspectos evaluados.`;
+  return "La revisión no encontró riesgos en los aspectos comprobados.";
 }
 
 function getCriterionOutcome(criterionId: string, status: string): string {
@@ -2306,12 +2434,12 @@ function getCriterionOutcome(criterionId: string, status: string): string {
     "http-availability": "La portada respondió según lo esperado y usó una conexión segura en esta comprobación.",
     "security-headers": "Las protecciones comprobadas estaban presentes en la respuesta observada.",
     "third-party-data-use": "No se ha podido confirmar el uso que terceros hacen de los datos.",
-    "external-service-transparency": "La nota refleja si se encontró información pública sobre los servicios externos y sus finalidades; no certifica que esas declaraciones sean ciertas.",
+    "external-service-transparency": "Comparamos las conexiones observadas con la información que publica el sitio sobre sus proveedores y para qué los utiliza.",
     "initial-cookie-risk": "No se reconocieron cookies con riesgo en la primera respuesta observada.",
     tracking: "No se encontraron referencias conocidas a rastreadores en el HTML inicial; no se ejecutaron scripts.",
     performance: "La respuesta inicial quedó dentro del umbral orientativo de esta comprobación; no representa la experiencia completa.",
   };
-  return outcomes[criterionId] ?? "La comprobación no detectó un problema en este punto.";
+  return outcomes[criterionId] ?? "Esta comprobación no encontró una señal de riesgo.";
 }
 
 function getCriterionEvidenceSummary(
@@ -2320,8 +2448,11 @@ function getCriterionEvidenceSummary(
   publicPolicyAssessment: PublicPolicyTransparencyAssessment | null = null,
 ): string {
   if (criterionId === "external-service-transparency" && publicPolicyAssessment) {
-    const evidence = publicPolicyAssessment.evidence;
-    return `Se encontraron ${evidence.linksFound} enlaces relacionados y se consultaron ${evidence.pagesInspected} páginas; se reconocieron ${evidence.providerMentions} proveedores, ${evidence.providersMissingPurpose} sin finalidad indicada.`;
+    return publicPolicyAssessment.status === "pass"
+      ? "La información pública del sitio explica servicios externos y para qué se usan."
+      : publicPolicyAssessment.status === "fail"
+        ? getPublicPolicyTransparencySummary(publicPolicyAssessment)
+        : "La comprobación de la información pública sigue en revisión.";
   }
   const evidence = checks
     .filter((check) => getCriterionControlIds(criterionId).includes(check.controlId))
@@ -2472,33 +2603,22 @@ function getPublicPolicyTransparencySummary(
 ): string {
   switch (assessment.reasonCode) {
     case "disclosure_found":
-      return "La política enlazada explica servicios externos y sus finalidades. Esto refleja lo que declara el sitio; no confirma prácticas internas.";
+      return "La información pública del sitio identifica servicios externos y explica para qué se usan.";
     case "policy_link_missing":
-      return "No encontramos un enlace público a información sobre los servicios externos del sitio.";
+      return "No encontramos información pública que explique qué servicios externos usa el sitio. Por eso no se puede saber qué entidades pueden recibir datos.";
     case "policy_content_missing":
-      return "Encontramos un enlace relacionado, pero no pudimos leer su contenido.";
+      return "El sitio enlaza información sobre sus servicios, pero su contenido no se pudo consultar.";
     case "policy_page_unavailable":
-      return "Una o más páginas enlazadas no estaban disponibles al consultarlas.";
+      return "La información pública enlazada no estaba disponible. Así, las personas no pueden revisar qué servicios se usan.";
     case "service_purpose_missing":
-      return "La información consultada no permite identificar proveedores externos y para qué se usan.";
+      return "La información pública no explica con claridad qué servicios externos se usan ni para qué.";
     case "access_denied":
-      return "El sitio o la página enlazada impidió consultar esta información pública.";
+      return "No fue posible consultar la información pública sobre los servicios externos.";
     case "auditor_error":
-      return "Un error técnico del auditor impidió completar la comprobación; el resultado queda en revisión.";
+      return "La revisión sigue en curso porque falló una comprobación técnica.";
     case "budget_exhausted":
-      return "La comprobación alcanzó su límite de tiempo o solicitudes; el criterio queda en revisión.";
+      return "La revisión sigue en curso y todavía no tiene un resultado completo.";
   }
-}
-
-function getPublicPolicyCategoryLabel(category: PublicPolicyTransparencyAssessment["evidence"]["categories"][number]): string {
-  const labels: Record<typeof category, string> = {
-    analytics: "medición de uso",
-    advertising: "publicidad",
-    social: "redes sociales",
-    consent: "preferencias de privacidad",
-    other: "otros servicios",
-  };
-  return labels[category];
 }
 
 function formatByteCount(value: number): string {
@@ -2539,16 +2659,6 @@ function getControlLabel(controlId: string): string {
 
 function getHistoryVerdictLabel(verdict: ScanVerdict): string {
   return VERDICT_LABELS[verdict] ?? "En revisión";
-}
-
-function getGlobalScoreSummary(report: PublicReport): string {
-  if (report.globalAssessment.status === "scored") {
-    return `${report.globalAssessment.score}/100`;
-  }
-  if (report.globalAssessment.status === "review") {
-    return "En revisión · se muestran por separado las notas y la cobertura de cada dimensión";
-  }
-  return "Sin nota global · este informe no incluye una evaluación de Privacidad";
 }
 
 function getHistoryGlobalScoreLabel(assessment: PublicReportHistoryEntry["globalAssessment"]): string {

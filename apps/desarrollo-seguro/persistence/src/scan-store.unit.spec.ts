@@ -477,9 +477,66 @@ describe("PostgresScanStore unit behavior", () => {
       publicPolicyTransparencyAssessment,
     })).resolves.toBe("run-id");
 
-    expect(query.mock.calls[0]?.[0]).toContain("ds_complete_scan_with_transparency");
+    expect(query.mock.calls[0]?.[0]).toContain("ds_complete_scan_with_service_comparison");
     expect(JSON.parse(query.mock.calls[0]?.[1]?.[12] as string)).toEqual(publicPolicyTransparencyAssessment);
     expect(JSON.stringify(query.mock.calls[0]?.[1])).not.toContain("https://");
+  });
+
+  it("persists and reads the bounded public service comparison", async () => {
+    const comparison: import("@desarrolloseguro/core").PublicServiceComparison = {
+      policyVersion: "public-service-comparison-v1",
+      status: "pass",
+      reasonCode: "services_disclosed",
+      items: [{
+        providerId: "openai-api",
+        observation: "observed_and_declared",
+        observedDomains: ["api.openai.com"],
+        declaredPurposes: ["assistant"],
+      }],
+    };
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rows: [{ ds_complete_scan: "run-id" }] })
+      .mockResolvedValueOnce({ rows: [makePublicReportRow({ report_public_service_comparison: comparison })] });
+    const store = new PostgresScanStore(makePool({ query }));
+
+    await expect(store.completeScan({
+      ...VALID_REPORT,
+      publicServiceComparison: comparison,
+    })).resolves.toBe("run-id");
+    expect(query.mock.calls[0]?.[0]).toContain("ds_complete_scan_with_service_comparison");
+    expect(JSON.parse(query.mock.calls[0]?.[1]?.[13] as string)).toEqual(comparison);
+
+    const report = await store.readPublicReport("8d140e17-68d6-489a-b451-7e87408187ae");
+    expect(report?.publicServiceComparison).toEqual(comparison);
+  });
+
+  it("rejects inconsistent public service comparisons before persisting or publishing", async () => {
+    const writeQuery = vi.fn();
+    const store = new PostgresScanStore(makePool({ query: writeQuery }));
+    const invalidComparison = {
+      policyVersion: "public-service-comparison-v1",
+      status: "pass",
+      reasonCode: "services_disclosed",
+      items: [{
+        providerId: "openai-api",
+        observation: "observed",
+        observedDomains: ["api.openai.com"],
+        declaredPurposes: [],
+      }],
+    };
+
+    await expect(store.completeScan({
+      ...VALID_REPORT,
+      publicServiceComparison: invalidComparison as never,
+    })).rejects.toThrow("invalid_public_service_comparison");
+    expect(writeQuery).not.toHaveBeenCalled();
+
+    const readQuery = vi.fn().mockResolvedValue({
+      rows: [makePublicReportRow({ report_public_service_comparison: invalidComparison })],
+    });
+    const readStore = new PostgresScanStore(makePool({ query: readQuery }));
+    await expect(readStore.readPublicReport("8d140e17-68d6-489a-b451-7e87408187ae"))
+      .rejects.toThrow("invalid_public_report_row");
   });
 
   it("stores public-policy evidence as separate client context beside inventory evidence", async () => {
@@ -498,7 +555,7 @@ describe("PostgresScanStore unit behavior", () => {
       publicPolicyTransparencyAssessment: assessment,
       processorTransparencyAssessment: assessProcessorTransparency({ status: "auditor_error" }),
     })).resolves.toBe("run-id");
-    expect(query.mock.calls[0]?.[0]).toContain("ds_complete_scan_with_transparency");
+    expect(query.mock.calls[0]?.[0]).toContain("ds_complete_scan_with_service_comparison");
     expect(JSON.parse(query.mock.calls[0]?.[1]?.[10] as string)).toMatchObject({ status: "unknown" });
     expect(JSON.parse(query.mock.calls[0]?.[1]?.[12] as string)).toEqual(assessment);
   });

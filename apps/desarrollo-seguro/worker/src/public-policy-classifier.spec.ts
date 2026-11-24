@@ -4,13 +4,21 @@ import { classifyPublicPolicyHtml, getPublicPolicyProviderSources } from "./publ
 describe("classifyPublicPolicyHtml", () => {
   it("requires an explicitly stated purpose alongside a known provider", () => {
     expect(classifyPublicPolicyHtml(`
-      <p>Usamos Google Analytics para medir el uso de este sitio.</p>
+      <p>Usamos Google Analytics para la medición del uso de este sitio.</p>
       <p>También integramos Meta Pixel.</p>
     `)).toMatchObject({
       providerIds: expect.arrayContaining(["google-analytics", "meta-pixel"]),
       providersWithPurpose: expect.arrayContaining(["google-analytics"]),
       purposeIds: ["analytics"],
       categories: ["analytics"],
+    });
+  });
+
+  it("does not treat the word analytics in a product name as a declared purpose", () => {
+    expect(classifyPublicPolicyHtml("<p>Usamos Google Analytics y Meta Pixel.</p>")).toMatchObject({
+      providerIds: ["google-analytics", "meta-pixel"],
+      providersWithPurpose: [],
+      declaredServices: [],
     });
   });
 
