@@ -477,7 +477,7 @@ describe("PostgresScanStore unit behavior", () => {
       publicPolicyTransparencyAssessment,
     })).resolves.toBe("run-id");
 
-    expect(query.mock.calls[0]?.[0]).toContain("ds_complete_scan_with_service_comparison");
+    expect(query.mock.calls[0]?.[0]).toContain("ds_complete_scan_with_legal_cookie_findings");
     expect(JSON.parse(query.mock.calls[0]?.[1]?.[12] as string)).toEqual(publicPolicyTransparencyAssessment);
     expect(JSON.stringify(query.mock.calls[0]?.[1])).not.toContain("https://");
   });
@@ -503,7 +503,7 @@ describe("PostgresScanStore unit behavior", () => {
       ...VALID_REPORT,
       publicServiceComparison: comparison,
     })).resolves.toBe("run-id");
-    expect(query.mock.calls[0]?.[0]).toContain("ds_complete_scan_with_service_comparison");
+    expect(query.mock.calls[0]?.[0]).toContain("ds_complete_scan_with_legal_cookie_findings");
     expect(JSON.parse(query.mock.calls[0]?.[1]?.[13] as string)).toEqual(comparison);
 
     const report = await store.readPublicReport("8d140e17-68d6-489a-b451-7e87408187ae");
@@ -555,7 +555,7 @@ describe("PostgresScanStore unit behavior", () => {
       publicPolicyTransparencyAssessment: assessment,
       processorTransparencyAssessment: assessProcessorTransparency({ status: "auditor_error" }),
     })).resolves.toBe("run-id");
-    expect(query.mock.calls[0]?.[0]).toContain("ds_complete_scan_with_service_comparison");
+    expect(query.mock.calls[0]?.[0]).toContain("ds_complete_scan_with_legal_cookie_findings");
     expect(JSON.parse(query.mock.calls[0]?.[1]?.[10] as string)).toMatchObject({ status: "unknown" });
     expect(JSON.parse(query.mock.calls[0]?.[1]?.[12] as string)).toEqual(assessment);
   });
