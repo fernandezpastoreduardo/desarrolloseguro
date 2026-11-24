@@ -202,6 +202,11 @@ requiere visitar, modificar ni desplegar Grumphya.
 
 Criterios verificables:
 
+- La respuesta validada del coordinador conserva `publicServiceComparison`,
+  `legalCookieFindings` y `firstEntryPolicyAccess` hasta persistencia. El API
+  público expone la evidencia de primera entrada junto con la comparación y
+  los hallazgos; un parser intermedio no puede descartarla silenciosamente.
+
 - Un aviso de consentimiento con enlace solo en el footer no pasa; el enlace en
   el propio aviso sí se sigue y se audita.
 - Sin cookies de terceros ni solicitud de consentimiento, se acepta el enlace

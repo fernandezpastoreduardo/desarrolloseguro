@@ -581,6 +581,17 @@ describe("PublicScanService", () => {
   });
 
   it("uses the common service comparison for non-clients", async () => {
+    const firstEntryPolicyAccess = {
+      policyVersion: "first-entry-policy-access-v1",
+      status: "fail",
+      reasonCode: "consent_link_missing",
+      consentPromptDetected: true,
+      thirdPartyCookieDetected: true,
+      nonEssentialThirdPartyStorageDetected: true,
+      linkLocation: "none",
+      link: null,
+      documentAccess: "not_checked",
+    } as const;
     const report = makeReport({
       hostname: "example.com",
       profileVersion: "domain-v4",
@@ -605,6 +616,7 @@ describe("PublicScanService", () => {
         reasonCode: "observed_service_undisclosed",
         items: [{ providerId: "google-analytics", observation: "observed", observedDomains: ["google-analytics.com"], declaredPurposes: [] }],
       },
+      firstEntryPolicyAccess,
     });
     const service = new PublicScanService({
       scanStore: {
@@ -621,6 +633,7 @@ describe("PublicScanService", () => {
       status: "fail",
       weight: 10,
     }));
+    expect(result.firstEntryPolicyAccess).toEqual(firstEntryPolicyAccess);
   });
 
   it("publishes the equal-weight MVP score only when both dimensions have full coverage", async () => {
@@ -868,6 +881,7 @@ describe("PublicScanService", () => {
         "processorTransparencyAssessment",
         "publicPolicyTransparencyAssessment",
         "publicServiceComparison",
+        "firstEntryPolicyAccess",
         "betaCertification",
         "internalAuditState",
         "internalAuditSummary",

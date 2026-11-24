@@ -25,6 +25,7 @@ import {
   type ProcessorTransparencyAssessment,
   type PublicPolicyTransparencyAssessment,
   type PublicServiceComparison,
+  type FirstEntryPolicyAccess,
   type LegalCookieFinding,
   type ScanFailureDiagnostic,
 } from "@desarrolloseguro/core";
@@ -65,6 +66,7 @@ export type PublicReport = {
   processorTransparencyAssessment: ProcessorTransparencyAssessment | null;
   publicPolicyTransparencyAssessment: PublicPolicyTransparencyAssessment | null;
   publicServiceComparison: PublicServiceComparison | null;
+  firstEntryPolicyAccess: FirstEntryPolicyAccess | null;
   legalCookieFindings?: LegalCookieFinding[];
   betaCertification: ReturnType<typeof assessBetaCertification>;
   certification: PublicBetaCertificationResponse | null;
@@ -354,6 +356,7 @@ function toPublicReport(
     processorTransparencyAssessment,
     publicPolicyTransparencyAssessment,
     publicServiceComparison,
+    firstEntryPolicyAccess: report.firstEntryPolicyAccess ?? null,
     ...(legalCookieFindings?.length ? { legalCookieFindings } : {}),
     betaCertification: assessBetaCertification(toBetaObservations(report.checks)),
     certification: toPublicCertification(report.certification),
