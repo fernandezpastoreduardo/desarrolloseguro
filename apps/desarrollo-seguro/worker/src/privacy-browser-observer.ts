@@ -315,7 +315,8 @@ async function runFlow(
       await page.goto(`https://${hostname}/`, { waitUntil: "domcontentloaded" });
       pageLoaded = true;
     } catch {
-      return await captureFlow(context, page, { ...UNKNOWN_FLOW, pageLoaded }, timeline, ledger, flowHosts, completedHosts);
+      const captured = await captureFlow(context, page, { ...UNKNOWN_FLOW, pageLoaded }, timeline, ledger, flowHosts, completedHosts);
+      return { ...captured, cookieReadComplete: false, storageReadComplete: false };
     }
     await page.waitForTimeout(CONSENT_SETTLE_MS);
     context.on("page", (openedPage) => {
