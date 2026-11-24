@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { ProviderCatalogSnapshot } from "@desarrolloseguro/persistence/provider-catalog";
+import { PROVIDER_LEGAL_RULES, type ProviderEvidenceSource } from "@desarrolloseguro/core";
 import { assessCatalogProviderDocumentation, mergeProviderDocumentationComparison } from "./provider-documentation-assessment.js";
+import type { ProviderLegalEvidenceContext } from "./provider-legal-evidence-builder.js";
 
 const siteStatement = {
   providerId: "openai-api",
@@ -46,6 +48,30 @@ describe("catalog provider documentation assessment", () => {
       items: [],
     }, findings);
     expect(merged).toMatchObject({ status: "fail", reasonCode: "provider_documentation_contradiction" });
+  });
+
+  it("keeps a proven contradiction but withholds the legal finding when required evidence is missing", () => {
+    const result = assessCatalogProviderDocumentation({
+      declarations: [{ providerId: "openai-api", purposes: ["ai_processing"], siteStatements: [{ ...siteStatement, factId: "provider_receives_personal_data" }] }],
+      snapshot: snapshotWithPersonalDataFact(),
+    });
+    expect(result[0]).toMatchObject({
+      status: "contradiction_confirmed",
+      comparisons: [{ relation: "opposes", legalMappingStatus: "elements_not_satisfied" }],
+    });
+  });
+
+  it("passes direct per-element evidence to the legal rule and emits its mapped finding", () => {
+    const result = assessCatalogProviderDocumentation({
+      declarations: [{ providerId: "openai-api", purposes: ["ai_processing"], siteStatements: [{ ...siteStatement, factId: "provider_receives_personal_data" }] }],
+      legalEvidenceContexts: { "openai-api": completeLegalEvidenceContext() },
+      snapshot: snapshotWithPersonalDataFact(),
+    });
+    expect(result[0]?.comparisons[0]?.legalFinding).toMatchObject({
+      status: "infraccion_legal_acreditada",
+      ruleId: "gdpr-recipient-disclosure-article-13-v1",
+      articles: expect.arrayContaining(["12(1)", "13(1)(e)", "83(5)(b)"]),
+    });
   });
 
   it("does not use unverified or unavailable catalog sources as provider facts", () => {
@@ -131,5 +157,40 @@ function snapshot(): ProviderCatalogSnapshot {
       checkedAt: "2026-11-24T03:00:00Z",
     }],
     createdAt: new Date("2026-11-24T03:00:00Z"),
+  };
+}
+
+function snapshotWithPersonalDataFact(): ProviderCatalogSnapshot {
+  const seed = snapshot();
+  const provider = seed.providerFacts[0] as { documentedFacts: Array<Record<string, unknown>> };
+  provider.documentedFacts.push({
+    factId: "provider_receives_personal_data",
+    value: true,
+    documentId: "openai-api-data-controls",
+    excerpt: "The provider documents processing of the user's personal data submitted to this service.",
+  });
+  seed.legalRules = Object.values(PROVIDER_LEGAL_RULES);
+  return seed;
+}
+
+function completeLegalEvidenceContext(): ProviderLegalEvidenceContext {
+  return {
+    dataOrigin: { value: "obtained_from_subject", evidence: [evidenceSource("origin", "audited_site")] },
+    personalDataInFlow: { basis: "direct_personal_data_flow", evidence: [evidenceSource("flow", "auditor_observation")] },
+    auditedEntityIsController: { evidence: [evidenceSource("controller", "audited_site")] },
+    aepdJurisdictionIsEstablished: { evidence: [evidenceSource("jurisdiction", "audited_site")] },
+  };
+}
+
+function evidenceSource(sourceId: string, sourceKind: ProviderEvidenceSource["sourceKind"]): ProviderEvidenceSource {
+  return {
+    sourceId,
+    version: "fixture-v1",
+    title: "Prueba directa de auditoría",
+    url: `https://${sourceKind === "provider_official" ? "provider.example" : "site.example"}/${sourceId}`,
+    capturedAt: "2026-11-24T03:00:00.000Z",
+    excerpt: "Evidencia directa para una prueba de integración.",
+    documentKind: sourceKind === "auditor_observation" ? "technical-evidence" : "privacy",
+    sourceKind,
   };
 }

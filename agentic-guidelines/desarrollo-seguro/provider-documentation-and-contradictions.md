@@ -147,6 +147,12 @@ legal vigente acrediten.
   prueba de dato personal o de quién es responsable, se conserva la
   contradicción de hecho sin emitir esta infracción legal. El artículo 5.1.a
   del RGPD no se usa como regla de exactitud de datos para esta discrepancia.
+- El worker debe pasar al motor una estructura `ProviderLegalEvidence`
+  construida con estas fuentes directas. Cada elemento no probado permanece
+  `unknown`; una solicitud a un dominio no demuestra qué datos se transmitieron.
+  Si falta cualquiera de los seis elementos, el informe conserva la
+  contradicción factual y muestra `elements_not_satisfied`, sin etiquetarla
+  como infracción legal acreditada.
 
 ## Actualización mensual
 

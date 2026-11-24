@@ -7,12 +7,14 @@ import {
 } from "@desarrolloseguro/core";
 import type { ProviderCatalogSnapshot } from "@desarrolloseguro/persistence/provider-catalog";
 import type { PublicServiceComparison, PublicServiceDeclarationEvidence } from "@desarrolloseguro/core";
+import { buildProviderLegalEvidence, type ProviderLegalEvidenceContext } from "./provider-legal-evidence-builder.js";
 
 const MAX_DOCUMENTED_FACTS_PER_PROVIDER = 30;
 
 export function assessCatalogProviderDocumentation(input: {
   declarations: readonly PublicServiceDeclarationEvidence[] | undefined;
   observedProviderIds?: readonly string[];
+  legalEvidenceContexts?: Readonly<Record<string, ProviderLegalEvidenceContext>>;
   snapshot: ProviderCatalogSnapshot;
 }): ProviderDocumentationContradiction[] {
   const declarations = input.declarations ?? [];
@@ -27,6 +29,11 @@ export function assessCatalogProviderDocumentation(input: {
       isRecord(candidate) && candidate.providerId === providerId,
     );
     const providerFacts = readDocumentedFacts(catalogProvider, input.snapshot);
+    const disputedSiteStatement = declaration?.siteStatements?.find(({ factId }) => factId === "provider_receives_personal_data");
+    const disputedProviderFact = providerFacts.find(({ factId }) => factId === "provider_receives_personal_data");
+    const legalEvidence = disputedSiteStatement && disputedProviderFact
+      ? buildProviderLegalEvidence(disputedSiteStatement, disputedProviderFact, input.legalEvidenceContexts?.[providerId])
+      : undefined;
     const documentationStatus = isRecord(catalogProvider) && isDocumentationStatus(catalogProvider.documentationStatus)
       ? catalogProvider.documentationStatus
       : "source_not_localized";
@@ -36,6 +43,7 @@ export function assessCatalogProviderDocumentation(input: {
         : documentationStatus === "source_unavailable" ? "unavailable" : "not_located",
       siteStatements: declaration?.siteStatements ?? [],
       providerFacts: documentationStatus === "located" ? providerFacts : [],
+      ...(legalEvidence ? { legalEvidence } : {}),
       legalRules: input.snapshot.legalRules,
     });
     if (comparison) {
