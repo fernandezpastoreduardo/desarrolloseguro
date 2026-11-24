@@ -305,6 +305,7 @@ type PublicReport = {
   processorTransparencyAssessment: PublicProcessorTransparencyAssessment | null;
   publicPolicyTransparencyAssessment: PublicPolicyTransparencyAssessment | null;
   publicServiceComparison?: PublicServiceComparison | null;
+  providerCatalogVersion?: string | null;
   firstEntryPolicyAccess?: FirstEntryPolicyAccess | null;
   internalAuditSummary?: InternalAuditPublicSummary | null;
   internalAuditState?: "running" | "review" | "complete" | null;
@@ -1192,7 +1193,7 @@ function ReportSummary({
           </section>
         )}
         {report.publicServiceComparison && (
-          <PublicServiceComparisonSection comparison={report.publicServiceComparison} observedDomains={report.privacyAssessment?.evidence.domains ?? []} />
+          <PublicServiceComparisonSection comparison={report.publicServiceComparison} observedDomains={report.privacyAssessment?.evidence.domains ?? []} catalogVersion={report.providerCatalogVersion} />
         )}
         {report.firstEntryPolicyAccess && (
           <FirstEntryPolicyAccessSection access={report.firstEntryPolicyAccess} />
@@ -1278,7 +1279,7 @@ function ReportSummary({
   );
 }
 
-function PublicServiceComparisonSection({ comparison, observedDomains }: { comparison: PublicServiceComparison; observedDomains: string[] }) {
+function PublicServiceComparisonSection({ comparison, observedDomains, catalogVersion }: { comparison: PublicServiceComparison; observedDomains: string[]; catalogVersion?: string | null }) {
   const classifiedDomains = new Set(comparison.items.flatMap(({ observedDomains: domains }) => domains));
   const otherObservedDomains = observedDomains.filter((domain) => !classifiedDomains.has(domain));
   const summary = comparison.reasonCode === "auditor_error"
@@ -1294,6 +1295,7 @@ function PublicServiceComparisonSection({ comparison, observedDomains }: { compa
     <section className="ds-portal__public-services" aria-labelledby="public-services-heading">
       <h3 id="public-services-heading">Servicios externos detectados</h3>
       <p>{summary}</p>
+      {catalogVersion && <p>Versión del catálogo oficial aplicado: <code>{catalogVersion}</code></p>}
       {comparison.items.length > 0 && (
         <ul className="ds-portal__public-service-list">
           {comparison.items.map((item) => {
@@ -1997,6 +1999,7 @@ function isPublicReport(value: unknown): value is PublicReport {
     !isProcessorTransparencyAssessment(value.processorTransparencyAssessment) ||
     !isPublicPolicyTransparencyAssessment(value.publicPolicyTransparencyAssessment) ||
     !isPublicServiceComparison(value.publicServiceComparison) ||
+    !(value.providerCatalogVersion === undefined || value.providerCatalogVersion === null || typeof value.providerCatalogVersion === "string" && /^[a-f0-9]{64}$/u.test(value.providerCatalogVersion)) ||
     !isFirstEntryPolicyAccess(value.firstEntryPolicyAccess) ||
     !isInternalAuditPublicSummary(value.internalAuditSummary) ||
     value.internalAuditState !== undefined && value.internalAuditState !== null &&

@@ -617,6 +617,7 @@ describe("PublicScanService", () => {
         items: [{ providerId: "google-analytics", observation: "observed", observedDomains: ["google-analytics.com"], declaredPurposes: [] }],
       },
       firstEntryPolicyAccess,
+      providerCatalogVersion: "a".repeat(64),
     });
     const service = new PublicScanService({
       scanStore: {
@@ -634,6 +635,7 @@ describe("PublicScanService", () => {
       weight: 10,
     }));
     expect(result.firstEntryPolicyAccess).toEqual(firstEntryPolicyAccess);
+    expect(result.providerCatalogVersion).toBe("a".repeat(64));
   });
 
   it("publishes the equal-weight MVP score only when both dimensions have full coverage", async () => {
@@ -882,6 +884,7 @@ describe("PublicScanService", () => {
         "publicPolicyTransparencyAssessment",
         "publicServiceComparison",
         "firstEntryPolicyAccess",
+        "providerCatalogVersion",
         "betaCertification",
         "internalAuditState",
         "internalAuditSummary",

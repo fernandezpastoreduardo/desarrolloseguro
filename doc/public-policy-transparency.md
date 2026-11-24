@@ -22,6 +22,8 @@ El informe público muestra el resultado y la evidencia estructurada de esta
 comprobación, la comparación de servicios externos y los hallazgos jurídicos
 acreditados. Estos datos se conservan desde la ejecución aislada del auditor
 hasta su presentación pública; no se descartan en el transporte interno.
+La sección de servicios muestra además la versión inmutable del catálogo
+oficial usado en ese informe.
 
 ## Proveedores, fuentes y contradicciones
 

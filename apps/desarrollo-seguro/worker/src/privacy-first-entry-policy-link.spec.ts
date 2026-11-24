@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { runInNewContext } from "node:vm";
 import { detectThirdPartyCookiePresence, inspectFirstEntryPolicyLinks, verifyFirstEntryPolicyDocument } from "./privacy-first-entry-policy-link.js";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -141,6 +142,14 @@ function makePage(options: { prompt: boolean; consentLink: boolean; footerLink: 
     querySelectorAll: () => controls,
   });
   return {
-    locator: () => ({ evaluateAll: (callback: (anchors: TestElement[], promptDetected: boolean) => unknown, promptDetected: boolean) => callback(anchors, promptDetected) }),
+    locator: () => ({ evaluateAll: <Result, Argument>(callback: (anchors: Element[], argument: Argument) => Result, argument: Argument) =>
+      runInNewContext(`(${callback.toString()})(anchors, argument)`, {
+        anchors: anchors as unknown as Element[],
+        argument,
+        HTMLElement: TestHTMLElement,
+        getComputedStyle: globalThis.getComputedStyle,
+        document: globalThis.document,
+        URL,
+      }) as Result }),
   };
 }

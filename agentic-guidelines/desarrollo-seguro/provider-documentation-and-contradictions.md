@@ -206,6 +206,12 @@ Criterios verificables:
   `legalCookieFindings` y `firstEntryPolicyAccess` hasta persistencia. El API
   público expone la evidencia de primera entrada junto con la comparación y
   los hallazgos; un parser intermedio no puede descartarla silenciosamente.
+- Cada informe público expone la versión inmutable del catálogo que utilizó,
+  para identificar las fuentes y hechos vigentes en esa auditoría.
+- La inspección de enlaces iniciales funciona dentro del contexto serializado
+  del navegador: el callback de `evaluateAll` recibe todos sus parámetros y no
+  depende de cierres del proceso Node. Una excepción del auditor no puede
+  degradar silenciosamente un enlace comprobable a `unknown`.
 
 - Un aviso de consentimiento con enlace solo en el footer no pasa; el enlace en
   el propio aviso sí se sigue y se audita.

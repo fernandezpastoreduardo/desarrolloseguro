@@ -67,6 +67,7 @@ export type PublicReport = {
   publicPolicyTransparencyAssessment: PublicPolicyTransparencyAssessment | null;
   publicServiceComparison: PublicServiceComparison | null;
   firstEntryPolicyAccess: FirstEntryPolicyAccess | null;
+  providerCatalogVersion: string | null;
   legalCookieFindings?: LegalCookieFinding[];
   betaCertification: ReturnType<typeof assessBetaCertification>;
   certification: PublicBetaCertificationResponse | null;
@@ -357,6 +358,7 @@ function toPublicReport(
     publicPolicyTransparencyAssessment,
     publicServiceComparison,
     firstEntryPolicyAccess: report.firstEntryPolicyAccess ?? null,
+    providerCatalogVersion: report.providerCatalogVersion ?? null,
     ...(legalCookieFindings?.length ? { legalCookieFindings } : {}),
     betaCertification: assessBetaCertification(toBetaObservations(report.checks)),
     certification: toPublicCertification(report.certification),
