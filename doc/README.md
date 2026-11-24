@@ -22,6 +22,7 @@ Esta carpeta reúne documentación técnica del proyecto independiente Desarroll
 - [Evaluación del cierre global](beta-global-closure-assessment.md): evidencia observada, discrepancias y condición de salida.
 - [Privacidad observable (Solistos v1)](solistos-privacy.md): metodología, rúbrica, límites de evidencia y uso operativo.
 - [Información pública sobre servicios externos](public-policy-transparency.md): alcance, interpretación y límites de la revisión de políticas públicas.
+- [Comparación pública de servicios externos](public-service-comparison.md): cómo leer los servicios observados, las declaraciones del sitio, las fuentes de proveedor y los estados de la ficha.
 - [Calidad](quality-baseline.md): criterios de calidad.
 - [Alcance del producto](desarrollo-seguro.md): propósito, estado y límites del prototipo.
 

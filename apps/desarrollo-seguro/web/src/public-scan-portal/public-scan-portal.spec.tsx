@@ -344,7 +344,7 @@ describe("PublicScanPortal", () => {
     await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "grumphya.com");
     await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
 
-    expect(await screen.findByRole("heading", { name: "Servicios externos declarados por Grumphya" })).toBeVisible();
+    expect(await screen.findByRole("heading", { name: "Información adicional compartida por Grumphya" })).toBeVisible();
     expect(screen.getByRole("heading", { name: /OpenAI.*API/ })).toBeVisible();
     expect(screen.getByText("Declaraciones de Grumphya:")).toBeVisible();
     expect(screen.getByText("No se usa para entrenar modelos.")).toBeVisible();
@@ -403,10 +403,10 @@ describe("PublicScanPortal", () => {
     await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "example.com");
     await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
 
-    expect(await screen.findByText(/8 de 8 criterios evaluados/u)).toBeVisible();
+    expect(await screen.findByRole("heading", { name: "Qué significa esta valoración" })).toBeVisible();
     await user.click(screen.getAllByRole("button", { name: "Ver detalle" })[0]);
     expect(screen.getByText("Información pública sobre servicios externos")).toBeVisible();
-    expect(screen.getByText(/se encontraron 2 enlaces relacionados y se consultaron 2 páginas; se reconocieron 3 proveedores, 0 sin finalidad indicada/i)).toBeVisible();
+    expect(screen.getByText(/la información pública del sitio explica servicios externos y para qué se usan/i)).toBeVisible();
   });
 
   it("stops after one poll when an accepted request has no active job", async () => {
@@ -492,7 +492,7 @@ describe("PublicScanPortal", () => {
     expect(await screen.findByText("Histórico")).toBeVisible();
     expect(screen.getByRole("heading", { name: "Historial de observaciones" })).toBeVisible();
     expect(screen.getByText("1 informe")).toBeVisible();
-    expect(screen.getByRole("heading", { name: "Dimensiones de evaluación" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Qué significa esta valoración" })).toBeVisible();
     const categoryButtons = screen.getAllByRole("button", { name: "Ver detalle" });
     expect(categoryButtons).toHaveLength(4);
     await user.click(categoryButtons[2]);
@@ -506,9 +506,8 @@ describe("PublicScanPortal", () => {
     expect(screen.getAllByText(/El análisis no pudo completar esta comprobación por un error técnico del auditor/i).length).toBeGreaterThan(0);
     await user.click(screen.getByRole("button", { name: "Cerrar detalle" }));
     await user.click(categoryButtons[2]);
-    expect(screen.getByText(/100\/100.*1 de 8 criterios evaluados/u)).toBeVisible();
     expect(screen.getAllByText(/El análisis no pudo completar esta comprobación por un error técnico/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/aspectos? .*en revisión porque el análisis no pudo completar/i))
+    expect(screen.getByText(/la revisión de esta parte todavía no ha terminado/i))
       .toBeVisible();
     expect(screen.getByText("100/100 provisional · 1 de 4 aspectos evaluados"))
       .toBeVisible();
@@ -520,7 +519,7 @@ describe("PublicScanPortal", () => {
     expect(screen.getByRole("heading", { name: "Rendimiento" })).toBeVisible();
     expect(screen.getByRole("region", { name: "Niveles de evaluación" })).toBeVisible();
     expect(screen.getByRole("img", { name: "Puntuación global: no disponible en este informe" })).toBeVisible();
-    expect(screen.getByText("Sin nota global · este informe no incluye una evaluación de Privacidad")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Qué significa esta valoración" })).toBeVisible();
     expect(document.querySelector(".ds-portal__score-ring")).toHaveAttribute("data-score-band", "unknown");
     expect(document.querySelectorAll('.ds-portal__category-score-ring[data-score-band="excellent"]')).toHaveLength(1);
     expect(screen.getByRole("img", { name: "Ética: sin puntuación; 0 de 2 aspectos evaluados" })).toBeVisible();
@@ -531,12 +530,12 @@ describe("PublicScanPortal", () => {
     expect(screen.getByRole("img", { name: "No observado: 0 de 8 criterios (0%)" })).toBeVisible();
     expect(screen.getByRole("img", { name: "En revisión: 7 de 8 criterios (88%)" })).toBeVisible();
     expect(screen.getByText(/instrucciones que ayudan al navegador a proteger/i)).toBeVisible();
-    expect(screen.getByText(/se revisaron 1 de 4 aspectos; no se detectaron problemas en el observado\. faltan datos de 3/i)).toBeVisible();
+    expect(screen.getByText(/la revisión de esta parte todavía no ha terminado/i)).toBeVisible();
     expect(screen.getByText("Política que restringe contenido cargado (CSP)")).toBeInTheDocument();
     expect(screen.getByText(/faltaba.*política de contenido CSP/i)).toBeVisible();
     expect(screen.getByText("Ver evidencias técnicas (1 comprobación)")).toBeVisible();
 
-    const summary = screen.getByRole("heading", { name: "Dimensiones de evaluación" });
+    const summary = screen.getByRole("heading", { name: "Qué significa esta valoración" });
     const detail = screen.getByRole("heading", { name: "Alcance observado" });
     expect(
       summary.compareDocumentPosition(detail) & Node.DOCUMENT_POSITION_FOLLOWING,
@@ -608,11 +607,11 @@ describe("PublicScanPortal", () => {
     render(<PublicScanPortal />);
 
     expect(await screen.findByRole("img", { name: "Puntuación global: en revisión" })).toBeVisible();
-    expect(screen.getByText(/en revisión · se muestran por separado/i)).toBeVisible();
+    expect(screen.getByText(/la revisión sigue en curso; todavía falta completar/i)).toBeVisible();
     expect(screen.getAllByText("Ética", { exact: true }).length).toBeGreaterThan(0);
     expect(screen.queryByText(/50\s*%/)).toBeNull();
-    expect(screen.getByText(/100\/100.*8 de 8 criterios evaluados/iu)).toBeVisible();
-    expect(screen.getByText(/80\/100.*3 de 5 criterios evaluados.*1 desconocidos.*1 no aplican/iu)).toBeVisible();
+    expect(screen.getByRole("img", { name: /Ética:/u })).toBeVisible();
+    expect(screen.getByRole("img", { name: /Privacidad:/u })).toBeVisible();
     expect(screen.queryByText("90/100 · 50 % Ética + 50 % Privacidad")).toBeNull();
     expect(screen.getByText(/La nota global combina por igual Ética y Privacidad/i)).toBeVisible();
   });

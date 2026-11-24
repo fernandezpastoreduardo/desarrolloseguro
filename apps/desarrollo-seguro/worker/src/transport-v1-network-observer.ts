@@ -308,6 +308,7 @@ function toPublicPolicyTransportEvidence(
     publicPolicyProviderMentions: evidence.providers.length,
     publicPolicyProvidersMissingPurpose: evidence.providers.length - evidence.providersWithPurpose.length,
     publicPolicyCategories: evidence.categories.join(","),
+    publicPolicyDeclaredServices: JSON.stringify(evidence.declaredServices),
     publicPolicyAuditorError: evidence.reasonCode === "auditor_error",
     publicPolicyBudgetExhausted: evidence.reasonCode === "budget_exhausted",
   };

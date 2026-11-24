@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { assessDomainEthics, assessDomainEthicsV4, assessDomainEthicsV5 } from "./domain-ethics-score.js";
+import { assessDomainEthics, assessDomainEthicsV4, assessDomainEthicsV5, assessDomainEthicsV6 } from "./domain-ethics-score.js";
 import { assessProcessorTransparency, type ProcessorTransparencyAssessment } from "./processor-inventory.js";
 import { assessPublicPolicyTransparency } from "./public-policy-assessment.js";
+import { assessPublicServiceComparison } from "./public-service-comparison.js";
 
 const check = (controlId: string, status: "pass" | "fail" | "unknown") => ({
   controlId,
@@ -194,7 +195,7 @@ describe("assessDomainEthics", () => {
     });
   });
 
-  it("prefers authenticated backend evidence and leaves auditor errors in review", () => {
+  it("uses the same public service evidence for clients and non-clients", () => {
     const allPublicControlsPass = [
       check("DS-DNS-01", "pass"), check("DS-TLS-01", "pass"), check("DS-TLS-02", "pass"),
       check("DS-HTTP-01", "pass"), check("DS-HDR-01", "pass"), check("DS-PRIV-05", "pass"),
@@ -215,10 +216,27 @@ describe("assessDomainEthics", () => {
     expect(assessment).toMatchObject({
       policyVersion: "domain-ethics-v5",
       score: 100,
-      assessedCriteria: 7,
+      assessedCriteria: 8,
     });
-    expect(assessment.criteria.find(({ id }) => id === "external-service-transparency")?.status).toBe("unknown");
-    expect(assessment.reasons).toContain("El auditor no pudo verificar el inventario de procesadores backend.");
+    expect(assessment.criteria.find(({ id }) => id === "external-service-transparency")?.status).toBe("pass");
+    expect(assessment.reasons).not.toContain("El auditor no pudo verificar el inventario de procesadores backend.");
     expect(assessDomainEthicsV4(allPublicControlsPass, backendError).policyVersion).toBe("domain-ethics-v4");
+  });
+
+  it("scores provider-by-provider public comparison and leaves observer errors unknown", () => {
+    const allPublicControlsPass = [
+      check("DS-DNS-01", "pass"), check("DS-TLS-01", "pass"), check("DS-TLS-02", "pass"),
+      check("DS-HTTP-01", "pass"), check("DS-HDR-01", "pass"), check("DS-PRIV-05", "pass"),
+      check("DS-PRIV-06", "pass"), check("DS-QUAL-02", "pass"),
+    ];
+    const undisclosed = assessDomainEthicsV6(allPublicControlsPass, assessPublicServiceComparison({
+      observed: [{ providerId: "google-analytics", domain: "google-analytics.com" }],
+      declared: [],
+      policyStatus: "pass",
+    }));
+    expect(undisclosed).toMatchObject({ policyVersion: "domain-ethics-v6", score: 90, assessedCriteria: 8 });
+    expect(undisclosed.reasons).toContain("Se observó un servicio externo que la información pública no identifica junto con su finalidad.");
+    const review = assessPublicServiceComparison({ observed: [], declared: [], policyStatus: "unknown" });
+    expect(assessDomainEthicsV6(allPublicControlsPass, review)).toMatchObject({ score: 100, assessedCriteria: 7 });
   });
 });

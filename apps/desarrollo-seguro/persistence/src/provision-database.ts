@@ -315,6 +315,8 @@ async function applyRuntimeGrants(pool: Pool): Promise<void> {
       ON public.ds_scan_processor_transparency TO ds_read;
     GRANT SELECT (run_id, assessment_json, created_at)
       ON public.ds_scan_public_policy_transparency TO ds_read;
+    GRANT SELECT (run_id, comparison_json, created_at)
+      ON public.ds_scan_public_service_comparisons TO ds_read;
     GRANT SELECT (run_id, summary_json, created_at)
       ON public.ds_scan_internal_audit_public_summaries TO ds_read;
 

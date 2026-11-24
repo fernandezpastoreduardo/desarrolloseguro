@@ -167,14 +167,28 @@ function parseExecutorResult(
     result.privacyAssessment = privacyAssessment;
   }
   if (value.publicPolicyTransparencyAssessment !== undefined) {
-    if (profileVersion !== "domain-v4" || value.scannerVersion !== "domain-v4-network-adapter-2") {
+    if (profileVersion !== "domain-v4" || value.scannerVersion !== "domain-v4-network-adapter-3") {
       throw new Error("executor_result_invalid");
     }
     const assessment = parsePublicPolicyTransparencyAssessment(value.publicPolicyTransparencyAssessment);
     if (!assessment) throw new Error("executor_result_invalid");
     result.publicPolicyTransparencyAssessment = assessment;
   }
+  if (value.publicServiceDeclarations !== undefined) {
+    if (profileVersion !== "domain-v4" || value.scannerVersion !== "domain-v4-network-adapter-3" ||
+        !isPublicServiceDeclarations(value.publicServiceDeclarations)) throw new Error("executor_result_invalid");
+    result.publicServiceDeclarations = value.publicServiceDeclarations;
+  }
   return result;
+}
+
+function isPublicServiceDeclarations(value: unknown): value is NonNullable<ScanRunInput["publicServiceDeclarations"]> {
+  return Array.isArray(value) && value.length <= 30 && value.every((item) =>
+    isRecord(item) && Reflect.ownKeys(item).length === 2 && Object.hasOwn(item, "providerId") &&
+    Object.hasOwn(item, "purposes") && typeof item.providerId === "string" &&
+    /^[a-z0-9][a-z0-9_-]{0,31}$/u.test(item.providerId) && Array.isArray(item.purposes) &&
+    item.purposes.length <= 8 && item.purposes.every((purpose) => typeof purpose === "string" && /^[a-z0-9][a-z0-9_-]{0,31}$/u.test(purpose)) &&
+    new Set(item.purposes).size === item.purposes.length);
 }
 
 function isScanProfileVersion(value: unknown): value is ScanProfileVersion {
@@ -192,7 +206,7 @@ function getScannerVersion(profileVersion: ScanProfileVersion): string {
 
 function getExpectedScannerVersion(profileVersion: ScanProfileVersion, hasPublicPolicyAssessment: boolean): string {
   return profileVersion === "domain-v4" && hasPublicPolicyAssessment
-    ? "domain-v4-network-adapter-2"
+    ? "domain-v4-network-adapter-3"
     : getScannerVersion(profileVersion);
 }
 

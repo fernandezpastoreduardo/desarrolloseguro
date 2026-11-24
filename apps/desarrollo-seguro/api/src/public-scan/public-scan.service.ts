@@ -8,6 +8,7 @@ import {
 import {
   assessDomainEthics,
   assessDomainEthicsV5,
+  assessDomainEthicsV6,
   assessDomainEthicsV4,
   assessGlobalScore,
   assessBetaCertification,
@@ -23,6 +24,7 @@ import {
   type PrivacyAssessment,
   type ProcessorTransparencyAssessment,
   type PublicPolicyTransparencyAssessment,
+  type PublicServiceComparison,
   type ScanFailureDiagnostic,
 } from "@desarrolloseguro/core";
 import {
@@ -61,6 +63,7 @@ export type PublicReport = {
   privacyAssessment: PrivacyAssessment | null;
   processorTransparencyAssessment: ProcessorTransparencyAssessment | null;
   publicPolicyTransparencyAssessment: PublicPolicyTransparencyAssessment | null;
+  publicServiceComparison: PublicServiceComparison | null;
   betaCertification: ReturnType<typeof assessBetaCertification>;
   certification: PublicBetaCertificationResponse | null;
   internalAuditSummary: InternalAuditPublicSummary | null;
@@ -315,7 +318,11 @@ function toPublicReport(
 ): PublicReport {
   const processorTransparencyAssessment = report.processorTransparencyAssessment ?? null;
   const publicPolicyTransparencyAssessment = report.publicPolicyTransparencyAssessment ?? null;
+  const publicServiceComparison = report.publicServiceComparison ?? null;
   const ethicsAssessment = report.profileVersion === "domain-v4" &&
+    report.scannerVersion === "domain-v4-network-adapter-3"
+    ? assessDomainEthicsV6(report.checks, publicServiceComparison)
+    : report.profileVersion === "domain-v4" &&
     report.scannerVersion === "domain-v4-network-adapter-2" && publicPolicyTransparencyAssessment
     ? assessDomainEthicsV5(report.checks, processorTransparencyAssessment, publicPolicyTransparencyAssessment)
     : report.profileVersion === "domain-v4"
@@ -343,6 +350,7 @@ function toPublicReport(
     privacyAssessment,
     processorTransparencyAssessment,
     publicPolicyTransparencyAssessment,
+    publicServiceComparison,
     betaCertification: assessBetaCertification(toBetaObservations(report.checks)),
     certification: toPublicCertification(report.certification),
     internalAuditState: resolvedInternalAuditState,

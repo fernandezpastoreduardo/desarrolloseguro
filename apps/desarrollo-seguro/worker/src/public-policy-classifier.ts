@@ -51,14 +51,17 @@ export function classifyPublicPolicyHtml(html: string): PublicPolicyClassificati
   const providersWithPurpose = new Set<string>();
   const purposes = new Set<string>();
   const categories = new Set<string>();
+  const declaredServices = new Map<string, Set<string>>();
   let accessDenied = false;
 
   for (const block of blocks) {
     if (ACCESS_DENIED_PHRASES.some((phrase) => block.includes(normalizeText(phrase)))) {
       accessDenied = true;
     }
+    const providerFreeText = PROVIDERS.reduce((text, provider) =>
+      provider.aliases.reduce((value, alias) => value.split(alias).join(" "), text), block);
     const blockPurposes = PURPOSE_TERMS.filter(({ terms }) =>
-      terms.some((term) => includesPhrase(block, term)),
+      terms.some((term) => includesPhrase(providerFreeText, term)),
     );
     for (const purpose of blockPurposes) {
       purposes.add(purpose.id);
@@ -70,6 +73,9 @@ export function classifyPublicPolicyHtml(html: string): PublicPolicyClassificati
       providers.add(provider.id);
       if (blockPurposes.length > 0) {
         providersWithPurpose.add(provider.id);
+        const purposes = declaredServices.get(provider.id) ?? new Set<string>();
+        for (const purpose of blockPurposes) purposes.add(purpose.id);
+        declaredServices.set(provider.id, purposes);
       }
     }
   }
@@ -79,6 +85,10 @@ export function classifyPublicPolicyHtml(html: string): PublicPolicyClassificati
     providersWithPurpose: [...providersWithPurpose].sort(compareIdentifiers).slice(0, 30),
     purposeIds: [...purposes].sort(compareIdentifiers).slice(0, 30),
     categories: [...categories].sort(compareIdentifiers).slice(0, 5),
+    declaredServices: [...declaredServices.entries()].map(([providerId, purposeIds]) => ({
+      providerId,
+      purposeIds: [...purposeIds].sort(compareIdentifiers),
+    })).sort((left, right) => compareIdentifiers(left.providerId, right.providerId)).slice(0, 30),
     ...(accessDenied ? { accessDenied: true } : {}),
   };
 }

@@ -1,5 +1,11 @@
 # Refinamiento de la ficha pública
 
+La comparación de servicios externos y su resultado público se rigen ahora
+por [`public-service-comparison.md`](./public-service-comparison.md). Ese
+contrato extiende los requisitos de interfaz de este documento y prevalece
+cuando el texto histórico todavía describe contadores de crawler o separa la
+nota pública del inventario privado.
+
 ## Propósito
 
 Hacer que la ficha de informes se entienda y se recorra con facilidad para una persona sin formación tecnológica, sin rebajar el rigor de las comprobaciones ni presentar como hechos cosas que no se han observado.

@@ -16,6 +16,9 @@ import {
   type InternalAuditPublicSummary,
   type ProcessorTransparencyAssessment,
   type PublicPolicyTransparencyAssessment,
+  parsePublicServiceComparison,
+  type PublicServiceComparison,
+  type PublicServiceDeclarationEvidence,
   type ScanFailureDiagnostic,
 } from "@desarrolloseguro/core";
 import type { ScanFailureCode } from "@desarrolloseguro/core";
@@ -57,6 +60,7 @@ const PUBLIC_REPORT_COLUMNS = `
   privacy_row.assessment_json AS report_privacy_assessment,
   processor_row.assessment_json AS report_processor_transparency,
   public_policy_row.assessment_json AS report_public_policy_transparency,
+  service_comparison_row.comparison_json AS report_public_service_comparison,
   (SELECT c.state FROM public.ds_beta_certifications AS c
    WHERE c.hostname = reports.hostname AND c.policy_version = 'beta-0.1') AS certification_state,
   (SELECT c.latest_assessment_status FROM public.ds_beta_certifications AS c
@@ -97,6 +101,11 @@ const PUBLIC_POLICY_TRANSPARENCY_LATERAL = `LEFT JOIN LATERAL (
   FROM public.ds_scan_public_policy_transparency
   WHERE run_id = reports.id
 ) AS public_policy_row ON true`;
+const PUBLIC_SERVICE_COMPARISON_LATERAL = `LEFT JOIN LATERAL (
+  SELECT comparison_json
+  FROM public.ds_scan_public_service_comparisons
+  WHERE run_id = reports.id
+) AS service_comparison_row ON true`;
 const PUBLIC_INTERNAL_AUDIT_LATERAL = `LEFT JOIN LATERAL (
   SELECT summary_json
   FROM public.ds_scan_internal_audit_public_summaries
@@ -142,6 +151,7 @@ export type PublicScanReport = {
   privacyAssessment?: PrivacyAssessment | null;
   processorTransparencyAssessment?: ProcessorTransparencyAssessment | null;
   publicPolicyTransparencyAssessment?: PublicPolicyTransparencyAssessment | null;
+  publicServiceComparison?: PublicServiceComparison | null;
   internalAuditSummary?: InternalAuditPublicSummary | null;
 };
 
@@ -228,6 +238,9 @@ export type ScanRunInput = {
   privacyAssessment?: PrivacyAssessment | null;
   processorTransparencyAssessment?: ProcessorTransparencyAssessment | null;
   publicPolicyTransparencyAssessment?: PublicPolicyTransparencyAssessment | null;
+  publicServiceComparison?: PublicServiceComparison | null;
+  /** Short-lived worker evidence; persisted only after combining with browser observations. */
+  publicServiceDeclarations?: PublicServiceDeclarationEvidence[];
   internalAuditSummary?: InternalAuditPublicSummary | null;
   metrics: {
     requestsCount: number;
@@ -425,6 +438,7 @@ export class PostgresScanStore implements ScanJobStore {
        ${PUBLIC_PRIVACY_LATERAL}
        ${PUBLIC_PROCESSOR_TRANSPARENCY_LATERAL}
        ${PUBLIC_POLICY_TRANSPARENCY_LATERAL}
+       ${PUBLIC_SERVICE_COMPARISON_LATERAL}
        ${PUBLIC_INTERNAL_AUDIT_LATERAL}
        WHERE domains.hostname = $1`,
       [hostname],
@@ -470,6 +484,7 @@ export class PostgresScanStore implements ScanJobStore {
        ${PUBLIC_PRIVACY_LATERAL}
        ${PUBLIC_PROCESSOR_TRANSPARENCY_LATERAL}
        ${PUBLIC_POLICY_TRANSPARENCY_LATERAL}
+       ${PUBLIC_SERVICE_COMPARISON_LATERAL}
        ${PUBLIC_INTERNAL_AUDIT_LATERAL}
        WHERE reports.id = $1::uuid
          AND domains.opted_out_at IS NULL`,
@@ -495,6 +510,7 @@ export class PostgresScanStore implements ScanJobStore {
        ${PUBLIC_PRIVACY_LATERAL}
        ${PUBLIC_PROCESSOR_TRANSPARENCY_LATERAL}
        ${PUBLIC_POLICY_TRANSPARENCY_LATERAL}
+       ${PUBLIC_SERVICE_COMPARISON_LATERAL}
        ${PUBLIC_INTERNAL_AUDIT_LATERAL}
        WHERE reports.hostname = $1
          AND reports.profile_version IN ('domain-v1', 'domain-v2', 'domain-v3', 'domain-v4')
@@ -678,11 +694,17 @@ export class PostgresScanStore implements ScanJobStore {
     if (input.publicPolicyTransparencyAssessment != null && !publicPolicyTransparencyAssessment) {
       throw new Error("invalid_public_policy_assessment");
     }
+    const publicServiceComparison = input.publicServiceComparison == null
+      ? null
+      : parsePublicServiceComparison(input.publicServiceComparison);
+    if (input.publicServiceComparison != null && !publicServiceComparison) {
+      throw new Error("invalid_public_service_comparison");
+    }
     try {
       const result = await this.pool.query<{ ds_complete_scan: string }>(
-        `SELECT ds_complete_scan_with_transparency(
+        `SELECT ds_complete_scan_with_service_comparison(
           $1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9::jsonb,
-          $10::jsonb, $11::jsonb, $12::jsonb, $13::jsonb
+          $10::jsonb, $11::jsonb, $12::jsonb, $13::jsonb, $14::jsonb
         ) AS ds_complete_scan`,
         [
           input.jobId,
@@ -698,6 +720,7 @@ export class PostgresScanStore implements ScanJobStore {
           processorTransparencyAssessment === null ? null : JSON.stringify(processorTransparencyAssessment),
           internalAuditSummary === null ? null : JSON.stringify(internalAuditSummary),
           publicPolicyTransparencyAssessment === null ? null : JSON.stringify(publicPolicyTransparencyAssessment),
+          publicServiceComparison === null ? null : JSON.stringify(publicServiceComparison),
         ],
       );
       const runId = result.rows[0]?.ds_complete_scan;
@@ -762,6 +785,12 @@ function parsePublicScanReport(row: Record<string, unknown>): PublicScanReport {
   if (row.report_public_policy_transparency != null && !publicPolicyTransparencyAssessment) {
     throw new Error(INVALID_PUBLIC_REPORT_ROW);
   }
+  const publicServiceComparison = row.report_public_service_comparison == null
+    ? null
+    : parsePublicServiceComparison(row.report_public_service_comparison);
+  if (row.report_public_service_comparison != null && !publicServiceComparison) {
+    throw new Error(INVALID_PUBLIC_REPORT_ROW);
+  }
   const internalAuditSummary = row.report_internal_audit_summary == null
     ? null
     : parseInternalAuditPublicSummary(row.report_internal_audit_summary);
@@ -790,6 +819,7 @@ function parsePublicScanReport(row: Record<string, unknown>): PublicScanReport {
     privacyAssessment,
     processorTransparencyAssessment,
     publicPolicyTransparencyAssessment,
+    publicServiceComparison,
     internalAuditSummary,
   };
 }

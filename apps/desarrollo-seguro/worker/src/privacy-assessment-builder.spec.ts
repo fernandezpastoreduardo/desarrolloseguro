@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assessPrivacyObservation } from "./privacy-assessment-builder.js";
+import { assessPrivacyObservation, getObservedPublicServices } from "./privacy-assessment-builder.js";
 import type { PrivacyBrowserFlowObservation, PrivacyBrowserObservation } from "./privacy-browser-observer.js";
 
 function flow(overrides: Partial<PrivacyBrowserFlowObservation> = {}): PrivacyBrowserFlowObservation {
@@ -25,6 +25,16 @@ function observation(overrides: Partial<PrivacyBrowserObservation> = {}): Privac
 }
 
 describe("assessPrivacyObservation", () => {
+  it("returns only confirmed third-party service and domain pairs", () => {
+    const result = getObservedPublicServices(observation({
+      initial: flow({
+        completedHostsAfterChoice: ["www.google-analytics.com", "grumphya.com", "unknown.example"],
+        cookiesAfterChoice: [{ name: "_ga", domain: ".grumphya.com", secure: true, httpOnly: false }],
+      }),
+    }));
+    expect(result).toEqual([{ providerId: "google-analytics", domain: "www.google-analytics.com" }]);
+  });
+
   it("gives a full score when the homepage has no consent prompt or observed tracking", () => {
     const result = assessPrivacyObservation(observation());
     expect(result.score).toBe(100);
