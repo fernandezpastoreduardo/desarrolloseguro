@@ -68,6 +68,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isSafeToken(value: unknown, maxLength: number): value is string {
-  return typeof value === "string" && value.length > 0 && value.length <= maxLength &&
-    !/[\u0000-\u001f\u007f]/u.test(value);
+  if (typeof value !== "string" || value.length === 0 || value.length > maxLength) return false;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code < 32 || code === 127) return false;
+  }
+  return true;
 }
