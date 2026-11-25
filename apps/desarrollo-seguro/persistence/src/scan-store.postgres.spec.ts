@@ -3,6 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   assessDevelopmentSecurityProcessorRegistry,
   assessFirstEntryPolicyAccess,
+  SCAN_FAILURE_DIAGNOSTIC_CODES,
   SCAN_FAILURE_DIAGNOSTIC_STAGES,
   type FirstEntryPolicyAccess,
 } from "@desarrolloseguro/core";
@@ -1708,6 +1709,24 @@ describePostgres.sequential("PostgresScanStore", () => {
     expect(failed.rows[0].failure_diagnostic).toEqual({
       stage,
       code: "executor_application_failed",
+    });
+  });
+
+  it.each(SCAN_FAILURE_DIAGNOSTIC_CODES)("persists the allowlisted runtime failure code %s", async (code) => {
+    const job = await queueAndClaim();
+    await expect(
+      store.failScan(job.id, job.leaseToken, "executor_failed", 1, {
+        stage: "provider_document_catalog_record",
+        code,
+      }),
+    ).resolves.toBe("failed");
+    const failed = await pool.query(
+      "SELECT failure_diagnostic FROM ds_scan_jobs WHERE id = $1",
+      [job.id],
+    );
+    expect(failed.rows[0].failure_diagnostic).toEqual({
+      stage: "provider_document_catalog_record",
+      code,
     });
   });
 

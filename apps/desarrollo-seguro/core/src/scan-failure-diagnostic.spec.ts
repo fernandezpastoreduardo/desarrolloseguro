@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   parseScanFailureDiagnostic,
+  SCAN_FAILURE_DIAGNOSTIC_CODES,
   SCAN_FAILURE_DIAGNOSTIC_STAGES,
 } from "./scan-failure-diagnostic.js";
 
@@ -42,5 +43,10 @@ describe("parseScanFailureDiagnostic", () => {
       stage,
       code: "executor_application_failed",
     })).toEqual({ stage, code: "executor_application_failed" });
+  });
+
+  it.each(SCAN_FAILURE_DIAGNOSTIC_CODES)("accepts only the allowlisted failure code %s", (code) => {
+    expect(parseScanFailureDiagnostic({ stage: "provider_document_catalog_record", code }))
+      .toEqual({ stage: "provider_document_catalog_record", code });
   });
 });

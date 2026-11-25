@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { createJsonLineRuntimeDiagnostic } from "./runtime-diagnostics.js";
+import {
+  createJsonLineRuntimeDiagnostic,
+  readScanFailureDiagnostic,
+  withScanFailureStage,
+} from "./runtime-diagnostics.js";
 
 describe("createJsonLineRuntimeDiagnostic", () => {
   it("writes stage and safe code without accepting request data", () => {
@@ -97,5 +101,39 @@ describe("createJsonLineRuntimeDiagnostic", () => {
       stage: "executor",
       code: "docker_runtime_command_failed",
     })).not.toThrow();
+  });
+});
+
+describe("withScanFailureStage", () => {
+  it("preserves a known catalog rejection category without retaining its raw message", async () => {
+    let failure: unknown;
+    try {
+      await withScanFailureStage("provider_document_catalog_record", () => {
+        throw new Error("provider_catalog_discovery_document_conflict");
+      });
+    } catch (error) {
+      failure = error;
+    }
+    expect(readScanFailureDiagnostic(failure)).toEqual({
+      stage: "provider_document_catalog_record",
+      code: "provider_catalog_discovery_document_conflict",
+    });
+    expect(JSON.stringify(failure)).not.toContain("provider_catalog_discovery_document_conflict");
+  });
+
+  it("maps database constraint SQLSTATEs to safe categories and hides private details", async () => {
+    let failure: unknown;
+    try {
+      await withScanFailureStage("provider_document_catalog_record", () => {
+        throw Object.assign(new Error("private SQL detail"), { code: "23514" });
+      });
+    } catch (error) {
+      failure = error;
+    }
+    expect(readScanFailureDiagnostic(failure)).toEqual({
+      stage: "provider_document_catalog_record",
+      code: "database_check_constraint_failed",
+    });
+    expect(JSON.stringify(failure)).not.toContain("private SQL detail");
   });
 });
