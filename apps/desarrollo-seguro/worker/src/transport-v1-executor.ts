@@ -6,6 +6,7 @@ import {
   evaluateVerdict,
   sanitizeScanObservations,
 } from "@desarrolloseguro/core";
+import type { ScanFailureDiagnostic } from "@desarrolloseguro/core";
 import type { ClaimedScanJob, ScanCheck, ScanRunInput } from "@desarrolloseguro/persistence";
 import { createTransportV1EgressBroker } from "./transport-v1-egress-broker.js";
 import { safeTransportErrorCode, type PinnedTransportErrorCode } from "./pinned-transport-error.js";
@@ -144,7 +145,6 @@ export class TransportV1FixtureExecutor {
     if (!isSupportedProfile(job.profileVersion)) {
       throw new Error("unsupported_scan_profile");
     }
-
     const startedAt = this.now();
     const observations = await Promise.all([
       safelyObserve(() => this.source.observeDns(job.hostname, signal), signal),
@@ -216,34 +216,30 @@ export class TransportV1NetworkExecutor {
     if (!isSupportedProfile(job.profileVersion)) {
       throw new Error("unsupported_scan_profile");
     }
+    const profileVersion = job.profileVersion;
 
     const startedAt = this.now();
-    const broker = createTransportV1EgressBroker(job.hostname, this.source, job.profileVersion);
     const operations = NETWORK_PROBE_OPERATIONS;
-    const observations = operations.map((operation) => async () => {
-      const requestId = randomUUID();
-      const response = await broker(
-        {
-          protocolVersion: 1,
-          requestId,
-          hostname: job.hostname,
-          operation,
-        },
-        signal,
-      );
-      if (
-        response.protocolVersion !== 1 ||
-        response.requestId !== requestId
-      ) {
-        throw new Error("egress_broker_response_invalid");
-      }
-      return response.result;
+    const probes = await runExecutorPhase("network_probe_collection", async () => {
+      const broker = createTransportV1EgressBroker(job.hostname, this.source, profileVersion);
+      const observations = operations.map((operation) => async () => {
+        const requestId = randomUUID();
+        const response = await broker(
+          {
+            protocolVersion: 1,
+            requestId,
+            hostname: job.hostname,
+            operation,
+          },
+          signal,
+        );
+        if (response.protocolVersion !== 1 || response.requestId !== requestId) {
+          throw new Error("egress_broker_response_invalid");
+        }
+        return response.result;
+      });
+      return observeNetworkProbes(observations, signal, MAX_CONCURRENT_NETWORK_PROBES);
     });
-    const probes = await observeNetworkProbes(
-      observations,
-      signal,
-      MAX_CONCURRENT_NETWORK_PROBES,
-    );
     if (probes.every((probe) => !probe || Object.keys(probe.evidence).length === 0)) {
       const probeFailures = operations.flatMap((operation, index) => {
         const probe = probes[index];
@@ -253,49 +249,48 @@ export class TransportV1NetworkExecutor {
       });
       throw new NetworkObservationUnavailableError(probeFailures);
     }
-    const completedAt = this.now();
-    const candidateChecks: ScanCheck[] = CHECKS.map((definition, index) => ({
-      ...definition,
-      status: "pass",
-      required: true,
-      observedAt: completedAt,
-      targetPath: "/",
-      summary: "",
-      limitation: "",
-      evidence: probes[index]?.evidence ?? {},
-    }));
-    appendTlsVersionCheck(candidateChecks, job.profileVersion, probes[1]?.evidence ?? {}, completedAt);
-    appendInitialCookieCheck(
-      candidateChecks,
-      job.profileVersion,
-      probes[4]?.evidence ?? {},
-      completedAt,
-    );
-    appendPassivePageSignalChecks(candidateChecks, job.profileVersion, probes[4]?.evidence ?? {}, completedAt);
-    appendPublicPolicyCheck(candidateChecks, job.profileVersion, probes[4]?.evidence ?? {}, completedAt);
-    const pageProbeError = probes[4]?.errorCode;
-    if (pageProbeError) {
-      for (const check of candidateChecks) {
-        if (["DS-HDR-01", "DS-PRIV-04", "DS-PRIV-05", "DS-PRIV-06", "DS-QUAL-02"].includes(check.controlId)) {
-          check.evidence.probeErrorCode = pageProbeError;
+    const { completedAt, sanitized } = await runExecutorPhase("evidence_sanitization", () => {
+      const completedAt = this.now();
+      const candidateChecks: ScanCheck[] = CHECKS.map((definition, index) => ({
+        ...definition,
+        status: "pass",
+        required: true,
+        observedAt: completedAt,
+        targetPath: "/",
+        summary: "",
+        limitation: "",
+        evidence: probes[index]?.evidence ?? {},
+      }));
+      appendTlsVersionCheck(candidateChecks, profileVersion, probes[1]?.evidence ?? {}, completedAt);
+      appendInitialCookieCheck(candidateChecks, profileVersion, probes[4]?.evidence ?? {}, completedAt);
+      appendPassivePageSignalChecks(candidateChecks, profileVersion, probes[4]?.evidence ?? {}, completedAt);
+      appendPublicPolicyCheck(candidateChecks, profileVersion, probes[4]?.evidence ?? {}, completedAt);
+      const pageProbeError = probes[4]?.errorCode;
+      if (pageProbeError) {
+        for (const check of candidateChecks) {
+          if (["DS-HDR-01", "DS-PRIV-04", "DS-PRIV-05", "DS-PRIV-06", "DS-QUAL-02"].includes(check.controlId)) {
+            check.evidence.probeErrorCode = pageProbeError;
+          }
         }
       }
-    }
-    const sanitized = sanitizeScanObservations(
-      job.hostname,
-      job.profileVersion,
-      ["/"],
-      candidateChecks,
-    );
-    const publicPolicyTransparencyAssessment = buildPublicPolicyAssessment(
-      job.profileVersion,
-      probes[4],
+      return {
+        completedAt,
+        sanitized: sanitizeScanObservations(job.hostname, profileVersion, ["/"], candidateChecks),
+      };
+    });
+    const { publicPolicyTransparencyAssessment, publicServiceDeclarations, publicPolicyDiscoveredDocuments } = await runExecutorPhase(
+      "public_policy_assessment",
+      () => ({
+        publicPolicyTransparencyAssessment: buildPublicPolicyAssessment(profileVersion, probes[4]),
+        publicServiceDeclarations: buildPublicServiceDeclarations(probes[4]?.evidence ?? {}),
+        publicPolicyDiscoveredDocuments: buildPublicPolicyDiscoveredDocuments(probes[4]?.evidence ?? {}),
+      }),
     );
 
-    return {
+    return await runExecutorPhase("result_assembly", () => ({
       scannerVersion: publicPolicyTransparencyAssessment
         ? DOMAIN_V4_PUBLIC_POLICY_SCANNER_VERSION
-        : getScannerVersion(job.profileVersion),
+        : getScannerVersion(profileVersion),
       startedAt,
       completedAt,
       verdict: evaluateVerdict(sanitized.checks),
@@ -304,20 +299,30 @@ export class TransportV1NetworkExecutor {
       ...(publicPolicyTransparencyAssessment
         ? { publicPolicyTransparencyAssessment }
         : {}),
-      ...(publicPolicyTransparencyAssessment
-        ? { publicServiceDeclarations: buildPublicServiceDeclarations(probes[4]?.evidence ?? {}) }
-        : {}),
-      ...(publicPolicyTransparencyAssessment
-        ? { publicPolicyDiscoveredDocuments: buildPublicPolicyDiscoveredDocuments(probes[4]?.evidence ?? {}) }
-        : {}),
+      ...(publicPolicyTransparencyAssessment ? { publicServiceDeclarations } : {}),
+      ...(publicPolicyTransparencyAssessment ? { publicPolicyDiscoveredDocuments } : {}),
       metrics: {
         requestsCount: probes.reduce((sum, probe) => sum + (probe?.requestsCount ?? 0), 0),
         bytesCount: probes.reduce((sum, probe) => sum + (probe?.bytesCount ?? 0), 0),
         durationMs: Math.max(0, completedAt.getTime() - startedAt.getTime()),
         pagesCount: 0,
       },
-    };
+    }));
   }
+}
+
+function runExecutorPhase<T>(
+  stage: ScanFailureDiagnostic["stage"],
+  operation: () => T | Promise<T>,
+): Promise<T> {
+  return Promise.resolve().then(operation).catch((error: unknown) => {
+    if (error instanceof Error && "scanFailureDiagnostic" in error) throw error;
+    const failure = new Error("executor_failed", { cause: error });
+    Object.defineProperty(failure, "scanFailureDiagnostic", {
+      value: { stage, code: "executor_application_failed" } satisfies ScanFailureDiagnostic,
+    });
+    throw failure;
+  });
 }
 
 function buildPublicPolicyDiscoveredDocuments(evidence: TransportV1Evidence): PublicPolicyDiscoveredDocument[] {

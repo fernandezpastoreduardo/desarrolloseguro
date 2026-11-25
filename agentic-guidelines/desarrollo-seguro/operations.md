@@ -122,6 +122,9 @@ excepción de una fase se convierte en su código fijo; no se oculta como fallo
 de auditoría de privacidad ni se reduce a `executor_application_failed`.
 Si la capa inferior no aporta fase, también se registran por separado la
 creación de sesión, la ejecución del executor y la limpieza del runtime.
+El protocolo del executor aislado también transporta las fases de observación
+de red, sanitización de evidencias, valoración documental y ensamblado del
+resultado, preservando la fase incluso al salir del contenedor efímero.
 El fallo registrado por el worker incluye `failureCode` y el par
 `failureDiagnostic.stage` / `failureDiagnostic.code` en una línea JSON
 `scan_job_failure`, tanto si se reintenta como si termina. La línea no incluye

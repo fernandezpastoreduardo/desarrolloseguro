@@ -7,6 +7,7 @@ import {
   NetworkObservationUnavailableError,
   TransportV1NetworkExecutor,
 } from "./transport-v1-executor.js";
+import { parseScanFailureDiagnostic } from "@desarrolloseguro/core";
 
 const EGRESS_BROKER_SOCKET = "/run/development-security-egress/broker.sock";
 
@@ -50,11 +51,14 @@ async function main(): Promise<void> {
         probeFailures: error.probeFailures,
       });
     } else {
+      const failureDiagnostic = readFailureDiagnostic(error);
       writeFailure(
         requestId,
         error instanceof Error && error.message === "executor_request_invalid"
           ? "request_invalid"
           : "executor_failed",
+        undefined,
+        failureDiagnostic ?? { stage: "executor", code: "executor_application_failed" },
       );
     }
     process.exitCode = 1;
@@ -65,10 +69,16 @@ function writeFailure(
   requestId: string,
   errorCode: "request_invalid" | "executor_failed",
   diagnostic?: { category: "network_observation_unavailable"; probeFailures: NetworkObservationUnavailableError["probeFailures"] },
+  failureDiagnostic?: ReturnType<typeof parseScanFailureDiagnostic>,
 ): void {
   process.stdout.write(
-    `${JSON.stringify({ protocolVersion: 1, requestId, errorCode, ...(diagnostic ? { diagnostic } : {}) })}\n`,
+    `${JSON.stringify({ protocolVersion: 1, requestId, errorCode, ...(diagnostic ? { diagnostic } : {}), ...(failureDiagnostic ? { failureDiagnostic } : {}) })}\n`,
   );
+}
+
+function readFailureDiagnostic(error: unknown): ReturnType<typeof parseScanFailureDiagnostic> {
+  if (!(error instanceof Error) || !("scanFailureDiagnostic" in error)) return null;
+  return parseScanFailureDiagnostic(error.scanFailureDiagnostic);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -80,7 +90,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   );
 }
 
-void main().catch(() => {
-  writeFailure("", "executor_failed");
+void main().catch((error: unknown) => {
+  writeFailure("", "executor_failed", undefined, {
+    ...(readFailureDiagnostic(error) ?? { stage: "executor", code: "executor_application_failed" }),
+  });
   process.exitCode = 1;
 });

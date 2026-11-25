@@ -145,7 +145,13 @@ export function createDockerRuntimeCoordinatorRunner(
           throw withRuntimeBoundaryDiagnostic(error, "response_validation", undefined, "executor_response_invalid");
         }
         if ("errorCode" in response) {
-          if (response.diagnostic?.category === "network_observation_unavailable") {
+          if (response.failureDiagnostic) {
+            executorDiagnostic = {
+              type: "runtime_diagnostic",
+              ...response.failureDiagnostic,
+            };
+            diagnostic(executorDiagnostic);
+          } else if (response.diagnostic?.category === "network_observation_unavailable") {
             executorDiagnostic = {
               type: "runtime_diagnostic",
               stage: "executor",
