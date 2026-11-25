@@ -351,7 +351,7 @@ test("shows the report and Grumphya's private review when an authorized analysis
   await expect(page.getByText(/Comprobación:/i).first()).toBeVisible();
   await expect(page.getByText(/Qué implica:/i).first()).toBeVisible();
   await expect(page.getByText(/qué revisar:/i)).toHaveCount(0);
-  await expect(page.getByText(/El contenido inicial menciona herramientas de seguimiento conocidas/i))
+  await expect(page.getByText(/El navegador inició solicitudes a servicios de seguimiento conocidos/i))
     .toBeVisible();
   await page.getByRole("button", { name: "Cerrar detalle" }).click();
   await categoryButtons.nth(3).click();
