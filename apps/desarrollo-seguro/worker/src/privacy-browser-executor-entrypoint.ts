@@ -1,7 +1,7 @@
 import { observePrivacyBehavior, type PrivacyBrowserInput, type PrivacyBrowserObservation } from "./privacy-browser-observer.js";
+import { PRIVACY_BROWSER_MAX_RESPONSE_BYTES } from "./privacy-browser-contract.js";
 
 const MAX_INPUT_BYTES = 4 * 1024;
-const MAX_OUTPUT_BYTES = 256 * 1024;
 // This URL is reachable only on the per-job internal Docker network; CONNECT payloads remain end-to-end TLS.
 const PROXY_URL = process.env.DS_PRIVACY_PROXY_URL ?? "http://privacy-egress:3128"; // NOSONAR
 
@@ -40,7 +40,7 @@ async function main(): Promise<void> {
     };
   }
   const serialized = `${JSON.stringify(result)}\n`;
-  if (Buffer.byteLength(serialized, "utf8") > MAX_OUTPUT_BYTES) {
+  if (Buffer.byteLength(serialized, "utf8") > PRIVACY_BROWSER_MAX_RESPONSE_BYTES) {
     process.stdout.write(`${JSON.stringify({ protocolVersion: 1, requestId: input.requestId, hostname: input.hostname, status: "unknown", code: "privacy_browser_output_too_large" })}\n`);
     return;
   }

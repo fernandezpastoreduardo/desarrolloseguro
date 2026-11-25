@@ -16,8 +16,10 @@ de forma asíncrona. Los botones
 independientes de consentimiento que omiten `type` se pueden pulsar aunque
 HTML les asigne por defecto el tipo `submit`; los controles dentro de un
 formulario no se envían. Cada análisis admite hasta 1.000 solicitudes y conserva
-hasta 400 eventos de red por flujo, con un máximo de 64 MiB recibidos. Si el auditor bloquea una solicitud, el
-informe la distingue de las comunicaciones que llegaron a recibir respuesta.
+hasta 400 eventos de red por flujo, con un máximo de 64 MiB recibidos y una
+respuesta JSON de navegador limitada a 1 MiB. Si el auditor bloquea una
+solicitud, el informe la distingue de las comunicaciones que llegaron a recibir
+respuesta.
 
 El informe separa cookies acreditadas antes de elegir de las que permanecen tras rechazar y recargar. Para una cookie propia que persiste, la atribución al proveedor puede apoyarse en una solicitud del mismo flujo antes de elegir, siempre que coincidan el nombre y dominio de la cookie en las instantáneas completas; el informe muestra esa fase de corroboración. Las solicitudes que el auditor bloquea se identifican como intentos y no como datos transmitidos. La evaluación legal usa las observaciones de forma independiente de la puntuación de privacidad, para que un fallo de cálculo de la nota no elimine hallazgos acreditados.
 

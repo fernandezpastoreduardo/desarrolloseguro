@@ -14,6 +14,7 @@ import { assessPrivacyObservation, getObservedPublicServices } from "./privacy-a
 import { buildLegalCookieFindings } from "./privacy-legal-cookie-findings.js";
 import { assessFirstEntryPolicyAccessObservation } from "./privacy-first-entry-policy-access.js";
 import type { PrivacyBrowserObservation } from "./privacy-browser-observer.js";
+import { parsePrivacyBrowserObservation, PRIVACY_BROWSER_MAX_RESPONSE_BYTES } from "./privacy-browser-contract.js";
 import {
   createJsonLineRuntimeDiagnostic,
   readScanFailureDiagnostic,
@@ -173,9 +174,13 @@ export function createDockerRuntimeCoordinatorRunner(
         let observation: PrivacyBrowserObservation | undefined;
         try {
           observation = await session.observePrivacy?.(request, signal);
-        } catch {
+        } catch (error) {
           observation = undefined;
-          diagnostic({ type: "runtime_diagnostic", stage: "privacy_browser_observation", code: "executor_application_failed" });
+          const message = error instanceof Error ? error.message : "";
+          const code = ["executor_response_too_large", "executor_response_invalid", "docker_command_output_too_large"].includes(message)
+            ? message as RuntimeDiagnosticCode
+            : "executor_application_failed";
+          diagnostic({ type: "runtime_diagnostic", stage: "privacy_browser_observation", code });
         }
         if (observation) {
           try {
@@ -521,9 +526,9 @@ export function createDockerRuntimeSessionFactory(
           await runDocker(dockerBinary, ["network", "connect", "--alias", "privacy-egress", privacyNetworkName, privacyProxyName], undefined, privacySignal, undefined, undefined, undefined, dockerSocketPath);
           await waitForPrivacyProxy(dockerBinary, dockerSocketPath, privacyProxyName, privacySignal);
           privacyBrowserMayExist = true;
-          const output = await runDocker(dockerBinary, ["run", "--interactive", "--name", privacyBrowserName, ...restrictedPrivacyBrowserArguments(privacyNetworkName), options.privacyBrowserImage], `${browserInput}\n`, privacySignal, 256 * 1024, false, PRIVACY_BROWSER_COMMAND_TIMEOUT_MS, dockerSocketPath);
+          const output = await runDocker(dockerBinary, ["run", "--interactive", "--name", privacyBrowserName, ...restrictedPrivacyBrowserArguments(privacyNetworkName), options.privacyBrowserImage], `${browserInput}\n`, privacySignal, PRIVACY_BROWSER_MAX_RESPONSE_BYTES, false, PRIVACY_BROWSER_COMMAND_TIMEOUT_MS, dockerSocketPath);
           try {
-            let observation = JSON.parse(output.trim()) as PrivacyBrowserObservation;
+            let observation = parsePrivacyBrowserObservation(JSON.parse(output.trim()) as unknown, privacyRequest);
             const proxyStats = await stopPrivacyProxyAndReadStats(dockerBinary, dockerSocketPath, privacyProxyName, privacySignal);
             if (!proxyStats || proxyStats.receivedBytes > PRIVACY_BROWSER_BUDGET.receivedBytes || proxyStats.budgetExceeded) {
               observation = {
@@ -548,7 +553,10 @@ export function createDockerRuntimeSessionFactory(
               observation = { ...observation, receivedBytes: proxyStats.receivedBytes };
             }
             return observation;
-          } catch { throw new Error("privacy_browser_response_invalid"); }
+          } catch (error) {
+            if (error instanceof Error && ["executor_response_too_large", "executor_response_invalid"].includes(error.message)) throw error;
+            throw new Error("executor_response_invalid", { cause: error });
+          }
         },
         close,
       };

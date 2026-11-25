@@ -32,6 +32,7 @@ const dockerBehavior = {
   hangExecutor: false,
   spawnErrorOnVolumeCreate: false,
   privacyProxyStopped: false,
+  privacyBrowserOutput: undefined as string | undefined,
 };
 
 beforeEach(() => {
@@ -51,6 +52,7 @@ beforeEach(() => {
     hangExecutor: false,
     spawnErrorOnVolumeCreate: false,
     privacyProxyStopped: false,
+    privacyBrowserOutput: undefined,
   });
   spawnMock.mockReset();
   spawnMock.mockImplementation((_binary: string, args: string[]) => {
@@ -78,7 +80,7 @@ beforeEach(() => {
         })}\n`;
         queueMicrotask(() => child.finish(dockerBehavior.executorExitCode, output));
       }
-      if (isPrivacyBrowser) queueMicrotask(() => child.finish(0, `${JSON.stringify(makePrivacyObservation())}\n`));
+      if (isPrivacyBrowser) queueMicrotask(() => child.finish(0, dockerBehavior.privacyBrowserOutput ?? `${JSON.stringify(makePrivacyObservation())}\n`));
     });
     child.stdin.on("data", (chunk) => {
       requestText += chunk.toString("utf8");
@@ -178,6 +180,48 @@ describe("createDockerRuntimeCoordinatorRunner", () => {
     expect(browserRun).toContain("--cap-drop");
     expect(browserRun).toContain("ALL");
     expect(dockerCalls.some((args) => args[0] === "network" && args[1] === "connect" && args.includes("--alias"))).toBe(true);
+  });
+
+  it("accepts a privacy browser response above the former 256 KiB limit", async () => {
+    dockerBehavior.privacyBrowserOutput = `${JSON.stringify(makePrivacyObservation())}${" ".repeat(300 * 1024)}\n`;
+    const factory = createDockerRuntimeSessionFactory({
+      executorImage: "executor:local", brokerImage: "broker:local",
+      privacyBrowserImage: "privacy-browser:local", privacyEgressImage: "privacy-egress:local",
+      brokerNetwork: "development-security-egress",
+    });
+    const session = await factory.create(REQUEST, new AbortController().signal);
+
+    await expect(session.observePrivacy!(REQUEST, new AbortController().signal)).resolves.toMatchObject({
+      status: "complete",
+      hostname: REQUEST.hostname,
+    });
+    await session.close();
+  });
+
+  it("keeps the base report and logs an explicit size failure when the browser reports an oversized response", async () => {
+    dockerBehavior.privacyBrowserOutput = `${JSON.stringify({
+      protocolVersion: 1,
+      requestId: REQUEST.requestId,
+      hostname: REQUEST.hostname,
+      status: "unknown",
+      code: "privacy_browser_output_too_large",
+    })}\n`;
+    const diagnostics: RuntimeDiagnosticEvent[] = [];
+    const runner = createDockerRuntimeCoordinatorRunner(createDockerRuntimeSessionFactory({
+      executorImage: "executor:local", brokerImage: "broker:local",
+      privacyBrowserImage: "privacy-browser:local", privacyEgressImage: "privacy-egress:local",
+      brokerNetwork: "development-security-egress",
+      diagnostic: (event) => diagnostics.push(event),
+    }));
+
+    const result = await runner.execute(REQUEST, new AbortController().signal);
+
+    expect(result.scannerVersion).toBe("transport-v1-network-adapter-1");
+    expect(diagnostics).toContainEqual({
+      type: "runtime_diagnostic",
+      stage: "privacy_browser_observation",
+      code: "executor_response_too_large",
+    });
   });
 
   it("reduces broker startup stderr to a safe failure category", () => {
