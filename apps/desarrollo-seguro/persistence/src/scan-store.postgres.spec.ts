@@ -137,7 +137,7 @@ describePostgres.sequential("PostgresScanStore", () => {
     expect(malformedVisit.rows[0]?.valid).toBe(false);
   });
 
-  it("persists optional first-entry policy-link visit snapshots with the report", async () => {
+  it("persists domain-v4 first-entry snapshots and transport-failure summaries together", async () => {
     const link = { hostname: TEST_HOSTNAME, path: "/privacy", kind: "privacy" } as const;
     const assessment: FirstEntryPolicyAccess = {
       ...assessFirstEntryPolicyAccess({
@@ -183,19 +183,36 @@ describePostgres.sequential("PostgresScanStore", () => {
       scannerVersion: TEST_SCANNER,
       startedAt: TEST_START,
       completedAt: TEST_NOW,
-      verdict: "pass",
+      verdict: "inconclusive",
       scope: ["/"],
       checks: [
-        ...makeEligibleDomainV3Checks().map((check) => ({
-          ...check,
-          limitation: "Resultado limitado a las rutas públicas declaradas del perfil domain-v4.",
-        })),
+        ...makeEligibleDomainV3Checks().map((check) => {
+          const base = {
+            ...check,
+            limitation: "Resultado limitado a las rutas públicas declaradas del perfil domain-v4.",
+          };
+          if (["DS-HDR-01", "DS-PRIV-05", "DS-PRIV-06", "DS-QUAL-02"].includes(check.controlId)) {
+            return {
+              ...base,
+              status: "unknown" as const,
+              evidence: { ...check.evidence, probeErrorCode: "transport_failed" },
+            };
+          }
+          if (check.controlId === "DS-TLS-02") {
+            return {
+              ...base,
+              status: "unknown" as const,
+              evidence: { ...check.evidence, tls10ProbeError: "transport_failed" },
+            };
+          }
+          return base;
+        }),
         {
           ...CHECK,
           controlId: "DS-PRIV-04",
           method: "GET",
-          status: "pass",
-          summary: "Comprobación DS-PRIV-04: pass.",
+          status: "unknown",
+          summary: "El lector no pudo completar esta comprobación: se produjo un error de transporte.",
           limitation: "Resultado limitado a las rutas públicas declaradas del perfil domain-v4.",
           evidence: {
             inspected: true,
@@ -208,8 +225,9 @@ describePostgres.sequential("PostgresScanStore", () => {
             policyRecipientsMentioned: true,
             policyPurposesMentioned: true,
             policyTextBlocked: false,
-            policyProbeFailed: false,
+            policyProbeFailed: true,
             policyLanguageCatalogVersion: "public-policy-language-eea-v1",
+            probeErrorCode: "transport_failed",
           },
         },
       ],
@@ -217,8 +235,16 @@ describePostgres.sequential("PostgresScanStore", () => {
       firstEntryPolicyAccess: assessment,
     });
 
-    expect((await store.readPublicReport(reportId))?.firstEntryPolicyAccess).toEqual(assessment);
-    expect((await store.readPublicReport(reportId))?.checks).toHaveLength(10);
+    const report = await store.readPublicReport(reportId);
+    expect(report?.firstEntryPolicyAccess).toEqual(assessment);
+    expect(report).toMatchObject({ profileVersion: "domain-v4", verdict: "inconclusive" });
+    expect(report?.checks).toHaveLength(10);
+    for (const controlId of ["DS-HDR-01", "DS-PRIV-04", "DS-PRIV-05", "DS-PRIV-06", "DS-QUAL-02"]) {
+      expect(report?.checks.find((check) => check.controlId === controlId))
+        .toMatchObject({ status: "unknown", summary: "El lector no pudo completar esta comprobación: se produjo un error de transporte." });
+    }
+    expect(report?.checks.find((check) => check.controlId === "DS-TLS-02")?.summary)
+      .toContain("TLS 1.0: se produjo un error de transporte.");
   });
 
   afterAll(async () => {
