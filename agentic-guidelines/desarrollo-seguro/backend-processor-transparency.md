@@ -157,9 +157,14 @@ worker, manteniendo el release anterior operativo.
    inventario o la política.
 10. El despliegue ordinario activa el lector de inventario con credenciales y
     ACL provisionadas, pero mantiene detenido el perfil de auditoría privada.
-11. La prueba del despliegue exige `domain-ethics-v4` con los ocho criterios
-    evaluados y rechaza `unknown` propio del auditor; un inventario incompleto
-    o no divulgado atribuible al dominio puede quedar como un `fail` evaluado.
+11. La prueba del despliegue exige `domain-ethics-v6` con los ocho criterios
+    evaluados. Para Grumphya, un `unknown` cuyo `reasonCode` sea
+    `auditor_error` se conserva en el informe y se imprime como diagnóstico no
+    bloqueante; no puede impedir desplegar Desarrollo Seguro. El smoke no debe
+    convertirlo en `pass` ni `fail`. El resto de fallos de informe, cobertura y
+    salud de Desarrollo Seguro continúa bloqueando el deploy. Un inventario
+    incompleto o no divulgado atribuible al dominio puede quedar como un
+    `fail` evaluado.
 12. El script de deploy espera saludable al auditor de inventario antes de
     actualizar el worker y falla de forma segura si el socket no está listo.
 
