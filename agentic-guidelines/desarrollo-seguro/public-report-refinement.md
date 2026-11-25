@@ -58,6 +58,7 @@ Hacer que la ficha de informes se entienda y se recorra con facilidad para una p
 - La ingestión y la respuesta pública conservan los contadores de navegador permitidos para cookies y rastreadores, y vuelven a calcular resumen y estado con esa evidencia. No se publican nombres ni valores de cookies ni URL completas. La versión de scanner se incrementa para que un informe cacheado no oculte este cambio.
 - El veredicto del análisis se calcula con los mismos checks ya enriquecidos con evidencia de navegador que se validan y persisten; no se compara un veredicto anterior a esa fusión con estados posteriores.
 - El contrato PostgreSQL permite únicamente los contadores de navegador aprobados, deriva de ellos el mismo resumen y limitación que la aplicación, y los expone en la vista pública; nunca expone nombres o valores de cookies ni URL completas.
+- El validador de informes de la interfaz acepta las puntuaciones de Privacidad con hasta dos decimales que produce el evaluador compartido. Un informe terminal con puntuación decimal debe poder cargarse tanto por su ID como desde el estado del dominio, y mostrar sus evidencias y categorías en lugar de quedar en error o conservar un resultado previo.
 - El pie de la ficha no muestra el texto «Comprobación técnica acotada desde el mismo VPS. No es una certificación independiente.»
 - Los errores técnicos que convierten una fase en `unknown` deben conservar una etapa y un código de causa de lista permitida para diagnóstico. No se guardan ni publican mensajes de excepción, URLs con query o fragmento, HTML, cookies, valores de almacenamiento ni datos personales. Estos diagnósticos no se transforman en incumplimientos atribuidos al dominio.
 
@@ -81,6 +82,7 @@ Hacer que la ficha de informes se entienda y se recorra con facilidad para una p
 16. Los contadores permitidos sobreviven la ingestión y se muestran en el detalle público; los informes del nuevo scanner se validan con la versión de formato vigente. El pie no contiene la frase de comprobación y certificación retirada.
 17. El veredicto coincide con los checks posteriores a la fusión de evidencia de navegador y el informe puede completarse cuando dicha evidencia cambie un estado.
 18. La validación PostgreSQL acepta y publica los contadores acotados y los textos derivados de ellos, y rechaza valores de evidencia o textos no permitidos.
+19. La interfaz acepta un informe vigente con puntuación de Privacidad decimal (por ejemplo, `95.63`) y representa Ética, Privacidad, Seguridad y Rendimiento a partir de sus criterios terminales.
 
 ## Verificación y publicación
 

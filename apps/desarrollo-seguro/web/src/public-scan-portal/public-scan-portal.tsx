@@ -2250,7 +2250,7 @@ function isInternalAuditPublicSummary(value: unknown): value is InternalAuditPub
 function isPrivacyAssessment(value: unknown): value is NonNullable<PublicReport["privacyAssessment"]> | null | undefined {
   if (value === null || value === undefined) return true;
   if (!isRecord(value) || value.policyVersion !== "privacy-v1" ||
-      (value.score !== null && (!isInteger(value.score) || value.score < 0 || value.score > 100)) ||
+      (value.score !== null && !isBoundedScore(value.score)) ||
       !isInteger(value.assessedCriteria) || !isInteger(value.unknownCriteria) ||
       !isInteger(value.notApplicableCriteria) || value.totalCriteria !== 5 ||
       !isRecord(value.evidence) || !isEvidenceNames(value.evidence.cookieNames, 128) ||
@@ -2502,6 +2502,11 @@ function isProcessorDisclosure(value: unknown): value is PublicProcessorDisclosu
 
 function isInteger(value: unknown): value is number {
   return typeof value === "number" && Number.isInteger(value);
+}
+
+function isBoundedScore(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 100 &&
+    Math.abs(value * 100 - Math.round(value * 100)) < 1e-8;
 }
 
 function isAnalysisRequest(
