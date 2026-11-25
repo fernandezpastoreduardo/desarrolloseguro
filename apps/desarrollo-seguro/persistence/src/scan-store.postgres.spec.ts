@@ -1,6 +1,10 @@
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { assessDevelopmentSecurityProcessorRegistry } from "@desarrolloseguro/core";
+import {
+  assessDevelopmentSecurityProcessorRegistry,
+  assessFirstEntryPolicyAccess,
+  type FirstEntryPolicyAccess,
+} from "@desarrolloseguro/core";
 import {
   PostgresScanStore,
   ScanLeaseLostError,
@@ -50,6 +54,26 @@ describePostgres.sequential("PostgresScanStore", () => {
   });
 
   it("accepts first-entry policy evidence linked from an informational notice", async () => {
+    const policyLinkVisit = {
+      status: "evaluated",
+      link: { hostname: "example.org", path: "/privacy", kind: "privacy" },
+      documentAccess: "accessible",
+      navigationStartedAtMs: 20,
+      beforeNavigation: {
+        capturedAtMs: 10,
+        cookies: [],
+        storageKeys: [],
+        cookieReadComplete: true,
+        storageReadComplete: true,
+      },
+      afterNavigation: {
+        capturedAtMs: 30,
+        cookies: [],
+        storageKeys: [],
+        cookieReadComplete: true,
+        storageReadComplete: true,
+      },
+    } as const;
     const assessments = [
       {
         policyVersion: "first-entry-policy-access-v1",
@@ -61,6 +85,7 @@ describePostgres.sequential("PostgresScanStore", () => {
         linkLocation: "information_notice",
         link: { hostname: "example.org", path: "/privacy", kind: "privacy" },
         documentAccess: "accessible",
+        policyLinkVisit,
       },
       {
         policyVersion: "first-entry-policy-access-v1",
@@ -83,9 +108,70 @@ describePostgres.sequential("PostgresScanStore", () => {
       "SELECT public.ds_valid_first_entry_policy_access($1::jsonb) AS valid",
       [JSON.stringify(assessments[1])],
     );
+    const malformedVisit = await pool.query<{ valid: boolean }>(
+      "SELECT public.ds_valid_first_entry_policy_access($1::jsonb) AS valid",
+      [JSON.stringify({ ...assessments[0], policyLinkVisit: { ...policyLinkVisit, afterNavigation: null } })],
+    );
 
     expect(result.rows[0]?.valid).toBe(true);
     expect(insufficient.rows[0]?.valid).toBe(true);
+    expect(malformedVisit.rows[0]?.valid).toBe(false);
+  });
+
+  it("persists optional first-entry policy-link visit snapshots with the report", async () => {
+    const link = { hostname: TEST_HOSTNAME, path: "/privacy", kind: "privacy" } as const;
+    const assessment: FirstEntryPolicyAccess = {
+      ...assessFirstEntryPolicyAccess({
+        consentPromptDetected: false,
+        thirdPartyCookieDetected: false,
+        nonEssentialThirdPartyStorageDetected: false,
+        consentComponentLink: null,
+        informationNoticeLink: link,
+        footerLink: null,
+        componentLinkDocumentAccess: "not_checked",
+        informationNoticeDocumentAccess: "accessible",
+        footerLinkDocumentAccess: "not_checked",
+      }),
+      policyLinkVisit: {
+        status: "evaluated",
+        link,
+        documentAccess: "accessible",
+        navigationStartedAtMs: 20,
+        beforeNavigation: {
+          capturedAtMs: 10,
+          cookies: [],
+          storageKeys: [],
+          cookieReadComplete: true,
+          storageReadComplete: true,
+        },
+        afterNavigation: {
+          capturedAtMs: 30,
+          cookies: [],
+          storageKeys: [],
+          cookieReadComplete: true,
+          storageReadComplete: true,
+        },
+      },
+    };
+    await store.ensureFreshScan({ hostname: TEST_HOSTNAME, profileVersion: "domain-v3", trigger: "requested" });
+    const job = await store.claimNextScan(new Date(), TEST_LEASE_MS);
+    if (!job) throw new Error("expected_claimed_first_entry_policy_scan");
+    const reportId = await store.completeScan({
+      jobId: job.id,
+      leaseToken: job.leaseToken,
+      hostname: TEST_HOSTNAME,
+      profileVersion: "domain-v3",
+      scannerVersion: TEST_SCANNER,
+      startedAt: TEST_START,
+      completedAt: TEST_NOW,
+      verdict: "pass",
+      scope: ["/"],
+      checks: makeEligibleDomainV3Checks(),
+      metrics: { requestsCount: 0, bytesCount: 0, durationMs: 1, pagesCount: 0 },
+      firstEntryPolicyAccess: assessment,
+    });
+
+    expect((await store.readPublicReport(reportId))?.firstEntryPolicyAccess).toEqual(assessment);
   });
 
   afterAll(async () => {
