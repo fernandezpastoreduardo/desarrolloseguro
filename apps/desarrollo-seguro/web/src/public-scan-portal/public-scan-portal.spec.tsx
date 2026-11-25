@@ -143,6 +143,7 @@ describe("PublicScanPortal", () => {
     const user = userEvent.setup();
 
     render(<PublicScanPortal />);
+    expect(screen.queryByText(/Comprobación técnica acotada desde el mismo VPS/i)).not.toBeInTheDocument();
     await user.type(
       screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }),
       "example.com",
@@ -481,7 +482,7 @@ describe("PublicScanPortal", () => {
     const report = {
       ...SCORED_PUBLIC_REPORT,
       profileVersion: "domain-v4",
-      scannerVersion: "domain-v4-network-adapter-6",
+      scannerVersion: "domain-v4-network-adapter-7",
       ethicsAssessment: {
         ...SCORED_PUBLIC_REPORT.ethicsAssessment,
         policyVersion: "domain-ethics-v6",
@@ -537,7 +538,7 @@ describe("PublicScanPortal", () => {
     const report = {
       ...SCORED_PUBLIC_REPORT,
       profileVersion: "domain-v4",
-      scannerVersion: "domain-v4-network-adapter-6",
+      scannerVersion: "domain-v4-network-adapter-7",
       ethicsAssessment: {
         ...SCORED_PUBLIC_REPORT.ethicsAssessment,
         policyVersion: "domain-ethics-v6",

@@ -28,6 +28,55 @@ const SAFE_DNS_CHECK = {
 };
 
 describe("sanitizeScanObservations", () => {
+  it("retains browser cookie and tracking evidence while separating blocked attempts from responses", () => {
+    const checks = makeDomainV4Checks().map((check) => {
+      if (check.controlId === "DS-PRIV-05") {
+        return {
+          ...check,
+          evidence: {
+            ...check.evidence,
+            browserObservationComplete: true,
+            browserCookieCount: 1,
+            browserInsecureCookieCount: 0,
+            browserCatalogMatchCount: 1,
+          },
+        };
+      }
+      if (check.controlId === "DS-PRIV-06") {
+        return {
+          ...check,
+          evidence: {
+            ...check.evidence,
+            browserObservationComplete: true,
+            browserThirdPartyRequestCount: 3,
+            browserKnownTrackingRequestCount: 1,
+            browserBlockedTrackingRequestCount: 1,
+            browserTrackingResponseCount: 0,
+          },
+        };
+      }
+      return check;
+    });
+    const result = sanitizeScanObservations(MONITORED_HOSTNAME, "domain-v4", ["/"], checks);
+    const cookies = result.checks.find(({ controlId }) => controlId === "DS-PRIV-05");
+    const tracking = result.checks.find(({ controlId }) => controlId === "DS-PRIV-06");
+    expect(cookies).toMatchObject({
+      status: "fail",
+      summary: "Antes de elegir, Chromium observó 1 cookie; 1 coincidía con cookies conocidas del catálogo y 0 carecían del atributo Secure.",
+      evidence: { browserObservationComplete: true, browserCookieCount: 1, browserCatalogMatchCount: 1 },
+    });
+    expect(tracking).toMatchObject({
+      status: "fail",
+      summary: "Antes de elegir, Chromium inició 3 solicitudes a terceros, incluidas 1 a rastreadores conocidos; se bloquearon 1 intento y 0 solicitudes recibieron respuesta.",
+      limitation: expect.stringContaining("no demuestran transmisión de datos"),
+      evidence: {
+        browserKnownTrackingRequestCount: 1,
+        browserBlockedTrackingRequestCount: 1,
+        browserTrackingResponseCount: 0,
+      },
+    });
+  });
+
   it("accepts exact root-only transport-v1 coverage", () => {
     const result = sanitizeScanObservations(
       MONITORED_HOSTNAME,
@@ -1192,6 +1241,10 @@ function makeDomainV4Checks() {
         insecureCookieCount: 0,
         catalogMatchCount: 0,
         consentPromptDetected: false,
+        browserObservationComplete: true,
+        browserCookieCount: 0,
+        browserInsecureCookieCount: 0,
+        browserCatalogMatchCount: 0,
       },
     },
     {
@@ -1201,6 +1254,11 @@ function makeDomainV4Checks() {
         inspected: true,
         thirdPartyResourceReferences: 0,
         knownTrackingResourceReferences: 0,
+        browserObservationComplete: true,
+        browserThirdPartyRequestCount: 0,
+        browserKnownTrackingRequestCount: 0,
+        browserBlockedTrackingRequestCount: 0,
+        browserTrackingResponseCount: 0,
       },
     },
     {
