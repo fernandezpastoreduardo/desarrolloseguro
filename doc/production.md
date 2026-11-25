@@ -27,6 +27,8 @@ El broker transmite al executor la evidencia agregada por un socket Unix. El con
 
 Las migraciones `054_runtime_failure_phases`, `055_runtime_boundary_diagnostics`, `056_isolated_executor_diagnostics`, `057_worker_composition_diagnostics`, `058_document_discovery_diagnostics` y `059_catalog_rejection_diagnostics` sincronizan la lista SQL permitida con las fases y códigos seguros de toda la ejecución. Esto incluye el proceso aislado, el runtime y el enriquecimiento posterior con el catálogo de proveedores. La migración 058 separa la conversión de documentos de su persistencia en el catálogo; la 059 añade causas internas allowlisted y categorías fijas para SQLSTATE de integridad.
 
+El merge de nuevos documentos de un proveedor conserva los hechos ya revisados en el catálogo y añade, cuando corresponda, los hechos extraídos del documento enlazado.
+
 Si una capa inferior falla sin aportar un diagnóstico seguro y válido, el worker identifica la frontera conocida: creación de sesión runtime, ejecución del executor o limpieza. El estado público conserva una causa operativa acotada sin revelar texto crudo ni detalles internos.
 
 El estado público y los logs del worker distinguen fallos de observación de

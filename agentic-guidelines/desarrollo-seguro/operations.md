@@ -138,6 +138,10 @@ En esa operación se proyectan mensajes internos solo cuando coinciden de forma
 exacta con un código previamente allowlisted; los SQLSTATE de integridad se
 convierten a categorías fijas. Nunca se copia el mensaje, constraint o parámetro
 de la base de datos al diagnóstico.
+Al ampliar evidencia documental de un proveedor ya catalogado, el merge debe
+conservar sus hechos previamente revisados y aceptar todos los identificadores
+de hecho definidos por el catálogo oficial, además de añadir los hechos
+extraídos del documento.
 Esto incluye los wrappers del executor del catálogo y los límites entre esos wrappers y
 `ScanJobProcessor`, donde se persiste el diagnóstico para el informe público.
 No se registran mensajes de excepción, datos del dominio, nombres de
