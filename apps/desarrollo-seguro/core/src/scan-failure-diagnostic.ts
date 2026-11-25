@@ -1,6 +1,8 @@
 export const SCAN_FAILURE_DIAGNOSTIC_STAGES = [
   "volume_create", "volume_prepare", "broker_start", "broker_ready", "executor",
   "executor_container_cleanup", "broker_container_cleanup", "volume_cleanup",
+  "privacy_browser_observation", "privacy_assessment", "cookie_legal_findings",
+  "service_comparison", "first_entry_policy_access", "response_validation",
 ] as const;
 
 export const SCAN_FAILURE_DIAGNOSTIC_CODES = [

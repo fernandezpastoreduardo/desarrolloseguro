@@ -231,7 +231,7 @@ function handleRequest(
               );
             } catch {
               sendFailure(socket, request.requestId, "executor_failed", {
-                stage: "executor",
+                stage: "response_validation",
                 code: "executor_response_invalid",
               });
               finish();
@@ -288,7 +288,7 @@ function sendResponse(
   const payload = Buffer.from(JSON.stringify(response));
   if (payload.byteLength > MAX_EXECUTOR_RESPONSE_BYTES) {
     sendFailure(socket, response.requestId, "executor_failed", {
-      stage: "executor",
+      stage: "response_validation",
       code: "executor_response_too_large",
     });
     return;

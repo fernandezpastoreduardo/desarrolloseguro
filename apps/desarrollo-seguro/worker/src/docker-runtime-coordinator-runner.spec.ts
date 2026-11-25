@@ -6,8 +6,10 @@ import {
   classifyBrokerStartupStderr,
   createDockerRuntimeCoordinatorRunner,
   createDockerRuntimeSessionFactory,
+  runRuntimePhase,
   type DockerRuntimeSessionFactory,
 } from "./docker-runtime-coordinator-runner.js";
+import type { RuntimeDiagnosticEvent } from "./runtime-diagnostics.js";
 import type { TransportV1ExecutorRequest } from "./transport-v1-executor-protocol.js";
 import type { PrivacyBrowserFlowObservation, PrivacyBrowserObservation } from "./privacy-browser-observer.js";
 
@@ -137,6 +139,26 @@ beforeEach(() => {
 let activeBroker: FakeDockerChild | undefined;
 
 describe("createDockerRuntimeCoordinatorRunner", () => {
+  it.each(["service_comparison", "first_entry_policy_access"] as const)(
+    "retains the bounded failing phase for %s",
+    (stage) => {
+      let thrown: unknown;
+      try {
+        runRuntimePhase(stage, () => { throw new Error("private runtime detail"); });
+      } catch (error) { thrown = error; }
+      const error = thrown as Error & {
+        scanFailureDiagnostic?: unknown;
+      };
+
+      expect(error.message).toBe("executor_failed");
+      expect(error.scanFailureDiagnostic).toEqual({
+        stage,
+        code: "executor_application_failed",
+      });
+      expect(JSON.stringify(error)).not.toContain("private runtime detail");
+    },
+  );
+
   it("runs the browser only on its internal network behind the bounded egress proxy", async () => {
     const factory = createDockerRuntimeSessionFactory({
       executorImage: "executor:local", brokerImage: "broker:local",
@@ -186,6 +208,65 @@ describe("createDockerRuntimeCoordinatorRunner", () => {
     expect(factory.create).toHaveBeenCalledExactlyOnceWith(REQUEST, signal);
     expect(execute).toHaveBeenCalledExactlyOnceWith(REQUEST, signal);
     expect(close).toHaveBeenCalledOnce();
+  });
+
+  it("logs a privacy-assessment phase error and preserves the base scan", async () => {
+    const diagnostics: RuntimeDiagnosticEvent[] = [];
+    const factory: DockerRuntimeSessionFactory = {
+      diagnostic: (event) => diagnostics.push(event),
+      create: vi.fn().mockResolvedValue({
+        execute: vi.fn().mockResolvedValue({
+          protocolVersion: 1,
+          requestId: REQUEST.requestId,
+          result: JSON.parse(JSON.stringify(makeResult())) as unknown,
+        }),
+        observePrivacy: vi.fn().mockResolvedValue({}),
+        close: vi.fn().mockResolvedValue(undefined),
+      }),
+    };
+
+    const result = await createDockerRuntimeCoordinatorRunner(factory).execute(
+      REQUEST,
+      new AbortController().signal,
+    );
+
+    expect(result.scannerVersion).toBe("transport-v1-network-adapter-1");
+    expect(result.privacyAssessment).toBeDefined();
+    expect(diagnostics).toContainEqual({
+      type: "runtime_diagnostic",
+      stage: "privacy_assessment",
+      code: "executor_application_failed",
+    });
+  });
+
+  it("logs a cookie-finding phase error without discarding the base scan", async () => {
+    const observation = makePrivacyObservation();
+    observation.initial.phaseEvidence.networkRequests = [null] as unknown as typeof observation.initial.phaseEvidence.networkRequests;
+    const diagnostics: RuntimeDiagnosticEvent[] = [];
+    const factory: DockerRuntimeSessionFactory = {
+      diagnostic: (event) => diagnostics.push(event),
+      create: vi.fn().mockResolvedValue({
+        execute: vi.fn().mockResolvedValue({
+          protocolVersion: 1,
+          requestId: REQUEST.requestId,
+          result: JSON.parse(JSON.stringify(makeResult())) as unknown,
+        }),
+        observePrivacy: vi.fn().mockResolvedValue(observation),
+        close: vi.fn().mockResolvedValue(undefined),
+      }),
+    };
+
+    const result = await createDockerRuntimeCoordinatorRunner(factory).execute(
+      REQUEST,
+      new AbortController().signal,
+    );
+
+    expect(result.scannerVersion).toBe("transport-v1-network-adapter-1");
+    expect(diagnostics).toContainEqual({
+      type: "runtime_diagnostic",
+      stage: "cookie_legal_findings",
+      code: "executor_application_failed",
+    });
   });
 
   it("builds the public service comparison from provider declarations", async () => {
@@ -238,6 +319,48 @@ describe("createDockerRuntimeCoordinatorRunner", () => {
     });
     expect(close).toHaveBeenCalledOnce();
   });
+
+  it.each(["service_comparison", "first_entry_policy_access"] as const)(
+    "preserves the %s diagnostic through the runtime boundary",
+    async (stage) => {
+      const request = { ...REQUEST, profileVersion: "domain-v4" as const };
+      const observation = makePrivacyObservation();
+      if (stage === "service_comparison") {
+        let reads = 0;
+        Object.defineProperty(observation.initial, "completedHostsAfterChoice", {
+          get: () => {
+            reads += 1;
+            if (reads >= 4) throw new Error("private observed-service detail");
+            return [];
+          },
+        });
+      } else {
+        Object.defineProperty(observation.initial, "firstEntryPolicyLinks", {
+          get: () => { throw new Error("private policy-link detail"); },
+        });
+      }
+      const factory: DockerRuntimeSessionFactory = {
+        create: vi.fn().mockResolvedValue({
+          execute: vi.fn().mockResolvedValue({
+            protocolVersion: 1,
+            requestId: request.requestId,
+            result: JSON.parse(JSON.stringify(makeDomainV4Result())) as unknown,
+          }),
+          observePrivacy: vi.fn().mockResolvedValue(observation),
+          close: vi.fn().mockResolvedValue(undefined),
+        }),
+      };
+
+      const failure = await createDockerRuntimeCoordinatorRunner(factory).execute(
+        request,
+        new AbortController().signal,
+      ).then(() => null, (error: unknown) => error);
+      expect(failure).toMatchObject({
+        message: "executor_failed",
+        scanFailureDiagnostic: { stage, code: "executor_application_failed" },
+      });
+    },
+  );
 
   it("persists an explicit first-entry failure when consent has only a footer link", async () => {
     const request = REQUEST;
@@ -705,6 +828,33 @@ function makeResult(): Omit<ScanRunInput, "jobId" | "leaseToken" | "hostname" | 
       evidence: {},
     })),
     metrics: { requestsCount: 0, bytesCount: 0, durationMs: 0, pagesCount: 0 },
+  };
+}
+
+function makeDomainV4Result(): ReturnType<typeof makeResult> & Record<string, unknown> {
+  const base = makeResult();
+  return {
+    ...base,
+    scannerVersion: "domain-v4-network-adapter-3",
+    checks: [...base.checks, ...base.checks],
+    publicPolicyTransparencyAssessment: {
+      policyVersion: "public-policy-v1",
+      status: "pass",
+      reasonCode: "disclosure_found",
+      evidence: {
+        linksFound: 1,
+        pagesInspected: 1,
+        unavailablePages: 0,
+        accessDeniedPages: 0,
+        providerMentions: 2,
+        providersMissingPurpose: 0,
+        categories: ["other"],
+      },
+    },
+    publicServiceDeclarations: [
+      { providerId: "openai-api", purposes: ["ai_processing"] },
+      { providerId: "ionos", purposes: ["infrastructure", "email_delivery"] },
+    ],
   };
 }
 

@@ -114,6 +114,27 @@ recibir el fallback allowlisted `executor` / `executor_application_failed`
 antes de persistir; nunca se guarda el mensaje crudo del error ni se deja un
 fallo terminal del executor sin categoría diagnóstica.
 
+Para ejecuciones `domain-v4`, el pipeline del coordinador conserva una fase
+allowlisted distinta al ejecutar el transporte, observar el navegador,
+construir hallazgos de cookies, comparar servicios declarados/observados,
+evaluar el acceso inicial a la política y validar la respuesta final. Una
+excepción de una fase se convierte en su código fijo; no se oculta como fallo
+de auditoría de privacidad ni se reduce a `executor_application_failed`.
+El fallo registrado por el worker incluye `failureCode` y el par
+`failureDiagnostic.stage` / `failureDiagnostic.code` en una línea JSON
+`scan_job_failure`, tanto si se reintenta como si termina. La línea no incluye
+hostname, identificador de trabajo, mensajes/causas, datos del navegador,
+documentos, HTML, cookies, rutas, consultas SQL ni payloads.
+
+Las pruebas unitarias cubren cada fase fallida del pipeline y el fallback para
+excepciones no clasificadas. Las pruebas del worker comprueban que los
+diagnósticos de fallo del executor se emiten en `scan_job_failure` durante
+reintentos y fallos terminales. Las pruebas de persistencia PostgreSQL
+comprueban que cada etapa/código nuevo aceptado se puede guardar y que la
+proyección pública conserva solo el diagnóstico categórico permitido. Las
+pruebas de telemetría rechazan fases/códigos fuera de catálogo y demuestran
+que el sink de logs no altera el resultado del trabajo.
+
 El recolector `apps/desarrollo-seguro/worker/scripts/measure-vps-capacity.mjs` solo consulta recursos locales. Sin `--health-url`, no genera solicitudes de red. Su resultado no sustituye una prueba de carga ni autoriza un scan.
 
 La ejecución real permanece deshabilitada. El paquete worker tiene un executor `transport-v1` que deriva los controles desde DNS/IP pinning y transportes HTTP/HTTPS acotados, y un canal hijo que no transmite las credenciales del coordinador. El proceso aún comparte usuario y filesystem y no dispone de una jaula de red o sistema de archivos. Antes de activar scans hacen falta demostrar la política de egress por destino con pruebas IPv4/IPv6 contra servicios señuelo, aplicar límites globales de solicitudes/bytes/tiempo, medir capacidad y revisar el resultado público. Un fallo de esos gates debe dejar la respuesta como no evaluable, nunca como aprobado.
