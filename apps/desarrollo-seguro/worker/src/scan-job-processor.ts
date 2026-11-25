@@ -60,6 +60,12 @@ export type ScanJobErrorCode =
   | "scan_profile_not_catalogued"
   | "scan_scope_not_allowlisted"
   | "scan_check_payload_not_allowlisted"
+  | "scan_check_required_invalid"
+  | "scan_check_severity_not_allowlisted"
+  | "scan_check_summary_not_allowlisted"
+  | "scan_check_limitation_not_allowlisted"
+  | "scan_check_evidence_payload_not_allowlisted"
+  | "scan_check_evidence_size_exceeded"
   | "scan_verdict_does_not_match_checks"
   | "invalid_scan_checks"
   | "invalid_scan_report"
@@ -284,6 +290,12 @@ const PROCESSING_ERROR_CODES: readonly ScanJobErrorCode[] = [
   "scan_profile_not_catalogued",
   "scan_scope_not_allowlisted",
   "scan_check_payload_not_allowlisted",
+  "scan_check_required_invalid",
+  "scan_check_severity_not_allowlisted",
+  "scan_check_summary_not_allowlisted",
+  "scan_check_limitation_not_allowlisted",
+  "scan_check_evidence_payload_not_allowlisted",
+  "scan_check_evidence_size_exceeded",
   "scan_verdict_does_not_match_checks",
   "invalid_scan_checks",
   "invalid_scan_report",

@@ -57,6 +57,27 @@ describe("createJsonLineScanJobTelemetry", () => {
   });
 
   it.each([
+    "scan_check_required_invalid",
+    "scan_check_severity_not_allowlisted",
+    "scan_check_summary_not_allowlisted",
+    "scan_check_limitation_not_allowlisted",
+    "scan_check_evidence_payload_not_allowlisted",
+    "scan_check_evidence_size_exceeded",
+  ] as const)("writes the bounded payload validation category %s", (code) => {
+    const write = vi.fn();
+    createJsonLineScanJobTelemetry(write)({
+      type: "scan_job_error",
+      code,
+      stage: "persist_success",
+      durationMs: 11,
+    });
+
+    expect(write).toHaveBeenCalledExactlyOnceWith(
+      `{"type":"scan_job_error","code":"${code}","stage":"persist_success","durationMs":11}\n`,
+    );
+  });
+
+  it.each([
     ["unexpected event type", { type: "scan_job_private", outcome: "completed", durationMs: 3 }],
     ["unknown outcome", { outcome: "other", durationMs: 3 }],
     ["negative duration", { outcome: "completed", durationMs: -1 }],
