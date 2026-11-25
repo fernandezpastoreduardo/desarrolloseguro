@@ -155,6 +155,7 @@ const MIGRATIONS = [
   { version: "048_provider_catalog_discovery_evidence_merge", file: "048_provider_catalog_discovery_evidence_merge.sql" },
   { version: "049_provider_discovery_document_facts", file: "049_provider_discovery_document_facts.sql" },
   { version: "050_information_notice_policy_access", file: "050_information_notice_policy_access.sql" },
+  { version: "051_first_entry_policy_visit", file: "051_first_entry_policy_visit.sql" },
 ] as const;
 
 export const DEVELOPMENT_SECURITY_MIGRATION_COUNT = MIGRATIONS.length;
