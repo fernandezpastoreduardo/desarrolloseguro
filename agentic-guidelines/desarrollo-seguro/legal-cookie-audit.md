@@ -13,6 +13,7 @@ La herramienta acredita hechos técnicos y aplica una regla jurídica explícita
 - Primera visita de una página pública en Chromium, con perfil nuevo y almacenamiento limpio.
 - Captura del banner y de los enlaces visibles en primera capa.
 - Observación antes de aceptar o rechazar, después de cada acción y después de recargar.
+- Los botones visibles del CMP se clasifican por su etiqueta y contexto. Un `<button>` independiente sin atributo `type` puede activarse aunque el navegador le asigne por defecto `type="submit"`; solo se bloquean controles dentro de un formulario real. Las escrituras continúan limitadas a la ventana temporal del clic de consentimiento.
 - Cookies, almacenamiento web y peticiones de terceros, con atribución temporal exacta.
 - Flujos independientes de aceptación y rechazo para evitar que el estado de uno contamine el otro.
 - Reglas para LSSI, RGPD y LOPDGDD; vía de consumo/LCD cuando la actividad y los elementos legales observados permitan aplicarla.
@@ -113,6 +114,7 @@ Los hallazgos jurídicos se muestran aparte de las puntuaciones técnicas. Si ex
 11. Las notas técnicas por área permanecen visibles aunque el bloqueo legal fije la puntuación global.
 12. El informe público expone los hallazgos y evidencia verificable sin valores de cookies, credenciales, cuerpos completos de requests ni datos personales innecesarios.
 13. Una cookie directamente observada en una fase con inventario completo conserva su hallazgo legal aunque una acción, recarga o fase posterior del mismo flujo haya quedado incompleta.
+14. Los botones independientes de aceptar, rechazar y gestionar preferencias que omiten `type` se reconocen y activan; controles dentro de formularios no se envían. La prueba de regresión cubre el marcado HTML con `type` implícito `submit` y comprueba que el flujo posterior a rechazar se ejecuta.
 
 ## Fuentes oficiales iniciales
 

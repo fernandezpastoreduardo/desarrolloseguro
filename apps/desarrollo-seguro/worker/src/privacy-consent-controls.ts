@@ -62,8 +62,10 @@ export async function inspectConsentControls(page: Page): Promise<ConsentControl
       if (!kind) continue;
       const control = element as HTMLButtonElement | HTMLInputElement;
       const supportedButton = control instanceof HTMLButtonElement || (control instanceof HTMLInputElement && control.type === "button");
-      const formAction = !supportedButton || element.closest("form") !== null || (control instanceof HTMLButtonElement && control.type === "submit") ||
-        (control instanceof HTMLInputElement && control.type === "submit");
+      // A <button> without an explicit type defaults to "submit", even when it is
+      // not inside a form. Clicking that standalone consent button cannot submit
+      // anything; keep actual form controls blocked.
+      const formAction = !supportedButton || element.closest("form") !== null;
       const parent = element.parentElement;
       const parentId = parent ? `${parent.tagName.toLowerCase()}:${parent.getAttribute("role") ?? ""}:${parent.className.toString().slice(0, 80)}` : null;
       controls.push({ index, label, kind, parentId, safeToClick: !formAction });

@@ -19,7 +19,7 @@ describe("privacy consent controls", () => {
       new MockButton("Rechazar todo"),
       new MockButton("Preferencias"),
       new MockButton("Guardar preferencias"),
-      new MockButton("Aceptar", true, true),
+      new MockButton("Aceptar en formulario", true, true),
       new MockButton("Oculto", false),
     ]);
 
@@ -32,6 +32,15 @@ describe("privacy consent controls", () => {
     expect(findConsentControl(controls, "reject")).toMatchObject({ kind: "reject", safeToClick: true });
     expect(await clickConsentControl(page as never, controls[4]!)).toBe(false);
     expect(await clickConsentControl(page as never, controls[0]!)).toBe(true);
+  });
+
+  it("allows a standalone default-submit consent button", async () => {
+    installDomGlobals();
+    const reject = new MockButton("Rechazar no esenciales");
+    const controls = await inspectConsentControls(makePage([reject]) as never);
+
+    expect(reject.type).toBe("submit");
+    expect(controls).toMatchObject([{ kind: "reject", safeToClick: true }]);
   });
 
   it("does not classify a generic permission button as a cookie-consent prompt", async () => {
@@ -139,7 +148,12 @@ class MockElement {
   readonly parentElement = { tagName: "DIV", className: "consent-controls", getAttribute: () => null };
   clicked = false;
 
-  constructor(readonly text: string, readonly visible = true, readonly clickFails = false) {
+  constructor(
+    readonly text: string,
+    readonly visible = true,
+    readonly clickFails = false,
+    readonly insideForm = false,
+  ) {
     this.tagName = this instanceof MockButton ? "BUTTON" : "INPUT";
   }
 
@@ -147,11 +161,16 @@ class MockElement {
   get textContent(): string { return this.text; }
   getBoundingClientRect(): DOMRect { return { width: this.visible ? 100 : 0, height: 30 } as DOMRect; }
   getAttribute(name: string): string | null { return name === "aria-checked" ? null : null; }
-  closest(selector: string): null | object { return selector === "form" && this.clickFails ? {} : null; }
+  closest(selector: string): null | object { return selector === "form" && this.insideForm ? {} : null; }
 }
 
 class MockButton extends MockElement {
-  readonly type = "button";
+  readonly type: string;
+
+  constructor(text: string, visible = true, insideForm = false, type = "submit") {
+    super(text, visible, false, insideForm);
+    this.type = type;
+  }
 }
 
 class MockToggle extends MockElement {
