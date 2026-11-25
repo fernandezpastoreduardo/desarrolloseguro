@@ -47,11 +47,12 @@ describe("createJsonLineScanJobTelemetry", () => {
     telemetry({
       type: "scan_job_error",
       code: "scan_check_payload_not_allowlisted",
+      stage: "validate_result",
       durationMs: 23,
     });
 
     expect(write).toHaveBeenCalledExactlyOnceWith(
-      '{"type":"scan_job_error","code":"scan_check_payload_not_allowlisted","durationMs":23}\n',
+      '{"type":"scan_job_error","code":"scan_check_payload_not_allowlisted","stage":"validate_result","durationMs":23}\n',
     );
   });
 

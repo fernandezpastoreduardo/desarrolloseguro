@@ -504,6 +504,7 @@ describe("ScanJobProcessor", () => {
     expect(telemetry).toHaveBeenCalledWith(expect.objectContaining({
       type: "scan_job_error",
       code: "scan_profile_controls_incomplete",
+      stage: "persist_success",
     }));
     expect(JSON.stringify(telemetry.mock.calls)).not.toContain("private");
   });
