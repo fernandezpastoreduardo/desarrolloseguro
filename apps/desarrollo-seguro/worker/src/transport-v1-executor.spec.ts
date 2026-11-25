@@ -72,7 +72,7 @@ describe("TransportV1 executors", () => {
     const observedAt = "2026-11-24T03:00:00.000Z";
     const controlIds = ["DS-DNS-01", "DS-TLS-01", "DS-TLS-02", "DS-HTTP-01", "DS-HDR-01", "DS-PRIV-04", "DS-PRIV-05", "DS-PRIV-06", "DS-PRIV-07", "DS-QUAL-02"];
     const result = {
-      scannerVersion: "domain-v4-network-adapter-5",
+      scannerVersion: "domain-v4-network-adapter-6",
       startedAt: observedAt,
       completedAt: observedAt,
       verdict: "inconclusive",

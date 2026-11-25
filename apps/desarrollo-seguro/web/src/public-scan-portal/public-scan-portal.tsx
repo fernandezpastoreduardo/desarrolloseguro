@@ -121,8 +121,8 @@ const CRITERION_FAIL_MEANINGS: Record<string, string> = {
   "security-headers": "Falta al menos una indicación que ayuda al navegador a proteger la visita.",
   "third-party-data-use": "Falta información pública necesaria sobre los servicios externos o el acceso a esa información fue denegado.",
   "external-service-transparency": "Se observó un servicio externo que no aparece explicado junto con su finalidad en la información pública.",
-  "initial-cookie-risk": "El nombre de un dato guardado coincide con los que suelen usar herramientas de análisis o publicidad. Esto no basta por sí solo para confirmar un incumplimiento.",
-  tracking: "El contenido inicial menciona herramientas de seguimiento conocidas, pero esta prueba no confirma que se conecten o se ejecuten.",
+  "initial-cookie-risk": "El navegador encontró cookies cuyos nombres coinciden con reglas del catálogo local y una solicitud del mismo flujo.",
+  tracking: "El navegador inició solicitudes a servicios de seguimiento conocidos; las solicitudes bloqueadas no acreditan transmisión de datos.",
   performance: "La primera respuesta tardó más de lo esperado en esta medición puntual.",
 };
 const EVIDENCE_LABELS: Record<string, string> = {
@@ -136,6 +136,12 @@ const EVIDENCE_LABELS: Record<string, string> = {
   csp: "Política que restringe contenido cargado (CSP)", inspected: "Respuesta inspeccionada", cookieCount: "Cookies en la primera respuesta",
   insecureCookieCount: "Cookies sin atributo Secure", catalogMatchCount: "Coincidencias con cookies conocidas", consentPromptDetected: "Aviso de consentimiento detectado",
   thirdPartyResourceReferences: "Referencias a recursos de terceros en el HTML", knownTrackingResourceReferences: "Referencias a rastreadores conocidos",
+  browserObservationComplete: "Observación del navegador completa", browserCookieCount: "Cookies visibles en Chromium antes de elegir",
+  browserInsecureCookieCount: "Cookies observadas sin atributo Secure", browserCatalogMatchCount: "Cookies que coinciden con el catálogo local",
+  browserThirdPartyRequestCount: "Solicitudes a terceros iniciadas antes de elegir",
+  browserKnownTrackingRequestCount: "Solicitudes a rastreadores conocidos",
+  browserBlockedTrackingRequestCount: "Intentos a rastreadores bloqueados por el auditor",
+  browserTrackingResponseCount: "Solicitudes a rastreadores con respuesta recibida",
   policyLanguageCatalogVersion: "Catálogo local de información pública",
   responseTimeMs: "Tiempo de respuesta inicial", responseBytes: "Tamaño recibido de la página",
 };
@@ -2180,7 +2186,7 @@ function isPublicReport(value: unknown): value is PublicReport {
   const usesV5PublicPolicy = value.ethicsAssessment.policyVersion === "domain-ethics-v5" &&
     value.profileVersion === "domain-v4" && value.scannerVersion === "domain-v4-network-adapter-2";
   const usesV6ServiceComparison = value.ethicsAssessment.policyVersion === "domain-ethics-v6" &&
-    value.profileVersion === "domain-v4" && value.scannerVersion === "domain-v4-network-adapter-5";
+    value.profileVersion === "domain-v4" && ["domain-v4-network-adapter-5", "domain-v4-network-adapter-6"].includes(value.scannerVersion);
   if ((value.ethicsAssessment.policyVersion === "domain-ethics-v3" && (hasProcessorAssessment || hasPublicPolicyAssessment)) ||
       (value.ethicsAssessment.policyVersion === "domain-ethics-v4" && (!hasProcessorAssessment || hasPublicPolicyAssessment)) ||
       usesV5PublicPolicy && !hasPublicPolicyAssessment ||
@@ -2738,8 +2744,8 @@ function getCriterionOutcome(criterionId: string, status: string): string {
     "security-headers": "Las protecciones comprobadas estaban presentes en la respuesta observada.",
     "third-party-data-use": "No se ha podido confirmar el uso que terceros hacen de los datos.",
     "external-service-transparency": "Comparamos las conexiones observadas con la información que publica el sitio sobre sus proveedores y para qué los utiliza.",
-    "initial-cookie-risk": "No se reconocieron cookies con riesgo en la primera respuesta observada.",
-    tracking: "No se encontraron referencias conocidas a rastreadores en el HTML inicial; no se ejecutaron scripts.",
+    "initial-cookie-risk": "No se encontraron cookies coincidentes con el catálogo local en la observación del navegador.",
+    tracking: "No se observaron solicitudes iniciadas a rastreadores conocidos durante la visita inicial.",
     performance: "La respuesta inicial quedó dentro del umbral orientativo de esta comprobación; no representa la experiencia completa.",
   };
   return outcomes[criterionId] ?? "Esta comprobación no encontró una señal de riesgo.";
@@ -2836,16 +2842,21 @@ function getCriterionEvidenceSummary(
       break;
     }
     case "initial-cookie-risk": {
-      const count = number("cookieCount");
-      const matches = number("catalogMatchCount");
-      const insecure = number("insecureCookieCount");
+      const count = number("browserCookieCount") ?? number("cookieCount");
+      const matches = number("browserCatalogMatchCount") ?? number("catalogMatchCount");
+      const insecure = number("browserInsecureCookieCount") ?? number("insecureCookieCount");
       if (count === null && matches === null && insecure === null) break;
-      return `En la primera respuesta se observaron ${count ?? "sin dato"} cookies; ${matches ?? "sin dato"} coincidían con el catálogo de nombres conocidos y ${insecure ?? "sin dato"} no incluían el atributo Secure.`;
+      return `Antes de elegir, el navegador observó ${count ?? "sin dato"} cookies; ${matches ?? "sin dato"} coincidían con cookies conocidas del catálogo y ${insecure ?? "sin dato"} no incluían Secure.`;
     }
     case "tracking": {
-      const thirdParty = number("thirdPartyResourceReferences");
-      const known = number("knownTrackingResourceReferences");
+      const thirdParty = number("browserThirdPartyRequestCount") ?? number("thirdPartyResourceReferences");
+      const known = number("browserKnownTrackingRequestCount") ?? number("knownTrackingResourceReferences");
+      const blocked = number("browserBlockedTrackingRequestCount");
+      const responses = number("browserTrackingResponseCount");
       if (thirdParty === null && known === null) break;
+      if (number("browserKnownTrackingRequestCount") !== null) {
+        return `Antes de elegir se iniciaron ${thirdParty ?? "sin dato"} solicitudes a terceros, ${known ?? "sin dato"} a rastreadores conocidos; ${blocked ?? 0} fueron bloqueadas por el auditor y ${responses ?? 0} recibieron respuesta.`;
+      }
       return `El HTML inicial contenía ${thirdParty ?? "sin dato"} referencias a recursos de terceros y ${known ?? "sin dato"} coincidencias con rastreadores conocidos.`;
     }
     case "performance": {

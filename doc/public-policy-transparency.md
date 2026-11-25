@@ -36,6 +36,15 @@ puertos, rutas y límites del scanner; no sigue destinos ajenos ni combina los
 informes de ambos hostnames. Esta regla se aplica a informes nuevos desde
 `domain-v4-network-adapter-5`.
 
+Los informes `domain-v4-network-adapter-6` incorporan a Ética y Privacidad la
+instantánea inicial de cookies y el registro de solicitudes iniciado por
+Chromium, además de las referencias visibles en HTML y las cabeceras. Las
+cookies analíticas solo se atribuyen cuando coinciden con una regla revisada
+del catálogo y existe una solicitud del mismo flujo al proveedor. Un intento
+bloqueado cuenta como intento observado, no como transmisión; el detalle
+muestra aparte cuántos intentos se bloquearon y cuántas solicitudes recibieron
+respuesta. Los nombres y valores de cookies y las URL completas no se publican.
+
 La navegación al enlace visible de política se comprueba en un contexto nuevo y
 su estado posterior se muestra separado de la instantánea inicial. El informe
 conserva tiempo monotónico, nombres, dominios y atributos de cookies y los

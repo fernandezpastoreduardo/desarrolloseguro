@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { assessPrivacyObservation, getObservedPublicServices } from "./privacy-assessment-builder.js";
 import { identifyUnattributedProviderDestination } from "./provider-destination-identity.js";
+import { mergePrivacyBrowserChecks } from "./privacy-public-browser-evidence.js";
 import type { PrivacyBrowserFlowObservation, PrivacyBrowserObservation } from "./privacy-browser-observer.js";
 
 function flow(overrides: Partial<PrivacyBrowserFlowObservation> = {}): PrivacyBrowserFlowObservation {
@@ -31,6 +32,75 @@ function observation(overrides: Partial<PrivacyBrowserObservation> = {}): Privac
 }
 
 describe("assessPrivacyObservation", () => {
+  it("uses a same-flow auditor-blocked Google Analytics request to corroborate a visible first-party cookie", () => {
+    const initial = flow({
+      signalHostsAfterChoice: ["region1.google-analytics.com"],
+      cookiesAfterChoice: [{ name: "_ga", domain: ".talentoypersonas.com", secure: true, httpOnly: false }],
+      phaseEvidence: {
+        ...flow().phaseEvidence,
+        beforeChoice: {
+          capturedAtMs: 100,
+          cookies: [{ name: "_ga", domain: ".talentoypersonas.com", secure: true, httpOnly: false }],
+          storageKeys: [],
+          cookieReadComplete: true,
+          storageReadComplete: true,
+        },
+        networkRequests: [{
+          phaseAtStart: "before_choice", responsePhase: null, responseAtMs: null, phaseAtCompletion: null,
+          startedAtMs: 50, completedAtMs: null, url: "https://region1.google-analytics.com/g/collect",
+          hostname: "region1.google-analytics.com", method: "POST", resourceType: "fetch", responseStatus: null,
+          blockedByAudit: true, failed: true, sentCookieNames: [], receivedCookieNames: [],
+        }],
+      },
+    });
+    const result = assessPrivacyObservation(observation({ hostname: "talentoypersonas.com", initial }));
+    expect(result.score).toBeLessThan(100);
+    expect(result.criteria[0]).toMatchObject({ status: "evaluated", confirmedFindings: 2 });
+  });
+
+  it("publishes browser counts and separates blocked tracking attempts from received responses", () => {
+    const blocked = {
+      phaseAtStart: "before_choice" as const, responsePhase: null, responseAtMs: null, phaseAtCompletion: null,
+      startedAtMs: 10, completedAtMs: null, url: "https://region1.google-analytics.com/g/collect",
+      hostname: "region1.google-analytics.com", method: "POST", resourceType: "fetch", responseStatus: null,
+      blockedByAudit: true, failed: true, sentCookieNames: [], receivedCookieNames: [],
+    };
+    const initial = flow({
+      phaseEvidence: {
+        ...flow().phaseEvidence,
+        beforeChoice: {
+          capturedAtMs: 20,
+          cookies: [{ name: "_ga", domain: ".talentoypersonas.com", secure: true, httpOnly: false }],
+          storageKeys: [],
+          cookieReadComplete: true,
+          storageReadComplete: true,
+        },
+        networkRequests: [blocked],
+      },
+    });
+    const check = (controlId: string) => ({
+      controlId, status: "pass" as const, required: true, severity: "medium", observedAt: new Date(),
+      targetPath: "/", method: "GET", summary: "", limitation: "", evidence: {},
+    });
+    const result = mergePrivacyBrowserChecks(
+      [check("DS-PRIV-05"), check("DS-PRIV-06")],
+      observation({ hostname: "talentoypersonas.com", initial }),
+    );
+    expect(result[0]).toMatchObject({
+      status: "fail",
+      evidence: { browserCookieCount: 1, browserCatalogMatchCount: 1, browserObservationComplete: true },
+    });
+    expect(result[1]).toMatchObject({
+      status: "fail",
+      evidence: {
+        browserKnownTrackingRequestCount: 1,
+        browserBlockedTrackingRequestCount: 1,
+        browserTrackingResponseCount: 0,
+      },
+      limitation: expect.stringContaining("no prueban que se transmitieran"),
+    });
+  });
+
   it("retains confirmed services and completed third-party destinations without assigning unknown companies", () => {
     const result = getObservedPublicServices(observation({
       initial: flow({
