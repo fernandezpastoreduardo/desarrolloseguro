@@ -56,6 +56,7 @@ Hacer que la ficha de informes se entienda y se recorra con facilidad para una p
 - Los criterios públicos `initial-cookie-risk` y `tracking` usan también la observación del navegador aislado antes de elegir: cookies visibles tras cargar la página y peticiones iniciadas a proveedores conocidos, además de las señales estáticas del HTML y de las cabeceras. Una petición bloqueada por el auditor demuestra el intento de conexión, no transmisión de datos; el detalle distingue intentos bloqueados y respuestas recibidas. Un HTML de redirección o una página vacía no sustituye los datos de la página canónica.
 - Una cookie de proveedor se atribuye solo si el nombre coincide con una regla local revisada y una solicitud del mismo flujo a un host de ese proveedor se completó o fue bloqueada explícitamente. Esta correlación puede reconocer cookies propias que el sitio vincula a un servicio externo; el nombre aislado no basta. La evidencia y la puntuación conservan la fase antes de elegir, después de rechazar y tras recargar.
 - La ingestión y la respuesta pública conservan los contadores de navegador permitidos para cookies y rastreadores, y vuelven a calcular resumen y estado con esa evidencia. No se publican nombres ni valores de cookies ni URL completas. La versión de scanner se incrementa para que un informe cacheado no oculte este cambio.
+- El veredicto del análisis se calcula con los mismos checks ya enriquecidos con evidencia de navegador que se validan y persisten; no se compara un veredicto anterior a esa fusión con estados posteriores.
 - El pie de la ficha no muestra el texto «Comprobación técnica acotada desde el mismo VPS. No es una certificación independiente.»
 - Los errores técnicos que convierten una fase en `unknown` deben conservar una etapa y un código de causa de lista permitida para diagnóstico. No se guardan ni publican mensajes de excepción, URLs con query o fragmento, HTML, cookies, valores de almacenamiento ni datos personales. Estos diagnósticos no se transforman en incumplimientos atribuidos al dominio.
 
@@ -77,6 +78,7 @@ Hacer que la ficha de informes se entienda y se recorra con facilidad para una p
 14. En un sitio con canonical `www`, Ética y Privacidad usan las cookies y solicitudes del navegador de la página final; los intentos bloqueados se separan de las respuestas recibidas y las cookies analíticas correlacionadas afectan al criterio de su fase.
 15. Las evidencias de navegador se publican como contadores acotados sin valores de cookie ni URL completa. El texto diferencia cookies vistas, solicitudes iniciadas, intentos bloqueados y respuestas recibidas; una solicitud bloqueada no se describe como transmisión.
 16. Los contadores permitidos sobreviven la ingestión y se muestran en el detalle público; los informes del nuevo scanner se validan con la versión de formato vigente. El pie no contiene la frase de comprobación y certificación retirada.
+17. El veredicto coincide con los checks posteriores a la fusión de evidencia de navegador y el informe puede completarse cuando dicha evidencia cambie un estado.
 
 ## Verificación y publicación
 
