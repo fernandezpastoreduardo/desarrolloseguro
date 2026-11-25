@@ -145,6 +145,39 @@ describe("transport-v1 egress IPC", () => {
     }
   });
 
+  it("transfers bounded public-policy document evidence larger than the former 32 KiB frame", async () => {
+    const path = await socketPath();
+    const documents = JSON.stringify(Array.from({ length: 40 }, (_, index) => ({
+      href: `https://provider-${index}.example/${"p".repeat(480)}`,
+      anchorText: "Documentación oficial ".repeat(9),
+      kind: "privacy",
+      documentRole: "provider_document",
+      sourcePageUrl: `https://grumphya.com/${"s".repeat(480)}`,
+      fetchStatus: "fetched",
+      sha256: "a".repeat(64),
+    })));
+    expect(Buffer.byteLength(documents, "utf8")).toBeGreaterThan(32 * 1024);
+    expect(documents.length).toBeLessThan(128 * 1024);
+    const evidence = {
+      finalScheme: "https",
+      publicPolicyDeclaredServices: JSON.stringify([{ providerId: "openai", purposeIds: ["generation"] }]),
+      publicPolicyDiscoveredDocuments: documents,
+    };
+    const source = makeSource();
+    vi.mocked(source.observeHeaders).mockResolvedValueOnce({ evidence, requestsCount: 40, bytesCount: 400_000 });
+    const broker = await listenTransportV1EgressBroker(path, HOSTNAME, source, "domain-v4");
+    try {
+      await expect(
+        createUnixSocketObservationSource(path, "domain-v4").observeHeaders(
+          HOSTNAME,
+          new AbortController().signal,
+        ),
+      ).resolves.toMatchObject({ evidence, requestsCount: 40, bytesCount: 400_000 });
+    } finally {
+      await broker.close();
+    }
+  });
+
   it("preserves safe probe error categories across the Unix socket", async () => {
     const path = await socketPath();
     const source: TransportV1ObservationSource = {

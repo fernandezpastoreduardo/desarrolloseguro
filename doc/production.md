@@ -23,6 +23,8 @@ Provisiona en `.secrets/` los archivos requeridos por la sección `secrets` del 
 
 El presupuesto del coordinador de análisis es de 210 segundos para completar el escaneo base, la observación Solistos (máximo propio de 120 segundos), la preparación y la limpieza del runtime; el cliente espera 215 segundos para dejar margen al cierre ordenado. Estos márgenes no amplían los límites de solicitudes, datos recibidos, proveedores, contextos ni recursos del navegador. Si se agota el plazo total o la respuesta excede el máximo del protocolo, el informe conserva una categoría diagnóstica acotada (`runtime_execution_timeout` o `executor_response_too_large`) sin registrar payloads ni errores crudos. Las excepciones inesperadas usan `executor_application_failed` y una respuesta que no cumple el esquema usa `executor_response_invalid`.
 
+El broker transmite al executor la evidencia agregada por un socket Unix. El contrato permite documentos oficiales y declaraciones públicas estructuradas; el límite de respuesta IPC es 512 KiB de JSON UTF-8 y se comprueba con una prueba de integración que pasa por el socket. Una carga que exceda el máximo devuelve `response_size_limit_exceeded` con una respuesta pequeña y allowlisted, sin cerrar la conexión de forma opaca.
+
 La migración `034_coordinator_failure_diagnostics` sincroniza la lista SQL permitida con los diagnósticos del coordinador para que sus errores puedan guardarse en el estado público.
 
 Si un executor falla sin aportar un diagnóstico seguro y válido, el worker guarda la categoría genérica `executor_application_failed` en etapa `executor`. El estado público incluye así una causa operativa acotada sin revelar texto crudo ni detalles internos.

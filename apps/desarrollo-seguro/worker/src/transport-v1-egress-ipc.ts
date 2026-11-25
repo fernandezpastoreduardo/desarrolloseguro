@@ -14,12 +14,16 @@ import type {
   TransportV1ProbeResult,
 } from "./transport-v1-executor.js";
 import { getTransportBudget } from "./transport-budget.js";
-import { MAX_TRANSPORT_EVIDENCE_FIELDS } from "./transport-v1-evidence-contract.js";
+import {
+  MAX_TRANSPORT_EVIDENCE_FIELDS,
+  MAX_TRANSPORT_IPC_RESPONSE_BYTES,
+  MAX_TRANSPORT_PUBLIC_POLICY_DECLARATIONS_CHARS,
+  MAX_TRANSPORT_PUBLIC_POLICY_DOCUMENTS_CHARS,
+} from "./transport-v1-evidence-contract.js";
 import type { ScanProfileVersion } from "./transport-v1-executor.js";
 
 const MAX_IPC_REQUEST_BYTES = 4 * 1024;
-const MAX_IPC_RESPONSE_BYTES = 32 * 1024;
-const MAX_PUBLIC_POLICY_DECLARATIONS_CHARS = 24 * 1024;
+const MAX_IPC_RESPONSE_BYTES = MAX_TRANSPORT_IPC_RESPONSE_BYTES;
 // Allow one short-lived connection per bounded probe. Completed client sockets
 // can remain open briefly while their close events propagate; the broker still
 // limits active network observations to two at a time.
@@ -153,7 +157,15 @@ async function dispatchRequest(
     const response = await broker(request, signal);
     const payload = Buffer.from(`${JSON.stringify(response)}\n`, "utf8");
     if (payload.byteLength > MAX_IPC_RESPONSE_BYTES) {
-      socket.destroy();
+      const boundedResponse: TransportV1BrokerResponse = {
+        ...response,
+        result: {
+          ...response.result,
+          evidence: {},
+          errorCode: "response_size_limit_exceeded",
+        },
+      };
+      socket.end(`${JSON.stringify(boundedResponse)}\n`);
       return;
     }
     socket.end(payload);
@@ -219,7 +231,9 @@ async function requestOperation(
         FORBIDDEN_EVIDENCE_KEYS.has(key) ||
         (typeof value !== "boolean" && typeof value !== "string" && typeof value !== "number") ||
         (typeof value === "string" &&
-          value.length > (key === "publicPolicyDeclaredServices" ? MAX_PUBLIC_POLICY_DECLARATIONS_CHARS : 256)) ||
+          value.length > (key === "publicPolicyDeclaredServices" ? MAX_TRANSPORT_PUBLIC_POLICY_DECLARATIONS_CHARS
+            : key === "publicPolicyDiscoveredDocuments" ? MAX_TRANSPORT_PUBLIC_POLICY_DOCUMENTS_CHARS
+              : 256)) ||
         (typeof value === "number" && !Number.isFinite(value)),
     )
   ) {
