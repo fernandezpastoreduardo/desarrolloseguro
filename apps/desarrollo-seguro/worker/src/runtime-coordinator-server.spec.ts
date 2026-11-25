@@ -5,6 +5,10 @@ import { createConnection } from "node:net";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ScanRunInput } from "@desarrolloseguro/persistence";
 import { RuntimeCoordinatorExecutor } from "./runtime-coordinator-executor.js";
+import { ProcessorAuditorScanExecutor } from "./processor-auditor-scan-executor.js";
+import { CatalogAwareScanExecutor } from "./catalog-aware-scan-executor.js";
+import { ScanJobProcessor } from "./scan-job-processor.js";
+import { createJsonLineScanJobTelemetry } from "./scan-job-telemetry.js";
 import { listenRuntimeCoordinator } from "./runtime-coordinator-server.js";
 import type { RuntimeCoordinatorRunner } from "./runtime-coordinator-server.js";
 import {
@@ -173,6 +177,68 @@ describe("runtime coordinator server", () => {
       ),
     ).rejects.toThrow("broker_failed");
     expect(runner.execute).toHaveBeenCalledOnce();
+  });
+
+  it("carries a runtime failure through the composed worker to persistence and its JSON log", async () => {
+    const runner: RuntimeCoordinatorRunner = {
+      execute: vi.fn(() => {
+        throw new Error("private runtime detail /srv/secret");
+      }),
+    };
+    const socketPath = await startCoordinator(runner);
+    const coordinator = await createClient(socketPath);
+    const processorExecutor = new ProcessorAuditorScanExecutor(
+      coordinator,
+      {} as never,
+      "fixture-revision",
+    );
+    const catalog = {
+      readActive: vi.fn(),
+      recordDiscoveredProvider: vi.fn(),
+    };
+    const composedExecutor = new CatalogAwareScanExecutor(processorExecutor, catalog);
+    const persisted: unknown[][] = [];
+    const store = {
+      recoverExpiredLeases: vi.fn().mockResolvedValue(0),
+      claimNextScan: vi.fn().mockResolvedValue({
+        id: "d1d1d1d1-d1d1-41d1-81d1-d1d1d1d1d1d1",
+        hostname: "sample.example.net",
+        profileVersion: "transport-v1",
+        trigger: "requested",
+        attempts: 3,
+        leaseToken: "fixture-lease-token",
+        leaseUntil: new Date("2026-11-10T12:01:00.000Z"),
+      }),
+      renewScanLease: vi.fn().mockResolvedValue(true),
+      failScan: vi.fn().mockImplementation(async (...args: unknown[]) => {
+        persisted.push(args);
+        return "failed";
+      }),
+      completeScan: vi.fn(),
+    };
+    const lines: string[] = [];
+    const telemetry = createJsonLineScanJobTelemetry((line) => lines.push(line));
+    const processor = new ScanJobProcessor(store, composedExecutor, () => new Date(), undefined, telemetry);
+
+    await expect(processor.processNext()).resolves.toBe("failed");
+
+    const diagnostic = { stage: "executor", code: "executor_application_failed" };
+    expect(persisted[0]).toEqual([
+      "d1d1d1d1-d1d1-41d1-81d1-d1d1d1d1d1d1",
+      "fixture-lease-token",
+      "executor_failed",
+      3,
+      diagnostic,
+    ]);
+    expect(JSON.parse(lines[0] ?? "{}")).toMatchObject({
+      type: "scan_job_failure",
+      outcome: "failed",
+      failureCode: "executor_failed",
+      failureDiagnostic: diagnostic,
+    });
+    expect(catalog.readActive).not.toHaveBeenCalled();
+    expect(lines.join("\n")).not.toContain("private runtime detail");
+    expect(lines.join("\n")).not.toContain("/srv/secret");
   });
 
   it("forwards safe executor diagnostics across the coordinator socket", async () => {

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { parseScanFailureDiagnostic } from "./scan-failure-diagnostic.js";
+import {
+  parseScanFailureDiagnostic,
+  SCAN_FAILURE_DIAGNOSTIC_STAGES,
+} from "./scan-failure-diagnostic.js";
 
 describe("parseScanFailureDiagnostic", () => {
   it("accepts bounded operational fields and probe categories", () => {
@@ -34,21 +37,7 @@ describe("parseScanFailureDiagnostic", () => {
     })).toEqual({ stage: "executor", code: "executor_response_too_large" });
   });
 
-  it.each([
-    "privacy_browser_observation",
-    "privacy_assessment",
-    "cookie_legal_findings",
-    "service_comparison",
-    "first_entry_policy_access",
-    "response_validation",
-    "runtime_session_create",
-    "executor_execution",
-    "runtime_session_cleanup",
-    "network_probe_collection",
-    "evidence_sanitization",
-    "public_policy_assessment",
-    "result_assembly",
-  ] as const)("accepts bounded pipeline phase %s", (stage) => {
+  it.each(SCAN_FAILURE_DIAGNOSTIC_STAGES)("accepts bounded pipeline phase %s", (stage) => {
     expect(parseScanFailureDiagnostic({
       stage,
       code: "executor_application_failed",

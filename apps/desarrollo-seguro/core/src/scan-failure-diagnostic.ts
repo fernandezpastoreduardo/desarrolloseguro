@@ -6,6 +6,10 @@ export const SCAN_FAILURE_DIAGNOSTIC_STAGES = [
   "runtime_session_create", "executor_execution", "runtime_session_cleanup",
   "network_probe_collection", "evidence_sanitization", "public_policy_assessment",
   "result_assembly",
+  "scan_runtime_executor", "processor_registry_assessment", "processor_auditor_read",
+  "internal_audit_summary", "provider_catalog_initial_read", "provider_discovery_identity",
+  "provider_discovery_record", "provider_document_discovery", "provider_catalog_refresh_read",
+  "provider_documentation_assessment", "provider_comparison_merge", "provider_catalog_result_assembly",
 ] as const;
 
 export const SCAN_FAILURE_DIAGNOSTIC_CODES = [

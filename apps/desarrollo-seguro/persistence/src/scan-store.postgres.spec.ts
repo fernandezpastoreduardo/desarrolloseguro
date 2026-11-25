@@ -3,6 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   assessDevelopmentSecurityProcessorRegistry,
   assessFirstEntryPolicyAccess,
+  SCAN_FAILURE_DIAGNOSTIC_STAGES,
   type FirstEntryPolicyAccess,
 } from "@desarrolloseguro/core";
 import {
@@ -1692,21 +1693,7 @@ describePostgres.sequential("PostgresScanStore", () => {
     });
   });
 
-  it.each([
-    "privacy_browser_observation",
-    "privacy_assessment",
-    "cookie_legal_findings",
-    "service_comparison",
-    "first_entry_policy_access",
-    "response_validation",
-    "runtime_session_create",
-    "executor_execution",
-    "runtime_session_cleanup",
-    "network_probe_collection",
-    "evidence_sanitization",
-    "public_policy_assessment",
-    "result_assembly",
-  ] as const)("persists the allowlisted runtime phase %s", async (stage) => {
+  it.each(SCAN_FAILURE_DIAGNOSTIC_STAGES)("persists the allowlisted runtime phase %s", async (stage) => {
     const job = await queueAndClaim();
     await expect(
       store.failScan(job.id, job.leaseToken, "executor_failed", 1, {

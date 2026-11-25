@@ -45,6 +45,25 @@ export function attachScanFailureDiagnostic<T extends Error>(
   return error;
 }
 
+/** Tags an exception at the worker composition boundary without replacing a lower-level diagnosis. */
+export async function withScanFailureStage<T>(
+  stage: RuntimeDiagnosticStage,
+  operation: () => T | Promise<T>,
+): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    if (readScanFailureDiagnostic(error)) throw error;
+    const failure = new Error("executor_failed", { cause: error });
+    attachScanFailureDiagnostic(failure, {
+      type: "runtime_diagnostic",
+      stage,
+      code: "executor_application_failed",
+    });
+    throw failure;
+  }
+}
+
 export function toScanFailureDiagnostic(event: RuntimeDiagnosticEvent): ScanFailureDiagnostic {
   return {
     stage: event.stage,
