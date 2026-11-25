@@ -28,9 +28,10 @@ BEGIN
        jsonb_array_length(item->'articles') <> 4 THEN RETURN false; END IF;
     FOR evidence_item IN SELECT value FROM jsonb_array_elements(item->'evidence') LOOP
       evidence_key_count := public.ds_public_policy_object_key_count(evidence_item);
-      IF jsonb_typeof(evidence_item) <> 'object' OR evidence_key_count < 9 OR evidence_key_count > 11 OR
-         evidence_key_count <> 9 + CASE WHEN evidence_item ? 'auditBlockedRequestHosts' THEN 1 ELSE 0 END +
-           CASE WHEN evidence_item ? 'corroborationPhase' THEN 1 ELSE 0 END OR
+      IF jsonb_typeof(evidence_item) <> 'object' OR evidence_key_count NOT IN (9, 10, 11) OR
+         (evidence_key_count = 9 AND (evidence_item ? 'auditBlockedRequestHosts' OR evidence_item ? 'corroborationPhase')) OR
+         (evidence_key_count = 10 AND ((evidence_item ? 'auditBlockedRequestHosts') = (evidence_item ? 'corroborationPhase'))) OR
+         (evidence_key_count = 11 AND NOT (evidence_item ? 'auditBlockedRequestHosts' AND evidence_item ? 'corroborationPhase')) OR
          NOT (evidence_item ?& ARRAY['flow', 'phase', 'capturedAtMs', 'cookieName', 'cookieDomain', 'provider',
            'purpose', 'attributionRuleId', 'correlatedRequestHosts']) OR
          (evidence_item ? 'corroborationPhase' AND
