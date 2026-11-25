@@ -131,8 +131,10 @@ auditor de procesadores, lectura inicial del catálogo, identificación y alta
 de proveedores observados, descubrimiento documental, segunda lectura del
 catálogo, valoración documental del proveedor y combinación del informe.
 Cada fase que pueda lanzar una excepción lleva una etapa allowlisted propia;
-una excepción ya etiquetada conserva su etapa original. Esto incluye los
-wrappers del executor del catálogo y los límites entre esos wrappers y
+una excepción ya etiquetada conserva su etapa original. El descubrimiento de
+documentación distingue la conversión de referencias del alta transaccional en
+el catálogo, para localizar fallos de datos frente a fallos de persistencia.
+Esto incluye los wrappers del executor del catálogo y los límites entre esos wrappers y
 `ScanJobProcessor`, donde se persiste el diagnóstico para el informe público.
 No se registran mensajes de excepción, datos del dominio, nombres de
 proveedores ni payloads.

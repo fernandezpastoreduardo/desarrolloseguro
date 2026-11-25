@@ -75,7 +75,7 @@ export class CatalogAwareScanExecutor implements ScanExecutor {
     }
 
     const documentDiscoveries = await withScanFailureStage(
-      "provider_document_discovery",
+      "provider_document_discovery_mapping",
       () => (result.publicPolicyDiscoveredDocuments ?? []).map((document) =>
         toCatalogedProviderDocumentDiscovery({
           document,
@@ -85,7 +85,7 @@ export class CatalogAwareScanExecutor implements ScanExecutor {
     );
     for (const discovery of documentDiscoveries) {
       if (discovery) {
-        await withScanFailureStage("provider_document_discovery", () =>
+        await withScanFailureStage("provider_document_catalog_record", () =>
           this.providerCatalog.recordDiscoveredProvider(discovery));
       }
     }
