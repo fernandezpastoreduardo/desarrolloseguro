@@ -55,13 +55,29 @@ export async function withScanFailureStage<T>(
   } catch (error) {
     if (readScanFailureDiagnostic(error)) throw error;
     const failure = new Error("executor_failed", { cause: error });
+    const code = readSafeWorkerFailureCode(error);
     attachScanFailureDiagnostic(failure, {
       type: "runtime_diagnostic",
       stage,
-      code: "executor_application_failed",
+      code,
     });
     throw failure;
   }
+}
+
+function readSafeWorkerFailureCode(error: unknown): RuntimeDiagnosticCode {
+  const message = error instanceof Error ? error.message : "";
+  if (RUNTIME_DIAGNOSTIC_CODES.includes(message as RuntimeDiagnosticCode) &&
+      (message.startsWith("provider_catalog_") || message.startsWith("invalid_provider_catalog_"))) {
+    return message as RuntimeDiagnosticCode;
+  }
+  if (isPostgresError(error) && error.code === "23505") return "database_unique_constraint_failed";
+  if (isPostgresError(error) && error.code === "23514") return "database_check_constraint_failed";
+  return "executor_application_failed";
+}
+
+function isPostgresError(error: unknown): error is Error & { code: string } {
+  return error instanceof Error && "code" in error && typeof error.code === "string";
 }
 
 export function toScanFailureDiagnostic(event: RuntimeDiagnosticEvent): ScanFailureDiagnostic {
