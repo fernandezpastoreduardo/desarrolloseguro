@@ -199,8 +199,7 @@ export function createDockerRuntimeCoordinatorRunner(
                 observed: observation ? getObservedPublicServices(observation) : [],
                 declared: executorResult.publicServiceDeclarations ?? [],
                 policyStatus: executorResult.publicPolicyTransparencyAssessment?.status ?? "unknown",
-                auditorError: executorResult.publicServiceDeclarations === undefined || !observation || [observation.initial, observation.accept, observation.reject]
-                  .some(({ status }) => status === "unknown"),
+                auditorError: executorResult.publicServiceDeclarations === undefined || !observation,
               })
             : null,
         );

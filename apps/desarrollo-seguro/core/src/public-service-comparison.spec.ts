@@ -146,6 +146,25 @@ describe("public service comparison", () => {
     })).toBeNull();
   });
 
+  it("retains observed services when policy inspection is incomplete", () => {
+    const result = assessPublicServiceComparison({
+      observed: [{ providerId: "google-analytics", domain: "www.google-analytics.com" }],
+      declared: [],
+      policyStatus: "unknown",
+    });
+
+    expect(result).toMatchObject({
+      status: "unknown",
+      reasonCode: "auditor_error",
+      items: [{
+        providerId: "google-analytics",
+        observation: "observed",
+        observedDomains: ["www.google-analytics.com"],
+      }],
+    });
+    expect(parsePublicServiceComparison(result)).toEqual(result);
+  });
+
   it("rejects public service comparisons larger than the persistence contract", () => {
     const valid = assessPublicServiceComparison({ observed: [], declared: [], policyStatus: "pass" });
     const oversized = {

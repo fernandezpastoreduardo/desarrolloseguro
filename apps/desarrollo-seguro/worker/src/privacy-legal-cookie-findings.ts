@@ -31,7 +31,6 @@ function collectPhaseEvidence(
   const snapshot: PrivacyBrowserStateSnapshot | null = phase === "before_choice"
     ? flow.phaseEvidence.beforeChoice
     : phase === "after_choice" ? flow.phaseEvidence.afterChoice : flow.phaseEvidence.afterReload;
-  if (flow.status !== "evaluated") return [];
   const requests = flow.phaseEvidence.networkRequests.filter((request) =>
     !request.blockedByAudit && request.phaseAtStart === phase,
   );

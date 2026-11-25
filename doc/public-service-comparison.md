@@ -54,6 +54,13 @@ identifican como información adicional aportada desde su aplicación. Se
 enumeran en un bloque independiente, porque no están disponibles para todos
 los dominios y no forman parte de la comparación pública común.
 
+Un informe terminado con comprobaciones incompletas las muestra como
+incompletas, no como si siguieran ejecutándose. Los servicios observados se
+conservan aunque la política no se haya podido leer; en ese caso se informa
+que la declaración no pudo comprobarse, sin afirmar que el sitio omitió el
+servicio. Una observación legal directa de una fase completa se conserva
+aunque otra fase del flujo haya fallado.
+
 ## Fuentes públicas de proveedores
 
 La ficha ofrece enlaces a páginas oficiales del proveedor sobre el servicio y

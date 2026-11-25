@@ -50,6 +50,10 @@ Hacer que la ficha de informes se entienda y se recorra con facilidad para una p
 - Los 14 criterios no mostrarán catorce spinners. La actividad de la auditoría se indica una vez en el encabezado del bloque; las filas pendientes dicen que esperan resultado vigente.
 - La presentación explica que los resultados describen señales y páginas observadas en la fecha indicada; no afirma cobertura universal ni ausencia total de riesgos.
 - La nota de dominios externos debe puntuar la falta de información pública exigible; un bloqueo explícito al auditor es fallo de transparencia, mientras que una caída o error del auditor queda en revisión. La implementación debe guardar qué documento público se encontró, qué señales observadas sustentaron la comparación y qué quedó fuera del alcance.
+- Un informe terminal (`fresh`, `stale` o `historical`) nunca describe categorías desconocidas como si siguieran ejecutándose. «Se está comprobando» se reserva para un trabajo activo. El resultado terminal indica brevemente que esa comprobación no pudo completarse y deja su causa en el detalle.
+- Las comprobaciones son independientes: un error técnico en privacidad, comparación documental u otra fase no elimina hallazgos observados por fases que sí terminaron. En particular, el fallo observado de acceso al enlace de política inicial debe conservarse y mostrarse aunque otra valoración de Privacidad quede desconocida.
+- En la auditoría jurídica, una cookie o petición directa ya observada en su fase temporal puede alimentar la regla legal aunque otro paso del flujo esté incompleto. La incompletitud solo impide conclusiones negativas; no borra hechos positivos acreditados. Si la política pública no pudo leerse, se muestran los servicios efectivamente observados y se mantiene sin resolver su declaración.
+- Los errores técnicos que convierten una fase en `unknown` deben conservar una etapa y un código de causa de lista permitida para diagnóstico. No se guardan ni publican mensajes de excepción, URLs con query o fragmento, HTML, cookies, valores de almacenamiento ni datos personales. Estos diagnósticos no se transforman en incumplimientos atribuidos al dominio.
 
 ## Criterios de aceptación
 
@@ -63,6 +67,9 @@ Hacer que la ficha de informes se entienda y se recorra con facilidad para una p
 8. Los textos y resultados separan las declaraciones públicas de los hechos observados; no declaran que se haya verificado una práctica contractual invisible.
 9. La falta de información pública exigible o la denegación explícita penaliza en dominios externos; los errores del auditor o el presupuesto agotado quedan en revisión.
 10. Las pruebas cubren contenido llano, jerarquía/agrupación, estados de espera activos y no activos, anuncios accesibles, regla de evidencia y ausencia de recomendaciones técnicas.
+11. Un informe terminal con criterios `unknown` no muestra «aún se está comprobando» ni otro texto que afirme actividad; un trabajo activo sí mantiene su estado de comprobación.
+12. Un hallazgo observado permanece visible y computable cuando una fase separada falla; los errores de cada fase registran causa técnica segura sin datos del sitio.
+13. Una fase documental incompleta conserva los proveedores y dominios positivos observados, pero no los etiqueta como omitidos en la declaración ni acredita por sí sola una infracción.
 
 ## Verificación y publicación
 

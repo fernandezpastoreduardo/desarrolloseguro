@@ -1072,7 +1072,7 @@ function ReportSummary({
           <div className="ds-portal__score-copy">
             <p className="ds-portal__eyebrow">Resultado de la evaluación</p>
             <h3 id="ethics-summary-heading">Qué significa esta valoración</h3>
-            <p className="ds-portal__report-takeaway">{getReportTakeaway(report)}</p>
+            <p className="ds-portal__report-takeaway">{getReportTakeaway(report, state)}</p>
           </div>
         </div>
         <p className="ds-portal__ethics-score">
@@ -1102,7 +1102,7 @@ function ReportSummary({
                   </div>
                   <CategoryScoreRing label={category.label} criteria={criteria} />
                 </div>
-                <p className="ds-portal__category-summary">{getCategorySummary(criteria)}</p>
+                <p className="ds-portal__category-summary">{getCategorySummary(criteria, state)}</p>
                 <button
                   className="ds-portal__category-more"
                   type="button"
@@ -1319,8 +1319,12 @@ function PublicServiceComparisonSection({ comparison, observedDomains, catalogVe
             const stateLabel = item.observation === "observed_and_declared"
               ? "Correcto · observado y explicado"
               : item.observation === "observed"
-                ? "Servicio observado · sin finalidad declarada"
-                : "Declarado · no observado en esta revisión";
+                ? comparison.status === "unknown"
+                  ? "Servicio observado · declaración sin comprobar"
+                  : "Servicio observado · sin finalidad declarada"
+                : comparison.status === "unknown"
+                  ? "Declarado · observación incompleta"
+                  : "Declarado · no observado en esta revisión";
             return (
               <li key={item.providerId} data-observation={item.observation}>
                 <div className="ds-portal__public-service-heading">
@@ -2657,21 +2661,29 @@ function getCategoryScoreLabel(criteria: Array<{ status: string; weight: number 
   return `${categoryScore.score}/100 · ${coverage}`;
 }
 
-function getCategorySummary(criteria: Array<{ status: string }>): string {
+function getCategorySummary(criteria: Array<{ status: string }>, state: string): string {
   const assessed = criteria.filter((criterion) => criterion.status !== "unknown");
   const problems = assessed.filter((criterion) => criterion.status === "fail").length;
   const unknown = criteria.length - assessed.length;
-  if (assessed.length === 0) return "Esta parte aún se está comprobando.";
+  if (assessed.length === 0) {
+    return state === "updating"
+      ? "Esta comprobación está en curso."
+      : "No se pudo completar esta comprobación.";
+  }
   if (problems > 0) {
-    return `${problems} comprobación${problems === 1 ? "" : "es"} señala${problems === 1 ? "" : "n"} un riesgo para las personas que visitan el sitio.`;
+    return unknown > 0
+      ? `${problems} comprobación${problems === 1 ? "" : "es"} con hallazgos; ${unknown} no se pudo${unknown === 1 ? "" : "n"} completar.`
+      : `${problems} comprobación${problems === 1 ? "" : "es"} con hallazgos.`;
   }
   if (unknown > 0) {
-    return `La revisión de esta parte todavía no ha terminado.`;
+    return state === "updating"
+      ? "Esta parte sigue en comprobación."
+      : `${unknown} comprobación${unknown === 1 ? "" : "es"} no se pudo${unknown === 1 ? "" : "n"} completar.`;
   }
   return "Las comprobaciones de esta parte no encontraron riesgos.";
 }
 
-function getReportTakeaway(report: PublicReport): string {
+function getReportTakeaway(report: PublicReport, state: string): string {
   const criteria = report.ethicsAssessment.criteria;
   const assessed = criteria.filter((criterion) => criterion.status !== "unknown");
   const problems = assessed.filter((criterion) => criterion.status === "fail").length;
@@ -2680,26 +2692,39 @@ function getReportTakeaway(report: PublicReport): string {
     return "Se ha acreditado un incumplimiento legal; la puntuación global es 0/100. Las valoraciones técnicas por área se muestran por separado.";
   }
   if (report.globalAssessment.status === "not_available") {
-    return "Este informe todavía no tiene información suficiente para una valoración global.";
+    return state === "updating"
+      ? "La revisión sigue en curso."
+      : "El informe terminó sin datos suficientes para una valoración global.";
   }
   if (report.globalAssessment.status === "review") {
+    if (state !== "updating") {
+      return problems > 0
+        ? `El informe terminó con ${problems} hallazgo${problems === 1 ? "" : "s"} y ${unknown} comprobación${unknown === 1 ? "" : "es"} sin completar.`
+        : "El informe terminó con comprobaciones sin completar.";
+    }
     return problems > 0
-      ? "La revisión encontró señales de riesgo y aún está comprobando otros aspectos."
-      : "La revisión sigue en curso; todavía falta completar algunas comprobaciones.";
+      ? "Hay hallazgos y la revisión sigue en curso."
+      : "La revisión sigue en curso.";
   }
-  if (assessed.length === 0) return "La revisión aún no ha reunido información suficiente para ofrecer una valoración.";
+  if (assessed.length === 0) {
+    return state === "updating"
+      ? "La revisión sigue en curso."
+      : "El informe terminó sin datos suficientes para una valoración.";
+  }
   if (problems > 0) {
-    return `La revisión encontró ${problems} señal${problems === 1 ? "" : "es"} que puede${problems === 1 ? "" : "n"} afectar a quienes usan este sitio. Los detalles explican qué se observó.`;
+    return `La revisión encontró ${problems} hallazgo${problems === 1 ? "" : "s"}. Consulta el detalle.`;
   }
   if (unknown > 0) {
-    return "Las comprobaciones terminadas no señalan riesgos; una parte de la revisión sigue en curso.";
+    return state === "updating"
+      ? "Las comprobaciones restantes siguen en curso."
+      : "El informe terminó con comprobaciones sin completar.";
   }
   return "La revisión no encontró riesgos en los aspectos comprobados.";
 }
 
 function getCriterionOutcome(criterionId: string, status: string): string {
-  if (status === "unknown") return "El análisis no pudo completar esta comprobación por un error técnico del auditor. Queda en revisión y no cuenta como un incumplimiento del dominio.";
-  if (status === "fail") return CRITERION_FAIL_MEANINGS[criterionId] ?? "La comprobación encontró una condición que conviene revisar.";
+  if (status === "unknown") return "Comprobación incompleta por un error técnico del auditor; no se atribuye al dominio.";
+  if (status === "fail") return CRITERION_FAIL_MEANINGS[criterionId] ?? "La comprobación detectó un incumplimiento del criterio.";
   const outcomes: Record<string, string> = {
     "dns-integrity": "El dominio resolvió a direcciones públicas durante esta comprobación; esto no confirma quién lo controla.",
     "transport-security": "La conexión superó las comprobaciones de TLS incluidas en este informe.",
@@ -2887,9 +2912,9 @@ function getPublicPolicyTransparencySummary(
     case "access_denied":
       return "No fue posible consultar la información pública sobre los servicios externos.";
     case "auditor_error":
-      return "La revisión sigue en curso porque falló una comprobación técnica.";
+      return "La comprobación terminó sin resultado por un error técnico del auditor.";
     case "budget_exhausted":
-      return "La revisión sigue en curso y todavía no tiene un resultado completo.";
+      return "La comprobación terminó incompleta al alcanzar el límite del auditor.";
   }
 }
 

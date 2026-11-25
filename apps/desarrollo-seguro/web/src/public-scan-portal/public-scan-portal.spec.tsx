@@ -533,6 +533,45 @@ describe("PublicScanPortal", () => {
     expect(screen.getByText(/una finalidad que el sitio identifica en su política/i)).toBeVisible();
   });
 
+  it("shows observed services without claiming the unread policy omitted them", async () => {
+    const report = {
+      ...SCORED_PUBLIC_REPORT,
+      profileVersion: "domain-v4",
+      scannerVersion: "domain-v4-network-adapter-3",
+      ethicsAssessment: {
+        ...SCORED_PUBLIC_REPORT.ethicsAssessment,
+        policyVersion: "domain-ethics-v6",
+        criteria: SCORED_PUBLIC_REPORT.ethicsAssessment.criteria.map((criterion) => criterion.id === "third-party-data-use"
+          ? { ...criterion, id: "external-service-transparency" }
+          : criterion),
+      },
+      publicServiceComparison: {
+        policyVersion: "public-service-comparison-v1",
+        status: "unknown",
+        reasonCode: "auditor_error",
+        items: [{
+          providerId: "google-analytics",
+          observation: "observed",
+          observedDomains: ["www.google-analytics.com"],
+          declaredPurposes: [],
+        }],
+      },
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({
+      hostname: "example.com", enrollment: "on_demand", state: "fresh", failureCode: null,
+      activeJobId: null, lastReport: report, checkedAt: "2026-11-03T10:01:00.000Z",
+    })));
+    const user = userEvent.setup();
+    render(<PublicScanPortal />);
+    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "example.com");
+    await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
+
+    expect(await screen.findByText("Google Analytics")).toBeVisible();
+    expect(screen.getByText("Servicio observado · declaración sin comprobar")).toBeVisible();
+    expect(screen.getByText(/www\.google-analytics\.com/u)).toBeVisible();
+    expect(screen.queryByText("Servicio observado · sin finalidad declarada")).toBeNull();
+  });
+
   it("shows a consent failure when the legal link is only in the footer", async () => {
     const report = {
       ...SCORED_PUBLIC_REPORT,
@@ -690,6 +729,10 @@ describe("PublicScanPortal", () => {
     await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
 
     expect(await screen.findByText("Histórico")).toBeVisible();
+    const terminalCategorySummaries = [...document.querySelectorAll(".ds-portal__category-summary")]
+      .map((element) => element.textContent ?? "");
+    expect(terminalCategorySummaries).toHaveLength(4);
+    expect(terminalCategorySummaries.join(" ")).not.toMatch(/aún se está comprobando|todavía no ha terminado|sigue en comprobación/i);
     expect(screen.getByRole("heading", { name: "Historial de observaciones" })).toBeVisible();
     expect(screen.getByText("1 informe")).toBeVisible();
     expect(screen.getByRole("heading", { name: "Qué significa esta valoración" })).toBeVisible();
@@ -703,12 +746,10 @@ describe("PublicScanPortal", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     await user.click(categoryButtons[0]);
     expect(screen.getByRole("dialog", { name: "Ética" })).toBeVisible();
-    expect(screen.getAllByText(/El análisis no pudo completar esta comprobación por un error técnico del auditor/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Comprobación incompleta por un error técnico del auditor/i).length).toBeGreaterThan(0);
     await user.click(screen.getByRole("button", { name: "Cerrar detalle" }));
     await user.click(categoryButtons[2]);
-    expect(screen.getAllByText(/El análisis no pudo completar esta comprobación por un error técnico/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/la revisión de esta parte todavía no ha terminado/i))
-      .toBeVisible();
+    expect(screen.getAllByText(/Comprobación incompleta por un error técnico/i).length).toBeGreaterThan(0);
     expect(screen.getByText("100/100 provisional · 1 de 4 aspectos evaluados"))
       .toBeVisible();
     expect(screen.getAllByText(/qué implica:/i)).toHaveLength(4);
@@ -730,7 +771,6 @@ describe("PublicScanPortal", () => {
     expect(screen.getByRole("img", { name: "No observado: 0 de 8 criterios (0%)" })).toBeVisible();
     expect(screen.getByRole("img", { name: "En revisión: 7 de 8 criterios (88%)" })).toBeVisible();
     expect(screen.getByText(/instrucciones que ayudan al navegador a proteger/i)).toBeVisible();
-    expect(screen.getByText(/la revisión de esta parte todavía no ha terminado/i)).toBeVisible();
     expect(screen.getByText("Política que restringe contenido cargado (CSP)")).toBeInTheDocument();
     expect(screen.getByText(/faltaba.*política de contenido CSP/i)).toBeVisible();
     expect(screen.getByText("Ver evidencias técnicas (1 comprobación)")).toBeVisible();
@@ -781,6 +821,7 @@ describe("PublicScanPortal", () => {
         ...SCORED_PUBLIC_REPORT.globalAssessment,
         status: "review",
         score: null,
+        ethicsCoverage: { assessedCriteria: 7, totalCriteria: 8 },
         privacyCoverage: {
           assessedCriteria: 3,
           unknownCriteria: 1,
@@ -800,6 +841,13 @@ describe("PublicScanPortal", () => {
               : criterion,
         ),
       },
+      ethicsAssessment: {
+        ...SCORED_PUBLIC_REPORT.ethicsAssessment,
+        assessedCriteria: 7,
+        criteria: SCORED_PUBLIC_REPORT.ethicsAssessment.criteria.map((criterion) => criterion.id === "initial-cookie-risk"
+          ? { ...criterion, status: "unknown" }
+          : criterion),
+      },
     };
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(reviewReport)));
     window.history.replaceState({}, "", `/?report=${REPORT_ID}`);
@@ -807,13 +855,61 @@ describe("PublicScanPortal", () => {
     render(<PublicScanPortal />);
 
     expect(await screen.findByRole("img", { name: "Puntuación global: en revisión" })).toBeVisible();
-    expect(screen.getByText(/la revisión sigue en curso; todavía falta completar/i)).toBeVisible();
+    expect(screen.getByText("El informe terminó con comprobaciones sin completar.")).toBeVisible();
+    expect(screen.getAllByText("No se pudo completar esta comprobación.").length).toBeGreaterThan(0);
+    expect(screen.queryByText(/aún se está comprobando/i)).toBeNull();
     expect(screen.getAllByText("Ética", { exact: true }).length).toBeGreaterThan(0);
     expect(screen.queryByText(/50\s*%/)).toBeNull();
     expect(screen.getByRole("img", { name: /Ética:/u })).toBeVisible();
     expect(screen.getByRole("img", { name: /Privacidad:/u })).toBeVisible();
     expect(screen.queryByText("90/100 · 50 % Ética + 50 % Privacidad")).toBeNull();
     expect(screen.getByText(/La nota global combina por igual Ética y Privacidad/i)).toBeVisible();
+  });
+
+  it("uses active wording only while the domain status is updating", async () => {
+    const reviewReport = {
+      ...SCORED_PUBLIC_REPORT,
+      globalAssessment: {
+        ...SCORED_PUBLIC_REPORT.globalAssessment,
+        status: "review",
+        score: null,
+        ethicsCoverage: { assessedCriteria: 7, totalCriteria: 8 },
+        privacyCoverage: { assessedCriteria: 3, unknownCriteria: 1, notApplicableCriteria: 1, totalCriteria: 5 },
+      },
+      ethicsAssessment: {
+        ...SCORED_PUBLIC_REPORT.ethicsAssessment,
+        assessedCriteria: 7,
+        criteria: SCORED_PUBLIC_REPORT.ethicsAssessment.criteria.map((criterion) => criterion.id === "initial-cookie-risk"
+          ? { ...criterion, status: "unknown" }
+          : criterion),
+      },
+      privacyAssessment: {
+        ...SCORED_PUBLIC_REPORT.privacyAssessment,
+        unknownCriteria: 1,
+        notApplicableCriteria: 1,
+        criteria: SCORED_PUBLIC_REPORT.privacyAssessment.criteria.map((criterion) => criterion.id === "contextual-excess"
+          ? { ...criterion, status: "unknown", deduction: null, awarded: null }
+          : criterion.id === "vendor-controls"
+            ? { ...criterion, status: "not_applicable" }
+            : criterion),
+      },
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({
+      hostname: "example.com",
+      enrollment: "on_demand",
+      state: "updating",
+      failureCode: null,
+      activeJobId: "123e4567-e89b-42d3-a456-426614174001",
+      lastReport: reviewReport,
+      checkedAt: "2026-11-03T10:01:00.000Z",
+    })));
+    const user = userEvent.setup();
+    render(<PublicScanPortal />);
+    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "example.com");
+    await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
+
+    expect(await screen.findByText("La revisión sigue en curso.")).toBeVisible();
+    expect(screen.getAllByText("Esta comprobación está en curso.").length).toBeGreaterThan(0);
   });
 
   it("shows an accredited legal cookie finding and fixes the global score at zero", async () => {

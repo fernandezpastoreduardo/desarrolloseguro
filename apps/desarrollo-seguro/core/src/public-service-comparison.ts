@@ -80,12 +80,6 @@ export function assessPublicServiceComparison(input: {
   auditorError?: boolean;
   providerDocumentation?: readonly ProviderDocumentationContradiction[];
 }): PublicServiceComparison {
-  if (input.auditorError || input.policyStatus === "unknown") return {
-    policyVersion: PUBLIC_SERVICE_COMPARISON_VERSION,
-    status: "unknown",
-    reasonCode: "auditor_error",
-    items: [],
-  };
   const observed = new Map<string, Set<string>>();
   for (const row of input.observed.slice(0, PUBLIC_SERVICE_MAX_ITEMS)) {
     if (!isProviderId(row.providerId) || !isSafeHostname(row.domain)) continue;
@@ -118,6 +112,12 @@ export function assessPublicServiceComparison(input: {
   const missing = items.some((item) => item.observation === "observed");
   const policyMissing = input.policyStatus === "fail";
   const hasContradiction = input.providerDocumentation?.some(({ status }) => status === "contradiction_confirmed") ?? false;
+  if (input.auditorError || input.policyStatus === "unknown") return {
+    policyVersion: PUBLIC_SERVICE_COMPARISON_VERSION,
+    status: "unknown",
+    reasonCode: "auditor_error",
+    items,
+  };
   return {
     policyVersion: PUBLIC_SERVICE_COMPARISON_VERSION,
     status: missing || hasContradiction || policyMissing ? "fail" : "pass",

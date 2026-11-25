@@ -25,6 +25,23 @@ describe("buildLegalCookieFindings", () => {
     ]);
   });
 
+  it("keeps directly observed cookies when a separate step leaves the flow incomplete", () => {
+    const observation = makeObservation({
+      initial: makeFlow({ beforeChoice: snapshot(40) }),
+      reject: makeFlow({ choiceActionAtMs: 80, afterChoice: snapshot(90) }),
+    });
+    observation.initial.status = "unknown";
+    observation.reject.status = "unknown";
+
+    expect(buildLegalCookieFindings(observation).map(({ ruleId, evidence }) => ({
+      ruleId,
+      phases: evidence.map(({ phase, capturedAtMs }) => ({ phase, capturedAtMs })),
+    }))).toEqual([
+      { ruleId: "lssi-cookie-no-prior-consent-v1", phases: [{ phase: "before_choice", capturedAtMs: 40 }] },
+      { ruleId: "lssi-cookie-after-rejection-v1", phases: [{ phase: "after_choice", capturedAtMs: 90 }] },
+    ]);
+  });
+
   it("records cookies still present after rejection and after reload as separate phases", () => {
     const observation = makeObservation({
       reject: makeFlow({

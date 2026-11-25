@@ -321,6 +321,59 @@ describe("createDockerRuntimeCoordinatorRunner", () => {
     expect(close).toHaveBeenCalledOnce();
   });
 
+  it("keeps phase-level legal and provider evidence when another browser step is unknown", async () => {
+    const request = { ...REQUEST, profileVersion: "domain-v4" as const };
+    const executorResult = {
+      ...makeDomainV4Result(),
+      publicPolicyTransparencyAssessment: {
+        policyVersion: "public-policy-v1",
+        status: "unknown",
+        reasonCode: "auditor_error",
+        evidence: {
+          linksFound: 1, pagesInspected: 0, unavailablePages: 0, accessDeniedPages: 0,
+          providerMentions: 0, providersMissingPurpose: 0, categories: [],
+        },
+      },
+      publicServiceDeclarations: [],
+    };
+    const observation = makePrivacyObservation();
+    observation.status = "partial";
+    observation.initial.status = "unknown";
+    observation.initial.completedHostsAfterChoice = ["www.google-analytics.com"];
+    observation.initial.phaseEvidence.beforeChoice = {
+      capturedAtMs: 40,
+      cookies: [{ name: "_ga", domain: "google-analytics.com", secure: true, httpOnly: false }],
+      storageKeys: [],
+      cookieReadComplete: true,
+      storageReadComplete: true,
+    };
+    const factory: DockerRuntimeSessionFactory = {
+      create: vi.fn().mockResolvedValue({
+        execute: vi.fn().mockResolvedValue({
+          protocolVersion: 1,
+          requestId: request.requestId,
+          result: JSON.parse(JSON.stringify(executorResult)) as unknown,
+        }),
+        observePrivacy: vi.fn().mockResolvedValue(observation),
+        close: vi.fn().mockResolvedValue(undefined),
+      }),
+    };
+
+    const result = await createDockerRuntimeCoordinatorRunner(factory).execute(request, new AbortController().signal);
+
+    expect(result.legalCookieFindings).toEqual([
+      expect.objectContaining({
+        ruleId: "lssi-cookie-no-prior-consent-v1",
+        status: "accredited",
+        evidence: [expect.objectContaining({ cookieName: "_ga", phase: "before_choice", capturedAtMs: 40 })],
+      }),
+    ]);
+    expect(result.publicServiceComparison).toMatchObject({
+      status: "unknown",
+      items: [{ providerId: "google-analytics", observation: "observed", observedDomains: ["www.google-analytics.com"] }],
+    });
+  });
+
   it.each(["service_comparison", "first_entry_policy_access"] as const)(
     "preserves the %s diagnostic through the runtime boundary",
     async (stage) => {
