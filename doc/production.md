@@ -25,13 +25,14 @@ El presupuesto del coordinador de análisis es de 210 segundos para completar el
 
 El broker transmite al executor la evidencia agregada por un socket Unix. El contrato permite documentos oficiales y declaraciones públicas estructuradas; el límite de respuesta IPC es 512 KiB de JSON UTF-8 y se comprueba con una prueba de integración que pasa por el socket. Una carga que exceda el máximo devuelve `response_size_limit_exceeded` con una respuesta pequeña y allowlisted, sin cerrar la conexión de forma opaca.
 
-La migración `034_coordinator_failure_diagnostics` sincroniza la lista SQL permitida con los diagnósticos del coordinador para que sus errores puedan guardarse en el estado público.
+Las migraciones `054_runtime_failure_phases` y `055_runtime_boundary_diagnostics` sincronizan la lista SQL permitida con las fases seguras del runtime para guardar los diagnósticos en el estado público.
 
-Si un executor falla sin aportar un diagnóstico seguro y válido, el worker guarda la categoría genérica `executor_application_failed` en etapa `executor`. El estado público incluye así una causa operativa acotada sin revelar texto crudo ni detalles internos.
+Si una capa inferior falla sin aportar un diagnóstico seguro y válido, el worker identifica la frontera conocida: creación de sesión runtime, ejecución del executor o limpieza. El estado público conserva una causa operativa acotada sin revelar texto crudo ni detalles internos.
 
 El estado público y los logs del worker distinguen fallos de observación de
 navegador, evaluación de privacidad, hallazgos de cookies, comparación de
-servicios, acceso inicial a la política y validación de la respuesta. Cada
+servicios, acceso inicial a la política, validación de la respuesta y fronteras
+del runtime. Cada
 reintento o fallo terminal del executor produce una línea JSON `scan_job_failure`
 con `outcome`, `failureCode` y el par `failureDiagnostic.stage`/`code`; consulta
 `docker logs` del worker para ver esos datos. Las líneas excluyen mensajes de

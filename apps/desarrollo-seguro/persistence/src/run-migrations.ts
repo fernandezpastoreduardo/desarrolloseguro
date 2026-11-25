@@ -159,6 +159,7 @@ const MIGRATIONS = [
   { version: "052_scan_payload_diagnostics", file: "052_scan_payload_diagnostics.sql" },
   { version: "053_transport_failed_summary_parity", file: "053_transport_failed_summary_parity.sql" },
   { version: "054_runtime_failure_phases", file: "054_runtime_failure_phases.sql" },
+  { version: "055_runtime_boundary_diagnostics", file: "055_runtime_boundary_diagnostics.sql" },
 ] as const;
 
 export const DEVELOPMENT_SECURITY_MIGRATION_COUNT = MIGRATIONS.length;

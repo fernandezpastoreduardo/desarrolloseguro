@@ -41,6 +41,9 @@ describe("parseScanFailureDiagnostic", () => {
     "service_comparison",
     "first_entry_policy_access",
     "response_validation",
+    "runtime_session_create",
+    "executor_execution",
+    "runtime_session_cleanup",
   ] as const)("accepts bounded pipeline phase %s", (stage) => {
     expect(parseScanFailureDiagnostic({
       stage,

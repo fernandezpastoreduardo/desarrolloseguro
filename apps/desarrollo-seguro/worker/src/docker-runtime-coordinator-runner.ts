@@ -122,9 +122,18 @@ export function createDockerRuntimeCoordinatorRunner(
       let executionError: unknown;
       let executorDiagnostic: RuntimeDiagnosticEvent | null = null;
       try {
-        session = await factory.create(request, signal);
+        try {
+          session = await factory.create(request, signal);
+        } catch (error) {
+          throw withRuntimeBoundaryDiagnostic(error, "runtime_session_create");
+        }
         if (signal.aborted) throw new Error("request_aborted");
-        const responseInput = await session.execute(request, signal);
+        let responseInput: unknown;
+        try {
+          responseInput = await session.execute(request, signal);
+        } catch (error) {
+          throw withRuntimeBoundaryDiagnostic(error, "executor_execution");
+        }
         let response: ReturnType<typeof parseTransportV1ExecutorResponse>;
         try {
           response = parseTransportV1ExecutorResponse(
@@ -132,8 +141,8 @@ export function createDockerRuntimeCoordinatorRunner(
             request.requestId,
             request.profileVersion,
           );
-        } catch {
-          throw new Error("executor_response_invalid");
+        } catch (error) {
+          throw withRuntimeBoundaryDiagnostic(error, "response_validation", undefined, "executor_response_invalid");
         }
         if ("errorCode" in response) {
           if (response.diagnostic?.category === "network_observation_unavailable") {
@@ -208,7 +217,7 @@ export function createDockerRuntimeCoordinatorRunner(
         await session?.close();
       } catch (cleanupError: unknown) {
         if (executionError === undefined) {
-          executionError = new Error("runtime_volume_failed", { cause: cleanupError });
+          executionError = withRuntimeBoundaryDiagnostic(cleanupError, "runtime_session_cleanup", "runtime_volume_failed");
         }
       }
       if (executionError !== undefined) {
@@ -222,7 +231,8 @@ export function createDockerRuntimeCoordinatorRunner(
         const failure = new Error(getRuntimeFailureCode(executionError), { cause: executionError });
         const runtimeDiagnostic = factory.getLastDiagnostic?.() ?? null;
         const errorDiagnostic = readScanFailureDiagnostic(executionError);
-        const safeDiagnostic = executorDiagnostic ?? (errorDiagnostic ? {
+        const boundaryStage = errorDiagnostic && ["runtime_session_create", "executor_execution", "response_validation", "runtime_session_cleanup"].includes(errorDiagnostic.stage);
+        const safeDiagnostic = executorDiagnostic ?? (boundaryStage && runtimeDiagnostic ? null : errorDiagnostic ? {
           type: "runtime_diagnostic" as const,
           ...errorDiagnostic,
         } : null) ?? runtimeDiagnostic ?? {
@@ -256,6 +266,25 @@ function withRuntimeFailureDiagnostic(
     type: "runtime_diagnostic",
     stage,
     code: "executor_application_failed",
+  });
+}
+
+function withRuntimeBoundaryDiagnostic(
+  error: unknown,
+  stage: "runtime_session_create" | "executor_execution" | "response_validation" | "runtime_session_cleanup",
+  fallbackCode?: ScanFailureCode,
+  diagnosticCode?: RuntimeDiagnosticCode,
+): Error {
+  if (error instanceof Error && error.message === "request_aborted") return error;
+  const failure = new Error(fallbackCode ?? getRuntimeFailureCode(error), { cause: error });
+  const existingDiagnostic = readScanFailureDiagnostic(error);
+  return attachScanFailureDiagnostic(failure, existingDiagnostic ? {
+    type: "runtime_diagnostic",
+    ...existingDiagnostic,
+  } : {
+    type: "runtime_diagnostic",
+    stage,
+    code: diagnosticCode ?? (stage === "runtime_session_cleanup" ? "runtime_cleanup_failed" : "executor_application_failed"),
   });
 }
 
