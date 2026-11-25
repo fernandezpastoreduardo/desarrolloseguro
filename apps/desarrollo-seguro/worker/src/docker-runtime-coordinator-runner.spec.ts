@@ -213,6 +213,13 @@ describe("createDockerRuntimeCoordinatorRunner", () => {
 
   it("logs a privacy-assessment phase error and preserves the base scan", async () => {
     const diagnostics: RuntimeDiagnosticEvent[] = [];
+    const observation = makePrivacyObservation();
+    observation.initial.phaseEvidence.beforeChoice = {
+      capturedAtMs: 40,
+      cookies: [{ name: "_ga", domain: "google-analytics.com", secure: true, httpOnly: false }],
+      storageKeys: [], cookieReadComplete: true, storageReadComplete: true,
+    };
+    observation.vendorControls = undefined as unknown as PrivacyBrowserObservation["vendorControls"];
     const factory: DockerRuntimeSessionFactory = {
       diagnostic: (event) => diagnostics.push(event),
       create: vi.fn().mockResolvedValue({
@@ -221,7 +228,7 @@ describe("createDockerRuntimeCoordinatorRunner", () => {
           requestId: REQUEST.requestId,
           result: JSON.parse(JSON.stringify(makeResult())) as unknown,
         }),
-        observePrivacy: vi.fn().mockResolvedValue({}),
+        observePrivacy: vi.fn().mockResolvedValue(observation),
         close: vi.fn().mockResolvedValue(undefined),
       }),
     };
@@ -233,6 +240,12 @@ describe("createDockerRuntimeCoordinatorRunner", () => {
 
     expect(result.scannerVersion).toBe("transport-v1-network-adapter-1");
     expect(result.privacyAssessment).toBeDefined();
+    expect(result.legalCookieFindings).toEqual([
+      expect.objectContaining({
+        ruleId: "lssi-cookie-no-prior-consent-v1",
+        evidence: [expect.objectContaining({ cookieName: "_ga", provider: "Google Analytics" })],
+      }),
+    ]);
     expect(diagnostics).toContainEqual({
       type: "runtime_diagnostic",
       stage: "privacy_assessment",

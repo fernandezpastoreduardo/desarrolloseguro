@@ -120,6 +120,7 @@ Los hallazgos jurídicos se muestran aparte de las puntuaciones técnicas. Si ex
 15. El auditor detecta y registra controles de consentimiento que aparecen hasta cinco segundos después de `DOMContentLoaded`; si el presupuesto interrumpe la búsqueda, no informa que el banner está ausente ni marca los controles como «no aplica».
 16. La evidencia de cookies de primera parte puede atribuirse a un proveedor cuando la misma fase registra una solicitud de ese proveedor bloqueada por el auditor; el informe expone el host en `auditBlockedRequestHosts` y no afirma que esa solicitud llegara al proveedor.
 17. Tras el rechazo, si la instantánea completa muestra la misma cookie (nombre y dominio) que ya estaba presente antes de elegir en ese flujo aislado, la atribución de proveedor puede corroborarse con las solicitudes de esa fase previa. Se registra `corroborationPhase: "before_choice"`; el informe distingue el momento en que persistió la cookie de la fase usada para identificar al proveedor. Si la solicitud fue bloqueada por el auditor, se conserva como intento bloqueado y nunca como transmisión completada.
+18. Un fallo al calcular la puntuación de privacidad no descarta la observación ni impide construir y persistir hallazgos legales con esa evidencia. La puntuación y la evaluación legal se calculan en pasos aislados; el fallo de uno no borra el resultado del otro.
 
 ## Fuentes oficiales iniciales
 

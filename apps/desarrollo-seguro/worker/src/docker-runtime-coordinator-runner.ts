@@ -181,7 +181,6 @@ export function createDockerRuntimeCoordinatorRunner(
           try {
             privacyAssessment = assessPrivacyObservation(observation);
           } catch {
-            observation = undefined;
             diagnostic({ type: "runtime_diagnostic", stage: "privacy_assessment", code: "executor_application_failed" });
           }
         }
