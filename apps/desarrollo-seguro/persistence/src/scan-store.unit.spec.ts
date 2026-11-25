@@ -125,6 +125,29 @@ describe("PostgresScanStore unit behavior", () => {
     expect(report?.firstEntryPolicyAccess).toEqual(evidence);
   });
 
+  it("persists first-entry policy evidence from an informational notice", async () => {
+    const evidence = assessFirstEntryPolicyAccess({
+      consentPromptDetected: false,
+      thirdPartyCookieDetected: false,
+      nonEssentialThirdPartyStorageDetected: false,
+      consentComponentLink: null,
+      informationNoticeLink: { hostname: "example.org", path: "/privacy", kind: "privacy" },
+      footerLink: null,
+      componentLinkDocumentAccess: "not_checked",
+      informationNoticeDocumentAccess: "accessible",
+      footerLinkDocumentAccess: "not_checked",
+    });
+    const completeQuery = vi.fn().mockResolvedValue({ rows: [{ ds_complete_scan: "run-id" }] });
+    const store = new PostgresScanStore(makePool({ query: completeQuery }));
+
+    await expect(store.completeScan({ ...VALID_REPORT, firstEntryPolicyAccess: evidence })).resolves.toBe("run-id");
+    expect(JSON.parse(completeQuery.mock.calls[0]?.[1]?.[16] as string)).toMatchObject({
+      status: "pass",
+      reasonCode: "information_notice_link_accessible_without_consent",
+      linkLocation: "information_notice",
+    });
+  });
+
   it("rejects a malformed provider catalog version on a report", async () => {
     const query = vi.fn().mockResolvedValue({
       rows: [makePublicReportRow({ report_provider_catalog_version: "not-a-version" })],

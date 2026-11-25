@@ -49,6 +49,45 @@ describePostgres.sequential("PostgresScanStore", () => {
     await store.ensureDomain(TEST_HOSTNAME, "monitored", TEST_PROFILE);
   });
 
+  it("accepts first-entry policy evidence linked from an informational notice", async () => {
+    const assessments = [
+      {
+        policyVersion: "first-entry-policy-access-v1",
+        status: "pass",
+        reasonCode: "information_notice_link_accessible_without_consent",
+        consentPromptDetected: false,
+        thirdPartyCookieDetected: false,
+        nonEssentialThirdPartyStorageDetected: false,
+        linkLocation: "information_notice",
+        link: { hostname: "example.org", path: "/privacy", kind: "privacy" },
+        documentAccess: "accessible",
+      },
+      {
+        policyVersion: "first-entry-policy-access-v1",
+        status: "fail",
+        reasonCode: "information_notice_insufficient_with_third_party_cookies",
+        consentPromptDetected: false,
+        thirdPartyCookieDetected: true,
+        nonEssentialThirdPartyStorageDetected: true,
+        linkLocation: "information_notice",
+        link: { hostname: "example.org", path: "/privacy", kind: "privacy" },
+        documentAccess: "accessible",
+      },
+    ];
+
+    const result = await pool.query<{ valid: boolean }>(
+      "SELECT public.ds_valid_first_entry_policy_access($1::jsonb) AS valid",
+      [JSON.stringify(assessments[0])],
+    );
+    const insufficient = await pool.query<{ valid: boolean }>(
+      "SELECT public.ds_valid_first_entry_policy_access($1::jsonb) AS valid",
+      [JSON.stringify(assessments[1])],
+    );
+
+    expect(result.rows[0]?.valid).toBe(true);
+    expect(insufficient.rows[0]?.valid).toBe(true);
+  });
+
   afterAll(async () => {
     await pool?.end();
   });
