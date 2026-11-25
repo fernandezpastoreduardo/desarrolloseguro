@@ -45,6 +45,10 @@ que la evidencia pública no permita observar.
   penalización.
 - Limitar cada documento a 64 KiB de texto inspeccionable y hasta 3
   redirecciones, que deben permanecer en el mismo host público.
+- Si un enlace de proveedor excede el máximo de clasificación de 64 KiB,
+  guardar un recibo `response_too_large` para ese documento y continuar con el
+  resto de las observaciones. Un error del clasificador queda como
+  `auditor_error` en ese recibo; ninguno debe borrar evidencia de la portada.
 - No transmitir a terceros la URL de la página auditada en el `Referer`.
   Desactivar cookies y credenciales en estas solicitudes.
 

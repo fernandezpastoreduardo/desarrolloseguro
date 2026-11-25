@@ -241,6 +241,34 @@ describe("collectPublicPolicyEvidence", () => {
     }));
   });
 
+  it("records provider documents above the classifier byte limit without losing the policy observation", async () => {
+    const oversizedProviderHtml = "x".repeat(65 * 1024);
+    const fetchDocument = vi.fn(async (request: PublicPolicyDocumentRequest) => request.path === "/privacy"
+      ? response({ html: `<a href="https://vendor.example.net/dpa">Data Processing Addendum</a>` })
+      : response({ html: oversizedProviderHtml, bytesCount: Buffer.byteLength(oversizedProviderHtml) }));
+
+    const evidence = await collectPublicPolicyEvidence({
+      hostname: "example.com",
+      links: [{ hostname: "privacy.example.com", path: "/privacy", kind: "privacy" }],
+      initialPageInspectable: true,
+      initialStatusCode: 200,
+      signal: new AbortController().signal,
+      fetchDocument,
+      classifyHtml: () => CLASSIFICATION,
+    });
+
+    expect(evidence).toMatchObject({ status: "pass", reasonCode: "disclosure_found", pagesInspected: 1 });
+    expect(evidence.discoveredDocuments).toContainEqual(expect.objectContaining({
+      href: "https://vendor.example.net/dpa",
+      fetchStatus: "failed",
+      sha256: null,
+      failureCode: "response_too_large",
+    }));
+    expect(evidence.requestsCount).toBe(2);
+    expect(evidence.bytesCount).toBeGreaterThan(Buffer.byteLength(oversizedProviderHtml));
+    expect(JSON.stringify(evidence)).not.toContain(oversizedProviderHtml);
+  });
+
   it("marks a missing public policy link as a transparency failure", async () => {
     const fetchDocument = vi.fn(async () => response());
 
