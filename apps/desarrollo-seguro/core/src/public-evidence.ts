@@ -7,8 +7,8 @@ const PUBLIC_EVIDENCE_FIELDS: Readonly<Record<string, readonly string[]>> = {
   "DS-PRIV-04": ["inspected", "privacyPolicyLinksFound", "policyLinksFound", "sitePrivacyPolicyFetched", "policyPagesFetched", "policyPagesMissing", "policyPagesDenied", "policyRecipientsMentioned", "policyPurposesMentioned", "policyTextBlocked", "policyProbeFailed", "policyLanguageCatalogVersion", "probeErrorCode"],
   "DS-HTTP-01": ["statusCode", "redirectedToHttps", "finalScheme", "requestedHostname", "finalHostname", "canonicalHostname", "redirectStatusCode", "redirectFromHostname", "redirectToHostname"],
   "DS-HDR-01": ["finalScheme", "hsts", "nosniff", "frameProtection", "referrerPolicy", "csp", "probeErrorCode"],
-  "DS-PRIV-05": ["inspected", "cookieCount", "insecureCookieCount", "catalogMatchCount", "consentPromptDetected", "probeErrorCode"],
-  "DS-PRIV-06": ["inspected", "thirdPartyResourceReferences", "knownTrackingResourceReferences", "probeErrorCode"],
+  "DS-PRIV-05": ["inspected", "cookieCount", "insecureCookieCount", "catalogMatchCount", "consentPromptDetected", "browserObservationComplete", "browserCookieCount", "browserInsecureCookieCount", "browserCatalogMatchCount", "probeErrorCode"],
+  "DS-PRIV-06": ["inspected", "thirdPartyResourceReferences", "knownTrackingResourceReferences", "browserObservationComplete", "browserThirdPartyRequestCount", "browserKnownTrackingRequestCount", "browserBlockedTrackingRequestCount", "browserTrackingResponseCount", "probeErrorCode"],
   "DS-QUAL-02": ["inspected", "responseTimeMs", "responseBytes", "probeErrorCode"],
 };
 
@@ -40,7 +40,7 @@ const PUBLIC_EVIDENCE_BOOLEANS = new Set([
   "tls12Accepted", "tls13Accepted", "redirectedToHttps", "hsts", "nosniff",
   "frameProtection", "referrerPolicy", "csp", "inspected", "consentPromptDetected",
   "sitePrivacyPolicyFetched", "policyRecipientsMentioned", "policyPurposesMentioned",
-  "policyTextBlocked", "policyProbeFailed",
+  "policyTextBlocked", "policyProbeFailed", "browserObservationComplete",
 ]);
 
 export function projectPublicEvidence(

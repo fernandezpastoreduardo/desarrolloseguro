@@ -11,6 +11,7 @@ import {
 } from "./transport-v1-executor-protocol.js";
 import type { RuntimeCoordinatorRunner } from "./runtime-coordinator-server.js";
 import { assessPrivacyObservation, getObservedPublicServices } from "./privacy-assessment-builder.js";
+import { mergePrivacyBrowserChecks } from "./privacy-public-browser-evidence.js";
 import { buildLegalCookieFindings } from "./privacy-legal-cookie-findings.js";
 import { assessFirstEntryPolicyAccessObservation } from "./privacy-first-entry-policy-access.js";
 import type { PrivacyBrowserObservation } from "./privacy-browser-observer.js";
@@ -211,7 +212,10 @@ export function createDockerRuntimeCoordinatorRunner(
           "first_entry_policy_access",
           () => assessFirstEntryPolicyAccessObservation(observation ?? null),
         );
-        const completedResult = { ...executorResult };
+        const completedResult = {
+          ...executorResult,
+          ...(observation ? { checks: mergePrivacyBrowserChecks(executorResult.checks, observation) } : {}),
+        };
         result = {
           ...completedResult,
           privacyAssessment,

@@ -80,7 +80,7 @@ function summarizePublicEvidence(observation: PrivacyBrowserObservation): Privac
     }
     for (const cookie of flow.cookiesAfterChoice) {
       if (isThirdPartyPrivacyHost(observation.hostname, cookie.domain) && isSafeHostname(cookie.domain)) domains.add(normalizeHostname(cookie.domain));
-      for (const match of matchCookie(cookie.name, cookie.domain, flow.completedHostsAfterChoice)) providers.add(match.provider);
+      for (const match of matchCookie(cookie.name, cookie.domain, cookieCorroboratingHosts(flow))) providers.add(match.provider);
     }
     for (const hostname of flow.completedHostsAfterChoice) {
       if (!isThirdPartyPrivacyHost(observation.hostname, hostname)) continue;
@@ -134,11 +134,16 @@ function assessInitialActivity(observation: PrivacyBrowserObservation): Criterio
   const thirdPartyAttempts = thirdPartyHosts(observation.hostname, flow.signalHostsAfterChoice);
   const completedHosts = thirdPartyHosts(observation.hostname, flow.completedHostsAfterChoice);
   const completedHostSet = new Set(completedHosts);
+  const blockedHosts = new Set(flow.phaseEvidence.networkRequests
+    .filter(({ blockedByAudit, phaseAtStart }) => blockedByAudit && phaseAtStart === "before_choice")
+    .map(({ hostname }) => hostname));
   const findings: Finding[] = [];
   for (const [index, hostname] of thirdPartyAttempts.entries()) {
     const matches = matchRequestHost(hostname);
     if (matches.some(isConsentMatch)) continue;
-    if (!completedHostSet.has(hostname)) {
+    if (!completedHostSet.has(hostname) && blockedHosts.has(hostname) && matches.some(isConfirmedMatch)) {
+      for (const match of matches.filter(isConfirmedMatch)) findings.push(finding(`initial-blocked-host-attempt:${match.ruleId}:${index}`, "medium"));
+    } else if (!completedHostSet.has(hostname)) {
       findings.push(finding(`initial-request-unconfirmed:${index}`, "low", "unknown"));
     } else if (matches.some(isConfirmedMatch)) {
       for (const match of matches.filter(isConfirmedMatch)) findings.push(finding(`initial-host:${match.ruleId}`, "high"));
@@ -147,8 +152,11 @@ function assessInitialActivity(observation: PrivacyBrowserObservation): Criterio
     }
   }
 
-  for (const [index, cookie] of flow.cookiesAfterChoice.entries()) {
-    const matches = matchCookie(cookie.name, cookie.domain, flow.completedHostsAfterChoice);
+  const initialCookies = flow.phaseEvidence.beforeChoice?.cookieReadComplete
+    ? flow.phaseEvidence.beforeChoice.cookies
+    : flow.cookiesAfterChoice;
+  for (const [index, cookie] of initialCookies.entries()) {
+    const matches = matchCookie(cookie.name, cookie.domain, cookieCorroboratingHosts(flow));
     const confirmed = matches.filter(isConfirmedMatch);
     if (matches.some(isConsentMatch)) continue;
     if (confirmed.length > 0) {
@@ -168,13 +176,13 @@ function assessContextualExcess(observation: PrivacyBrowserObservation): Criteri
     return criterion("contextual-excess", "unknown");
   }
   const confirmed = flow.cookiesAfterChoice.flatMap((cookie) =>
-    matchCookie(cookie.name, cookie.domain, flow.completedHostsAfterChoice)
+    matchCookie(cookie.name, cookie.domain, cookieCorroboratingHosts(flow))
       .filter((match) => isConfirmedMatch(match) && !isConsentMatch(match))
       .map((match) => ({ ...match, cookieName: cookie.name })),
   );
   const findings: Finding[] = [];
   for (const [index, cookie] of flow.cookiesAfterChoice.entries()) {
-    const matches = matchCookie(cookie.name, cookie.domain, flow.completedHostsAfterChoice);
+    const matches = matchCookie(cookie.name, cookie.domain, cookieCorroboratingHosts(flow));
     if (!matches.some(isConfirmedMatch) && !matches.some(isConsentMatch)) {
       findings.push(finding(`accepted-cookie-unclassified:${index}`, "low", "unknown"));
     }
@@ -228,7 +236,7 @@ function assessRejection(observation: PrivacyBrowserObservation): Criterion {
     .flatMap((hostname) => matchRequestHost(hostname))
     .filter((match) => isConfirmedMatch(match) && !isConsentMatch(match));
   const confirmedCookies = flow.cookiesAfterChoice.flatMap((cookie) =>
-    matchCookie(cookie.name, cookie.domain, flow.completedHostsAfterChoice)
+    matchCookie(cookie.name, cookie.domain, cookieCorroboratingHosts(flow))
       .filter((match) => isConfirmedMatch(match) && !isConsentMatch(match)),
   );
   const findings: Finding[] = [];
@@ -237,7 +245,7 @@ function assessRejection(observation: PrivacyBrowserObservation): Criterion {
     findings.push(finding(`rejected-provider-active:${match.ruleId}`, "high"));
   }
   for (const [index, cookie] of flow.cookiesAfterChoice.entries()) {
-    const matches = matchCookie(cookie.name, cookie.domain, flow.completedHostsAfterChoice);
+    const matches = matchCookie(cookie.name, cookie.domain, cookieCorroboratingHosts(flow));
     if (!matches.some(isConfirmedMatch) && !matches.some(isConsentMatch)) {
       findings.push(finding(`rejected-cookie-unclassified:${index}`, "low", "unknown"));
     }
@@ -298,6 +306,15 @@ function matchCookie(name: string, domain: string, corroboratingHostnames: reado
 
 function matchRequestHost(hostname: string): PrivacyKnowledgeMatch[] {
   return matchPrivacySignal({ signalType: "request_host", value: hostname, observedHostname: hostname }, PRIVACY_KNOWLEDGE_RULES);
+}
+
+function cookieCorroboratingHosts(flow: PrivacyBrowserFlowObservation): string[] {
+  return [...new Set([
+    ...flow.completedHostsAfterChoice,
+    ...flow.phaseEvidence.networkRequests
+      .filter(({ blockedByAudit, phaseAtStart }) => blockedByAudit && phaseAtStart !== "after_policy_link")
+      .map(({ hostname }) => hostname),
+  ])];
 }
 
 function thirdPartyHosts(requestedHostname: string, hostnames: readonly string[]): string[] {
