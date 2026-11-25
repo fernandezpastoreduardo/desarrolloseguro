@@ -245,6 +245,90 @@ describe("PostgresProviderCatalogStore", () => {
     }));
   });
 
+  it("preserves provider_receives_content when cataloging documents for an existing provider", async () => {
+    const current = snapshot();
+    const documentId = "openai-api-data-controls";
+    const title = "Data controls in the OpenAI platform";
+    const url = "https://developers.openai.com/api/docs/guides/your-data";
+    const providerFacts = [{
+      providerId: "openai-api",
+      displayName: "OpenAI API",
+      aliases: [],
+      products: [],
+      officialDocuments: [{ documentId, kind: "service", title, url, reviewedAt: "2026-11-24" }],
+      documentedFacts: [{
+        documentId,
+        factId: "provider_receives_content",
+        value: true,
+        excerpt: "API inputs and outputs are processed to provide the requested service.",
+      }],
+    }];
+    const sources = [{
+      providerId: "openai-api",
+      documentId,
+      title,
+      url,
+      status: "seeded" as const,
+      sha256: null,
+      checkedAt: "2026-11-24T00:00:00.000Z",
+    }];
+    const existingProviderSnapshot = {
+      ...current,
+      providerFacts,
+      sources,
+      catalogVersion: computeProviderCatalogVersion(providerFacts, current.legalRules, sources),
+    };
+    let nextVersion = "";
+    const query = vi.fn(async (sql: string, values?: unknown[]) => {
+      if (sql.includes("ds_add_provider_catalog_discovery_evidence_version")) {
+        nextVersion = String(values?.[1]);
+        return { rows: [{ ds_add_provider_catalog_discovery_evidence_version: nextVersion }] };
+      }
+      return { rows: [snapshotRow(existingProviderSnapshot)] };
+    });
+    const store = new PostgresProviderCatalogStore({ query } as never);
+
+    await expect(store.recordDiscoveredProvider({
+      providerId: "openai-api",
+      displayName: "OpenAI API",
+      aliases: [],
+      products: [],
+      evidence: {
+        ...explicitDiscoveryEvidence(),
+        sourceId: "audited-privacy-link",
+      },
+      officialDocuments: [{
+        documentId: "audited-openai-api-data-controls",
+        kind: "service",
+        title,
+        url,
+        discoveryMethod: "audited_site_link",
+        status: "fetched",
+        sha256: "e".repeat(64),
+        checkedAt: "2026-11-25T03:01:00.000Z",
+        documentedFacts: [{
+          factId: "provider_receives_personal_data",
+          value: true,
+          excerpt: "The provider receives personal data through the API service.",
+        }],
+      }],
+    })).resolves.toEqual({
+      catalogVersion: expect.any(String),
+      created: true,
+      documentationStatus: "located",
+    });
+
+    const call = query.mock.calls.find(([sql]) => sql.includes("ds_add_provider_catalog_discovery_evidence_version"));
+    expect(call).toBeDefined();
+    const mergedFacts = JSON.parse(String(call?.[1]?.[2])) as Array<Record<string, unknown>>;
+    const openAiFact = mergedFacts.find(({ providerId }) => providerId === "openai-api");
+    expect(openAiFact?.documentedFacts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ factId: "provider_receives_content" }),
+      expect.objectContaining({ factId: "provider_receives_personal_data" }),
+    ]));
+    expect(nextVersion).toMatch(/^[a-f0-9]{64}$/u);
+  });
+
   it("does not create another version when a discovery is repeated exactly", async () => {
     const current = snapshot();
     const evidence = explicitDiscoveryEvidence();

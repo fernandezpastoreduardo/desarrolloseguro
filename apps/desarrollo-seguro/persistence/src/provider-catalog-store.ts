@@ -417,18 +417,29 @@ function normalizeDiscoveredFacts(value: unknown, status: unknown): ProviderDisc
 }
 
 function readStoredDocumentedFacts(value: unknown): Array<{
-  documentId: string; factId: "provider_receives_personal_data"; value: boolean; excerpt: string;
+  documentId: string; factId: "provider_receives_personal_data" | "provider_receives_content"; value: boolean; excerpt: string;
 }> {
   if (value === undefined) return [];
   if (!Array.isArray(value) || value.length > MAX_RULES) throw new Error("provider_catalog_discovery_payload_invalid");
-  const output: Array<{ documentId: string; factId: "provider_receives_personal_data"; value: boolean; excerpt: string }> = [];
+  const output: Array<{
+    documentId: string;
+    factId: "provider_receives_personal_data" | "provider_receives_content";
+    value: boolean;
+    excerpt: string;
+  }> = [];
   for (const entry of value) {
     if (!isRecord(entry) || !onlyKeys(entry, ["documentId", "factId", "value", "excerpt"]) ||
-        !isIdentifier(entry.documentId, 96) || entry.factId !== "provider_receives_personal_data" ||
+        !isIdentifier(entry.documentId, 96) ||
+        entry.factId !== "provider_receives_personal_data" && entry.factId !== "provider_receives_content" ||
         typeof entry.value !== "boolean" || !isSafeText(entry.excerpt, 1, 500)) {
       throw new Error("provider_catalog_discovery_payload_invalid");
     }
-    output.push({ documentId: entry.documentId, factId: entry.factId, value: entry.value, excerpt: entry.excerpt });
+    output.push({
+      documentId: entry.documentId,
+      factId: entry.factId,
+      value: entry.value,
+      excerpt: entry.excerpt,
+    });
   }
   return output;
 }
