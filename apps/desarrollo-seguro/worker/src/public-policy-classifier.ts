@@ -5,7 +5,7 @@ import { PRIVACY_KNOWLEDGE_RULES } from "./privacy-knowledge-catalog.js";
 import type { PrivacyKnowledgeRule } from "./privacy-knowledge-base.js";
 import type { PublicPolicyClassification } from "./public-policy-crawler.js";
 
-const MAX_POLICY_TEXT_BYTES = 64 * 1024;
+export const MAX_POLICY_TEXT_BYTES = 64 * 1024;
 const MAX_BLOCKS = 2_000;
 const MAX_BLOCK_LENGTH = 4_096;
 const PROVIDER_IDENTIFIER = /^[a-z0-9][a-z0-9_-]{0,31}$/u;

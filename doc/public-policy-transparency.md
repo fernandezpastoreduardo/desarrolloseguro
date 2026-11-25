@@ -75,6 +75,11 @@ un fallo técnico al abrir un enlace son resultados diferentes. No encontrar
 una URL con las fuentes permitidas no demuestra que el proveedor carezca de
 documentación.
 
+Un documento oficial que exceda los 64 KiB que el clasificador puede procesar
+queda marcado `response_too_large`. El informe conserva ese recibo y continúa
+con los demás documentos y señales de la página; no convierte la limitación de
+un documento en un fallo de transporte de toda la auditoría.
+
 ## Catálogo y actualización
 
 El catálogo guarda documentos oficiales conocidos, hechos documentados,

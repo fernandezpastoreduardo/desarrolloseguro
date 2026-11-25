@@ -23,6 +23,8 @@ El worker incluye `createEgressDestinationAuthorizer`, que autoriza solo el host
 
 El límite en bytes de cada respuesta IPC debe cubrir el mayor payload de evidencia que el broker admite, medido sobre el JSON UTF-8 serializado y no solo por longitud de caracteres. La prueba de contrato debe atravesar el socket Unix con evidencia de documentos y declaraciones cerca de sus topes permitidos. Si un resultado excede el máximo IPC, el broker devuelve un error de tamaño allowlisted con respuesta acotada; nunca destruye el socket y deja que el worker convierta el cierre en un error de transporte genérico. Una respuesta de página que no cabe puede hacer que se pierdan a la vez los hallazgos de cabeceras, cookies, seguimiento y rendimiento, así que la coherencia entre límites es una puerta de CI previa al deploy.
 
+El crawler puede admitir documentos oficiales mayores que el texto máximo del clasificador. Si un documento excede ese límite, debe quedar con recibo `response_too_large`; un error del clasificador se registra como `auditor_error` para ese documento. Ninguno de los dos casos debe abortar el crawler ni invalidar observaciones ya obtenidas de la portada. La prueba de regresión usa un documento superior a 64 KiB, conserva la evaluación de la política del sitio y comprueba que el cuerpo no se persiste.
+
 El contrato de controles y evidencia está descrito en [controls-and-evidence.md](controls-and-evidence.md). Valida estructura y coherencia, pero no autentica observaciones. El executor no puede considerarse una fuente confiable hasta que el diseño pruebe cómo obtiene evidencia de conexiones reales y cómo impide que un worker aislado escriba valores inventados.
 
 Las sondas de versiones TLS conservan una matriz explícita. Un rechazo de

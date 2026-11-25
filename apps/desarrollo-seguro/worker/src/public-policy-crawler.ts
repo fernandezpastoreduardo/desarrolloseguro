@@ -12,7 +12,10 @@ import {
 } from "./egress-destination-policy.js";
 import type { PublicDnsResolver } from "./pinned-dns-lookup.js";
 import type { PublicPolicyDiscoveredDocument } from "./public-policy-document-boundary.js";
-import { classifyProviderDocumentHtml } from "./public-policy-classifier.js";
+import {
+  classifyProviderDocumentHtml,
+  MAX_POLICY_TEXT_BYTES,
+} from "./public-policy-classifier.js";
 
 export const PUBLIC_POLICY_CRAWL_LIMITS = Object.freeze({
   durationMs: 120_000,
@@ -887,9 +890,23 @@ async function fetchExplicitDocumentReceipt(input: {
       Buffer.byteLength(response.html, "utf8") > PUBLIC_POLICY_CRAWL_LIMITS.documentBytes) {
     return { receipt: { fetchStatus: "failed", sha256: null, failureCode: "response_too_large" }, ...counts };
   }
-  const documentedFacts = input.documentRole === "provider_document"
-    ? classifyProviderDocumentHtml(response.html)
-    : [];
+  let documentedFacts: ReturnType<typeof classifyProviderDocumentHtml> = [];
+  if (input.documentRole === "provider_document") {
+    if (Buffer.byteLength(response.html, "utf8") > MAX_POLICY_TEXT_BYTES) {
+      return {
+        receipt: { fetchStatus: "failed", sha256: null, failureCode: "response_too_large" },
+        ...counts,
+      };
+    }
+    try {
+      documentedFacts = classifyProviderDocumentHtml(response.html);
+    } catch {
+      return {
+        receipt: { fetchStatus: "failed", sha256: null, failureCode: "auditor_error" },
+        ...counts,
+      };
+    }
+  }
   return {
     receipt: {
       fetchStatus: "fetched",
