@@ -146,6 +146,28 @@ describe("public service comparison", () => {
     })).toBeNull();
   });
 
+  it("rejects public service comparisons larger than the persistence contract", () => {
+    const valid = assessPublicServiceComparison({ observed: [], declared: [], policyStatus: "pass" });
+    const oversized = {
+      ...valid,
+      providerDocumentation: [{
+        providerId: "openai-api",
+        status: "source_unavailable",
+        reasonCode: "official_source_unavailable",
+        comparisons: [],
+        sourceEvidence: Array.from({ length: 50 }, (_, index) => ({
+          documentId: `openai-document-${index}`,
+          title: "OpenAI provider document",
+          url: `https://openai.example/${"a".repeat(1_800)}`,
+          status: "unavailable",
+          sha256: null,
+          checkedAt: "2026-11-25T03:00:00Z",
+        })),
+      }],
+    };
+    expect(parsePublicServiceComparison(oversized)).toBeNull();
+  });
+
   it("rejects invalid hostnames, duplicate values, and inconsistent status reasons", () => {
     const observed = assessPublicServiceComparison({
       observed: [{ providerId: "google-analytics", domain: "bad..host" }],

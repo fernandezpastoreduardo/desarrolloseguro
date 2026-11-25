@@ -322,15 +322,48 @@ describePostgres.sequential("PostgresScanStore", () => {
         categories: ["analytics", "advertising"],
       },
     } satisfies import("@desarrolloseguro/core").PublicPolicyTransparencyAssessment;
+    const siteSource = {
+      sourceId: "site-policy",
+      version: "scan-1",
+      title: "Privacy notice",
+      url: "https://policy.example.net/privacy",
+      capturedAt: new Date().toISOString(),
+      excerpt: "The site says it does not send idea text to OpenAI.",
+      documentKind: "privacy",
+      sourceKind: "audited_site",
+    } as const;
+    const providerSource = {
+      sourceId: "openai-data-controls",
+      version: "catalog-1",
+      title: "API data controls",
+      url: "https://developers.openai.com/api/docs/guides/your-data",
+      capturedAt: new Date().toISOString(),
+      excerpt: "OpenAI documents processing submitted API content.",
+      documentKind: "service",
+      sourceKind: "provider_official",
+    } as const;
     const serviceComparison = {
       policyVersion: "public-service-comparison-v1",
-      status: "pass",
-      reasonCode: "services_disclosed",
+      status: "fail",
+      reasonCode: "provider_documentation_contradiction",
       items: [{
         providerId: "openai-api",
         observation: "declared",
         observedDomains: [],
         declaredPurposes: ["ai_processing"],
+      }],
+      providerDocumentation: [{
+        providerId: "openai-api",
+        status: "contradiction_confirmed",
+        reasonCode: "opposing_explicit_statements",
+        comparisons: [{
+          factId: "provider_receives_content",
+          siteStatement: siteSource,
+          siteValue: false,
+          providerFact: providerSource,
+          providerValue: true,
+          relation: "opposes",
+        }],
       }],
     } satisfies import("@desarrolloseguro/core").PublicServiceComparison;
     const reportId = await store.completeScan({
