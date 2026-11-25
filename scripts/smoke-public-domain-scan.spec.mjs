@@ -5,6 +5,7 @@ import {
   validateWwwRedirect,
   validateCompletedReport,
   validateReusableAdmission,
+  describeNonBlockingDiagnostics,
   validateTerminalFailure,
   describeTerminalFailure,
   describeStatusProgress,
@@ -175,14 +176,31 @@ test("rejects a TLS unknown without a complete boolean-or-diagnostic matrix", ()
   );
 });
 
-test("rejects an auditor-owned unknown for the backend inventory criterion", () => {
+test("accepts and reports an external processor auditor error without blocking the deploy", () => {
   const status = completedStatus();
   status.lastReport.processorTransparencyAssessment.status = "unknown";
-  status.lastReport.ethicsAssessment.assessedCriteria = 7;
-  assert.throws(
-    () => validateCompletedReport(status, "previous-report-id"),
-    /public_scan_ethics_assessment_incomplete_.*(?:coverage_incomplete|processor_assessment_invalid)/u,
+  status.lastReport.processorTransparencyAssessment.reasonCode = "auditor_error";
+  status.lastReport.processorTransparencyAssessment.inventory = null;
+  const report = validateCompletedReport(status, "previous-report-id");
+  assert.equal(report.processorTransparencyAssessment.status, "unknown");
+  assert.deepEqual(
+    describeNonBlockingDiagnostics(report, "grumphya.com"),
+    ["processor_inventory_unknown_auditor_error"],
   );
+});
+
+test("keeps an auditor-owned unknown blocking the self-domain report", () => {
+  const status = completedStatus();
+  status.hostname = "desarrolloseguro.org";
+  status.lastReport.hostname = "desarrolloseguro.org";
+  status.lastReport.processorTransparencyAssessment.status = "unknown";
+  status.lastReport.processorTransparencyAssessment.reasonCode = "auditor_error";
+  status.lastReport.processorTransparencyAssessment.inventory = null;
+  assert.throws(
+    () => validateCompletedReport(status, "previous-report-id", "desarrolloseguro.org"),
+    /public_scan_ethics_assessment_incomplete_.*processor_assessment_invalid/u,
+  );
+  assert.deepEqual(describeNonBlockingDiagnostics(status.lastReport, "desarrolloseguro.org"), []);
 });
 
 test("accepts www HTTPS redirect to the canonical domain without an exposed port", () => {
