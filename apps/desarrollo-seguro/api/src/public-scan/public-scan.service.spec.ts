@@ -596,7 +596,7 @@ describe("PublicScanService", () => {
     const report = makeReport({
       hostname: "example.com",
       profileVersion: "domain-v4",
-      scannerVersion: "domain-v4-network-adapter-3",
+      scannerVersion: "domain-v4-network-adapter-4",
       publicPolicyTransparencyAssessment: {
         policyVersion: "public-policy-v1",
         status: "fail",

@@ -18,8 +18,8 @@ describe("privacy policy v1", () => {
     expect(PRIVACY_EXCESS_THRESHOLDS).toEqual({ cookiesPerProviderAndPurpose: 5, cookiesPerPurpose: 10 });
     expect(PRIVACY_BROWSER_BUDGET).toEqual({
       durationMs: 120_000,
-      requests: 300,
-      receivedBytes: 20 * 1024 * 1024,
+      requests: 1_000,
+      receivedBytes: 64 * 1024 * 1024,
       individualProviders: 30,
       contexts: 8,
     });

@@ -325,7 +325,7 @@ function toPublicReport(
   const publicPolicyTransparencyAssessment = report.publicPolicyTransparencyAssessment ?? null;
   const publicServiceComparison = report.publicServiceComparison ?? null;
   const ethicsAssessment = report.profileVersion === "domain-v4" &&
-    report.scannerVersion === "domain-v4-network-adapter-3"
+    report.scannerVersion === "domain-v4-network-adapter-4"
     ? assessDomainEthicsV6(report.checks, publicServiceComparison)
     : report.profileVersion === "domain-v4" &&
     report.scannerVersion === "domain-v4-network-adapter-2" && publicPolicyTransparencyAssessment

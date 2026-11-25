@@ -21,8 +21,8 @@ export const PRIVACY_EXCESS_THRESHOLDS = {
 
 export const PRIVACY_BROWSER_BUDGET = {
   durationMs: 120_000,
-  requests: 300,
-  receivedBytes: 20 * 1024 * 1024,
+  requests: 1_000,
+  receivedBytes: 64 * 1024 * 1024,
   individualProviders: 30,
   contexts: 8,
 } as const;

@@ -1,6 +1,7 @@
 import { createPrivacyEgressProxy } from "./privacy-egress-proxy.js";
+import { PRIVACY_BROWSER_BUDGET } from "@desarrolloseguro/core";
 
-const DEFAULT_RECEIVED_BYTE_LIMIT = 20 * 1024 * 1024;
+const DEFAULT_RECEIVED_BYTE_LIMIT = PRIVACY_BROWSER_BUDGET.receivedBytes;
 const PORT = 3_128;
 
 async function main(): Promise<void> {
@@ -29,7 +30,7 @@ async function main(): Promise<void> {
 function readPositiveInteger(value: string | undefined, fallback: number): number {
   if (value === undefined) return fallback;
   const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > 20 * 1024 * 1024) throw new Error("privacy_proxy_limit_invalid");
+  if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > PRIVACY_BROWSER_BUDGET.receivedBytes) throw new Error("privacy_proxy_limit_invalid");
   return parsed;
 }
 

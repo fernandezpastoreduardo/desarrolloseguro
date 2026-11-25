@@ -40,7 +40,7 @@ function completedStatus() {
     lastReport: {
       id: "f7490d2d-2976-4a89-a9a7-001690e873ef",
       profileVersion: "domain-v4",
-      scannerVersion: "domain-v4-network-adapter-3",
+      scannerVersion: "domain-v4-network-adapter-4",
       completedAt: "2026-11-11T20:00:00.000Z",
       checks,
       ethicsAssessment: {

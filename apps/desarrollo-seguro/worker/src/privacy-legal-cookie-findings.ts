@@ -31,21 +31,37 @@ function collectPhaseEvidence(
   const snapshot: PrivacyBrowserStateSnapshot | null = phase === "before_choice"
     ? flow.phaseEvidence.beforeChoice
     : phase === "after_choice" ? flow.phaseEvidence.afterChoice : flow.phaseEvidence.afterReload;
-  const requests = flow.phaseEvidence.networkRequests.filter((request) =>
-    !request.blockedByAudit && request.phaseAtStart === phase,
-  );
-  const hosts = [...new Set(requests.map(({ hostname }) => normalizeHostname(hostname)))];
+  const requests = flow.phaseEvidence.networkRequests.filter((request) => request.phaseAtStart === phase);
+  const hosts = [...new Set(requests.filter(({ blockedByAudit }) => !blockedByAudit)
+    .map(({ hostname }) => normalizeHostname(hostname)))];
+  const auditBlockedRequestHosts = [...new Set(requests
+    .filter(({ blockedByAudit }) => blockedByAudit)
+    .map(({ hostname }) => normalizeHostname(hostname)))];
   const evidence: LegalCookieEvidence[] = [];
   const snapshotCookies = snapshot && snapshot.cookieReadComplete ? snapshot.cookies : [];
   const snapshotCapturedAtMs = snapshot?.capturedAtMs ?? 0;
   for (const cookie of snapshotCookies) {
+    const wasPresentBeforeChoice = phase !== "before_choice" &&
+      flow.phaseEvidence.beforeChoice?.cookieReadComplete === true &&
+      flow.phaseEvidence.beforeChoice.cookies.some((prior) => prior.name === cookie.name &&
+        normalizeDomain(prior.domain) === normalizeDomain(cookie.domain));
+    const priorRequests = wasPresentBeforeChoice
+      ? flow.phaseEvidence.networkRequests.filter((request) => request.phaseAtStart === "before_choice")
+      : [];
+    const priorHosts = [...new Set(priorRequests.filter(({ blockedByAudit }) => !blockedByAudit)
+      .map(({ hostname }) => normalizeHostname(hostname)))];
+    const priorBlockedHosts = [...new Set(priorRequests.filter(({ blockedByAudit }) => blockedByAudit)
+      .map(({ hostname }) => normalizeHostname(hostname)))];
     evidence.push(...matchCookieEvidence(flowName, phase, snapshotCapturedAtMs,
-      cookie.name, cookie.domain, hosts));
+      cookie.name, cookie.domain,
+      [...new Set([...hosts, ...priorHosts])],
+      [...new Set([...auditBlockedRequestHosts, ...priorBlockedHosts])],
+      wasPresentBeforeChoice ? "before_choice" : undefined));
   }
   for (const request of requests) {
     for (const cookieName of request.sentCookieNames) {
       evidence.push(...matchCookieEvidence(flowName, phase, request.startedAtMs,
-        cookieName, request.hostname, [request.hostname]));
+        cookieName, request.hostname, request.blockedByAudit ? [] : [request.hostname], request.blockedByAudit ? [request.hostname] : []));
     }
     const responsePhase = phase === "before_choice" ? "before_choice" : phase;
     const receivedInPhase = request.responsePhase === responsePhase && request.responseAtMs !== null &&
@@ -55,7 +71,7 @@ function collectPhaseEvidence(
     if (receivedInPhase && request.responseAtMs !== null && request.responseStatus !== null && request.responseStatus < 400) {
       for (const cookieName of request.receivedCookieNames) {
         evidence.push(...matchCookieEvidence(flowName, phase, request.responseAtMs,
-          cookieName, request.hostname, [request.hostname]));
+          cookieName, request.hostname, request.blockedByAudit ? [] : [request.hostname], request.blockedByAudit ? [request.hostname] : []));
       }
     }
   }
@@ -71,12 +87,14 @@ function matchCookieEvidence(
   cookieName: string,
   cookieDomain: string,
   corroboratingHosts: string[],
+  auditBlockedRequestHosts: string[],
+  corroborationPhase?: LegalCookieEvidence["phase"],
 ): LegalCookieEvidence[] {
   return matchPrivacySignal({
     signalType: "cookie_name",
     value: cookieName,
     observedHostname: cookieDomain,
-    corroboratingHostnames: corroboratingHosts,
+    corroboratingHostnames: [...new Set([...corroboratingHosts, ...auditBlockedRequestHosts])],
   }, PRIVACY_KNOWLEDGE_RULES).filter((match) =>
     match.classification === "confirmed" && match.confidence === "high" && TRACKING_CATEGORIES.has(match.category),
   ).map((match) => ({
@@ -89,6 +107,8 @@ function matchCookieEvidence(
     purpose: match.purpose,
     attributionRuleId: match.ruleId,
     correlatedRequestHosts: corroboratingHosts.slice(0, 20),
+    ...(corroborationPhase ? { corroborationPhase } : {}),
+    ...(auditBlockedRequestHosts.length ? { auditBlockedRequestHosts: auditBlockedRequestHosts.slice(0, 20) } : {}),
   }));
 }
 

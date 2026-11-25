@@ -25,6 +25,37 @@ describe("buildLegalCookieFindings", () => {
     ]);
   });
 
+  it("records an analytics host blocked by the auditor as an attempted request", () => {
+    const observation = makeObservation({ initial: makeFlow({ beforeChoice: {
+      capturedAtMs: 40,
+      cookies: [{ name: "_ga", domain: "example.es", secure: true, httpOnly: false }],
+      storageKeys: [], cookieReadComplete: true, storageReadComplete: true,
+    } }) });
+    observation.initial.phaseEvidence.networkRequests = [{
+      phaseAtStart: "before_choice",
+      responsePhase: null,
+      responseAtMs: null,
+      phaseAtCompletion: null,
+      startedAtMs: 30,
+      completedAtMs: null,
+      url: "https://region1.google-analytics.com/g/collect",
+      hostname: "region1.google-analytics.com",
+      method: "POST",
+      resourceType: "ping",
+      responseStatus: null,
+      blockedByAudit: true,
+      failed: true,
+      sentCookieNames: [],
+      receivedCookieNames: [],
+    }];
+
+    expect(buildLegalCookieFindings(observation)[0]?.evidence[0]).toMatchObject({
+      cookieName: "_ga",
+      correlatedRequestHosts: [],
+      auditBlockedRequestHosts: ["region1.google-analytics.com"],
+    });
+  });
+
   it("keeps directly observed cookies when a separate step leaves the flow incomplete", () => {
     const observation = makeObservation({
       initial: makeFlow({ beforeChoice: snapshot(40) }),
@@ -58,6 +89,56 @@ describe("buildLegalCookieFindings", () => {
     expect(findings[0]?.evidence.map(({ phase, capturedAtMs }) => ({ phase, capturedAtMs }))).toEqual([
       { phase: "after_choice", capturedAtMs: 90 },
       { phase: "after_reload", capturedAtMs: 160 },
+    ]);
+  });
+
+  it("attributes a first-party cookie that persists after rejection to its own earlier blocked analytics request", () => {
+    const observation = makeObservation({
+      reject: makeFlow({
+        beforeChoice: snapshot(40, "_ga", "talentoypersonas.com"),
+        choiceActionAtMs: 80,
+        afterChoice: snapshot(90, "_ga", "talentoypersonas.com"),
+        reloadStartedAtMs: 120,
+        afterReload: snapshot(160, "_ga", "talentoypersonas.com"),
+      }),
+    });
+    observation.reject.phaseEvidence.networkRequests = [{
+      phaseAtStart: "before_choice",
+      responsePhase: null,
+      responseAtMs: null,
+      phaseAtCompletion: null,
+      startedAtMs: 30,
+      completedAtMs: null,
+      url: "https://region1.google-analytics.com/g/collect",
+      hostname: "region1.google-analytics.com",
+      method: "POST",
+      resourceType: "ping",
+      responseStatus: null,
+      blockedByAudit: true,
+      failed: true,
+      sentCookieNames: [],
+      receivedCookieNames: [],
+    }];
+
+    const finding = buildLegalCookieFindings(observation).find(({ ruleId }) => ruleId === "lssi-cookie-after-rejection-v1");
+    expect(finding?.evidence).toEqual([
+      expect.objectContaining({
+        phase: "after_choice",
+        cookieName: "_ga",
+        cookieDomain: "talentoypersonas.com",
+        provider: "Google Analytics",
+        corroborationPhase: "before_choice",
+        correlatedRequestHosts: [],
+        auditBlockedRequestHosts: ["region1.google-analytics.com"],
+      }),
+      expect.objectContaining({
+        phase: "after_reload",
+        cookieName: "_ga",
+        cookieDomain: "talentoypersonas.com",
+        provider: "Google Analytics",
+        corroborationPhase: "before_choice",
+        auditBlockedRequestHosts: ["region1.google-analytics.com"],
+      }),
     ]);
   });
 
@@ -143,10 +224,10 @@ function makeFlow(overrides: {
   };
 }
 
-function snapshot(capturedAtMs: number, cookieName = "_ga") {
+function snapshot(capturedAtMs: number, cookieName = "_ga", domain = "google-analytics.com") {
   return {
     capturedAtMs,
-    cookies: [{ name: cookieName, domain: "google-analytics.com", secure: true, httpOnly: false }],
+    cookies: [{ name: cookieName, domain, secure: true, httpOnly: false }],
     storageKeys: [],
     cookieReadComplete: true,
     storageReadComplete: true,

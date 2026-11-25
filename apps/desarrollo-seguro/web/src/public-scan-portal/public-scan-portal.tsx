@@ -1553,6 +1553,12 @@ function LegalCookieFindingsSection({ findings }: { findings: LegalCookieFinding
                 Cookie {evidence.cookieName} en {evidence.cookieDomain}; {evidence.provider}, finalidad {evidence.purpose};
                 {" "}{evidence.flow === "initial" ? "antes de elegir" : evidence.phase === "after_choice" ? "después de rechazar" : "después de recargar el rechazo"}
                 {" "}({evidence.capturedAtMs} ms).
+                {evidence.auditBlockedRequestHosts?.length ? (
+                  <> Solicitud observada {evidence.corroborationPhase === "before_choice" ? "antes de elegir" : "en esta fase"} a {evidence.auditBlockedRequestHosts.join(", ")} bloqueada por el auditor antes de transmitirse.</>
+                ) : null}
+                {evidence.corroborationPhase === "before_choice" && !evidence.auditBlockedRequestHosts?.length ? (
+                  <> Atribución del proveedor corroborada por una solicitud de la misma cookie antes de elegir.</>
+                ) : null}
               </li>
             ))}
           </ul>
@@ -2174,7 +2180,7 @@ function isPublicReport(value: unknown): value is PublicReport {
   const usesV5PublicPolicy = value.ethicsAssessment.policyVersion === "domain-ethics-v5" &&
     value.profileVersion === "domain-v4" && value.scannerVersion === "domain-v4-network-adapter-2";
   const usesV6ServiceComparison = value.ethicsAssessment.policyVersion === "domain-ethics-v6" &&
-    value.profileVersion === "domain-v4" && value.scannerVersion === "domain-v4-network-adapter-3";
+    value.profileVersion === "domain-v4" && value.scannerVersion === "domain-v4-network-adapter-4";
   if ((value.ethicsAssessment.policyVersion === "domain-ethics-v3" && (hasProcessorAssessment || hasPublicPolicyAssessment)) ||
       (value.ethicsAssessment.policyVersion === "domain-ethics-v4" && (!hasProcessorAssessment || hasPublicPolicyAssessment)) ||
       usesV5PublicPolicy && !hasPublicPolicyAssessment ||

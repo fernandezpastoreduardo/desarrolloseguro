@@ -1,6 +1,6 @@
 import type { Page, Request } from "playwright";
 
-const MAX_REQUESTS = 30;
+const MAX_REQUESTS = 400;
 const MAX_COOKIE_NAMES_PER_REQUEST = 3;
 
 export type PrivacyRequestPhase = "before_choice" | "after_choice" | "after_reload" | "cmp_inspection" | "after_policy_link";

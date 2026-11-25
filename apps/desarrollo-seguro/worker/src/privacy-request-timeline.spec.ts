@@ -72,11 +72,20 @@ describe("PrivacyRequestTimeline", () => {
         { name: "set-cookie", value: "four=x" },
       ]),
     });
-    for (let index = 0; index < 31; index += 1) harness.emit("request", makeRequest(`https://example.com/${index}`, {}));
+    for (let index = 0; index < 350; index += 1) {
+      harness.emit("request", makeRequest(`https://example.com/${index}`, {}));
+    }
+    harness.timeline.setPhase("after_reload");
+    harness.emit("request", makeRequest("https://region1.google-analytics.com/g/collect", {}));
+    for (let index = 0; index < 51; index += 1) harness.emit("request", makeRequest(`https://example.com/later-${index}`, {}));
 
     const snapshot = await harness.timeline.snapshot();
-    expect(snapshot.events).toHaveLength(30);
+    expect(snapshot.events).toHaveLength(400);
     expect(snapshot.complete).toBe(false);
+    expect(snapshot.events).toContainEqual(expect.objectContaining({
+      hostname: "region1.google-analytics.com",
+      phaseAtStart: "after_reload",
+    }));
     expect(snapshot.events[0]).toMatchObject({
       sentCookieNames: ["one", "two", "three"],
       receivedCookieNames: ["one", "two", "three"],

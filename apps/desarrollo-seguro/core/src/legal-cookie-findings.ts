@@ -8,6 +8,10 @@ export type LegalCookieEvidence = {
   purpose: string;
   attributionRuleId: string;
   correlatedRequestHosts: string[];
+  /** Phase containing the request used to attribute a cookie that persisted across a user action. */
+  corroborationPhase?: "before_choice" | "after_choice" | "after_reload";
+  /** Requests the audited page attempted to make but the audit browser blocked before transmission. */
+  auditBlockedRequestHosts?: string[];
 };
 
 export type LegalCookieFinding = {
@@ -59,7 +63,10 @@ function parseEvidence(value: unknown): LegalCookieEvidence | null {
       !isSafeToken(value.cookieName, 128) || !isSafeToken(value.cookieDomain, 253) ||
       !isSafeToken(value.provider, 100) || !isSafeToken(value.purpose, 250) ||
       !isSafeToken(value.attributionRuleId, 100) || !Array.isArray(value.correlatedRequestHosts) ||
-      value.correlatedRequestHosts.length > 20 || !value.correlatedRequestHosts.every((host) => isSafeToken(host, 253))) return null;
+      value.correlatedRequestHosts.length > 20 || !value.correlatedRequestHosts.every((host) => isSafeToken(host, 253)) ||
+      value.corroborationPhase !== undefined && !["before_choice", "after_choice", "after_reload"].includes(String(value.corroborationPhase)) ||
+      value.auditBlockedRequestHosts !== undefined && (!Array.isArray(value.auditBlockedRequestHosts) ||
+        value.auditBlockedRequestHosts.length > 20 || !value.auditBlockedRequestHosts.every((host) => isSafeToken(host, 253)))) return null;
   return value as LegalCookieEvidence;
 }
 

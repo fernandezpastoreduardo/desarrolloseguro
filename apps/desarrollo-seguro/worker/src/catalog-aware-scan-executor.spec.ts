@@ -15,7 +15,7 @@ const JOB: ClaimedScanJob = {
 };
 
 const RESULT: Omit<ScanRunInput, "jobId" | "leaseToken" | "hostname" | "profileVersion"> = {
-  scannerVersion: "domain-v4-network-adapter-3",
+  scannerVersion: "domain-v4-network-adapter-4",
   startedAt: new Date("2026-11-02T10:00:00.000Z"),
   completedAt: new Date("2026-11-02T10:00:30.000Z"),
   verdict: "inconclusive",

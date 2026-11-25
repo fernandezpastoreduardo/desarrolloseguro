@@ -74,6 +74,44 @@ describe("observePrivacyBehavior", () => {
     expect(browser.close).toHaveBeenCalledOnce();
   });
 
+  it("waits for consent controls that load after DOMContentLoaded", async () => {
+    vi.stubGlobal("HTMLElement", MockElement);
+    vi.stubGlobal("HTMLButtonElement", MockButton);
+    vi.stubGlobal("HTMLInputElement", MockInput);
+    vi.stubGlobal("getComputedStyle", () => ({ display: "block", visibility: "visible", opacity: "1" }));
+    vi.stubGlobal("document", { getElementById: () => null });
+    const labels = ["Aceptar todas", "Rechazar no esenciales"];
+    const contexts = Array.from({ length: 4 }, () => makeContext(
+      [], undefined, labels, false, undefined, false, null, 2_000,
+    ));
+    const browser = { newContext: vi.fn(async () => contexts.shift()!), close: vi.fn(async () => undefined) };
+    const inspectPolicyLinks = vi.fn(async () => ({
+      status: "evaluated" as const,
+      consentComponentDetected: true,
+      consentComponentLink: null,
+      consentComponentDocumentAccess: "not_checked" as const,
+      informationNoticeLink: null,
+      informationNoticeDocumentAccess: "not_checked" as const,
+      footerLink: null,
+      footerLinkDocumentAccess: "not_checked" as const,
+    }));
+
+    const result = await observePrivacyBehavior({
+      protocolVersion: 1,
+      requestId: "947dd0c9-564c-4a30-8ce3-efb4ecae9136",
+      hostname: "grumphya.com",
+    }, {
+      proxyUrl: "http://privacy-egress:3128",
+      launchBrowser: vi.fn(async () => browser as never) as never,
+      inspectPolicyLinks: inspectPolicyLinks as never,
+    });
+
+    expect(result.initial.consentPromptDetected).toBe(true);
+    expect(result.initial.rejectVisibleAtFirstLayer).toBe(true);
+    expect(result.reject.status).toBe("evaluated");
+    expect(result.reject.actionsToReject).toBe(1);
+  });
+
   it("captures grumphya_anon only after opening the policy link without treating it as rejection failure", async () => {
     const postLinkContext = makePolicyLinkVisitContext();
     const contexts = [makeContext(), postLinkContext, makeContext(), makeContext()];
@@ -274,8 +312,11 @@ function makeContext(
   requestOnNavigation: { url: string; method: string } = { url: "https://grumphya.com/", method: "GET" },
   navigationFails = false,
   websocketUrl: string | null = null,
+  controlsAppearAfterMs = 0,
 ) {
-  const elements = controlLabels.map((label) => new MockButton(label));
+  const delayedLabels = controlsAppearAfterMs > 0 ? [...controlLabels] : [];
+  const elements = controlsAppearAfterMs > 0 ? [] : controlLabels.map((label) => new MockButton(label));
+  let waitElapsedMs = 0;
   let requestRoute: ((route: unknown) => Promise<void>) | undefined;
   let websocketRoute: ((socket: unknown) => void) | undefined;
   const page = {
@@ -294,7 +335,12 @@ function makeContext(
       });
       if (websocketUrl) websocketRoute?.({ url: () => websocketUrl, close: vi.fn() });
     }),
-    waitForTimeout: vi.fn(async () => undefined),
+    waitForTimeout: vi.fn(async (milliseconds: number) => {
+      waitElapsedMs += milliseconds;
+      if (controlsAppearAfterMs > 0 && waitElapsedMs >= controlsAppearAfterMs && delayedLabels.length > 0) {
+        elements.push(...delayedLabels.splice(0).map((label) => new MockButton(label)));
+      }
+    }),
     locator: vi.fn((selector: string) => ({
       evaluateAll: vi.fn(async (callback: (items: unknown[]) => unknown) => callback(selector.includes("checkbox") || selector.includes("switch") ? [] : elements)),
       nth: vi.fn((index: number) => ({ click: vi.fn(async () => {

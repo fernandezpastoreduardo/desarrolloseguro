@@ -275,7 +275,7 @@ describe("createDockerRuntimeCoordinatorRunner", () => {
     const request = { ...REQUEST, profileVersion: "domain-v4" as const };
     const executorResult = {
       ...base,
-      scannerVersion: "domain-v4-network-adapter-3",
+      scannerVersion: "domain-v4-network-adapter-4",
       checks: [...base.checks, ...base.checks],
       publicPolicyTransparencyAssessment: {
         policyVersion: "public-policy-v1",
@@ -924,7 +924,7 @@ function makeDomainV4Result(): ReturnType<typeof makeResult> & Record<string, un
   const base = makeResult();
   return {
     ...base,
-    scannerVersion: "domain-v4-network-adapter-3",
+    scannerVersion: "domain-v4-network-adapter-4",
     checks: [...base.checks, ...base.checks],
     publicPolicyTransparencyAssessment: {
       policyVersion: "public-policy-v1",

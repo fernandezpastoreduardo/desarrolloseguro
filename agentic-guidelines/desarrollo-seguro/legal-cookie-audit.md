@@ -12,9 +12,11 @@ La herramienta acredita hechos técnicos y aplica una regla jurídica explícita
 
 - Primera visita de una página pública en Chromium, con perfil nuevo y almacenamiento limpio.
 - Captura del banner y de los enlaces visibles en primera capa.
+- Tras `DOMContentLoaded`, buscar controles visibles de consentimiento durante un máximo de cinco segundos, en intervalos de 250 ms. Esto cubre CMP que se monta de forma asíncrona; solo declarar que no hay banner al agotarse el plazo con la captura completa. Si la comprobación se interrumpe por el presupuesto o una cancelación, el estado queda desconocido.
 - Observación antes de aceptar o rechazar, después de cada acción y después de recargar.
 - Los botones visibles del CMP se clasifican por su etiqueta y contexto. Un `<button>` independiente sin atributo `type` puede activarse aunque el navegador le asigne por defecto `type="submit"`; solo se bloquean controles dentro de un formulario real. Las escrituras continúan limitadas a la ventana temporal del clic de consentimiento.
-- Cookies, almacenamiento web y peticiones de terceros, con atribución temporal exacta.
+- Cookies, almacenamiento web y peticiones de terceros, con atribución temporal exacta. Cada análisis permite hasta 1.000 solicitudes y conserva hasta 400 eventos de red por flujo para mantener la correlación temporal de páginas con muchos recursos, incluidas las solicitudes de recarga tras una elección; al superar cualquiera de los límites la cobertura se marca incompleta. El total recibido se limita a 64 MiB por análisis, suficiente para completar los flujos independientes en sitios cuyo contenido supera el límite anterior de 20 MiB.
+- Las solicitudes bloqueadas por las salvaguardas del auditor se conservan separadas de los hosts cuyas respuestas sí se recibieron. Pueden corroborar qué proveedor intentó contactar el sitio, pero el informe las identifica como bloqueadas antes de transmitirse.
 - Flujos independientes de aceptación y rechazo para evitar que el estado de uno contamine el otro.
 - Reglas para LSSI, RGPD y LOPDGDD; vía de consumo/LCD cuando la actividad y los elementos legales observados permitan aplicarla.
 - No se considera infracción autónoma el mero hecho de que la página permita navegar mientras el aviso está visible.
@@ -115,6 +117,9 @@ Los hallazgos jurídicos se muestran aparte de las puntuaciones técnicas. Si ex
 12. El informe público expone los hallazgos y evidencia verificable sin valores de cookies, credenciales, cuerpos completos de requests ni datos personales innecesarios.
 13. Una cookie directamente observada en una fase con inventario completo conserva su hallazgo legal aunque una acción, recarga o fase posterior del mismo flujo haya quedado incompleta.
 14. Los botones independientes de aceptar, rechazar y gestionar preferencias que omiten `type` se reconocen y activan; controles dentro de formularios no se envían. La prueba de regresión cubre el marcado HTML con `type` implícito `submit` y comprueba que el flujo posterior a rechazar se ejecuta.
+15. El auditor detecta y registra controles de consentimiento que aparecen hasta cinco segundos después de `DOMContentLoaded`; si el presupuesto interrumpe la búsqueda, no informa que el banner está ausente ni marca los controles como «no aplica».
+16. La evidencia de cookies de primera parte puede atribuirse a un proveedor cuando la misma fase registra una solicitud de ese proveedor bloqueada por el auditor; el informe expone el host en `auditBlockedRequestHosts` y no afirma que esa solicitud llegara al proveedor.
+17. Tras el rechazo, si la instantánea completa muestra la misma cookie (nombre y dominio) que ya estaba presente antes de elegir en ese flujo aislado, la atribución de proveedor puede corroborarse con las solicitudes de esa fase previa. Se registra `corroborationPhase: "before_choice"`; el informe distingue el momento en que persistió la cookie de la fase usada para identificar al proveedor. Si la solicitud fue bloqueada por el auditor, se conserva como intento bloqueado y nunca como transmisión completada.
 
 ## Fuentes oficiales iniciales
 

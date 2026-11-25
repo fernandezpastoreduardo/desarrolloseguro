@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { isAbsolute } from "node:path";
 import type { ScanRunInput } from "@desarrolloseguro/persistence";
-import { assessPrivacy, assessPublicServiceComparison } from "@desarrolloseguro/core";
+import { assessPrivacy, assessPublicServiceComparison, PRIVACY_BROWSER_BUDGET } from "@desarrolloseguro/core";
 import { SCAN_FAILURE_CODES, type ScanFailureCode } from "@desarrolloseguro/core";
 import {
   MAX_EXECUTOR_RESPONSE_BYTES,
@@ -518,7 +518,7 @@ export function createDockerRuntimeSessionFactory(
           privacyNetworkMayExist = true;
           await runDocker(dockerBinary, ["network", "create", "--internal", "--label", "io.desarrolloseguro.role=ephemeral-privacy", privacyNetworkName], undefined, privacySignal, undefined, undefined, undefined, dockerSocketPath);
           privacyProxyMayExist = true;
-          await runDocker(dockerBinary, ["run", "--detach", "--name", privacyProxyName, "--network", brokerNetwork, "--read-only", "--user", "1000:1000", "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "--pids-limit", "64", "--memory", "128m", "--cpus", "0.25", "--tmpfs", "/tmp:rw,noexec,nosuid,size=16m,uid=1000,gid=1000", "--env", "DS_PRIVACY_MAX_RECEIVED_BYTES=20971520", options.privacyEgressImage], undefined, privacySignal, undefined, undefined, undefined, dockerSocketPath);
+          await runDocker(dockerBinary, ["run", "--detach", "--name", privacyProxyName, "--network", brokerNetwork, "--read-only", "--user", "1000:1000", "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "--pids-limit", "64", "--memory", "128m", "--cpus", "0.25", "--tmpfs", "/tmp:rw,noexec,nosuid,size=16m,uid=1000,gid=1000", "--env", `DS_PRIVACY_MAX_RECEIVED_BYTES=${PRIVACY_BROWSER_BUDGET.receivedBytes}`, options.privacyEgressImage], undefined, privacySignal, undefined, undefined, undefined, dockerSocketPath);
           await runDocker(dockerBinary, ["network", "connect", "--alias", "privacy-egress", privacyNetworkName, privacyProxyName], undefined, privacySignal, undefined, undefined, undefined, dockerSocketPath);
           await waitForPrivacyProxy(dockerBinary, dockerSocketPath, privacyProxyName, privacySignal);
           privacyBrowserMayExist = true;
@@ -526,7 +526,7 @@ export function createDockerRuntimeSessionFactory(
           try {
             let observation = JSON.parse(output.trim()) as PrivacyBrowserObservation;
             const proxyStats = await stopPrivacyProxyAndReadStats(dockerBinary, dockerSocketPath, privacyProxyName, privacySignal);
-            if (!proxyStats || proxyStats.receivedBytes > 20 * 1024 * 1024 || proxyStats.budgetExceeded) {
+            if (!proxyStats || proxyStats.receivedBytes > PRIVACY_BROWSER_BUDGET.receivedBytes || proxyStats.budgetExceeded) {
               observation = {
                 ...observation,
                 status: "partial",

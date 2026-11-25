@@ -18,12 +18,15 @@ import {
   inspectConsentControls,
   inspectVendorToggles,
   turnVendorTogglesOff,
+  type ConsentControl,
   type VendorToggle,
   type VendorToggleInspection,
 } from "./privacy-consent-controls.js";
 
 const NAVIGATION_TIMEOUT_MS = 15_000;
 const CONSENT_SETTLE_MS = 1_000;
+const CONSENT_DETECTION_TIMEOUT_MS = 5_000;
+const CONSENT_DETECTION_POLL_MS = 250;
 const ACTION_TIMEOUT_MS = 5_000;
 const MAX_RECORDED_NAMES = 200;
 const MAX_PHASE_SNAPSHOT_NAMES = 50;
@@ -437,11 +440,13 @@ async function runFlow(
       const captured = await captureFlow(context, page, { ...UNKNOWN_FLOW, pageLoaded }, timeline, ledger, flowHosts, completedHosts);
       return { ...captured, cookieReadComplete: false, storageReadComplete: false };
     }
-    await page.waitForTimeout(CONSENT_SETTLE_MS);
+    const controls = await waitForConsentControls(page, () => signal?.aborted === true || gate.hasExceededBudget());
+    if (controls === null) {
+      return await captureFlow(context, page, { ...UNKNOWN_FLOW, pageLoaded }, timeline, ledger, flowHosts, completedHosts);
+    }
     context.on("page", (openedPage) => {
       if (openedPage !== page) void openedPage.close().catch(() => undefined);
     });
-    const controls = await inspectConsentControls(page);
     const hasConsentControls = controls.length > 0;
     const firstEntryPolicyLinks = action === "initial"
       ? await inspectPolicyLinks(page, hasConsentControls)
@@ -564,6 +569,21 @@ async function runFlow(
   } finally {
     await context.close().catch(() => undefined);
   }
+}
+
+async function waitForConsentControls(
+  page: Page,
+  shouldStop: () => boolean,
+): Promise<ConsentControl[] | null> {
+  const maxPolls = Math.ceil(CONSENT_DETECTION_TIMEOUT_MS / CONSENT_DETECTION_POLL_MS);
+  for (let poll = 0; poll <= maxPolls; poll += 1) {
+    if (shouldStop()) return null;
+    const controls = await inspectConsentControls(page);
+    if (controls.length > 0) return controls;
+    if (poll === maxPolls) return [];
+    await page.waitForTimeout(CONSENT_DETECTION_POLL_MS);
+  }
+  return [];
 }
 
 async function capturePersistedChoiceState(

@@ -481,7 +481,7 @@ describe("PublicScanPortal", () => {
     const report = {
       ...SCORED_PUBLIC_REPORT,
       profileVersion: "domain-v4",
-      scannerVersion: "domain-v4-network-adapter-3",
+      scannerVersion: "domain-v4-network-adapter-4",
       ethicsAssessment: {
         ...SCORED_PUBLIC_REPORT.ethicsAssessment,
         policyVersion: "domain-ethics-v6",
@@ -537,7 +537,7 @@ describe("PublicScanPortal", () => {
     const report = {
       ...SCORED_PUBLIC_REPORT,
       profileVersion: "domain-v4",
-      scannerVersion: "domain-v4-network-adapter-3",
+      scannerVersion: "domain-v4-network-adapter-4",
       ethicsAssessment: {
         ...SCORED_PUBLIC_REPORT.ethicsAssessment,
         policyVersion: "domain-ethics-v6",
@@ -945,6 +945,7 @@ describe("PublicScanPortal", () => {
           purpose: "analytics",
           attributionRuleId: "google-analytics-ga-v1",
           correlatedRequestHosts: ["www.google-analytics.com"],
+          auditBlockedRequestHosts: ["region1.google-analytics.com"],
         }],
         evidenceComplete: true,
       }],
@@ -958,6 +959,7 @@ describe("PublicScanPortal", () => {
     expect(screen.getByText("Incumplimientos legales acreditados")).toBeVisible();
     expect(screen.getByText("Cookie no esencial antes del consentimiento")).toBeVisible();
     expect(screen.getByText(/LSSI, artículos 22.2, 38.4.g, 39.1.c, 43.1/u)).toBeVisible();
+    expect(screen.getByText(/bloqueada por el auditor antes de transmitirse/u)).toBeVisible();
     expect(screen.getByText(/la puntuación global es 0\/100/i)).toBeVisible();
   });
 
