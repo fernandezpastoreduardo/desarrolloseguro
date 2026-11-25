@@ -53,6 +53,25 @@ describePostgres.sequential("PostgresScanStore", () => {
     await store.ensureDomain(TEST_HOSTNAME, "monitored", TEST_PROFILE);
   });
 
+  it("keeps check payload SQL failures separated into bounded diagnostic codes", async () => {
+    const result = await pool.query<{ definition: string }>(
+      "SELECT pg_get_functiondef('public.ds_validate_check_result_before_insert()'::regprocedure) AS definition",
+    );
+    const definition = result.rows[0]?.definition ?? "";
+
+    for (const code of [
+      "scan_check_required_invalid",
+      "scan_check_severity_not_allowlisted",
+      "scan_check_summary_not_allowlisted",
+      "scan_check_limitation_not_allowlisted",
+      "scan_check_evidence_payload_not_allowlisted",
+      "scan_check_evidence_size_exceeded",
+    ]) {
+      expect(definition).toContain(code);
+    }
+    expect(definition).not.toContain("scan_check_payload_not_allowlisted");
+  });
+
   it("accepts first-entry policy evidence linked from an informational notice", async () => {
     const policyLinkVisit = {
       status: "evaluated",
@@ -153,25 +172,53 @@ describePostgres.sequential("PostgresScanStore", () => {
         },
       },
     };
-    await store.ensureFreshScan({ hostname: TEST_HOSTNAME, profileVersion: "domain-v3", trigger: "requested" });
+    await store.ensureFreshScan({ hostname: TEST_HOSTNAME, profileVersion: "domain-v4", trigger: "requested" });
     const job = await store.claimNextScan(new Date(), TEST_LEASE_MS);
     if (!job) throw new Error("expected_claimed_first_entry_policy_scan");
     const reportId = await store.completeScan({
       jobId: job.id,
       leaseToken: job.leaseToken,
       hostname: TEST_HOSTNAME,
-      profileVersion: "domain-v3",
+      profileVersion: "domain-v4",
       scannerVersion: TEST_SCANNER,
       startedAt: TEST_START,
       completedAt: TEST_NOW,
       verdict: "pass",
       scope: ["/"],
-      checks: makeEligibleDomainV3Checks(),
+      checks: [
+        ...makeEligibleDomainV3Checks().map((check) => ({
+          ...check,
+          limitation: "Resultado limitado a las rutas públicas declaradas del perfil domain-v4.",
+        })),
+        {
+          ...CHECK,
+          controlId: "DS-PRIV-04",
+          method: "GET",
+          status: "pass",
+          summary: "Comprobación DS-PRIV-04: pass.",
+          limitation: "Resultado limitado a las rutas públicas declaradas del perfil domain-v4.",
+          evidence: {
+            inspected: true,
+            privacyPolicyLinksFound: 1,
+            policyLinksFound: 1,
+            sitePrivacyPolicyFetched: true,
+            policyPagesFetched: 1,
+            policyPagesMissing: 0,
+            policyPagesDenied: 0,
+            policyRecipientsMentioned: true,
+            policyPurposesMentioned: true,
+            policyTextBlocked: false,
+            policyProbeFailed: false,
+            policyLanguageCatalogVersion: "public-policy-language-eea-v1",
+          },
+        },
+      ],
       metrics: { requestsCount: 0, bytesCount: 0, durationMs: 1, pagesCount: 0 },
       firstEntryPolicyAccess: assessment,
     });
 
     expect((await store.readPublicReport(reportId))?.firstEntryPolicyAccess).toEqual(assessment);
+    expect((await store.readPublicReport(reportId))?.checks).toHaveLength(10);
   });
 
   afterAll(async () => {
