@@ -3,6 +3,7 @@ import type {
   ScanJobErrorCode,
   ScanJobTelemetry,
   ScanJobTelemetryEvent,
+  ScanJobProcessingStage,
 } from "./scan-job-processor.js";
 
 const SCAN_JOB_OUTCOMES: ReadonlySet<ScanJobOutcome> = new Set([
@@ -30,6 +31,16 @@ const SCAN_JOB_ERROR_CODES: ReadonlySet<ScanJobErrorCode> = new Set([
   "scan_run_insert_failed",
   "worker_processing_failed",
 ]);
+const SCAN_JOB_PROCESSING_STAGES: ReadonlySet<ScanJobProcessingStage> = new Set([
+  "preflight",
+  "lease_recovery",
+  "claim",
+  "validate_job",
+  "execute",
+  "persist_failure",
+  "validate_result",
+  "persist_success",
+]);
 
 export type ScanJobTelemetryWriter = (line: string) => void;
 
@@ -46,6 +57,7 @@ export function createJsonLineScanJobTelemetry(
       write(`${JSON.stringify({
         type: "scan_job_error",
         code: event.code,
+        stage: event.stage,
         durationMs: event.durationMs,
       })}\n`);
       return;
@@ -69,6 +81,8 @@ function isSafeTelemetryEvent(
       SCAN_JOB_OUTCOMES.has(event.outcome)) ||
       (event.type === "scan_job_error" &&
         event.code !== undefined &&
-        SCAN_JOB_ERROR_CODES.has(event.code)))
+        SCAN_JOB_ERROR_CODES.has(event.code) &&
+        event.stage !== undefined &&
+        SCAN_JOB_PROCESSING_STAGES.has(event.stage)))
   );
 }

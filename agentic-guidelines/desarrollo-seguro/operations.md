@@ -76,6 +76,18 @@ No añadas `--volumes` a una parada normal. El volumen es el almacenamiento pers
 
 ## Capacidad y escaneo
 
+### Diagnóstico seguro de errores del worker
+
+Las líneas `scan_job_error` deben registrar, además del código de error
+allowlisted y la duración, una fase fija del procesamiento (`preflight`,
+`lease_recovery`, `claim`, `validate_job`, `execute`, `persist_failure`,
+`validate_result` o `persist_success`). La fase sirve para localizar el
+subsistema sin guardar mensajes de excepción, causas, dominios, identificadores,
+rutas, SQL ni contenido observado. Valores desconocidos o malformados se
+descartan; la telemetría nunca puede alterar el resultado del trabajo. Cuando el
+código sea genérico, la fase debe bastar para distinguir errores de ejecución,
+persistencia y validación.
+
 ### Presupuesto del runtime de análisis
 
 El límite de Solistos de 120 segundos cubre la observación del navegador; no

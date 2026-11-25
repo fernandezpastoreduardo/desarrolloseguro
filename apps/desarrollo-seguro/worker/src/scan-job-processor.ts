@@ -34,8 +34,19 @@ export type ScanJobTelemetryEvent = {
   type: "scan_job_outcome" | "scan_job_error";
   outcome?: ScanJobOutcome;
   code?: ScanJobErrorCode;
+  stage?: ScanJobProcessingStage;
   durationMs: number;
 };
+
+export type ScanJobProcessingStage =
+  | "preflight"
+  | "lease_recovery"
+  | "claim"
+  | "validate_job"
+  | "execute"
+  | "persist_failure"
+  | "validate_result"
+  | "persist_success";
 
 export type ScanJobErrorCode =
   | "invalid_hostname"
@@ -77,27 +88,36 @@ export class ScanJobProcessor {
 
   async processNext(): Promise<ScanJobOutcome> {
     const startedAt = performance.now();
+    let stage: ScanJobProcessingStage = "preflight";
     try {
-      const outcome = await this.processNextInternal();
+      const outcome = await this.processNextInternal((nextStage) => {
+        stage = nextStage;
+      });
       this.emitOutcome(outcome, startedAt);
       return outcome;
     } catch (error) {
-      this.emitError(error, startedAt);
+      this.emitError(error, stage, startedAt);
       this.emitOutcome("failed", startedAt);
       throw error;
     }
   }
 
-  private async processNextInternal(): Promise<ScanJobOutcome> {
+  private async processNextInternal(
+    setStage: (stage: ScanJobProcessingStage) => void,
+  ): Promise<ScanJobOutcome> {
+    setStage("preflight");
     await this.executor.assertReady?.();
     const claimedAt = this.now();
+    setStage("lease_recovery");
     await this.recoverExpiredLeasesIfDue(claimedAt);
+    setStage("claim");
     const claimed = await this.store.claimNextScan(
       claimedAt,
       DEFAULT_LEASE_DURATION_MS,
     );
     if (!claimed) return "idle";
 
+    setStage("validate_job");
     if (normalizeHostname(claimed.hostname) !== claimed.hostname) {
       throw new Error("invalid_hostname");
     }
@@ -133,6 +153,7 @@ export class ScanJobProcessor {
     let executorFailed = false;
     let executorError: unknown;
     try {
+      setStage("execute");
       result = await this.executor.execute(claimed, abortController.signal);
     } catch (error: unknown) {
       executorFailed = true;
@@ -144,6 +165,7 @@ export class ScanJobProcessor {
     if (leaseLost) return "lease_lost";
     if (executorFailed || result === undefined) {
       try {
+        setStage("persist_failure");
         return await this.store.failScan(
           claimed.id,
           claimed.leaseToken,
@@ -156,6 +178,7 @@ export class ScanJobProcessor {
         throw error;
       }
     }
+    setStage("validate_result");
     const observations = sanitizeScanObservations(
       claimed.hostname,
       claimed.profileVersion,
@@ -167,6 +190,7 @@ export class ScanJobProcessor {
     }
 
     try {
+      setStage("persist_success");
       const persistedResult = { ...result };
       delete persistedResult.publicPolicyDiscoveredDocuments;
       await this.store.completeScan({
@@ -228,13 +252,18 @@ export class ScanJobProcessor {
     }
   }
 
-  private emitError(error: unknown, startedAt: number): void {
+  private emitError(
+    error: unknown,
+    stage: ScanJobProcessingStage,
+    startedAt: number,
+  ): void {
     if (!this.telemetry) return;
     const durationMs = Math.max(0, Math.round(performance.now() - startedAt));
     try {
       this.telemetry({
         type: "scan_job_error",
         code: getProcessingErrorCode(error),
+        stage,
         durationMs,
       });
     } catch {
