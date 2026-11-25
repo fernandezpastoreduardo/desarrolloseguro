@@ -32,7 +32,7 @@ Si una capa inferior falla sin aportar un diagnóstico seguro y válido, el work
 El estado público y los logs del worker distinguen fallos de observación de
 navegador, evaluación de privacidad, hallazgos de cookies, comparación de
 servicios, acceso inicial a la política, validación de la respuesta y fronteras
-del runtime. Cada
+del runtime y del executor aislado. Cada
 reintento o fallo terminal del executor produce una línea JSON `scan_job_failure`
 con `outcome`, `failureCode` y el par `failureDiagnostic.stage`/`code`; consulta
 `docker logs` del worker para ver esos datos. Las líneas excluyen mensajes de

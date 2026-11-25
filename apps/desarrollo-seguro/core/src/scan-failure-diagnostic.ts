@@ -4,6 +4,8 @@ export const SCAN_FAILURE_DIAGNOSTIC_STAGES = [
   "privacy_browser_observation", "privacy_assessment", "cookie_legal_findings",
   "service_comparison", "first_entry_policy_access", "response_validation",
   "runtime_session_create", "executor_execution", "runtime_session_cleanup",
+  "network_probe_collection", "evidence_sanitization", "public_policy_assessment",
+  "result_assembly",
 ] as const;
 
 export const SCAN_FAILURE_DIAGNOSTIC_CODES = [

@@ -645,6 +645,31 @@ describe("createDockerRuntimeSessionFactory", () => {
     });
   });
 
+  it("preserves a failure phase returned by the isolated executor protocol", async () => {
+    dockerBehavior.executorOutput = `${JSON.stringify({
+      protocolVersion: 1,
+      requestId: REQUEST.requestId,
+      errorCode: "executor_failed",
+      failureDiagnostic: { stage: "public_policy_assessment", code: "executor_application_failed" },
+    })}\n`;
+    const diagnostic = vi.fn();
+    const runner = createDockerRuntimeCoordinatorRunner(createDockerRuntimeSessionFactory({
+      executorImage: "executor:test",
+      brokerImage: "broker:test",
+      diagnostic,
+    }));
+
+    await expect(runner.execute(REQUEST, new AbortController().signal)).rejects.toMatchObject({
+      message: "executor_failed",
+      scanFailureDiagnostic: { stage: "public_policy_assessment", code: "executor_application_failed" },
+    });
+    expect(diagnostic).toHaveBeenCalledWith({
+      type: "runtime_diagnostic",
+      stage: "public_policy_assessment",
+      code: "executor_application_failed",
+    });
+  });
+
   it("categorizes a Docker process spawn error without exposing its detail", async () => {
     dockerBehavior.spawnErrorOnVolumeCreate = true;
     const runner = createDockerRuntimeCoordinatorRunner(createDockerRuntimeSessionFactory({
