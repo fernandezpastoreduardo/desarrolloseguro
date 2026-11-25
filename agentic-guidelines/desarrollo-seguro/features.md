@@ -12,6 +12,12 @@ Una persona puede introducir un hostname público normalizado y consultar si exi
 
 Para Grumphya, `grumphya.com` y `www.grumphya.com` comparten la identidad del informe solo cuando un informe reciente observa una cadena completa y validada de redirección HTTP permanente 301/308 entre ambos. El escáner continúa la redirección con las mismas protecciones DNS, TLS, rutas y salida; no transforma el hostname por texto. La respuesta pública conserva el hostname solicitado y el salto observado. El estado del alias apunta al informe vigente del destino y muestra la evidencia de redirección por separado. Sin esa evidencia permanente, los hostnames permanecen separados.
 
+En los análisis públicos, las sondas siguen además redirects entre el hostname
+solicitado y su alias literal `www.` para leer la página canónica, sin fusionar
+informes ni historiales. Solo se permite el par exacto y se mantienen los
+límites de transporte y alcance definidos en
+[`canonical-www-probe-redirects.md`](canonical-www-probe-redirects.md).
+
 ## F2. Informes y evidencia
 
 Un informe identifica hostname, perfil, rutas cubiertas, métodos, resultados, fecha UTC, punto de observación y límites. `same_vps` indica que la muestra procede del mismo VPS donde se ejecuta el servicio; no implica una observación independiente desde Internet.

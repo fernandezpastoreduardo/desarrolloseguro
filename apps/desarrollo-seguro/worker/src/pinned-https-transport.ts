@@ -36,7 +36,7 @@ export type PinnedHttpsRequest = {
   hostname: string;
   requestedHostname?: string;
   initialRedirect?: { statusCode: number; fromHostname: string; toHostname: string };
-  allowGrumphyaAliasRedirects?: boolean;
+  allowCanonicalWwwRedirects?: boolean;
   path: string;
   method: "GET" | "HEAD";
   allowedPaths: readonly string[];
@@ -90,8 +90,7 @@ export async function requestPinnedHttps(
     !REDIRECT_STATUS_CODES.has(input.initialRedirect.statusCode) ||
     input.initialRedirect.fromHostname !== requestedHostname ||
     input.initialRedirect.toHostname !== hostname ||
-    !GRUMPHYA_HOSTNAMES.has(requestedHostname) ||
-    !GRUMPHYA_HOSTNAMES.has(hostname)
+    !isWwwAliasPair(requestedHostname, hostname)
   )) throw new Error("invalid_scan_redirect_context");
   validateRequestMethod(input.method);
   validateAllowedPaths(input.allowedPaths);
@@ -158,7 +157,7 @@ export async function requestPinnedHttps(
       isCrossHostnameLocation(result.location, currentHostname, currentPath);
     if (
       !REDIRECT_STATUS_CODES.has(result.statusCode) ||
-      (isCrossHostnameRedirect && input.allowGrumphyaAliasRedirects !== true)
+      (isCrossHostnameRedirect && input.allowCanonicalWwwRedirects !== true)
     ) {
       return {
         statusCode: result.statusCode,
@@ -202,7 +201,7 @@ export async function requestPinnedHttps(
         currentPath,
         allowedPaths,
         hostname,
-        input.allowGrumphyaAliasRedirects === true,
+        input.allowCanonicalWwwRedirects === true,
       );
       const targetKey = `${target.hostname}${target.path}`;
       if (seenTargets.has(targetKey)) {
@@ -439,7 +438,7 @@ function validateRedirect(
   currentPath: string,
   allowedPaths: readonly string[],
   requestedHostname: string,
-  allowGrumphyaAliasRedirects: boolean,
+  allowCanonicalWwwRedirects: boolean,
 ): { hostname: string; path: string } {
   if (location === undefined || location.length > 2_048) {
     throw new Error("redirect_origin_not_allowlisted");
@@ -452,7 +451,7 @@ function validateRedirect(
   }
   if (
     target.protocol !== "https:" ||
-    !isAllowedRedirectHostname(requestedHostname, target.hostname, allowGrumphyaAliasRedirects) ||
+    !isAllowedRedirectHostname(requestedHostname, target.hostname, allowCanonicalWwwRedirects) ||
     (target.port !== "" && target.port !== String(HTTPS_PORT)) ||
     target.username !== "" ||
     target.password !== "" ||
@@ -468,10 +467,14 @@ function validateRedirect(
 function isAllowedRedirectHostname(
   requestedHostname: string,
   targetHostname: string,
-  allowGrumphyaAliasRedirects: boolean,
+  allowCanonicalWwwRedirects: boolean,
 ): boolean {
   return targetHostname === requestedHostname ||
-    (allowGrumphyaAliasRedirects && GRUMPHYA_HOSTNAMES.has(requestedHostname) && GRUMPHYA_HOSTNAMES.has(targetHostname));
+    (allowCanonicalWwwRedirects && isWwwAliasPair(requestedHostname, targetHostname));
+}
+
+function isWwwAliasPair(left: string, right: string): boolean {
+  return left !== right && (left === `www.${right}` || right === `www.${left}`);
 }
 
 function isCrossHostnameLocation(location: string | undefined, hostname: string, currentPath: string): boolean {

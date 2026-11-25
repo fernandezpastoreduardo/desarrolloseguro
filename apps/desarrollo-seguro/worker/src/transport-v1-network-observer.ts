@@ -217,7 +217,7 @@ export function createTransportV1NetworkObserver(
           const page = await requestPinnedHttps(
             {
               hostname,
-              allowGrumphyaAliasRedirects: isGrumphyaHostname(hostname),
+              allowCanonicalWwwRedirects: true,
               path: "/",
               method: "GET",
               allowedPaths: ROOT_PATHS,
@@ -263,10 +263,6 @@ export function createTransportV1NetworkObserver(
       );
     },
   };
-}
-
-function isGrumphyaHostname(hostname: string): boolean {
-  return hostname === "grumphya.com" || hostname === "www.grumphya.com";
 }
 
 function toPassivePageEvidence(

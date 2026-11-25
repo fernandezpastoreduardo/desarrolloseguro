@@ -165,7 +165,7 @@ function parseExecutorResult(
     result.privacyAssessment = privacyAssessment;
   }
   if (value.publicPolicyTransparencyAssessment !== undefined) {
-    if (profileVersion !== "domain-v4" || value.scannerVersion !== "domain-v4-network-adapter-4") {
+    if (profileVersion !== "domain-v4" || value.scannerVersion !== "domain-v4-network-adapter-5") {
       throw new Error("executor_result_invalid");
     }
     const assessment = parsePublicPolicyTransparencyAssessment(value.publicPolicyTransparencyAssessment);
@@ -173,7 +173,7 @@ function parseExecutorResult(
     result.publicPolicyTransparencyAssessment = assessment;
   }
   if (value.publicServiceDeclarations !== undefined) {
-    if (profileVersion !== "domain-v4" || value.scannerVersion !== "domain-v4-network-adapter-4") {
+    if (profileVersion !== "domain-v4" || value.scannerVersion !== "domain-v4-network-adapter-5") {
       throw new Error("executor_result_invalid");
     }
     const declarations = parsePublicServiceDeclarations(value.publicServiceDeclarations);
@@ -181,7 +181,7 @@ function parseExecutorResult(
     result.publicServiceDeclarations = declarations;
   }
   if (value.publicPolicyDiscoveredDocuments !== undefined) {
-    if (profileVersion !== "domain-v4" || value.scannerVersion !== "domain-v4-network-adapter-4") {
+    if (profileVersion !== "domain-v4" || value.scannerVersion !== "domain-v4-network-adapter-5") {
       throw new Error("executor_result_invalid");
     }
     const documents = parsePublicPolicyDiscoveredDocuments(value.publicPolicyDiscoveredDocuments);
@@ -193,7 +193,7 @@ function parseExecutorResult(
     value.legalCookieFindings !== undefined ||
     value.firstEntryPolicyAccess !== undefined
   ) {
-    if (profileVersion !== "domain-v4" || value.scannerVersion !== "domain-v4-network-adapter-4") {
+    if (profileVersion !== "domain-v4" || value.scannerVersion !== "domain-v4-network-adapter-5") {
       throw new Error("executor_result_invalid");
     }
   }
@@ -234,7 +234,7 @@ function getScannerVersion(profileVersion: ScanProfileVersion): string {
 
 function getExpectedScannerVersion(profileVersion: ScanProfileVersion, hasPublicPolicyAssessment: boolean): string {
   return profileVersion === "domain-v4" && hasPublicPolicyAssessment
-    ? "domain-v4-network-adapter-4"
+    ? "domain-v4-network-adapter-5"
     : getScannerVersion(profileVersion);
 }
 

@@ -127,7 +127,7 @@ export async function requestPinnedHttpUpgrade(
         {
           hostname: upgradedTarget.hostname,
           requestedHostname: hostname,
-          allowGrumphyaAliasRedirects: hostname === "grumphya.com" || hostname === "www.grumphya.com",
+          allowCanonicalWwwRedirects: true,
           ...(upgradedTarget.hostname !== hostname ? {
             initialRedirect: {
               statusCode: httpResult.statusCode,
@@ -332,7 +332,7 @@ export function validateUpgradeLocation(
   }
   if (
     target.protocol !== "https:" ||
-    (target.hostname !== hostname && !isAllowedGrumphyaAlias(hostname, target.hostname)) ||
+    (target.hostname !== hostname && !isWwwAliasPair(hostname, target.hostname)) ||
     (target.port !== "" && target.port !== "443") ||
     target.username !== "" ||
     target.password !== "" ||
@@ -344,9 +344,9 @@ export function validateUpgradeLocation(
   return allowedPaths.includes(path) ? { hostname: target.hostname, path } : undefined;
 }
 
-function isAllowedGrumphyaAlias(fromHostname: string, toHostname: string): boolean {
-  return (fromHostname === "grumphya.com" || fromHostname === "www.grumphya.com") &&
-    (toHostname === "grumphya.com" || toHostname === "www.grumphya.com");
+function isWwwAliasPair(fromHostname: string, toHostname: string): boolean {
+  return fromHostname !== toHostname &&
+    (fromHostname === `www.${toHostname}` || toHostname === `www.${fromHostname}`);
 }
 
 function validatePath(path: string, allowedPaths: readonly string[]): void {

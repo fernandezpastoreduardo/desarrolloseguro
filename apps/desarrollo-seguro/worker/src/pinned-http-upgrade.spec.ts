@@ -30,12 +30,19 @@ const { certificate: FIXTURE_CERTIFICATE, privateKey: FIXTURE_PRIVATE_KEY } =
   createEphemeralHttpsFixture();
 
 describe("validateUpgradeLocation", () => {
-  it("accepts only the two authorized Grumphya hostnames and preserves the observed response status", () => {
+  it("accepts only the exact www alias pair and preserves the observed response status", () => {
     expect(validateUpgradeLocation("https://grumphya.com/", "www.grumphya.com", "/", ["/"], 301))
       .toEqual({ hostname: "grumphya.com", path: "/" });
     expect(validateUpgradeLocation("https://www.grumphya.com/", "grumphya.com", "/", ["/"], 308))
       .toEqual({ hostname: "www.grumphya.com", path: "/" });
     expect(validateUpgradeLocation("https://outside.example/", "www.grumphya.com", "/", ["/"], 301))
+      .toBeUndefined();
+  });
+
+  it("accepts an exact www alias as the HTTPS target for any scanned hostname", () => {
+    expect(validateUpgradeLocation(`https://www.${HOSTNAME}/`, HOSTNAME, "/", ["/"], 301))
+      .toEqual({ hostname: `www.${HOSTNAME}`, path: "/" });
+    expect(validateUpgradeLocation("https://www.outside.example/", HOSTNAME, "/", ["/"], 301))
       .toBeUndefined();
   });
 });
@@ -138,6 +145,40 @@ describe("requestPinnedHttpUpgrade", () => {
     );
     expect(lookupRequests).toEqual([[HOSTNAME, 80], [HOSTNAME, 443]]);
     expect(httpsOptions).toEqual([{ port: 443, path: "/" }]);
+  });
+
+  it("follows HTTP to HTTPS when the target is the exact www alias", async () => {
+    const httpFactory = createRequestFactory(301, `https://www.${HOSTNAME}/`);
+    const httpsTargets: Array<{ host: string | undefined; port: number | undefined }> = [];
+    const httpsFactory: HttpsRequestFactory = vi.fn((options, callback) => {
+      httpsTargets.push({ host: options.hostname, port: options.port });
+      const request = Object.assign(new EventEmitter(), {
+        end() {
+          callback(createResponse(200));
+          return this;
+        },
+        destroy() {
+          return this;
+        },
+      });
+      return request as unknown as ClientRequest;
+    });
+    const { lookupFactory, lookupRequests } = createLookupFactory();
+
+    const result = await requestPinnedHttpUpgrade(
+      {
+        hostname: HOSTNAME,
+        path: "/",
+        method: "GET",
+        allowedPaths: PATHS,
+        signal: new AbortController().signal,
+      },
+      { requestFactory: httpFactory, httpsRequestFactory: httpsFactory, lookupFactory },
+    );
+
+    expect(result).toMatchObject({ statusCode: 200, finalScheme: "https", redirectedToHttps: true });
+    expect(httpsTargets).toEqual([{ host: `www.${HOSTNAME}`, port: 443 }]);
+    expect(lookupRequests).toEqual([[HOSTNAME, 80], [`www.${HOSTNAME}`, 443]]);
   });
 
   it.each([

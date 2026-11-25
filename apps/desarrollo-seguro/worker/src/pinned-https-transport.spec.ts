@@ -181,6 +181,46 @@ describe("requestPinnedHttps", () => {
     expect(lookup).toHaveBeenCalledTimes(2);
   });
 
+  it("inspects the final page after a redirect to the exact www alias", async () => {
+    const requestedHosts: string[] = [];
+    const fixture = await startHttpsFixture((request, response) => {
+      requestedHosts.push(request.headers.host ?? "");
+      if (request.headers.host === FIXTURE_HOSTNAME) {
+        response.writeHead(301, { location: `https://www.${FIXTURE_HOSTNAME}/` });
+        response.end();
+        return;
+      }
+      response.writeHead(200, { "content-type": "text/html" });
+      response.end('<html><head></head><body><script src="https://www.googletagmanager.com/gtm.js"></script></body></html>');
+    });
+    const result = await requestPinnedHttps(
+      {
+        hostname: FIXTURE_HOSTNAME,
+        path: FIXTURE_ROOT_PATH,
+        method: "GET",
+        allowedPaths: FIXTURE_REQUEST_PATHS,
+        signal: new AbortController().signal,
+        inspectPage: true,
+        capturePublicPolicyLinks: true,
+        allowCanonicalWwwRedirects: true,
+        allowUntrustedCertificate: true,
+      },
+      {
+        lookupFactory: () => createLoopbackLookup(),
+        requestFactory: (options, callback) => httpsRequest({ ...options, port: fixture.port }, callback),
+      },
+    );
+
+    expect(requestedHosts).toEqual([FIXTURE_HOSTNAME, `www.${FIXTURE_HOSTNAME}`]);
+    expect(result).toMatchObject({
+      statusCode: 200,
+      finalHostname: `www.${FIXTURE_HOSTNAME}`,
+      redirectCount: 1,
+      passivePageSignals: { inspected: true, thirdPartyResourceReferences: 1, knownTrackingResourceReferences: 1 },
+      publicPolicyPageInspectable: true,
+    });
+  });
+
   it("does not follow a redirect to a hostname outside the authorized pair", async () => {
     const fixture = await startHttpsFixture((_request, response) => {
       response.writeHead(302, {
@@ -196,23 +236,22 @@ describe("requestPinnedHttps", () => {
       ) => httpsRequest({ ...options, port: fixture.port }, callback),
     );
 
-    const result = await requestPinnedHttps(
+    await expect(requestPinnedHttps(
         {
           hostname: FIXTURE_HOSTNAME,
           path: FIXTURE_ROOT_PATH,
           method: "GET",
           allowedPaths: FIXTURE_REQUEST_PATHS,
           signal: new AbortController().signal,
+          allowCanonicalWwwRedirects: true,
         },
         {
           ca: FIXTURE_CERTIFICATE,
           lookupFactory: () => lookup,
           requestFactory,
         },
-      );
+      )).rejects.toThrow("redirect_origin_not_allowlisted");
 
-    expect(result.statusCode).toBe(302);
-    expect(result.finalHostname).toBe(FIXTURE_HOSTNAME);
     expect(requestFactory).toHaveBeenCalledOnce();
     expect(lookup).toHaveBeenCalledOnce();
   });

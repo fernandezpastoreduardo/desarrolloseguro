@@ -481,7 +481,7 @@ describe("PublicScanPortal", () => {
     const report = {
       ...SCORED_PUBLIC_REPORT,
       profileVersion: "domain-v4",
-      scannerVersion: "domain-v4-network-adapter-4",
+      scannerVersion: "domain-v4-network-adapter-5",
       ethicsAssessment: {
         ...SCORED_PUBLIC_REPORT.ethicsAssessment,
         policyVersion: "domain-ethics-v6",
@@ -537,7 +537,7 @@ describe("PublicScanPortal", () => {
     const report = {
       ...SCORED_PUBLIC_REPORT,
       profileVersion: "domain-v4",
-      scannerVersion: "domain-v4-network-adapter-4",
+      scannerVersion: "domain-v4-network-adapter-5",
       ethicsAssessment: {
         ...SCORED_PUBLIC_REPORT.ethicsAssessment,
         policyVersion: "domain-ethics-v6",

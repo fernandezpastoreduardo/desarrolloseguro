@@ -28,6 +28,14 @@ hasta su presentación pública; no se descartan en el transporte interno.
 La sección de servicios muestra además la versión inmutable del catálogo
 oficial usado en ese informe.
 
+Las mediciones de contenido inicial, referencias a rastreadores, política
+pública y rendimiento siguen una redirección entre el hostname auditado y su
+alias exacto con prefijo `www.`. Así el informe mide la portada final, no el
+pequeño cuerpo HTML de un `301` o `308`. El seguimiento mantiene TLS, DNS,
+puertos, rutas y límites del scanner; no sigue destinos ajenos ni combina los
+informes de ambos hostnames. Esta regla se aplica a informes nuevos desde
+`domain-v4-network-adapter-5`.
+
 La navegación al enlace visible de política se comprueba en un contexto nuevo y
 su estado posterior se muestra separado de la instantánea inicial. El informe
 conserva tiempo monotónico, nombres, dominios y atributos de cookies y los
