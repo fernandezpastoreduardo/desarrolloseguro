@@ -10,6 +10,7 @@ import {
 
 export const PUBLIC_SERVICE_COMPARISON_VERSION = "public-service-comparison-v1" as const;
 export const PUBLIC_SERVICE_MAX_ITEMS = 30;
+export const PUBLIC_SERVICE_COMPARISON_MAX_BYTES = 65_536;
 const PROVIDER_ID = /^[a-z0-9][a-z0-9_-]{0,31}$/u;
 const PURPOSE_ID = /^[a-z0-9][a-z0-9_-]{0,31}$/u;
 
@@ -129,7 +130,8 @@ export function assessPublicServiceComparison(input: {
 }
 
 export function parsePublicServiceComparison(value: unknown): PublicServiceComparison | null {
-  if (!isRecord(value) || !["policyVersion", "status", "reasonCode", "items"].every((key) => Object.hasOwn(value, key)) ||
+  if (!isRecord(value) || !isWithinPublicServiceComparisonSize(value) ||
+      !["policyVersion", "status", "reasonCode", "items"].every((key) => Object.hasOwn(value, key)) ||
       Object.keys(value).some((key) => !["policyVersion", "status", "reasonCode", "items", "providerDocumentation"].includes(key)) ||
       value.policyVersion !== PUBLIC_SERVICE_COMPARISON_VERSION ||
       !["pass", "fail", "unknown"].includes(String(value.status)) ||
@@ -174,6 +176,15 @@ export function parsePublicServiceComparison(value: unknown): PublicServiceCompa
     items,
     ...(providerDocumentation.length ? { providerDocumentation: providerDocumentation as ProviderDocumentationContradiction[] } : {}),
   };
+}
+
+function isWithinPublicServiceComparisonSize(value: Record<string, unknown>): boolean {
+  try {
+    const serialized = JSON.stringify(value);
+    return serialized !== undefined && new TextEncoder().encode(serialized).byteLength <= PUBLIC_SERVICE_COMPARISON_MAX_BYTES;
+  } catch {
+    return false;
+  }
 }
 
 export function getPublicServiceProviderInfo(providerId: string) {

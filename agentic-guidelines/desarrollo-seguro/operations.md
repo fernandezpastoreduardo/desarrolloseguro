@@ -108,6 +108,17 @@ cumpla el esquema de respuesta usa `executor_response_invalid`. Así, el estado
 público no queda como `executor_failed` opaco cuando no hay una categoría más
 específica segura. El catálogo de etapa/códigos de la migración SQL que valida
 `ds_fail_scan` debe actualizarse en la misma entrega que el parser TypeScript;
+
+### Persistencia de contradicciones documentales de proveedores
+
+El validador SQL de `public_service_comparison` debe aceptar el mismo contrato
+versionado que valida `parsePublicServiceComparison`, incluidos los motivos de
+contradicción confirmada y su evidencia documental estructurada. Al ampliar el
+contrato TypeScript, la entrega debe añadir una migración SQL compatible y una
+prueba PostgreSQL que complete y lea un informe con esa evidencia. La
+aceptación requiere que se guarde el informe, que el diagnóstico público no
+termine como `worker_processing_failed` en `persist_success`, y que los campos
+desconocidos sigan rechazándose.
 una prueba PostgreSQL debe persistir al menos la nueva categoría de timeout.
 En el límite del worker, un fallo del executor sin diagnóstico válido debe
 recibir el fallback allowlisted `executor` / `executor_application_failed`
