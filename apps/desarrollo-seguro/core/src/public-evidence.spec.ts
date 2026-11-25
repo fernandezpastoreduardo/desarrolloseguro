@@ -52,4 +52,34 @@ describe("projectPublicEvidence", () => {
       tls13ProbeError: "request_timeout",
     });
   });
+
+  it("projects browser-observed cookie and request counts without cookie names or URLs", () => {
+    expect(projectPublicEvidence("DS-PRIV-05", {
+      browserObservationComplete: true,
+      browserCookieCount: 2,
+      browserInsecureCookieCount: 1,
+      browserCatalogMatchCount: 1,
+      cookieName: "_ga",
+      cookieValue: "secret",
+    })).toEqual({
+      browserObservationComplete: true,
+      browserCookieCount: 2,
+      browserInsecureCookieCount: 1,
+      browserCatalogMatchCount: 1,
+    });
+    expect(projectPublicEvidence("DS-PRIV-06", {
+      browserObservationComplete: true,
+      browserThirdPartyRequestCount: 3,
+      browserKnownTrackingRequestCount: 2,
+      browserBlockedTrackingRequestCount: 1,
+      browserTrackingResponseCount: 1,
+      requestUrl: "https://tracker.example/pixel?token=secret",
+    })).toEqual({
+      browserObservationComplete: true,
+      browserThirdPartyRequestCount: 3,
+      browserKnownTrackingRequestCount: 2,
+      browserBlockedTrackingRequestCount: 1,
+      browserTrackingResponseCount: 1,
+    });
+  });
 });

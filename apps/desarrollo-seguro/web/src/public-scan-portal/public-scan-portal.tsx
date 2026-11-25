@@ -818,10 +818,6 @@ export function PublicScanPortal() {
         </section>
       )}
       <footer className="ds-portal__footer">
-        <p>
-          Comprobación técnica acotada desde el mismo VPS. No es una
-          certificación independiente.
-        </p>
         <a href="/desarrollo-seguro/">Cómo funciona este servicio</a>
       </footer>
     </main>
@@ -2186,7 +2182,7 @@ function isPublicReport(value: unknown): value is PublicReport {
   const usesV5PublicPolicy = value.ethicsAssessment.policyVersion === "domain-ethics-v5" &&
     value.profileVersion === "domain-v4" && value.scannerVersion === "domain-v4-network-adapter-2";
   const usesV6ServiceComparison = value.ethicsAssessment.policyVersion === "domain-ethics-v6" &&
-    value.profileVersion === "domain-v4" && ["domain-v4-network-adapter-5", "domain-v4-network-adapter-6"].includes(value.scannerVersion);
+    value.profileVersion === "domain-v4" && ["domain-v4-network-adapter-5", "domain-v4-network-adapter-6", "domain-v4-network-adapter-7"].includes(value.scannerVersion);
   if ((value.ethicsAssessment.policyVersion === "domain-ethics-v3" && (hasProcessorAssessment || hasPublicPolicyAssessment)) ||
       (value.ethicsAssessment.policyVersion === "domain-ethics-v4" && (!hasProcessorAssessment || hasPublicPolicyAssessment)) ||
       usesV5PublicPolicy && !hasPublicPolicyAssessment ||

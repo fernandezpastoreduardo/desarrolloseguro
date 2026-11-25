@@ -45,6 +45,13 @@ bloqueado cuenta como intento observado, no como transmisión; el detalle
 muestra aparte cuántos intentos se bloquearon y cuántas solicitudes recibieron
 respuesta. Los nombres y valores de cookies y las URL completas no se publican.
 
+Desde `domain-v4-network-adapter-7`, los contadores acotados de esa observación
+se conservan durante la ingestión y llegan al detalle público junto con los
+estados y las puntuaciones que los usan. Los informes anteriores mantienen sus
+evidencias y formato. El pie de la ficha enlaza a la explicación del servicio
+sin la frase «Comprobación técnica acotada desde el mismo VPS. No es una
+certificación independiente.».
+
 La navegación al enlace visible de política se comprueba en un contexto nuevo y
 su estado posterior se muestra separado de la instantánea inicial. El informe
 conserva tiempo monotónico, nombres, dominios y atributos de cookies y los

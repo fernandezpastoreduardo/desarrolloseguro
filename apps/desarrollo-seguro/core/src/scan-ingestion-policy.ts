@@ -175,6 +175,10 @@ const CONTROLS: Readonly<Record<string, ControlContract>> = {
       insecureCookieCount: "count",
       catalogMatchCount: "count",
       consentPromptDetected: "boolean",
+      browserObservationComplete: "boolean",
+      browserCookieCount: "count",
+      browserInsecureCookieCount: "count",
+      browserCatalogMatchCount: "count",
       probeErrorCode: TLS_PROBE_ERROR_CODES,
     },
   },
@@ -184,6 +188,11 @@ const CONTROLS: Readonly<Record<string, ControlContract>> = {
       inspected: "boolean",
       thirdPartyResourceReferences: "count",
       knownTrackingResourceReferences: "count",
+      browserObservationComplete: "boolean",
+      browserThirdPartyRequestCount: "count",
+      browserKnownTrackingRequestCount: "count",
+      browserBlockedTrackingRequestCount: "count",
+      browserTrackingResponseCount: "count",
       probeErrorCode: TLS_PROBE_ERROR_CODES,
     },
   },
@@ -407,7 +416,7 @@ function sanitizeCheck(
     targetPath,
     method,
     summary: getSafeCheckSummary(controlId, status, evidence),
-    limitation: `Resultado limitado a las rutas públicas declaradas del perfil ${profileVersion}.`,
+    limitation: getSafeCheckLimitation(controlId, profileVersion, evidence),
     evidence,
   };
 }
@@ -442,7 +451,20 @@ function getSafeCheckSummary(
     return "No se pudieron determinar todas las versiones de TLS; faltan resultados de una o más pruebas.";
   }
   if (controlId !== "DS-PRIV-05") {
+    if (controlId === "DS-PRIV-06" && evidence.browserObservationComplete === true) {
+      const thirdPartyRequests = Number(evidence.browserThirdPartyRequestCount);
+      const knownRequests = Number(evidence.browserKnownTrackingRequestCount);
+      const blockedRequests = Number(evidence.browserBlockedTrackingRequestCount);
+      const responses = Number(evidence.browserTrackingResponseCount);
+      return `Antes de elegir, Chromium inició ${thirdPartyRequests} solicitud${thirdPartyRequests === 1 ? "" : "es"} a terceros, incluidas ${knownRequests} a rastreadores conocidos; se bloquearon ${blockedRequests} intento${blockedRequests === 1 ? "" : "s"} y ${responses} solicitud${responses === 1 ? "" : "es"} recibieron respuesta.`;
+    }
     return `Comprobación ${controlId}: ${status}.`;
+  }
+  if (evidence.browserObservationComplete === true) {
+    const cookies = Number(evidence.browserCookieCount);
+    const matches = Number(evidence.browserCatalogMatchCount);
+    const insecure = Number(evidence.browserInsecureCookieCount);
+    return `Antes de elegir, Chromium observó ${cookies} cookie${cookies === 1 ? "" : "s"}; ${matches} coincidía${matches === 1 ? "" : "n"} con cookies conocidas del catálogo y ${insecure} carecían del atributo Secure.`;
   }
   if (
     evidence.inspected !== true ||
@@ -454,6 +476,22 @@ function getSafeCheckSummary(
     return "No se pudo inspeccionar la respuesta inicial para detectar cookies conocidas; criterio no evaluado.";
   }
   return `Cookies en respuesta inicial: ${evidence.cookieCount}; coincidencias con la tabla local Analytics/Marketing: ${evidence.catalogMatchCount}; sin atributo Secure: ${evidence.insecureCookieCount}. No se interactuó con el banner de consentimiento.`;
+}
+
+function getSafeCheckLimitation(
+  controlId: string,
+  profileVersion: ProfileVersion,
+  evidence: Record<string, SafeEvidenceValue>,
+): string {
+  const profileLimit = `Resultado limitado a las rutas públicas declaradas del perfil ${profileVersion}.`;
+  if (profileVersion !== PROFILE_VERSION_DOMAIN_V4 || evidence.browserObservationComplete !== true) return profileLimit;
+  if (controlId === "DS-PRIV-06") {
+    return "Una solicitud iniciada demuestra un intento; las bloqueadas por el auditor no demuestran transmisión de datos. El conteo de respuestas indica solicitudes que sí recibieron respuesta.";
+  }
+  if (controlId === "DS-PRIV-05") {
+    return "Cookies observadas por Chromium antes de elegir. La atribución a un servicio requiere coincidencia con el catálogo local y una solicitud del mismo flujo.";
+  }
+  return profileLimit;
 }
 
 function getTlsProbeErrorLabel(code: string): string {
@@ -517,6 +555,17 @@ function deriveSafeStatus(
     return submittedStatus as SanitizedScanCheck["status"];
   }
 
+  if (
+    profileVersion === PROFILE_VERSION_DOMAIN_V4 &&
+    controlId === "DS-PRIV-05" &&
+    (Number(evidence.catalogMatchCount) > 0 || Number(evidence.browserCatalogMatchCount) > 0)
+  ) return "fail";
+  if (
+    profileVersion === PROFILE_VERSION_DOMAIN_V4 &&
+    controlId === "DS-PRIV-06" &&
+    (Number(evidence.knownTrackingResourceReferences) > 0 || Number(evidence.browserKnownTrackingRequestCount) > 0)
+  ) return "fail";
+
   const requiredEvidence = getRequiredEvidence(profileVersion, controlId);
   if (!requiredEvidence || !requiredEvidence.every((key) => key in evidence)) {
     return "unknown";
@@ -524,6 +573,19 @@ function deriveSafeStatus(
 
   const failed = CONTROL_FAILURES[controlId]?.(evidence) ?? false;
   if (failed) return "fail";
+
+  if (profileVersion === PROFILE_VERSION_DOMAIN_V4 && controlId === "DS-PRIV-05") {
+    return evidence.inspected === true && evidence.browserObservationComplete === true &&
+      Number(evidence.catalogMatchCount) === 0 && Number(evidence.browserCatalogMatchCount) === 0
+      ? "pass"
+      : "unknown";
+  }
+  if (profileVersion === PROFILE_VERSION_DOMAIN_V4 && controlId === "DS-PRIV-06") {
+    return evidence.inspected === true && evidence.browserObservationComplete === true &&
+      Number(evidence.knownTrackingResourceReferences) === 0 && Number(evidence.browserKnownTrackingRequestCount) === 0
+      ? "pass"
+      : "unknown";
+  }
 
   return CONTROL_PASSES[controlId]?.(evidence) ? "pass" : "unknown";
 }
@@ -580,6 +642,14 @@ function getRequiredEvidence(
   ) {
     return [...(controlEvidence ?? []), "finalScheme"];
   }
+  if (profileVersion === PROFILE_VERSION_DOMAIN_V4 && controlId === "DS-PRIV-05") {
+    return [...(controlEvidence ?? []), "browserObservationComplete", "browserCookieCount",
+      "browserInsecureCookieCount", "browserCatalogMatchCount"];
+  }
+  if (profileVersion === PROFILE_VERSION_DOMAIN_V4 && controlId === "DS-PRIV-06") {
+    return [...(controlEvidence ?? []), "browserObservationComplete", "browserThirdPartyRequestCount",
+      "browserKnownTrackingRequestCount", "browserBlockedTrackingRequestCount", "browserTrackingResponseCount"];
+  }
   return controlEvidence;
 }
 
@@ -615,8 +685,9 @@ const CONTROL_FAILURES: Readonly<Record<string, EvidencePredicate>> = {
     (evidence.sitePrivacyPolicyFetched === false && evidence.policyProbeFailed !== true && Number(evidence.privacyPolicyLinksFound) > 0)
   ),
   "DS-PRIV-05": (evidence) =>
-    Number(evidence.catalogMatchCount) > 0,
-  "DS-PRIV-06": (evidence) => Number(evidence.knownTrackingResourceReferences) > 0,
+    Number(evidence.catalogMatchCount) > 0 || Number(evidence.browserCatalogMatchCount) > 0,
+  "DS-PRIV-06": (evidence) =>
+    Number(evidence.knownTrackingResourceReferences) > 0 || Number(evidence.browserKnownTrackingRequestCount) > 0,
   "DS-QUAL-02": (evidence) => Number(evidence.responseTimeMs) > 2_500,
   "DS-PRIV-03": (evidence) =>
     Number(evidence.mixedContentCount) > 0 ||
