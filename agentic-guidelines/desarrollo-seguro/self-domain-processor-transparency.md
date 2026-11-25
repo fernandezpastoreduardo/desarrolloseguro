@@ -14,14 +14,16 @@ inferida de la ausencia de cookies o referencias a terceros.
 
 ## Alcance de inventario
 
-El inventario enumera integraciones backend de producción que reciben o
-procesan datos proporcionados por las personas usuarias o datos de sus
-informes. Se basa en el registro de integraciones activas del artefacto
-desplegado y se vincula a su digest de release.
+El inventario enumera los proveedores externos que reciben, procesan o alojan
+datos del servicio en producción, incluidas las plataformas de infraestructura
+que almacenan la aplicación, API o base de datos. Se basa en la configuración
+desplegada y el registro de integraciones activas del artefacto, y se vincula a
+su digest de release.
 
 El inventario distingue explícitamente:
 
-- proveedores o procesadores externos que reciben esos datos;
+- proveedores o procesadores externos que reciben esos datos, incluidos los
+  proveedores de alojamiento de la plataforma;
 - componentes internos de Desarrollo Seguro, incluidas la web, la API, la
   base de datos y el proxy operado por la misma entidad;
 - destinos de escaneo que reciben solicitudes técnicas limitadas porque una
@@ -31,18 +33,22 @@ El inventario distingue explícitamente:
   la consulta autenticada de inventario de Grumphya. No se presentan como
   proveedores de la web pública de Desarrollo Seguro.
 
-Una lista vacía solo es completa si el registro de producción y las pruebas
-demuestran que no hay integraciones externas activas dentro del alcance
-declarado. No afirma que no existan proveedores de infraestructura fuera de ese
-alcance ni verifica contratos, retención o prácticas de terceros. Esas
-limitaciones deben figurar en la explicación pública y no se rellenan con
-suposiciones. OpenAI solo se declara como integración si el runtime de este
-producto realmente le transmite datos.
+Una lista vacía solo es completa si la configuración de producción y las
+pruebas demuestran que no hay ningún proveedor externo activo que reciba,
+procese o aloje datos del servicio. La observación de producción confirma que
+el VPS que aloja Desarrollo Seguro también ejecuta Grumphya; la política de
+Grumphya identifica ese VPS como servicio de IONOS. Por tanto, IONOS debe
+aparecer en el registro de Desarrollo Seguro como proveedor activo de
+alojamiento. La declaración no atribuye a IONOS accesos humanos, retención
+concreta ni prácticas contractuales que no estén acreditadas. SMTP y OpenAI
+solo se declaran si el runtime de Desarrollo Seguro realmente los utiliza.
 
 ## Evidencia y proyección
 
 - El origen de evidencia es local, versionado y mantenido junto al registro de
-  integraciones; el informe muestra su versión y digest del release.
+  integraciones; el informe muestra su versión y digest del release. Al añadir
+  IONOS como proveedor de alojamiento, incrementa la revisión del registro a
+  `v2`.
 - La revisión se obtiene del argumento confiable que envía CI. Si el gateway
   remoto instalado todavía omite ese argumento, el script de despliegue puede
   recuperarla únicamente del nombre validado `gha-<40-hex>.<6-char-suffix>`
@@ -86,8 +92,11 @@ allowlist del inventario.
    obligatoria en ambos dominios.
 3. Ningún proveedor ni condición se inventa; toda lista vacía tiene una
    definición de alcance, un registro de origen y pruebas de cobertura.
-4. Un informe nuevo de la portada produce valoración ética 100/100 y global
+4. El registro `v2` declara IONOS como proveedor activo de alojamiento, y la
+   política pública lo identifica con propósito y enlaces a su política de
+   privacidad, documentación de Hosting y contrato de tratamiento.
+5. Un informe nuevo de la portada produce valoración ética 100/100 y global
    100/100. La cobertura de Privacidad muestra con claridad sus criterios
    evaluados y los `not_applicable` legítimos, sin `unknown`.
-5. Los resultados, informes históricos, Grumphya y otros dominios no cambian
+6. Los resultados, informes históricos, Grumphya y otros dominios no cambian
    su semántica como efecto colateral.

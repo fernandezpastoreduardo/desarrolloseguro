@@ -355,6 +355,71 @@ describe("PublicScanPortal", () => {
       .toHaveAttribute("href", "https://grumphya.com/politica-de-privacidad#openai-api");
   });
 
+  it("accepts and shows the self-domain IONOS hosting inventory", async () => {
+    const report = {
+      ...PUBLIC_REPORT,
+      hostname: "desarrolloseguro.org",
+      ethicsAssessment: {
+        ...PUBLIC_REPORT.ethicsAssessment,
+        policyVersion: "domain-ethics-v4",
+        assessedCriteria: 2,
+        criteria: PUBLIC_REPORT.ethicsAssessment.criteria.map((criterion) => criterion.id === "third-party-data-use"
+          ? { id: "backend-processor-transparency", label: "Transparencia de procesadores backend", status: "pass", weight: 10 }
+          : criterion),
+        reasons: [],
+      },
+      globalAssessment: {
+        ...PUBLIC_REPORT.globalAssessment,
+        ethicsCoverage: { assessedCriteria: 2, totalCriteria: 8 },
+      },
+      processorTransparencyAssessment: {
+        policyVersion: "processor-inventory-v1",
+        status: "pass",
+        reasonCode: "inventory_complete_and_disclosed",
+        inventory: {
+          policyVersion: "processor-inventory-v1",
+          observedAt: "2026-11-25T10:00:00.000Z",
+          validUntil: "2026-11-26T10:00:00.000Z",
+          hostname: "desarrolloseguro.org",
+          deploymentDigest: `sha256:${"a".repeat(64)}`,
+          inventoryStatus: "complete",
+          privacyPolicy: {
+            url: "https://desarrolloseguro.org/desarrollo-seguro/privacidad.html",
+            revision: "v2",
+          },
+          processors: [{
+            providerId: "ionos",
+            displayName: "IONOS",
+            product: "VPS",
+            disclosureStatus: "published",
+            purpose: "Alojamiento de la web pública, la API y la base de datos de Desarrollo Seguro.",
+            policyUrl: "https://desarrolloseguro.org/desarrollo-seguro/privacidad.html#ionos-hosting",
+            declaredStatements: [
+              "Desarrollo Seguro está alojado en un VPS de IONOS que ejecuta la web pública, la API y la base de datos.",
+            ],
+          }],
+          attestation: { verified: true, keyId: "desarrolloseguro-source-registry-v1" },
+          evidenceSource: "desarrolloseguro_source_registry",
+        },
+      },
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({
+      hostname: "desarrolloseguro.org", enrollment: "monitored", state: "fresh",
+      failureCode: null, activeJobId: null, lastReport: report,
+      checkedAt: "2026-11-25T10:01:00.000Z",
+    })));
+    const user = userEvent.setup();
+    render(<PublicScanPortal />);
+    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "desarrolloseguro.org");
+    await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
+
+    expect(await screen.findByRole("heading", { name: "Información adicional compartida por Desarrollo Seguro" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: /IONOS.*VPS/ })).toBeVisible();
+    expect(screen.getByText(/Alojamiento de la web pública/)).toBeVisible();
+    expect(screen.getByRole("link", { name: "Ver política de privacidad de Desarrollo Seguro" }))
+      .toHaveAttribute("href", "https://desarrolloseguro.org/desarrollo-seguro/privacidad.html#ionos-hosting");
+  });
+
   it("shows the v5 public service transparency criterion in Ethics with its evidence", async () => {
     const criteria = PUBLIC_REPORT.ethicsAssessment.criteria.map((criterion) => criterion.id === "third-party-data-use"
       ? { id: "external-service-transparency", label: "Información pública sobre servicios externos", status: "pass", weight: 10 }
