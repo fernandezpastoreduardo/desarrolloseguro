@@ -2461,7 +2461,7 @@ function isProcessorTransparencyAssessment(value: unknown): value is PublicProce
     inventory.privacyPolicy.url === "https://desarrolloseguro.org/desarrollo-seguro/privacidad.html" &&
     inventory.attestation.keyId === "desarrolloseguro-source-registry-v1" &&
     inventory.evidenceSource === "desarrolloseguro_source_registry" &&
-    inventory.inventoryStatus === "complete" && inventory.processors.length === 0;
+    inventory.inventoryStatus === "complete";
   if (!grumphyaInventory && !selfInventory) return false;
   const expected = inventory.inventoryStatus === "incomplete"
     ? ["fail", "inventory_incomplete"]
@@ -2482,7 +2482,8 @@ function isProcessorDisclosure(value: unknown): value is PublicProcessorDisclosu
   return value.disclosureStatus === "published" &&
     Object.keys(value).sort((left, right) => left.localeCompare(right, "en")).join(",") === "declaredStatements,disclosureStatus,displayName,policyUrl,product,providerId,purpose" &&
     isBoundedString(value.purpose, 500) && typeof value.policyUrl === "string" &&
-    value.policyUrl.startsWith("https://grumphya.com/politica-de-privacidad#") &&
+    (value.policyUrl.startsWith("https://grumphya.com/politica-de-privacidad#") ||
+      value.policyUrl.startsWith("https://desarrolloseguro.org/desarrollo-seguro/privacidad.html#")) &&
     Array.isArray(value.declaredStatements) && value.declaredStatements.length <= 10 &&
     value.declaredStatements.every((statement) => isBoundedString(statement, 500));
 }
@@ -2861,11 +2862,11 @@ function getProcessorTransparencySummary(
   }
   if (assessment.reasonCode === "inventory_complete_empty") {
     return assessment.inventory?.hostname === "desarrolloseguro.org"
-      ? "Desarrollo Seguro declara que no usa servicios externos para procesar datos dentro del alcance revisado. Esta comprobación no incluye a los proveedores de infraestructura."
+      ? "Desarrollo Seguro declara que no hay proveedores externos activos en el inventario de producción publicado."
       : "La revisión interna no encontró servicios externos activos en los sistemas de producción cubiertos.";
   }
   return assessment.inventory?.hostname === "desarrolloseguro.org"
-    ? "Desarrollo Seguro declara que la lista de servicios externos está completa y los servicios incluidos aparecen en su política de privacidad."
+    ? "Desarrollo Seguro declara que su inventario de producción está completo; los proveedores incluidos aparecen en su política de privacidad."
     : "Grumphya declara que la lista de servicios externos está completa y los servicios incluidos aparecen en su política de privacidad.";
 }
 

@@ -58,6 +58,16 @@ describe("classifyPublicPolicyHtml", () => {
     expect(result.siteStatements?.some((statement) => statement.factId === "provider_receives_personal_data")).toBe(false);
   });
 
+  it("recognizes the published IONOS VPS hosting disclosure for Desarrollo Seguro", () => {
+    const result = classifyPublicPolicyHtml(`
+      <p>Desarrollo Seguro está alojado en un VPS de IONOS que ejecuta la web pública, la API y la base de datos.</p>
+      <p>El propósito declarado es el alojamiento de esa infraestructura.</p>
+    `);
+
+    expect(result.providerIds).toContain("ionos");
+    expect(result.declaredServices).toContainEqual({ providerId: "ionos", purposeIds: ["infrastructure"] });
+  });
+
   it("emits provider_receives_personal_data only for an explicit direct personal-data claim", () => {
     const result = classifyPublicPolicyHtml(`
       <p><strong>Política de privacidad</strong></p>

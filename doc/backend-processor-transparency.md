@@ -24,13 +24,13 @@ como “no se usa para entrenar modelos” se muestra como declaración de
 Grumphya, no como una verificación independiente.
 
 Para `desarrolloseguro.org`, el worker proyecta el registro local y versionado
-`development-security-processor-registry.ts`. El resultado se vincula a la
-revisión de código que construyó la imagen. La página de privacidad explica su
-alcance: integraciones backend que reciben datos de informes o usuarios. Los
-destinos técnicos del análisis y la integración condicional con Grumphya quedan
-fuera de esa lista. El inventario vacío significa que el código no declara
-procesadores externos en ese ámbito; no afirma que no haya proveedores de
-infraestructura ni verifica contratos o prácticas de terceros.
+`development-security-processor-registry.ts`. La revisión v2 declara IONOS como
+proveedor del VPS que aloja la web pública, la API y la base de datos. La página
+de privacidad enlaza la política, la documentación de Hosting y el contrato de
+tratamiento de datos de IONOS. La declaración se liga a la revisión de código
+que construyó la imagen; no verifica por sí sola las condiciones contractuales,
+prácticas ni plazos concretos de conservación. Los destinos técnicos del
+análisis y la integración condicional con Grumphya quedan fuera de esa lista.
 
 El informe guarda esta evaluación junto a la evidencia del análisis. La base de
 datos exige que exista para `desarrolloseguro.org` y `grumphya.com` y rechaza

@@ -45,20 +45,31 @@ function signedInventory(overrides: Record<string, unknown> = {}): unknown {
 }
 
 describe("verifyProcessorInventory", () => {
-  it("accepts a versioned first-party registry bound to its deployment revision", () => {
+  it("accepts the declared IONOS hosting provider in the versioned first-party registry", () => {
+    const processors = [{
+      providerId: "ionos",
+      displayName: "IONOS",
+      product: "VPS",
+      disclosureStatus: "published" as const,
+      purpose: "Alojamiento de la web pública, la API y la base de datos de Desarrollo Seguro.",
+      policyUrl: "https://desarrolloseguro.org/desarrollo-seguro/privacidad.html#ionos-hosting",
+      declaredStatements: [
+        "Desarrollo Seguro está alojado en un VPS de IONOS que ejecuta la web pública, la API y la base de datos.",
+      ],
+    }];
     const assessment = assessDevelopmentSecurityProcessorRegistry({
       deploymentRevision: "a".repeat(40),
-      registryRevision: "v1",
-      processors: [],
+      registryRevision: "v2",
+      processors,
       now,
     });
 
-    expect(assessment).toMatchObject({ status: "pass", reasonCode: "inventory_complete_empty" });
+    expect(assessment).toMatchObject({ status: "pass", reasonCode: "inventory_complete_and_disclosed" });
     expect(assessment.inventory).toMatchObject({
       hostname: "desarrolloseguro.org",
       evidenceSource: "desarrolloseguro_source_registry",
-      privacyPolicy: { revision: "v1" },
-      processors: [],
+      privacyPolicy: { revision: "v2" },
+      processors,
     });
     expect(parseProcessorTransparencyAssessment(assessment)).toEqual(assessment);
   });

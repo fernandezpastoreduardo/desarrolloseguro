@@ -307,7 +307,8 @@ function isProcessor(value: unknown): value is ProcessorDisclosure {
     hasExactKeys(value, ["providerId", "displayName", "product", "disclosureStatus", "purpose", "policyUrl", "declaredStatements"]) &&
     isBoundedText(value.purpose, PROCESSOR_INVENTORY_MAX_TEXT_LENGTH) &&
     typeof value.policyUrl === "string" &&
-    value.policyUrl.startsWith(`${PROCESSOR_INVENTORY_POLICY_URL}#`) &&
+    (value.policyUrl.startsWith(`${PROCESSOR_INVENTORY_POLICY_URL}#`) ||
+      value.policyUrl.startsWith(`${DEVELOPMENT_SECURITY_INVENTORY_POLICY_URL}#`)) &&
     Array.isArray(value.declaredStatements) && value.declaredStatements.length <= PROCESSOR_INVENTORY_MAX_STATEMENTS &&
     value.declaredStatements.every((statement) => isBoundedText(statement, PROCESSOR_INVENTORY_MAX_TEXT_LENGTH)) &&
     new Set(value.declaredStatements).size === value.declaredStatements.length;
@@ -341,7 +342,7 @@ function isVerifiedProjection(value: unknown): value is VerifiedProcessorInvento
       value.privacyPolicy.url === DEVELOPMENT_SECURITY_INVENTORY_POLICY_URL &&
       value.attestation.keyId === DEVELOPMENT_SECURITY_INVENTORY_KID &&
       value.evidenceSource === "desarrolloseguro_source_registry" &&
-      value.inventoryStatus === "complete" && value.processors.length === 0) {
+      value.inventoryStatus === "complete") {
     // The self-domain registry is versioned in this source tree and tied to the built revision.
   } else return false;
   const ids = value.processors.map((processor) => (processor as ProcessorDisclosure).providerId);
