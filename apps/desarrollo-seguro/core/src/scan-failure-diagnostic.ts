@@ -3,6 +3,7 @@ export const SCAN_FAILURE_DIAGNOSTIC_STAGES = [
   "executor_container_cleanup", "broker_container_cleanup", "volume_cleanup",
   "privacy_browser_observation", "privacy_assessment", "cookie_legal_findings",
   "service_comparison", "first_entry_policy_access", "response_validation",
+  "runtime_session_create", "executor_execution", "runtime_session_cleanup",
 ] as const;
 
 export const SCAN_FAILURE_DIAGNOSTIC_CODES = [

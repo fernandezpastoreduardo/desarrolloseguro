@@ -1699,6 +1699,9 @@ describePostgres.sequential("PostgresScanStore", () => {
     "service_comparison",
     "first_entry_policy_access",
     "response_validation",
+    "runtime_session_create",
+    "executor_execution",
+    "runtime_session_cleanup",
   ] as const)("persists the allowlisted runtime phase %s", async (stage) => {
     const job = await queueAndClaim();
     await expect(

@@ -10,6 +10,7 @@ import {
   type DockerRuntimeSessionFactory,
 } from "./docker-runtime-coordinator-runner.js";
 import type { RuntimeDiagnosticEvent } from "./runtime-diagnostics.js";
+import { readScanFailureDiagnostic } from "./runtime-diagnostics.js";
 import type { TransportV1ExecutorRequest } from "./transport-v1-executor-protocol.js";
 import type { PrivacyBrowserFlowObservation, PrivacyBrowserObservation } from "./privacy-browser-observer.js";
 
@@ -416,9 +417,9 @@ describe("createDockerRuntimeCoordinatorRunner", () => {
     };
     const runner = createDockerRuntimeCoordinatorRunner(factory);
 
-    await expect(runner.execute(REQUEST, new AbortController().signal)).rejects.toThrow(
-      "transport_failed",
-    );
+    const error = await runner.execute(REQUEST, new AbortController().signal).catch((failure: unknown) => failure);
+    expect(error).toMatchObject({ message: "transport_failed" });
+    expect(readScanFailureDiagnostic(error)).toEqual({ stage: "response_validation", code: "executor_response_invalid" });
     expect(close).toHaveBeenCalledOnce();
   });
 
@@ -432,10 +433,20 @@ describe("createDockerRuntimeCoordinatorRunner", () => {
     };
     const runner = createDockerRuntimeCoordinatorRunner(factory);
 
-    await expect(runner.execute(REQUEST, new AbortController().signal)).rejects.toThrow(
-      "executor_failed",
-    );
+    const error = await runner.execute(REQUEST, new AbortController().signal).catch((failure: unknown) => failure);
+    expect(error).toMatchObject({ message: "executor_failed" });
+    expect(readScanFailureDiagnostic(error)).toEqual({ stage: "executor_execution", code: "executor_application_failed" });
     expect(close).toHaveBeenCalledOnce();
+  });
+
+  it("labels an unclassified runtime creation failure at its boundary", async () => {
+    const runner = createDockerRuntimeCoordinatorRunner({
+      create: vi.fn().mockRejectedValue(new Error("private docker detail")),
+    });
+
+    const error = await runner.execute(REQUEST, new AbortController().signal).catch((failure: unknown) => failure);
+    expect(error).toMatchObject({ message: "executor_failed" });
+    expect(readScanFailureDiagnostic(error)).toEqual({ stage: "runtime_session_create", code: "executor_application_failed" });
   });
 
   it("reports a safe cleanup category when closing the runtime fails", async () => {
