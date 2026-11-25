@@ -162,6 +162,7 @@ const MIGRATIONS = [
   { version: "055_runtime_boundary_diagnostics", file: "055_runtime_boundary_diagnostics.sql" },
   { version: "056_isolated_executor_diagnostics", file: "056_isolated_executor_diagnostics.sql" },
   { version: "057_worker_composition_diagnostics", file: "057_worker_composition_diagnostics.sql" },
+  { version: "058_document_discovery_diagnostics", file: "058_document_discovery_diagnostics.sql" },
 ] as const;
 
 export const DEVELOPMENT_SECURITY_MIGRATION_COUNT = MIGRATIONS.length;
