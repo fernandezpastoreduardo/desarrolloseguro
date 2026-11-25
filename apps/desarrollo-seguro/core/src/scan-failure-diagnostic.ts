@@ -24,6 +24,17 @@ export const SCAN_FAILURE_DIAGNOSTIC_CODES = [
   "runtime_broker_ready_timeout", "runtime_broker_ready_failed", "runtime_volume_create_failed",
   "runtime_volume_prepare_failed", "runtime_broker_start_failed", "runtime_cleanup_retry",
   "runtime_cleanup_failed", "runtime_execution_timeout", "executor_response_too_large",
+  "provider_catalog_discovery_invalid", "provider_catalog_active_missing",
+  "provider_catalog_provider_limit_exceeded", "provider_catalog_discovery_identity_conflict",
+  "provider_catalog_discovery_evidence_conflict", "provider_catalog_discovery_fact_conflict",
+  "provider_catalog_discovery_document_conflict", "provider_catalog_discovery_payload_invalid",
+  "provider_catalog_discovery_conflict", "provider_catalog_discovery_version_collision",
+  "invalid_provider_catalog_discovery", "provider_catalog_active_version_changed",
+  "provider_catalog_provider_already_known", "provider_catalog_discovery_snapshot_mismatch",
+  "invalid_provider_catalog_discovery_merge", "provider_catalog_discovery_provider_identity_invalid",
+  "provider_catalog_discovery_merge_snapshot_mismatch", "provider_catalog_discovery_merge_document_mismatch",
+  "provider_catalog_version_collision", "database_unique_constraint_failed",
+  "database_check_constraint_failed",
 ] as const;
 
 export const SCAN_DIAGNOSTIC_PROBE_OPERATIONS = ["dns", "tls", "http-head", "http-get", "headers"] as const;

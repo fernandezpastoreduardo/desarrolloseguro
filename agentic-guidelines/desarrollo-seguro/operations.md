@@ -134,6 +134,10 @@ Cada fase que pueda lanzar una excepción lleva una etapa allowlisted propia;
 una excepción ya etiquetada conserva su etapa original. El descubrimiento de
 documentación distingue la conversión de referencias del alta transaccional en
 el catálogo, para localizar fallos de datos frente a fallos de persistencia.
+En esa operación se proyectan mensajes internos solo cuando coinciden de forma
+exacta con un código previamente allowlisted; los SQLSTATE de integridad se
+convierten a categorías fijas. Nunca se copia el mensaje, constraint o parámetro
+de la base de datos al diagnóstico.
 Esto incluye los wrappers del executor del catálogo y los límites entre esos wrappers y
 `ScanJobProcessor`, donde se persiste el diagnóstico para el informe público.
 No se registran mensajes de excepción, datos del dominio, nombres de
