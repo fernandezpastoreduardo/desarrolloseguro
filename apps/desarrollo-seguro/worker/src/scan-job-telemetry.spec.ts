@@ -56,6 +56,25 @@ describe("createJsonLineScanJobTelemetry", () => {
     );
   });
 
+  it("writes the allowlisted executor diagnostic for retrying and terminal failures", () => {
+    const write = vi.fn();
+    const telemetry = createJsonLineScanJobTelemetry(write);
+    for (const outcome of ["retrying", "failed"] as const) {
+      telemetry({
+        type: "scan_job_failure",
+        outcome,
+        failureCode: "executor_failed",
+        failureDiagnostic: { stage: "service_comparison", code: "executor_application_failed" },
+        durationMs: 31,
+      });
+    }
+
+    expect(write.mock.calls.map(([line]) => line)).toEqual([
+      '{"type":"scan_job_failure","outcome":"retrying","failureCode":"executor_failed","failureDiagnostic":{"stage":"service_comparison","code":"executor_application_failed"},"durationMs":31}\n',
+      '{"type":"scan_job_failure","outcome":"failed","failureCode":"executor_failed","failureDiagnostic":{"stage":"service_comparison","code":"executor_application_failed"},"durationMs":31}\n',
+    ]);
+  });
+
   it.each([
     "scan_check_required_invalid",
     "scan_check_severity_not_allowlisted",
@@ -85,6 +104,7 @@ describe("createJsonLineScanJobTelemetry", () => {
     ["unsafe duration", { outcome: "completed", durationMs: Number.MAX_SAFE_INTEGER + 1 }],
     ["non-finite duration", { outcome: "completed", durationMs: Number.NaN }],
     ["unknown error code", { code: "private_error" }],
+    ["unknown failure stage", { type: "scan_job_failure", outcome: "failed", failureCode: "executor_failed", failureDiagnostic: { stage: "private", code: "executor_application_failed" } }],
   ])("drops events with %s", (_label, event) => {
     const write = vi.fn();
     const telemetry = createJsonLineScanJobTelemetry(write);

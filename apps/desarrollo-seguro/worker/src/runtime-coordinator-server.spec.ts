@@ -130,8 +130,29 @@ describe("runtime coordinator server", () => {
     )).rejects.toMatchObject({
       message: "executor_failed",
       scanFailureDiagnostic: {
-        stage: "executor",
+        stage: "response_validation",
         code: "executor_response_too_large",
+      },
+    });
+  });
+
+  it("labels a response that fails the executor result contract", async () => {
+    const result = makeResult();
+    result.scannerVersion = "unexpected-version";
+    const runner: RuntimeCoordinatorRunner = {
+      execute: vi.fn().mockResolvedValue(result),
+    };
+    const socketPath = await startCoordinator(runner);
+    const executor = await createClient(socketPath);
+
+    await expect(executor.execute(
+      { hostname: "sample.example.net", profileVersion: "transport-v1" },
+      new AbortController().signal,
+    )).rejects.toMatchObject({
+      message: "executor_failed",
+      scanFailureDiagnostic: {
+        stage: "response_validation",
+        code: "executor_response_invalid",
       },
     });
   });

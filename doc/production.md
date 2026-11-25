@@ -29,6 +29,14 @@ La migración `034_coordinator_failure_diagnostics` sincroniza la lista SQL perm
 
 Si un executor falla sin aportar un diagnóstico seguro y válido, el worker guarda la categoría genérica `executor_application_failed` en etapa `executor`. El estado público incluye así una causa operativa acotada sin revelar texto crudo ni detalles internos.
 
+El estado público y los logs del worker distinguen fallos de observación de
+navegador, evaluación de privacidad, hallazgos de cookies, comparación de
+servicios, acceso inicial a la política y validación de la respuesta. Cada
+reintento o fallo terminal del executor produce una línea JSON `scan_job_failure`
+con `outcome`, `failureCode` y el par `failureDiagnostic.stage`/`code`; consulta
+`docker logs` del worker para ver esos datos. Las líneas excluyen mensajes de
+excepción, hostnames, identificadores de trabajos y evidencias del sitio.
+
 Antes de desplegar el análisis, prepara la interfaz `br-ds-egress` y comprueba sus filtros exclusivos. Los scripts modifican solo `development-security-egress` y reglas `iptables`/`ip6tables` asociadas a esa interfaz; no configuran UFW ni cambian reglas de otras redes:
 
 ```sh

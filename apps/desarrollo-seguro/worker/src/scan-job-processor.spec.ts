@@ -115,10 +115,13 @@ describe("ScanJobProcessor", () => {
 
   it("persists only an allowlisted runtime failure category", async () => {
     const store = makeStore(JOB);
+    const telemetry = vi.fn();
     const executor = {
-      execute: vi.fn().mockRejectedValue(new Error("broker_failed")),
+      execute: vi.fn().mockRejectedValue(Object.assign(new Error("broker_failed"), {
+        scanFailureDiagnostic: { stage: "service_comparison", code: "executor_application_failed" },
+      })),
     };
-    const processor = new ScanJobProcessor(store, executor);
+    const processor = new ScanJobProcessor(store, executor, () => new Date(), undefined, telemetry);
 
     await expect(processor.processNext()).resolves.toBe("retrying");
 
@@ -127,8 +130,35 @@ describe("ScanJobProcessor", () => {
       JOB.leaseToken,
       "broker_failed",
       3,
-      { stage: "executor", code: "executor_application_failed" },
+      { stage: "service_comparison", code: "executor_application_failed" },
     );
+    expect(telemetry).toHaveBeenCalledWith(expect.objectContaining({
+      type: "scan_job_failure",
+      outcome: "retrying",
+      failureCode: "broker_failed",
+      failureDiagnostic: { stage: "service_comparison", code: "executor_application_failed" },
+    }));
+  });
+
+  it("logs the same bounded diagnostic when an executor failure becomes terminal", async () => {
+    const store = makeStore(JOB);
+    vi.mocked(store.failScan).mockResolvedValue("failed");
+    const telemetry = vi.fn();
+    const executor = {
+      execute: vi.fn().mockRejectedValue(Object.assign(new Error("executor_failed"), {
+        scanFailureDiagnostic: { stage: "first_entry_policy_access", code: "executor_application_failed" },
+      })),
+    };
+    const processor = new ScanJobProcessor(store, executor, () => new Date(), undefined, telemetry);
+
+    await expect(processor.processNext()).resolves.toBe("failed");
+
+    expect(telemetry).toHaveBeenCalledWith(expect.objectContaining({
+      type: "scan_job_failure",
+      outcome: "failed",
+      failureCode: "executor_failed",
+      failureDiagnostic: { stage: "first_entry_policy_access", code: "executor_application_failed" },
+    }));
   });
 
   it("emits bounded operational outcome telemetry without job or target data", async () => {

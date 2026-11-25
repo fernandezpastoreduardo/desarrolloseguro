@@ -33,4 +33,18 @@ describe("parseScanFailureDiagnostic", () => {
       code: "executor_response_too_large",
     })).toEqual({ stage: "executor", code: "executor_response_too_large" });
   });
+
+  it.each([
+    "privacy_browser_observation",
+    "privacy_assessment",
+    "cookie_legal_findings",
+    "service_comparison",
+    "first_entry_policy_access",
+    "response_validation",
+  ] as const)("accepts bounded pipeline phase %s", (stage) => {
+    expect(parseScanFailureDiagnostic({
+      stage,
+      code: "executor_application_failed",
+    })).toEqual({ stage, code: "executor_application_failed" });
+  });
 });

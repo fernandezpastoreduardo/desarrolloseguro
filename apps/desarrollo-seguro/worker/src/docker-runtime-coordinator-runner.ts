@@ -16,6 +16,7 @@ import { assessFirstEntryPolicyAccessObservation } from "./privacy-first-entry-p
 import type { PrivacyBrowserObservation } from "./privacy-browser-observer.js";
 import {
   createJsonLineRuntimeDiagnostic,
+  readScanFailureDiagnostic,
   RUNTIME_DIAGNOSTIC_CODES,
   type RuntimeDiagnosticCode,
   type RuntimeDiagnosticEvent,
@@ -150,30 +151,49 @@ export function createDockerRuntimeCoordinatorRunner(
               : response.errorCode,
           );
         }
-        result = response.result;
+        const executorResult = response.result;
+        result = executorResult;
         let privacyAssessment = assessPrivacy({ criteria: [] });
         let legalCookieFindings: ReturnType<typeof buildLegalCookieFindings> = [];
         let observation: PrivacyBrowserObservation | undefined;
         try {
           observation = await session.observePrivacy?.(request, signal);
-          if (observation) {
-            privacyAssessment = assessPrivacyObservation(observation);
-            legalCookieFindings = buildLegalCookieFindings(observation);
-          }
         } catch {
-          // Privacy browser failures lower coverage but never block the established scan or certification.
+          observation = undefined;
+          diagnostic({ type: "runtime_diagnostic", stage: "privacy_browser_observation", code: "executor_application_failed" });
         }
-        const publicServiceComparison = result.publicPolicyTransparencyAssessment
-          ? assessPublicServiceComparison({
-              observed: observation ? getObservedPublicServices(observation) : [],
-              declared: result.publicServiceDeclarations ?? [],
-              policyStatus: result.publicPolicyTransparencyAssessment?.status ?? "unknown",
-              auditorError: result.publicServiceDeclarations === undefined || !observation || [observation.initial, observation.accept, observation.reject]
-                .some(({ status }) => status === "unknown"),
-            })
-          : null;
-        const firstEntryPolicyAccess = assessFirstEntryPolicyAccessObservation(observation ?? null);
-        const completedResult = { ...result };
+        if (observation) {
+          try {
+            privacyAssessment = assessPrivacyObservation(observation);
+          } catch {
+            observation = undefined;
+            diagnostic({ type: "runtime_diagnostic", stage: "privacy_assessment", code: "executor_application_failed" });
+          }
+        }
+        if (observation) {
+          try {
+            legalCookieFindings = buildLegalCookieFindings(observation);
+          } catch {
+            diagnostic({ type: "runtime_diagnostic", stage: "cookie_legal_findings", code: "executor_application_failed" });
+          }
+        }
+        const publicServiceComparison: ReturnType<typeof assessPublicServiceComparison> | null = runRuntimePhase(
+          "service_comparison",
+          () => executorResult.publicPolicyTransparencyAssessment
+            ? assessPublicServiceComparison({
+                observed: observation ? getObservedPublicServices(observation) : [],
+                declared: executorResult.publicServiceDeclarations ?? [],
+                policyStatus: executorResult.publicPolicyTransparencyAssessment?.status ?? "unknown",
+                auditorError: executorResult.publicServiceDeclarations === undefined || !observation || [observation.initial, observation.accept, observation.reject]
+                  .some(({ status }) => status === "unknown"),
+              })
+            : null,
+        );
+        const firstEntryPolicyAccess = runRuntimePhase(
+          "first_entry_policy_access",
+          () => assessFirstEntryPolicyAccessObservation(observation ?? null),
+        );
+        const completedResult = { ...executorResult };
         result = {
           ...completedResult,
           privacyAssessment,
@@ -201,7 +221,11 @@ export function createDockerRuntimeCoordinatorRunner(
         }
         const failure = new Error(getRuntimeFailureCode(executionError), { cause: executionError });
         const runtimeDiagnostic = factory.getLastDiagnostic?.() ?? null;
-        const safeDiagnostic = executorDiagnostic ?? runtimeDiagnostic ?? {
+        const errorDiagnostic = readScanFailureDiagnostic(executionError);
+        const safeDiagnostic = executorDiagnostic ?? (errorDiagnostic ? {
+          type: "runtime_diagnostic" as const,
+          ...errorDiagnostic,
+        } : null) ?? runtimeDiagnostic ?? {
           type: "runtime_diagnostic" as const,
           stage: "executor" as const,
           code: "executor_application_failed" as const,
@@ -221,6 +245,29 @@ export function createDockerRuntimeCoordinatorRunner(
       return result;
     },
   };
+}
+
+function withRuntimeFailureDiagnostic(
+  error: unknown,
+  stage: "service_comparison" | "first_entry_policy_access",
+): Error {
+  const failure = new Error(getRuntimeFailureCode(error), { cause: error });
+  return attachScanFailureDiagnostic(failure, {
+    type: "runtime_diagnostic",
+    stage,
+    code: "executor_application_failed",
+  });
+}
+
+export function runRuntimePhase<T>(
+  stage: "service_comparison" | "first_entry_policy_access",
+  operation: () => T,
+): T {
+  try {
+    return operation();
+  } catch (error) {
+    throw withRuntimeFailureDiagnostic(error, stage);
+  }
 }
 
 function getRuntimeFailureCode(error: unknown): ScanFailureCode {

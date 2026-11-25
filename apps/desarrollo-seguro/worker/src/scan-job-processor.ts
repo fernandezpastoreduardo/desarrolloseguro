@@ -31,10 +31,12 @@ export type ScanJobOutcome =
   | "failed";
 
 export type ScanJobTelemetryEvent = {
-  type: "scan_job_outcome" | "scan_job_error";
+  type: "scan_job_outcome" | "scan_job_error" | "scan_job_failure";
   outcome?: ScanJobOutcome;
   code?: ScanJobErrorCode;
   stage?: ScanJobProcessingStage;
+  failureCode?: ScanFailureCode;
+  failureDiagnostic?: ScanFailureDiagnostic;
   durationMs: number;
 };
 
@@ -98,7 +100,7 @@ export class ScanJobProcessor {
     try {
       const outcome = await this.processNextInternal((nextStage) => {
         stage = nextStage;
-      });
+      }, startedAt);
       this.emitOutcome(outcome, startedAt);
       return outcome;
     } catch (error) {
@@ -110,6 +112,7 @@ export class ScanJobProcessor {
 
   private async processNextInternal(
     setStage: (stage: ScanJobProcessingStage) => void,
+    startedAt: number,
   ): Promise<ScanJobOutcome> {
     setStage("preflight");
     await this.executor.assertReady?.();
@@ -172,13 +175,17 @@ export class ScanJobProcessor {
     if (executorFailed || result === undefined) {
       try {
         setStage("persist_failure");
-        return await this.store.failScan(
+        const failureCode = getFailureCode(executorError);
+        const failureDiagnostic = getFailureDiagnostic(executorError);
+        const outcome = await this.store.failScan(
           claimed.id,
           claimed.leaseToken,
-          getFailureCode(executorError),
+          failureCode,
           MAX_EXECUTOR_ATTEMPTS,
-          getFailureDiagnostic(executorError),
+          failureDiagnostic,
         );
+        this.emitFailure(failureCode, failureDiagnostic, outcome, startedAt);
+        return outcome;
       } catch (error) {
         if (error instanceof ScanLeaseLostError) return "lease_lost";
         throw error;
@@ -274,6 +281,27 @@ export class ScanJobProcessor {
       });
     } catch {
       // Telemetry must never change scan processing or expose private errors.
+    }
+  }
+
+  private emitFailure(
+    failureCode: ScanFailureCode,
+    failureDiagnostic: ScanFailureDiagnostic,
+    outcome: ScanJobOutcome,
+    startedAt: number,
+  ): void {
+    if (!this.telemetry) return;
+    const durationMs = Math.max(0, Math.round(performance.now() - startedAt));
+    try {
+      this.telemetry({
+        type: "scan_job_failure",
+        outcome,
+        failureCode,
+        failureDiagnostic,
+        durationMs,
+      });
+    } catch {
+      // Failure telemetry must never change job processing or expose private errors.
     }
   }
 }

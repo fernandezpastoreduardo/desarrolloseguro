@@ -1692,6 +1692,31 @@ describePostgres.sequential("PostgresScanStore", () => {
     });
   });
 
+  it.each([
+    "privacy_browser_observation",
+    "privacy_assessment",
+    "cookie_legal_findings",
+    "service_comparison",
+    "first_entry_policy_access",
+    "response_validation",
+  ] as const)("persists the allowlisted runtime phase %s", async (stage) => {
+    const job = await queueAndClaim();
+    await expect(
+      store.failScan(job.id, job.leaseToken, "executor_failed", 1, {
+        stage,
+        code: "executor_application_failed",
+      }),
+    ).resolves.toBe("failed");
+    const failed = await pool.query(
+      "SELECT failure_diagnostic FROM ds_scan_jobs WHERE id = $1",
+      [job.id],
+    );
+    expect(failed.rows[0].failure_diagnostic).toEqual({
+      stage,
+      code: "executor_application_failed",
+    });
+  });
+
   it("renews only a current unexpired lease", async () => {
     const job = await queueAndClaim();
     const renewRequestedAt = new Date();
