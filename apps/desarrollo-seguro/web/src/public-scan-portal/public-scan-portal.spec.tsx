@@ -867,6 +867,127 @@ describe("PublicScanPortal", () => {
     expect(screen.getByText(/La nota global combina por igual Ética y Privacidad/i)).toBeVisible();
   });
 
+  it("loads a current v6 result from the hero search with a decimal privacy score", async () => {
+    const ethicsStatuses: Record<string, string> = {
+      "dns-integrity": "pass",
+      "transport-security": "pass",
+      "http-availability": "pass",
+      "security-headers": "fail",
+      "third-party-data-use": "fail",
+      "initial-cookie-risk": "fail",
+      tracking: "fail",
+      performance: "pass",
+    };
+    const v6Criteria = SCORED_PUBLIC_REPORT.ethicsAssessment.criteria.map((criterion) => ({
+      ...criterion,
+      id: criterion.id === "third-party-data-use" ? "external-service-transparency" : criterion.id,
+      status: ethicsStatuses[criterion.id] ?? criterion.status,
+    }));
+    const privacyCriteria = SCORED_PUBLIC_REPORT.privacyAssessment.criteria.map((criterion) => {
+      switch (criterion.id) {
+        case "preference-before-tracking":
+          return { ...criterion, deduction: 1.5, awarded: 28.5, confirmedFindings: 3, unknownFindings: 4 };
+        case "contextual-excess":
+          return { ...criterion, status: "evaluated", deduction: 0, awarded: 10, confirmedFindings: 0, unknownFindings: 1 };
+        case "choice-parity":
+          return { ...criterion, deduction: 0, awarded: 20, confirmedFindings: 0, unknownFindings: 0 };
+        case "rejection-persistence":
+          return { ...criterion, deduction: 2, awarded: 18, confirmedFindings: 2, unknownFindings: 1 };
+        default:
+          return { ...criterion, status: "unknown", deduction: null, awarded: null };
+      }
+    });
+    const legalFinding = {
+      ruleId: "lssi-cookie-no-prior-consent-v1",
+      ruleVersion: "1.0.0",
+      status: "accredited",
+      title: "Cookie analítica antes del consentimiento",
+      description: "La evidencia cumple la regla jurídica configurada.",
+      jurisdiction: "ES",
+      articles: ["22.2", "38.4.g", "39.1.c", "43.1"].map((article) => ({
+        law: "LSSI",
+        article,
+        url: "https://www.boe.es/buscar/act.php?id=BOE-A-2002-13758",
+      })),
+      infringementClass: "minor",
+      sanction: { type: "statutory_maximum", currency: "EUR", maximum: 30000 },
+      authority: "Agencia Española de Protección de Datos",
+      evidence: [{
+        flow: "initial",
+        phase: "before_choice",
+        capturedAtMs: 1000,
+        cookieName: "_ga",
+        cookieDomain: "example.com",
+        provider: "Google Analytics",
+        purpose: "Identificador de cliente para analítica.",
+        attributionRuleId: "google-analytics-cookie-ga-v1",
+        correlatedRequestHosts: ["www.googletagmanager.com"],
+      }],
+      evidenceComplete: true,
+    };
+    const report = {
+      ...SCORED_PUBLIC_REPORT,
+      profileVersion: "domain-v4",
+      scannerVersion: "domain-v4-network-adapter-7",
+      verdict: "fail",
+      globalAssessment: {
+        ...SCORED_PUBLIC_REPORT.globalAssessment,
+        status: "scored",
+        score: 0,
+        legalViolationAccredited: true,
+        ethicsCoverage: { assessedCriteria: 8, totalCriteria: 8 },
+        privacyCoverage: { assessedCriteria: 4, unknownCriteria: 1, notApplicableCriteria: 0, totalCriteria: 5 },
+      },
+      ethicsAssessment: {
+        ...SCORED_PUBLIC_REPORT.ethicsAssessment,
+        policyVersion: "domain-ethics-v6",
+        score: 55,
+        criteria: v6Criteria,
+      },
+      privacyAssessment: {
+        ...SCORED_PUBLIC_REPORT.privacyAssessment,
+        score: 95.63,
+        assessedCriteria: 4,
+        unknownCriteria: 1,
+        notApplicableCriteria: 0,
+        criteria: privacyCriteria,
+      },
+      publicServiceComparison: {
+        policyVersion: "public-service-comparison-v1",
+        status: "fail",
+        reasonCode: "public_policy_missing",
+        items: [],
+      },
+      legalCookieFindings: [legalFinding],
+      checks: SCORED_PUBLIC_REPORT.checks.map((check) => ({
+        ...check,
+        status: check.controlId === "DS-HDR-01" ? "fail" : check.status,
+      })),
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({
+      hostname: "example.com",
+      enrollment: "on_demand",
+      state: "fresh",
+      failureCode: null,
+      activeJobId: null,
+      lastReport: report,
+      checkedAt: "2026-11-03T10:01:00.000Z",
+    })));
+    const user = userEvent.setup();
+
+    render(<PublicScanPortal />);
+    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "example.com");
+    await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
+
+    expect(await screen.findByRole("heading", { name: "Qué significa esta valoración" })).toBeVisible();
+    expect(screen.getByRole("img", { name: "Puntuación global: 0 de 100 puntos" })).toBeVisible();
+    expect(screen.getByText("95.63/100 · 4 de 5 criterios evaluados · 1 desconocidos · 0 no aplican")).toBeVisible();
+    expect(screen.getByRole("img", { name: "Ética: 0 de 100 puntos; 2 de 2 aspectos evaluados" })).toBeVisible();
+    expect(screen.getByRole("img", { name: "Privacidad: 0 de 100 puntos; 1 de 1 aspectos evaluados" })).toBeVisible();
+    expect(screen.getByRole("img", { name: "Seguridad: 71 de 100 puntos; 4 de 4 aspectos evaluados" })).toBeVisible();
+    expect(screen.getByRole("img", { name: "Rendimiento: 100 de 100 puntos; 1 de 1 aspectos evaluados" })).toBeVisible();
+  });
+
   it("uses active wording only while the domain status is updating", async () => {
     const reviewReport = {
       ...SCORED_PUBLIC_REPORT,

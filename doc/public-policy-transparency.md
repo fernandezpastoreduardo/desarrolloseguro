@@ -90,6 +90,11 @@ concreta que impondrá una autoridad. Si falta un elemento legal, el informe
 conserva la contradicción y muestra qué estado del mapeo jurídico se aplicó;
 no inventa artículos ni cuantías ni activa el cero jurídico.
 
+La ficha pública admite la precisión decimal de la valoración de Privacidad y
+presenta las cuatro categorías con los criterios realmente recibidos. Si una
+infracción legal queda acreditada, la puntuación global aparece en cero aunque
+las valoraciones técnicas por área se conserven por separado.
+
 Los hallazgos nuevos incluyen las fuentes públicas por elemento legal, con
 título, enlace y fragmento breve. Los informes históricos con el formato
 anterior siguen siendo válidos; los IDs de fuente antiguos no se interpretan
