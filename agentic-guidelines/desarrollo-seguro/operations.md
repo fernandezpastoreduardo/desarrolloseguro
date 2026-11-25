@@ -125,6 +125,26 @@ creación de sesión, la ejecución del executor y la limpieza del runtime.
 El protocolo del executor aislado también transporta las fases de observación
 de red, sanitización de evidencias, valoración documental y ensamblado del
 resultado, preservando la fase incluso al salir del contenedor efímero.
+La cobertura diagnóstica debe continuar por toda la composición del worker,
+después de que el coordinador devuelva el resultado: enriquecimiento del
+auditor de procesadores, lectura inicial del catálogo, identificación y alta
+de proveedores observados, descubrimiento documental, segunda lectura del
+catálogo, valoración documental del proveedor y combinación del informe.
+Cada fase que pueda lanzar una excepción lleva una etapa allowlisted propia;
+una excepción ya etiquetada conserva su etapa original. Esto incluye los
+wrappers del executor del catálogo y los límites entre esos wrappers y
+`ScanJobProcessor`, donde se persiste el diagnóstico para el informe público.
+No se registran mensajes de excepción, datos del dominio, nombres de
+proveedores ni payloads.
+
+La aceptación requiere inyectar un error en cada fase posterior al runtime y
+demostrar que el mismo par `stage`/`code` alcanza `store.failScan`, la línea
+`scan_job_failure`, la respuesta de estado público y el detalle terminal del
+smoke. También debe existir al menos una prueba que recorra la composición
+completa del worker, no solo pruebas unitarias aisladas de protocolo,
+persistencia y formato. Un fallo no clasificado conserva el fallback
+`executor` / `executor_application_failed`, pero no reemplaza un diagnóstico
+de fase ya adjunto.
 El fallo registrado por el worker incluye `failureCode` y el par
 `failureDiagnostic.stage` / `failureDiagnostic.code` en una línea JSON
 `scan_job_failure`, tanto si se reintenta como si termina. La línea no incluye

@@ -4,6 +4,7 @@ import { ProcessorAuditorClient } from "./processor-auditor-client.js";
 import { assessDevelopmentSecurityProcessorRegistry } from "@desarrolloseguro/core";
 import { DEVELOPMENT_SECURITY_PROCESSOR_REGISTRY } from "./development-security-processor-registry.js";
 import type { ScanExecutorResult } from "./public-policy-document-boundary.js";
+import { withScanFailureStage } from "./runtime-diagnostics.js";
 
 export class ProcessorAuditorScanExecutor implements ScanExecutor {
   constructor(
@@ -20,20 +21,28 @@ export class ProcessorAuditorScanExecutor implements ScanExecutor {
     job: ClaimedScanJob,
     signal: AbortSignal,
   ): Promise<ScanExecutorResult> {
-    const result = await this.scanExecutor.execute(job, signal);
+    const result = await withScanFailureStage("scan_runtime_executor", () =>
+      this.scanExecutor.execute(job, signal));
     if (job.hostname === "desarrolloseguro.org") {
-      return {
-        ...result,
-        processorTransparencyAssessment: assessDevelopmentSecurityProcessorRegistry({
+      const processorTransparencyAssessment = await withScanFailureStage(
+        "processor_registry_assessment",
+        () => assessDevelopmentSecurityProcessorRegistry({
           deploymentRevision: this.deploymentRevision,
           registryRevision: DEVELOPMENT_SECURITY_PROCESSOR_REGISTRY.revision,
           processors: DEVELOPMENT_SECURITY_PROCESSOR_REGISTRY.processors,
         }),
-      };
+      );
+      return { ...result, processorTransparencyAssessment };
     }
     if (job.hostname !== "grumphya.com") return result;
-    const processorTransparencyAssessment = await this.auditor.read(signal);
-    const internalAuditSummary = await this.auditor.readInternalAuditSummary(signal);
+    const processorTransparencyAssessment = await withScanFailureStage(
+      "processor_auditor_read",
+      () => this.auditor.read(signal),
+    );
+    const internalAuditSummary = await withScanFailureStage(
+      "internal_audit_summary",
+      () => this.auditor.readInternalAuditSummary(signal),
+    );
     return { ...result, processorTransparencyAssessment, internalAuditSummary };
   }
 }
