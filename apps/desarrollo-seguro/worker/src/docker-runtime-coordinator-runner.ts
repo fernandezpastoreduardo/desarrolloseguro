@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { isAbsolute } from "node:path";
 import type { ScanRunInput } from "@desarrolloseguro/persistence";
-import { assessPrivacy, assessPublicServiceComparison, PRIVACY_BROWSER_BUDGET } from "@desarrolloseguro/core";
+import { assessPrivacy, assessPublicServiceComparison, evaluateVerdict, PRIVACY_BROWSER_BUDGET } from "@desarrolloseguro/core";
 import { SCAN_FAILURE_CODES, type ScanFailureCode } from "@desarrolloseguro/core";
 import {
   MAX_EXECUTOR_RESPONSE_BYTES,
@@ -218,6 +218,7 @@ export function createDockerRuntimeCoordinatorRunner(
         };
         result = {
           ...completedResult,
+          verdict: evaluateVerdict(completedResult.checks),
           privacyAssessment,
           legalCookieFindings,
           firstEntryPolicyAccess,

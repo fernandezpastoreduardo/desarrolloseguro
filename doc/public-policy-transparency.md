@@ -47,8 +47,9 @@ respuesta. Los nombres y valores de cookies y las URL completas no se publican.
 
 Desde `domain-v4-network-adapter-7`, los contadores acotados de esa observación
 se conservan durante la ingestión y llegan al detalle público junto con los
-estados y las puntuaciones que los usan. Los informes anteriores mantienen sus
-evidencias y formato. El pie de la ficha enlaza a la explicación del servicio
+estados, las puntuaciones y el veredicto calculados tras incorporar la
+observación. Los informes anteriores mantienen sus evidencias y formato. El
+pie de la ficha enlaza a la explicación del servicio
 sin la frase «Comprobación técnica acotada desde el mismo VPS. No es una
 certificación independiente.».
 

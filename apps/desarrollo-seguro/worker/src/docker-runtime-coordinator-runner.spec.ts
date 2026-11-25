@@ -378,6 +378,63 @@ describe("createDockerRuntimeCoordinatorRunner", () => {
     expect(close).toHaveBeenCalledOnce();
   });
 
+  it("recalculates the verdict after browser evidence changes check statuses", async () => {
+    const request = { ...REQUEST, hostname: "grumphya.com", profileVersion: "domain-v4" as const };
+    const result = makeDomainV4Result();
+    const executorResult = {
+      ...result,
+      verdict: "pass" as const,
+      checks: result.checks.map((check, index) => ({
+        ...check,
+        controlId: index === 8 ? "DS-PRIV-05" : index === 9 ? "DS-PRIV-06" : check.controlId,
+        status: "pass" as const,
+      })),
+    };
+    const observation = makePrivacyObservation();
+    observation.hostname = request.hostname;
+    observation.initial.phaseEvidence.beforeChoice = {
+      capturedAtMs: 40,
+      cookies: [{ name: "_ga", domain: "google-analytics.com", secure: true, httpOnly: false }],
+      storageKeys: [],
+      cookieReadComplete: true,
+      storageReadComplete: true,
+    };
+    observation.initial.phaseEvidence.networkRequests = [{
+      phaseAtStart: "before_choice",
+      responsePhase: "before_choice",
+      responseAtMs: 50,
+      phaseAtCompletion: "before_choice",
+      startedAtMs: 45,
+      completedAtMs: 50,
+      url: "https://www.google-analytics.com/g/collect",
+      hostname: "www.google-analytics.com",
+      method: "GET",
+      resourceType: "fetch",
+      responseStatus: 204,
+      blockedByAudit: false,
+      failed: false,
+      sentCookieNames: [],
+      receivedCookieNames: [],
+    }];
+    const factory: DockerRuntimeSessionFactory = {
+      create: vi.fn().mockResolvedValue({
+        execute: vi.fn().mockResolvedValue({
+          protocolVersion: 1,
+          requestId: request.requestId,
+          result: JSON.parse(JSON.stringify(executorResult)) as unknown,
+        }),
+        observePrivacy: vi.fn().mockResolvedValue(observation),
+        close: vi.fn().mockResolvedValue(undefined),
+      }),
+    };
+
+    const completed = await createDockerRuntimeCoordinatorRunner(factory).execute(request, new AbortController().signal);
+
+    expect(completed.checks.find(({ controlId }) => controlId === "DS-PRIV-05")?.status).toBe("fail");
+    expect(completed.checks.find(({ controlId }) => controlId === "DS-PRIV-06")?.status).toBe("fail");
+    expect(completed.verdict).toBe("fail");
+  });
+
   it("keeps phase-level legal and provider evidence when another browser step is unknown", async () => {
     const request = { ...REQUEST, profileVersion: "domain-v4" as const };
     const executorResult = {
