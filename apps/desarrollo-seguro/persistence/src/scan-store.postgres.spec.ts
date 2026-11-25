@@ -1285,6 +1285,103 @@ describePostgres.sequential("PostgresScanStore", () => {
     expect(JSON.stringify(report)).not.toContain("token=private");
   });
 
+  it("persists and publicly projects browser cookie and request evidence for domain-v4", async () => {
+    const job = await queueAndClaim("domain-v4");
+    const checks = makeEligibleDomainV3Checks().map((check) => {
+      const base = {
+        ...check,
+        limitation: "Resultado limitado a las rutas públicas declaradas del perfil domain-v4.",
+      };
+      if (check.controlId === "DS-PRIV-05") {
+        return {
+          ...base,
+          status: "fail" as const,
+          summary: "Antes de elegir, Chromium observó 1 cookie; 0 coincidían con cookies conocidas del catálogo y 1 carecían del atributo Secure.",
+          limitation: "Cookies observadas por Chromium antes de elegir. La atribución a un servicio requiere coincidencia con el catálogo local y una solicitud del mismo flujo.",
+          evidence: {
+            ...check.evidence,
+            browserObservationComplete: true,
+            browserCookieCount: 1,
+            browserInsecureCookieCount: 1,
+            browserCatalogMatchCount: 0,
+          },
+        };
+      }
+      if (check.controlId === "DS-PRIV-06") {
+        return {
+          ...base,
+          status: "fail" as const,
+          summary: "Antes de elegir, Chromium inició 2 solicitudes a terceros, incluidas 1 a rastreadores conocidos; se bloquearon 1 intento y 1 solicitud recibieron respuesta.",
+          limitation: "Una solicitud iniciada demuestra un intento; las bloqueadas por el auditor no demuestran transmisión de datos. El conteo de respuestas indica solicitudes que sí recibieron respuesta.",
+          evidence: {
+            ...check.evidence,
+            browserObservationComplete: true,
+            browserThirdPartyRequestCount: 2,
+            browserKnownTrackingRequestCount: 1,
+            browserBlockedTrackingRequestCount: 1,
+            browserTrackingResponseCount: 1,
+          },
+        };
+      }
+      return base;
+    });
+    checks.push({
+      ...CHECK,
+      controlId: "DS-PRIV-04",
+      method: "GET",
+      status: "pass",
+      summary: "Comprobación DS-PRIV-04: pass.",
+      limitation: "Resultado limitado a las rutas públicas declaradas del perfil domain-v4.",
+      evidence: {
+        inspected: true,
+        privacyPolicyLinksFound: 1,
+        policyLinksFound: 1,
+        sitePrivacyPolicyFetched: true,
+        policyPagesFetched: 1,
+        policyPagesMissing: 0,
+        policyPagesDenied: 0,
+        policyRecipientsMentioned: true,
+        policyPurposesMentioned: true,
+        policyTextBlocked: false,
+        policyProbeFailed: false,
+        policyLanguageCatalogVersion: "public-policy-language-eea-v1",
+      },
+    });
+    const reportId = await completeDirectly(job, ["/"], checks, "fail");
+    const report = await store.readPublicReport(reportId);
+
+    expect(report?.checks.find(({ controlId }) => controlId === "DS-PRIV-05"))
+      .toMatchObject({
+        status: "fail",
+        summary: "Antes de elegir, Chromium observó 1 cookie; 0 coincidían con cookies conocidas del catálogo y 1 carecían del atributo Secure.",
+        evidence: {
+          browserObservationComplete: true,
+          browserCookieCount: 1,
+          browserInsecureCookieCount: 1,
+          browserCatalogMatchCount: 0,
+        },
+      });
+    expect(report?.checks.find(({ controlId }) => controlId === "DS-PRIV-06"))
+      .toMatchObject({
+        status: "fail",
+        summary: "Antes de elegir, Chromium inició 2 solicitudes a terceros, incluidas 1 a rastreadores conocidos; se bloquearon 1 intento y 1 solicitud recibieron respuesta.",
+        evidence: {
+          browserObservationComplete: true,
+          browserThirdPartyRequestCount: 2,
+          browserKnownTrackingRequestCount: 1,
+          browserBlockedTrackingRequestCount: 1,
+          browserTrackingResponseCount: 1,
+        },
+      });
+    const publicEvidence = await pool.query<{ evidence_json: Record<string, unknown> }>(
+      "SELECT evidence_json FROM public.ds_public_check_results WHERE run_id = $1 AND control_id IN ('DS-PRIV-05', 'DS-PRIV-06') ORDER BY control_id",
+      [reportId],
+    );
+    expect(publicEvidence.rows).toHaveLength(2);
+    expect(JSON.stringify(publicEvidence.rows)).not.toContain("cookieName");
+    expect(JSON.stringify(publicEvidence.rows)).not.toContain("cookieValue");
+  });
+
   it("persists and publicly projects bounded page-probe diagnostics for domain-v4", async () => {
     const job = await queueAndClaim("domain-v4");
     const checks = [
@@ -1970,7 +2067,7 @@ describePostgres.sequential("PostgresScanStore", () => {
     job: ClaimedScanJob,
     scope: readonly string[],
     checks: readonly ScanCheck[],
-    verdict: "pass" | "inconclusive" = "inconclusive",
+    verdict: "pass" | "fail" | "inconclusive" = "inconclusive",
   ): Promise<string> {
     const startedAt = new Date();
     const completedAt = new Date(startedAt.getTime() + 1);

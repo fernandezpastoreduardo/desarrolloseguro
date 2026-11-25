@@ -57,6 +57,7 @@ Hacer que la ficha de informes se entienda y se recorra con facilidad para una p
 - Una cookie de proveedor se atribuye solo si el nombre coincide con una regla local revisada y una solicitud del mismo flujo a un host de ese proveedor se completó o fue bloqueada explícitamente. Esta correlación puede reconocer cookies propias que el sitio vincula a un servicio externo; el nombre aislado no basta. La evidencia y la puntuación conservan la fase antes de elegir, después de rechazar y tras recargar.
 - La ingestión y la respuesta pública conservan los contadores de navegador permitidos para cookies y rastreadores, y vuelven a calcular resumen y estado con esa evidencia. No se publican nombres ni valores de cookies ni URL completas. La versión de scanner se incrementa para que un informe cacheado no oculte este cambio.
 - El veredicto del análisis se calcula con los mismos checks ya enriquecidos con evidencia de navegador que se validan y persisten; no se compara un veredicto anterior a esa fusión con estados posteriores.
+- El contrato PostgreSQL permite únicamente los contadores de navegador aprobados, deriva de ellos el mismo resumen y limitación que la aplicación, y los expone en la vista pública; nunca expone nombres o valores de cookies ni URL completas.
 - El pie de la ficha no muestra el texto «Comprobación técnica acotada desde el mismo VPS. No es una certificación independiente.»
 - Los errores técnicos que convierten una fase en `unknown` deben conservar una etapa y un código de causa de lista permitida para diagnóstico. No se guardan ni publican mensajes de excepción, URLs con query o fragmento, HTML, cookies, valores de almacenamiento ni datos personales. Estos diagnósticos no se transforman en incumplimientos atribuidos al dominio.
 
@@ -79,6 +80,7 @@ Hacer que la ficha de informes se entienda y se recorra con facilidad para una p
 15. Las evidencias de navegador se publican como contadores acotados sin valores de cookie ni URL completa. El texto diferencia cookies vistas, solicitudes iniciadas, intentos bloqueados y respuestas recibidas; una solicitud bloqueada no se describe como transmisión.
 16. Los contadores permitidos sobreviven la ingestión y se muestran en el detalle público; los informes del nuevo scanner se validan con la versión de formato vigente. El pie no contiene la frase de comprobación y certificación retirada.
 17. El veredicto coincide con los checks posteriores a la fusión de evidencia de navegador y el informe puede completarse cuando dicha evidencia cambie un estado.
+18. La validación PostgreSQL acepta y publica los contadores acotados y los textos derivados de ellos, y rechaza valores de evidencia o textos no permitidos.
 
 ## Verificación y publicación
 
