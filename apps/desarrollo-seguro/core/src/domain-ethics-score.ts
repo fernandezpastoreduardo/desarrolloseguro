@@ -200,7 +200,7 @@ const UNKNOWN_REASONS: Record<string, string> = {
   "third-party-data-use": "El auditor no pudo terminar la revisión de la información pública sobre servicios externos.",
   "initial-cookie-risk": "No se pudo inspeccionar la respuesta inicial; no se ha evaluado el comportamiento posterior del consentimiento.",
   tracking: "No se midieron conexiones ni scripts ejecutados; la comprobación se limita a referencias del HTML inicial.",
-  performance: "No se midieron el tiempo y el tamaño de la respuesta inicial.",
+  performance: "Faltan métricas requeridas de móvil o escritorio.",
 };
 
 export function assessDomainEthics(checks: unknown): DomainEthicsAssessment {

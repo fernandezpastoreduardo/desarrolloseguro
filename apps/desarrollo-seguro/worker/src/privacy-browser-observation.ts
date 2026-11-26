@@ -88,6 +88,7 @@ function unknownPerformanceEvidence(): PerformanceBrowserEvidence {
     ttfbMs: null,
     transferBytes: null,
     score: null,
+    diagnostic: { code: "browser_observation_error" as const },
   });
   return { profiles: [unknown("mobile"), unknown("desktop")] };
 }
