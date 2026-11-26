@@ -62,6 +62,8 @@ se eliminan al terminar el job.
 
 **Criterios:** errores y ausencia de informe no muestran un resultado inventado ni reutilizan silenciosamente un informe anterior; respuestas llevan `Cache-Control: no-store`; el estado `not_scanned` indica que no existe observación.
 
+**Corrección del contrato de observación Chromium:** los resúmenes que `domain-v5` deriva de observaciones de cookies y solicitudes deben coincidir exactamente con los allowlists SQL de persistencia. La migración cubre `DS-PRIV-05` y `DS-PRIV-06` para informes `domain-v4` y `domain-v5` sin aflojar la validación de texto/evidencia. La regresión PostgreSQL persiste un informe v5 con ambas observaciones completas y comprueba su lectura pública.
+
 Para Grumphya, `grumphya.com` y `www.grumphya.com` comparten la identidad del informe solo cuando un informe reciente observa una cadena completa y validada de redirección HTTP permanente 301/308 entre ambos. El escáner continúa la redirección con las mismas protecciones DNS, TLS, rutas y salida; no transforma el hostname por texto. La respuesta pública conserva el hostname solicitado y el salto observado. El estado del alias apunta al informe vigente del destino y muestra la evidencia de redirección por separado. Sin esa evidencia permanente, los hostnames permanecen separados.
 
 En los análisis públicos, las sondas siguen además redirects entre el hostname

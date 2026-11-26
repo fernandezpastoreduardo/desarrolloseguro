@@ -98,6 +98,15 @@ describePostgres.sequential("PostgresScanStore", () => {
     expect(definition).not.toContain("scan_check_payload_not_allowlisted");
   });
 
+  it("keeps Chromium privacy summary rules enabled for domain-v5", async () => {
+    const result = await pool.query<{ definition: string }>(
+      "SELECT pg_get_functiondef('public.ds_validate_check_result_before_insert()'::regprocedure) AS definition",
+    );
+    const definition = result.rows[0]?.definition ?? "";
+    expect(definition).toContain("run_profile_version IN ('domain-v4', 'domain-v5')");
+    expect(definition).toContain("NEW.control_id = 'DS-PRIV-06'");
+  });
+
   it("accepts first-entry policy evidence linked from an informational notice", async () => {
     const policyLinkVisit = {
       status: "evaluated",
@@ -1491,15 +1500,43 @@ describePostgres.sequential("PostgresScanStore", () => {
     };
     const limitation = "Resultado limitado a las rutas públicas declaradas del perfil domain-v5.";
     const checks: ScanCheck[] = [
-      ...makeEligibleDomainV3Checks().map((check) => ({
-        ...check,
-        targetPath,
-        limitation,
-        ...(check.controlId === "DS-QUAL-02" ? { evidence: performanceEvidence } : {}),
-        ...(check.controlId === "DS-HDR-01"
-          ? { evidence: { ...check.evidence, finalScheme: "https" } }
-          : {}),
-      })),
+      ...makeEligibleDomainV3Checks().map((check) => {
+        const base = { ...check, targetPath, limitation };
+        if (check.controlId === "DS-QUAL-02") return { ...base, evidence: performanceEvidence };
+        if (check.controlId === "DS-HDR-01") {
+          return { ...base, evidence: { ...check.evidence, finalScheme: "https" } };
+        }
+        if (check.controlId === "DS-PRIV-05") {
+          return {
+            ...base,
+            status: "pass" as const,
+            summary: "Antes de elegir, Chromium observó 0 cookies; 0 coincidían con cookies conocidas del catálogo y 0 carecían del atributo Secure.",
+            evidence: {
+              ...check.evidence,
+              browserObservationComplete: true,
+              browserCookieCount: 0,
+              browserInsecureCookieCount: 0,
+              browserCatalogMatchCount: 0,
+            },
+          };
+        }
+        if (check.controlId === "DS-PRIV-06") {
+          return {
+            ...base,
+            status: "pass" as const,
+            summary: "Antes de elegir, Chromium inició 0 solicitudes a terceros, incluidas 0 a rastreadores conocidos; se bloquearon 0 intentos y 0 solicitudes recibieron respuesta.",
+            evidence: {
+              ...check.evidence,
+              browserObservationComplete: true,
+              browserThirdPartyRequestCount: 0,
+              browserKnownTrackingRequestCount: 0,
+              browserBlockedTrackingRequestCount: 0,
+              browserTrackingResponseCount: 0,
+            },
+          };
+        }
+        return base;
+      }),
       {
         ...CHECK,
         controlId: "DS-PRIV-04",
@@ -1552,6 +1589,14 @@ describePostgres.sequential("PostgresScanStore", () => {
     });
     expect(report?.checks.find(({ controlId }) => controlId === "DS-QUAL-02")?.evidence)
       .toMatchObject(performanceEvidence);
+    expect(report?.checks.find(({ controlId }) => controlId === "DS-PRIV-05")?.summary)
+      .toContain("Chromium observó 0 cookies");
+    expect(report?.checks.find(({ controlId }) => controlId === "DS-PRIV-06")?.summary)
+      .toContain("Chromium inició 0 solicitudes a terceros");
+    expect(report?.checks.find(({ controlId }) => controlId === "DS-PRIV-05")?.limitation)
+      .toBe(limitation);
+    expect(report?.checks.find(({ controlId }) => controlId === "DS-PRIV-06")?.limitation)
+      .toBe(limitation);
     expect(completedJob.rows[0]?.target_url).toBeNull();
   });
 
