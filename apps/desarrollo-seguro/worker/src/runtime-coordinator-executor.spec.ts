@@ -14,6 +14,36 @@ afterEach(async () => {
 });
 
 describe("RuntimeCoordinatorExecutor", () => {
+  it("streams correlated per-aspect progress before the final report", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "ds-runtime-progress-"));
+    directories.push(directory);
+    const socketPath = join(directory, "coordinator.sock");
+    const progressEvent = { aspect: "privacy", state: "running" };
+    const server = createServer((socket) => {
+      let requestBuffer = "";
+      socket.on("data", (chunk) => {
+        requestBuffer += chunk.toString("utf8");
+        const newline = requestBuffer.indexOf("\n");
+        if (newline < 0) return;
+        const request = JSON.parse(requestBuffer.slice(0, newline)) as { requestId: string };
+        socket.write(`${JSON.stringify({ protocolVersion: 1, requestId: request.requestId, progressEvent })}\n`);
+        socket.end(`${JSON.stringify({ protocolVersion: 1, requestId: request.requestId, result: makeResult() })}\n`);
+      });
+    });
+    servers.push(server);
+    await new Promise<void>((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(socketPath, resolve);
+    });
+    await chmod(socketPath, 0o660);
+    const executor = new RuntimeCoordinatorExecutor({ socketPath, expectedSocketUid: process.getuid?.() ?? 0, expectedSocketGid: process.getgid?.() ?? 0 });
+    const received: unknown[] = [];
+
+    await executor.execute({ hostname: "sample.example.net", profileVersion: "transport-v1", targetUrl: null }, new AbortController().signal, async (event) => { received.push(event); });
+
+    expect(received).toEqual([progressEvent]);
+  });
+
   it("sends only the normalized hostname and profile through the trusted socket", async () => {
     const socketPath = await startCoordinator((request) => {
       expect(Object.keys(request).sort()).toEqual([

@@ -3,6 +3,7 @@ import { parseFirstEntryPolicyAccess, type FirstEntryPolicyAccess } from "@desar
 import { parseLegalCookieFindings, type LegalCookieFinding } from "@desarrolloseguro/core/legal-cookie-findings";
 import { parsePublicServiceComparison } from "@desarrolloseguro/core/public-service-comparison";
 import { parseScanTargetUrl } from "@desarrolloseguro/core/scan-target-url";
+import { parsePublicAuditProgress, type PublicAuditAspect, type PublicAuditProgress } from "@desarrolloseguro/core/public-audit-progress";
 import { PUBLIC_SERVICE_PROVIDER_INFO } from "@desarrolloseguro/core/public-service-catalog";
 import "./public-scan-portal.scss";
 
@@ -20,8 +21,6 @@ const INVALID_DOMAIN_MESSAGE =
   "Escribe una dirección HTTPS pública válida, por ejemplo cualquierdominio.com.";
 const NO_REPORT_MESSAGE =
   "Todavía no hay un informe completo guardado para esta dirección.";
-const UPDATING_WITHOUT_REPORT_MESSAGE =
-  "Hay una revisión en curso. Puede tardar unos minutos; vuelve a consultar para ver el resultado cuando termine.";
 const UNAVAILABLE_DOMAIN_MESSAGE =
   "Esta dirección no está disponible para consulta pública.";
 const ANALYSIS_REQUEST_MESSAGES: Record<string, string> = {
@@ -352,6 +351,7 @@ type DomainStatus = {
   state: DomainState;
   failureCode: ScanFailureCode | null;
   activeJobId: string | null;
+  auditProgress?: PublicAuditProgress;
   lastReport: PublicReport | null;
   hostnameResolution?: {
     observedReportId: string;
@@ -576,7 +576,11 @@ export function PublicScanPortal() {
     }
   }
 
-  async function loadTargetStatus(inputUrl: string, focusOnError = false) {
+  async function loadTargetStatus(
+    inputUrl: string,
+    focusOnError = false,
+    requestMissingReport = false,
+  ) {
     const normalizedInputUrl = addDefaultHttpsScheme(inputUrl);
     setDomain(normalizedInputUrl);
     let target: ReturnType<typeof parseScanTargetUrl>;
@@ -628,6 +632,16 @@ export function PublicScanPortal() {
       if (payload.lastReport && payload.lastReport.profileVersion !== "domain-v5") {
         void loadHistory(payload.hostname);
       }
+      if (payload.state === "updating") {
+        reportBeforeAnalysisId.current = payload.lastReport?.id ?? null;
+        setAnalysisRequestState("running");
+      } else if (payload.state === "not_scanned" && requestMissingReport) {
+        void requestAnalysis({
+          statusOverride: payload,
+          targetUrlOverride: targetUrl,
+          automaticallyAuthorized: true,
+        });
+      }
       setState("ready");
     } catch {
       setStatus(null);
@@ -639,7 +653,7 @@ export function PublicScanPortal() {
 
   async function submitDomain(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await loadTargetStatus(domain, true);
+    await loadTargetStatus(domain, true, true);
   }
 
   async function loadHistory(hostname: string): Promise<void> {
@@ -662,23 +676,30 @@ export function PublicScanPortal() {
     }
   }
 
-  async function requestAnalysis() {
+  async function requestAnalysis(options: {
+    statusOverride?: DomainStatus;
+    targetUrlOverride?: string;
+    automaticallyAuthorized?: boolean;
+  } = {}) {
+    const requestStatus = options.statusOverride ?? status;
+    const requestTargetUrl = options.targetUrlOverride ?? auditTargetUrl;
+    const automaticallyAuthorized = options.automaticallyAuthorized ?? false;
     if (
-      !status ||
-      !auditTargetUrl ||
-      !authorizationConfirmed ||
-      state === "loading" ||
+      !requestStatus ||
+      !requestTargetUrl ||
+      (!authorizationConfirmed && !automaticallyAuthorized) ||
+      (state === "loading" && !automaticallyAuthorized) ||
       analysisRequestInFlight.current
     ) return;
     analysisStatusPollCount.current = 0;
     setScanAnnouncementText("");
     scanAnnouncement.current = null;
-    reportBeforeAnalysisId.current = status.lastReport?.id ?? null;
+    reportBeforeAnalysisId.current = requestStatus.lastReport?.id ?? null;
     analysisRequestInFlight.current = true;
     setAnalysisRequestState("loading");
     try {
       const response = await fetch(
-        `${API_ROOT}/domains/${encodeURIComponent(status.hostname)}/analysis-requests`,
+        `${API_ROOT}/domains/${encodeURIComponent(requestStatus.hostname)}/analysis-requests`,
         {
           method: "POST",
           headers: {
@@ -687,15 +708,15 @@ export function PublicScanPortal() {
           },
           credentials: "omit",
           cache: "no-store",
-          body: JSON.stringify({ authorized: true, targetUrl: auditTargetUrl }),
+          body: JSON.stringify({ authorized: true, targetUrl: requestTargetUrl }),
         },
       );
       if (!response.ok) throw new Error("invalid_analysis_request_response");
       const payload: unknown = await readPublicJson(response);
       if (
         !isAnalysisRequest(payload) ||
-        payload.hostname !== status.hostname ||
-        payload.targetUrl !== undefined && payload.targetUrl !== auditTargetUrl
+        payload.hostname !== requestStatus.hostname ||
+        payload.targetUrl !== undefined && payload.targetUrl !== requestTargetUrl
       ) {
         throw new Error("invalid_analysis_request_response");
       }
@@ -780,14 +801,13 @@ export function PublicScanPortal() {
             </button>
           </div>
           <span id="ds-portal-help" className="ds-portal__help">
-            Consultar solo muestra el informe guardado. Si autorizas un
-            análisis, se visitará esta dirección y los recursos que permita el
-            perfil; algunos pueden pertenecer a otros servicios.
+            Si ya hay un informe, lo verás aquí. Si todavía no existe, iniciaremos
+            la revisión de esta dirección y los recursos que permita el perfil.
           </span>
         </form>
         <div className="ds-portal__hero-footnote" aria-hidden="true">
           <span>01</span>
-          <span>Consulta del informe guardado para una dirección</span>
+          <span>Consulta o inicia el informe de una dirección</span>
         </div>
       </section>
 
@@ -812,9 +832,11 @@ export function PublicScanPortal() {
         <ReportResult report={report} history={history} />
       )}
       {isScanInProgress(status, analysisRequestState) && (
+        status?.state !== "updating" && (
         <ScanProgress
           phase={getScanProgressPhase(status, analysisRequestState)}
         />
+        )
       )}
       {scanAnnouncementText && (
         <p
@@ -834,20 +856,18 @@ export function PublicScanPortal() {
           <p className="ds-portal__eyebrow">{status.hostname}</p>
           <h2 id="ds-empty-heading">{EMPTY_REPORT_TITLE}</h2>
           <p>
-            Cuando exista un análisis completo, aquí verás su fecha, alcance y
-            controles observados.
+            {analysisRequestState === "loading" || analysisRequestState === "queued" || analysisRequestState === "running"
+              ? "No hay un informe guardado. El análisis se está iniciando."
+              : "No hay un informe guardado para esta dirección."}
           </p>
-          <p className="ds-portal__disclaimer">
-            Esta dirección aún no tiene un informe. Si solicitas el análisis,
-            las comprobaciones seguirán el alcance indicado en el perfil y no
-            usarán credenciales ni enviarán formularios.
-          </p>
-          <AnalysisRequestPanel
-            authorizationConfirmed={authorizationConfirmed}
-            onAuthorizationChange={setAuthorizationConfirmed}
-            requestState={analysisRequestState}
-            onRequest={() => void requestAnalysis()}
-          />
+          {analysisRequestState !== "loading" && analysisRequestState !== "queued" && analysisRequestState !== "running" && (
+            <AnalysisRequestPanel
+              authorizationConfirmed={authorizationConfirmed}
+              onAuthorizationChange={setAuthorizationConfirmed}
+              requestState={analysisRequestState}
+              onRequest={() => void requestAnalysis()}
+            />
+          )}
         </section>
       )}
       <footer className="ds-portal__footer">
@@ -883,6 +903,7 @@ function DomainResult({
           {STATE_LABELS[status.state] ?? "Estado del informe"}
         </h2>
         <p>{getEmptyStateMessage(status.state)}</p>
+        {status.state === "updating" && <AspectProgress progress={status.auditProgress} />}
         {status.state === "failed" && (
           <>
             <p className="ds-portal__failure" role="alert">
@@ -895,11 +916,6 @@ function DomainResult({
               onRequest={onRequestAnalysis}
             />
           </>
-        )}
-        {status.state === "updating" && (
-          <p className="ds-portal__disclaimer">
-            La revisión sigue en curso. Puede tardar unos minutos; vuelve a consultar para ver el resultado cuando termine.
-          </p>
         )}
       </section>
     );
@@ -955,7 +971,7 @@ function DomainResult({
           />
         </>
       )}
-      <ReportSummary report={report} state={status.state} history={history} />
+      <ReportSummary report={report} state={status.state} history={history} auditProgress={status.auditProgress} />
     </section>
   );
 }
@@ -1090,10 +1106,12 @@ function ReportSummary({
   report,
   state,
   history,
+  auditProgress,
 }: {
   report: PublicReport;
   state: string;
   history: PublicReportHistoryEntry[];
+  auditProgress?: PublicAuditProgress;
 }) {
   const isCurrent = state === "fresh";
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
@@ -1119,6 +1137,7 @@ function ReportSummary({
         <BetaEvaluationCharts criteria={report.ethicsAssessment.criteria} />
         <div className="ds-portal__report-categories">
           {REPORT_CATEGORIES.map((category) => {
+            const aspectProgress = state === "updating" ? auditProgress?.aspects[category.id as PublicAuditAspect] ?? "pending" : null;
             const criteria = report.ethicsAssessment.criteria.filter((criterion) =>
               (category.criteria as readonly string[]).includes(criterion.id),
             );
@@ -1150,6 +1169,7 @@ function ReportSummary({
                 <p className="ds-portal__category-summary">{performanceScoreApplies
                   ? getPerformanceCategorySummary(performanceScore)
                   : getCategorySummary(criteria, state)}</p>
+                {aspectProgress && aspectProgress !== "complete" && <p className="ds-portal__aspect-progress" role="status" aria-busy="true"><span className="ds-portal__spinner" aria-hidden="true" />{category.label}: {aspectProgress === "running" ? "comprobación en curso" : "pendiente"}</p>}
                 {!performanceScoreApplies && criteria.length > 0 && (
                   <ul className="ds-portal__category-evidence" aria-label={`Resultados destacados de ${category.label}`}>
                     {[...criteria]
@@ -2207,6 +2227,7 @@ function isDomainStatus(value: unknown): value is DomainStatus {
     (value.state === "failed" && value.failureCode === null) ||
     (value.state !== "failed" && value.failureCode !== null) ||
     (value.activeJobId !== null && !isUuid(value.activeJobId)) ||
+    (value.auditProgress !== undefined && parsePublicAuditProgress(value.auditProgress) === null) ||
     (value.lastReport !== null && !isPublicReport(value.lastReport)) ||
     (value.hostnameResolution !== undefined && !isHostnameResolution(value.hostnameResolution)) ||
     !isIsoTimestamp(value.checkedAt)
@@ -2218,6 +2239,21 @@ function isDomainStatus(value: unknown): value is DomainStatus {
     (isHostnameResolution(value.hostnameResolution) &&
       value.lastReport.hostname === value.hostnameResolution.canonicalHostname)
   );
+}
+
+function AspectProgress({ progress }: { progress?: PublicAuditProgress }) {
+  const labels: Array<[PublicAuditAspect, string]> = [
+    ["ethics", "Ética"], ["privacy", "Privacidad"], ["security", "Seguridad"], ["performance", "Rendimiento"],
+  ];
+  return <ul className="ds-portal__aspect-progress-list" aria-label="Progreso de las comprobaciones">
+    {labels.map(([aspect, label]) => {
+      const state = progress?.aspects[aspect] ?? "pending";
+      return <li key={aspect} data-state={state} aria-busy={state !== "complete"}>
+        {state !== "complete" && <span className="ds-portal__spinner" aria-hidden="true" />}
+        <span>{label}: {state === "complete" ? "comprobado" : state === "running" ? "en curso" : "pendiente"}</span>
+      </li>;
+    })}
+  </ul>;
 }
 
 function isHostnameResolution(value: unknown): value is NonNullable<DomainStatus["hostnameResolution"]> {
@@ -3164,7 +3200,7 @@ function formatEvidenceValue(value: string | number | boolean, key: string): str
 }
 
 function getEmptyStateMessage(state: string): string {
-  if (state === "updating") return UPDATING_WITHOUT_REPORT_MESSAGE;
+  if (state === "updating") return "El informe aparecerá aquí cuando termine la comprobación.";
   if (state === "unavailable") return UNAVAILABLE_DOMAIN_MESSAGE;
   if (state === "failed") {
     return "El último análisis terminó sin generar un informe.";

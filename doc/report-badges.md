@@ -1,6 +1,6 @@
 # Sello verificable de informe
 
-El API puede emitir un identificador aleatorio de 256 bits para la identidad canónica de `grumphya.com` con perfil `domain-v1`, `domain-v2`, `domain-v3` o `domain-v4` (el perfil activo actual es `domain-v4`). Solo guarda su SHA-256. Cada sello dura 30 días y puede revocarse. Al emitirlo se exige una certificación `active` con informe certificado vigente. El token no se fija al UUID de ese primer informe: en cada verificación se comprueba el `certifiedReportId` actual. Una renovación elegible mantiene el mismo sello; una certificación suspendida, un informe vencido, la revocación o el vencimiento del token lo ocultan. No se emite desde datos de muestra, desde una identidad sin informe certificado vigente o desde un informe bloqueado.
+El API puede emitir un identificador aleatorio de 256 bits para `grumphya.com`, `www.grumphya.com` o `desarrolloseguro.org`, con perfil `domain-v1`, `domain-v2`, `domain-v3` o `domain-v4` (el perfil activo actual es `domain-v4`). Solo guarda su SHA-256. Cada sello dura 30 días y puede revocarse. Al emitirlo se exige una certificación `active` con informe certificado vigente. El token no se fija al UUID de ese primer informe: en cada verificación se comprueba el `certifiedReportId` actual. Una renovación elegible mantiene el mismo sello; una certificación suspendida, un informe vencido, la revocación o el vencimiento del token lo ocultan. No se emite desde datos de muestra, desde una identidad sin informe certificado vigente o desde un informe bloqueado.
 
 La certificación beta se persiste por dominio (`pending`, `active` o
 `suspended`). La emisión requiere una certificación `active`; la verificación
@@ -41,10 +41,10 @@ El deploy genera una clave aleatoria local en `/opt/desarrollo-seguro/secrets/de
 Para emitir desde el checkout de Desarrollo Seguro en el VPS, ejecuta el helper como `root` con el UUID de un informe real:
 
 ```sh
-node scripts/issue-report-badge.mjs <uuid-del-informe-real>
+node scripts/issue-report-badge.mjs <uuid-del-informe-real> [hostname]
 ```
 
-El helper valida el UUID, lee la clave solo desde el archivo privado y muestra la respuesta pública de emisión. La API guarda solo SHA-256 del token aleatorio; conserva el token y `verifyUrl` de la salida para el embed. No se puede recuperar después. La emisión acepta cualquiera de los dos hostnames y resuelve la identidad del hostname canónico. Se rechaza si no hay una certificación activa con informe vigente o si el hostname no pertenece al perfil de análisis de dominio. El UUID devuelto identifica el informe vigente al emitir; no debe fijarse en el embed.
+El helper valida el UUID, lee la clave solo desde el archivo privado y muestra la respuesta pública de emisión. La API guarda solo SHA-256 del token aleatorio; conserva el token y `verifyUrl` de la salida para el embed. No se puede recuperar después. La emisión acepta `grumphya.com`, `www.grumphya.com` o `desarrolloseguro.org` y resuelve la identidad del hostname canónico. Se rechaza si no hay una certificación activa con informe vigente o si el hostname no pertenece al perfil de análisis de dominio. El UUID devuelto identifica el informe vigente al emitir; no debe fijarse en el embed. Para el sello del footer de Desarrollo Seguro, sustituye el atributo `data-token` vacío de las páginas públicas por el token emitido para `desarrolloseguro.org`.
 
 La emisión se autoriza con el secreto que solo conserva el VPS:
 

@@ -1,5 +1,6 @@
 import type { ClaimedScanJob } from "@desarrolloseguro/persistence";
 import type { ScanExecutor } from "./scan-job-processor.js";
+import type { PublicAuditProgressEvent } from "@desarrolloseguro/core";
 import { ProcessorAuditorClient } from "./processor-auditor-client.js";
 import { assessDevelopmentSecurityProcessorRegistry } from "@desarrolloseguro/core";
 import { DEVELOPMENT_SECURITY_PROCESSOR_REGISTRY } from "./development-security-processor-registry.js";
@@ -20,9 +21,10 @@ export class ProcessorAuditorScanExecutor implements ScanExecutor {
   async execute(
     job: ClaimedScanJob,
     signal: AbortSignal,
+    onProgress?: (event: PublicAuditProgressEvent) => Promise<void>,
   ): Promise<ScanExecutorResult> {
     const result = await withScanFailureStage("scan_runtime_executor", () =>
-      this.scanExecutor.execute(job, signal));
+      this.scanExecutor.execute(job, signal, onProgress));
     if (job.hostname === "desarrolloseguro.org") {
       const processorTransparencyAssessment = await withScanFailureStage(
         "processor_registry_assessment",

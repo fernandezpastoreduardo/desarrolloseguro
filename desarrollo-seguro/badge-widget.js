@@ -1,7 +1,7 @@
 const API_ORIGIN = "https://desarrolloseguro.org";
 const STATUS_PATH = "/api/desarrollo-seguro/v1/domains";
 const REPORT_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
-const AUTHORIZED_HOSTNAMES = new Set(["grumphya.com", "www.grumphya.com"]);
+const AUTHORIZED_HOSTNAMES = new Set(["grumphya.com", "www.grumphya.com", "desarrolloseguro.org"]);
 const BADGE_WIDGET_STYLES = "__DS_BADGE_WIDGET_STYLES__";
 const BADGE_WIDGET_LOGO_SVG = "__DS_BADGE_WIDGET_LOGO_SVG__";
 const BADGE_REQUEST_TIMEOUT_MS = 10_000;
@@ -43,17 +43,21 @@ async function initializeBadge(widget) {
     reportId: result.reportId,
   });
   widget.href = `https://desarrolloseguro.org/desarrollo-seguro/verificar.html#${query.toString()}`;
-  widget.append(createBrandLogo(), createBadgeCopy(result.hostname), createApprovalMark());
+  widget.append(createBrandLogo(result.hostname), createBadgeCopy(result.hostname), createApprovalMark());
   widget.setAttribute("aria-label", `Sello aprobado de Desarrollo Seguro para ${result.hostname}. Abrir la verificación y el informe.`);
   widget.classList.add("ds-verified-badge");
   widget.dataset.state = "valid";
   widget.hidden = false;
 }
 
-function createBrandLogo() {
+function createBrandLogo(hostname) {
   const logo = document.createElement("img");
   logo.className = "ds-verified-badge__logo";
   logo.alt = "Logotipo de Desarrollo Seguro";
+  if (hostname === "desarrolloseguro.org" && window.location.hostname === hostname) {
+    logo.src = "/desarrollo-seguro/assets/desarrollo-seguro-logo-v1.svg";
+    return logo;
+  }
   const logoUrl = URL.createObjectURL(new Blob([BADGE_WIDGET_LOGO_SVG], { type: "image/svg+xml" }));
   logo.src = logoUrl;
   const releaseLogo = () => URL.revokeObjectURL(logoUrl);

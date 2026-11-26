@@ -6,6 +6,10 @@ import {
   parseScanFailureDiagnostic,
   type ScanFailureDiagnostic,
   type ScanFailureCode,
+  createInitialPublicAuditProgress,
+  advancePublicAuditProgress,
+  parsePublicAuditProgressEvent,
+  type PublicAuditProgressEvent,
 } from "@desarrolloseguro/core";
 import {
   ScanLeaseLostError,
@@ -20,6 +24,7 @@ export type ScanExecutor = {
   execute(
     job: ClaimedScanJob,
     signal: AbortSignal,
+    onProgress?: (event: PublicAuditProgressEvent) => Promise<void>,
   ): Promise<ScanExecutorResult>;
 };
 
@@ -163,7 +168,18 @@ export class ScanJobProcessor {
     let executorError: unknown;
     try {
       setStage("execute");
-      result = await this.executor.execute(claimed, abortController.signal);
+      let progress = createInitialPublicAuditProgress();
+      await this.store.updateScanProgress?.(claimed.id, claimed.leaseToken, progress);
+      result = await this.executor.execute(claimed, abortController.signal, async (input) => {
+        const event = parsePublicAuditProgressEvent(input);
+        if (!event) throw new Error("scan_progress_event_invalid");
+        const next = advancePublicAuditProgress(progress, event);
+        if (!next) throw new Error("scan_progress_transition_invalid");
+        if (next === progress) return;
+        const updated = await this.store.updateScanProgress?.(claimed.id, claimed.leaseToken, next);
+        if (!updated) throw new ScanLeaseLostError();
+        progress = next;
+      });
     } catch (error: unknown) {
       executorFailed = true;
       executorError = error;

@@ -13,6 +13,7 @@ import {
 import { parseScanTargetUrl } from "@desarrolloseguro/core";
 import { readScanFailureDiagnostic } from "./runtime-diagnostics.js";
 import { RUNTIME_COORDINATOR_EXECUTION_TIMEOUT_MS } from "./runtime-coordinator-timeouts.js";
+import type { PublicAuditProgressEvent } from "@desarrolloseguro/core";
 
 const MAX_ACTIVE_JOBS = 1;
 const REQUEST_TIMEOUT_MS = 5_000;
@@ -22,6 +23,7 @@ export type RuntimeCoordinatorRunner = {
   execute(
     request: TransportV1ExecutorRequest,
     signal: AbortSignal,
+    onProgress?: (event: PublicAuditProgressEvent) => void,
   ): Promise<
     Omit<ScanRunInput, "jobId" | "leaseToken" | "hostname" | "profileVersion">
   >;
@@ -213,7 +215,10 @@ function handleRequest(
       });
     }, executionTimeoutMs);
     const task = Promise.resolve()
-      .then(() => runner.execute(request, controller.signal))
+      .then(() => runner.execute(request, controller.signal, (event) => {
+        if (socket.destroyed || controller.signal.aborted) return;
+        socket.write(`${JSON.stringify({ protocolVersion: 1, requestId: request.requestId, progressEvent: event })}\n`);
+      }))
       .then(
         (result) => {
           executionSettled = true;

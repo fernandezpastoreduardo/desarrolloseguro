@@ -30,6 +30,7 @@ import {
   type LegalCookieFinding,
   type ScanFailureDiagnostic,
 } from "@desarrolloseguro/core";
+import type { PublicAuditProgress } from "@desarrolloseguro/core";
 import {
   type EnsureScanResult,
   type PostgresScanStore,
@@ -117,6 +118,7 @@ export type PublicDomainStatus = {
   enrollment: "monitored" | "on_demand";
   state: PublicDomainState;
   activeJobId: string | null;
+  auditProgress?: PublicAuditProgress;
   failureCode: ScanFailureCode | null;
   failureDiagnostic: ScanFailureDiagnostic | null;
   lastReport: PublicReport | null;
@@ -203,6 +205,9 @@ export class PublicScanService {
       enrollment: isOptedOut ? "on_demand" : snapshot.enrollment,
       state,
       activeJobId: isOptedOut ? null : snapshot.activeJobId,
+      ...(!isOptedOut && isUpdating && snapshot.activeProgress
+        ? { auditProgress: snapshot.activeProgress }
+        : {}),
       failureCode: state === "failed" ? snapshot.lastFailure?.code ?? null : null,
       failureDiagnostic: state === "failed" ? snapshot.lastFailure?.diagnostic ?? null : null,
       lastReport: report ? toPublicReport(report, report.hostname === "grumphya.com"

@@ -7,7 +7,7 @@ import {
 } from "@nestjs/common";
 import { REPORT_ID_PATTERN } from "../public-scan/public-scan.constants.js";
 
-const AUTHORIZED_HOSTNAMES = new Set(["grumphya.com", "www.grumphya.com"]);
+const AUTHORIZED_HOSTNAMES = new Set(["grumphya.com", "www.grumphya.com", "desarrolloseguro.org"]);
 const AUTHORIZED_ORIGINS = new Set([
   "https://grumphya.com",
   "https://desarrolloseguro.org",

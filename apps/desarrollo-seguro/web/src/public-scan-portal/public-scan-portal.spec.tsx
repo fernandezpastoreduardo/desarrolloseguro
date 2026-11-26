@@ -266,7 +266,74 @@ describe("PublicScanPortal", () => {
     expect(fetchMock.mock.calls.every(([, options]) => options?.method !== "POST")).toBe(true);
   });
 
-  it("lets an authorized user request a bounded analysis for an unscanned domain", async () => {
+  it("shows one concise progress message when a scan is already running without a report", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({
+      hostname: "example.com",
+      enrollment: "on_demand",
+      state: "updating",
+      failureCode: null,
+      activeJobId: "123e4567-e89b-42d3-a456-426614174123",
+      lastReport: null,
+      checkedAt: "2026-11-03T08:00:00.000Z",
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+
+    render(<PublicScanPortal />);
+    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "https://example.com/");
+    await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
+
+    expect(await screen.findByRole("heading", { name: "Actualización en curso" })).toBeVisible();
+    expect(screen.getAllByText("El informe aparecerá aquí cuando termine la comprobación.")).toHaveLength(1);
+    expect(screen.queryByText(/vuelve a consultar para ver el resultado cuando termine/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("list", { name: "Progreso de las comprobaciones" })).toBeVisible();
+    expect(fetchMock.mock.calls.every(([, options]) => options?.method !== "POST")).toBe(true);
+  });
+
+  it("renders the new report from status polling without a page reload", async () => {
+    vi.useFakeTimers();
+    const status = {
+      hostname: "example.com",
+      enrollment: "on_demand",
+      state: "not_scanned",
+      failureCode: null,
+      activeJobId: null,
+      lastReport: null,
+      checkedAt: "2026-11-03T08:00:00.000Z",
+    };
+    const completedStatus = {
+      ...status,
+      state: "fresh",
+      lastReport: SCORED_PUBLIC_REPORT,
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(Response.json(status))
+      .mockResolvedValueOnce(Response.json({ hostname: "example.com", state: "queued" }, { status: 202 }))
+      .mockResolvedValueOnce(Response.json(completedStatus))
+      .mockResolvedValueOnce(Response.json([]));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<PublicScanPortal />);
+    const input = screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME });
+    const form = input.closest("form");
+    if (!form) throw new Error("search_form_missing");
+
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "https://example.com/" } });
+      fireEvent.submit(form);
+      await Promise.resolve();
+    });
+    expect(screen.getByRole("progressbar", { name: "Progreso del análisis" })).toBeVisible();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000);
+    });
+
+    expect(screen.getByRole("heading", { name: "Qué significa esta valoración" })).toBeVisible();
+    expect(screen.queryByRole("progressbar", { name: "Progreso del análisis" })).not.toBeInTheDocument();
+    expect(screen.queryByText("La consulta no está disponible")).not.toBeInTheDocument();
+  });
+
+  it("starts one bounded analysis when the user consults an unscanned domain", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
@@ -294,33 +361,21 @@ describe("PublicScanPortal", () => {
     );
     await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
 
-    expect(fetchMock).toHaveBeenCalledWith(STATUS_ENDPOINT, {
+    expect(fetchMock).toHaveBeenNthCalledWith(1, STATUS_ENDPOINT, {
       headers: { Accept: "application/json" },
       method: "GET",
       credentials: "omit",
       cache: "no-store",
     });
-    expect(
-      await screen.findByRole("heading", { name: "Aún no hay un informe" }),
-    ).toBeVisible();
-    expect(screen.getByText(/si solicitas el análisis, las comprobaciones seguirán el alcance/i)).toBeVisible();
-    const authorization = screen.getByRole("checkbox", {
-      name: /tengo autorización para solicitar este análisis/i,
-    });
-    const requestButton = screen.getByRole("button", {
-      name: "Solicitar análisis",
-    });
-    expect(requestButton).toBeDisabled();
-    await user.click(authorization);
-    await user.click(requestButton);
-
-    expect(fetchMock).toHaveBeenLastCalledWith(ANALYSIS_REQUEST_ENDPOINT, {
+    expect(fetchMock).toHaveBeenNthCalledWith(2, ANALYSIS_REQUEST_ENDPOINT, {
       method: "POST",
       headers: { Accept: "application/json", "Content-Type": "application/json" },
       credentials: "omit",
       cache: "no-store",
       body: JSON.stringify({ authorized: true, targetUrl: "https://example.com/" }),
     });
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Solicitar análisis" })).not.toBeInTheDocument();
     expect(await screen.findByRole("progressbar", { name: "Progreso del análisis" }))
       .toHaveAttribute("data-phase", "queued");
     expect(
@@ -911,12 +966,6 @@ describe("PublicScanPortal", () => {
       "https://example.com/",
     );
     await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
-    await user.click(
-      await screen.findByRole("checkbox", {
-        name: /tengo autorización para solicitar este análisis/i,
-      }),
-    );
-    await user.click(screen.getByRole("button", { name: "Solicitar análisis" }));
     expect(await screen.findByRole("progressbar", { name: "Progreso del análisis" }))
       .toHaveAttribute("data-phase", "queued");
 
@@ -1409,7 +1458,7 @@ describe("PublicScanPortal", () => {
       .toHaveAttribute("data-phase", "queued");
   });
 
-  it("shows an indeterminate progress bar for a domain with an active scan", async () => {
+  it("shows each pending audit aspect while a domain scan is active", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
@@ -1433,14 +1482,12 @@ describe("PublicScanPortal", () => {
     );
     await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
 
-    const progress = await screen.findByRole("progressbar", {
-      name: "Progreso del análisis",
-    });
-    expect(progress).toHaveAttribute(
-      "aria-valuetext",
-      expect.stringContaining("El tiempo depende de las pruebas necesarias"),
-    );
-    expect(progress).not.toHaveAttribute("aria-valuenow");
+    const progress = await screen.findByRole("list", { name: "Progreso de las comprobaciones" });
+    expect(progress.querySelectorAll(".ds-portal__spinner")).toHaveLength(4);
+    expect(progress).toHaveTextContent("Ética: pendiente");
+    expect(progress).toHaveTextContent("Privacidad: pendiente");
+    expect(progress).toHaveTextContent("Seguridad: pendiente");
+    expect(progress).toHaveTextContent("Rendimiento: pendiente");
   });
 
   it("accepts and labels a transport-v1 report", async () => {
@@ -1799,7 +1846,8 @@ describe("PublicScanPortal", () => {
   });
 
   it("adds HTTPS to an address without a scheme and keeps the placeholder generic", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(Response.json({
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(Response.json({
       hostname: "cualquierdominio.com",
       enrollment: "on_demand",
       state: "not_scanned",
@@ -1807,7 +1855,8 @@ describe("PublicScanPortal", () => {
       activeJobId: null,
       lastReport: null,
       checkedAt: "2026-11-03T08:00:00.000Z",
-    }));
+    }))
+      .mockResolvedValueOnce(Response.json({ hostname: "cualquierdominio.com", state: "queued" }, { status: 202 }));
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
 
@@ -1827,6 +1876,13 @@ describe("PublicScanPortal", () => {
         cache: "no-store",
       },
     );
+    expect(fetchMock).toHaveBeenLastCalledWith(ANALYSIS_REQUEST_ENDPOINT.replace("example.com", "cualquierdominio.com"), {
+      method: "POST",
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      credentials: "omit",
+      cache: "no-store",
+      body: JSON.stringify({ authorized: true, targetUrl: "https://cualquierdominio.com/ruta?plan=basico" }),
+    });
   });
 
   it("rejects explicit HTTP URLs instead of auditing an insecure URL", async () => {
@@ -1903,15 +1959,6 @@ describe("PublicScanPortal", () => {
       fireEvent.submit(form);
       await Promise.resolve();
     });
-    await act(async () => {
-      fireEvent.click(
-        screen.getByRole("checkbox", {
-          name: /tengo autorización para solicitar este análisis/i,
-        }),
-      );
-      fireEvent.click(screen.getByRole("button", { name: "Solicitar análisis" }));
-      await Promise.resolve();
-    });
 
     const announcement = screen.getByText(
       "Tu solicitud está en cola. Te avisaremos cuando empiece la comprobación.",
@@ -1948,9 +1995,6 @@ describe("PublicScanPortal", () => {
     render(<PublicScanPortal />);
     await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "https://example.com/");
     await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
-    await user.click(screen.getByRole("checkbox", { name: /tengo autorización/i }));
-    await user.click(screen.getByRole("button", { name: "Solicitar análisis" }));
-
     const progress = await screen.findByRole("progressbar", { name: "Progreso del análisis" });
     expect(progress).toHaveAttribute("data-phase", "submitting");
     expect(progress).toHaveAttribute("aria-busy", "true");

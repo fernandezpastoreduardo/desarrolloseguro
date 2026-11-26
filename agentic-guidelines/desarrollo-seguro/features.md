@@ -35,6 +35,35 @@ trabajo nuevo. Los informes históricos no se borran ni se modifican y no se
 encolan análisis automáticamente; los límites por minuto, de cola y de un
 trabajo activo por hostname siguen vigentes.
 
+Al consultar una URL sin informe previo, la acción de consulta también registra
+automáticamente un análisis: no se pide una confirmación adicional ni una
+segunda pulsación para iniciarlo. Una URL que ya tiene informe conserva la
+consulta de solo lectura y los controles explícitos para solicitar una nueva
+revisión. Después de registrar o detectar un trabajo activo, el portal consulta
+su estado automáticamente y muestra el informe nuevo sin recargar la página.
+Mientras no hay informe disponible se presenta un único mensaje breve de
+progreso, sin repetir la misma explicación en dos bloques.
+
+Los cuatro aspectos del informe —Ética, Privacidad, Seguridad y Rendimiento—
+mantienen el resultado disponible y muestran un spinner solo mientras sus
+comprobaciones estén pendientes o en curso. El estado de cada aspecto procede de progreso real
+persistido por el trabajo; no se simula progreso a partir del tiempo
+transcurrido.
+
+El contrato temporal `public-audit-progress-v1` contiene para cada aspecto
+`pending`, `running` o `complete`, sin porcentajes ni datos del sitio. Se
+almacena en `ds_scan_jobs` mientras el job está activo y la API lo expone solo
+en el estado del mismo hostname y URL consultados. Las transiciones son
+monótonas: `pending → running → complete`. El worker publica: Seguridad tras
+las sondas HTTP/TLS/DNS; Privacidad tras la observación de privacidad;
+Rendimiento tras las mediciones de móvil y escritorio; Ética tras combinar las
+comprobaciones finales con la comparación documental/de servicios. El informe
+completo sigue siendo inmutable y solo se publica al terminar. El portal
+conserva el último informe disponible y muestra al lado los aspectos que se
+están actualizando; sin informe previo, presenta los cuatro estados por
+separado hasta que esté disponible el resultado final. Al acabar o fallar el
+job, se borra este estado temporal.
+
 La URL completa se propaga por admisión, job temporal, transporte/worker,
 perfil y validación del informe. Rendimiento usa mediciones propias tipo
 Lighthouse para móvil y escritorio, sin librerías externas ni atribución de
@@ -73,6 +102,14 @@ comparación de servicios y ética v6. Los tests cubren la propagación de esos 
 hasta el informe público, tanto con resultados conclusivos como con un error
 verificable del auditor.
 
+La consulta de una URL sin informe provoca una única solicitud autorizada y
+presenta su resultado al terminar sin una recarga; una consulta de una URL con
+informe sigue siendo de solo lectura. El estado sin informe no repite el mismo
+texto de progreso. Las comprobaciones cubren las dos rutas. Para progreso
+parcial, el estado de cada uno de los cuatro aspectos debe provenir del job y
+actualizarse al completar sus comprobaciones; no se aceptan spinners
+decorativos ni estados calculados solo por tiempo.
+
 Las cargas del navegador incluyen los recursos de terceros que la página
 solicite con GET/HEAD. Salen por el proxy por análisis, con DNS fijado a IPv4
 pública, solo puertos 80/443 y los límites de tiempo, solicitudes y bytes ya
@@ -107,7 +144,7 @@ Una regresión adicional debe empezar con `DS-QUAL-02` provisionalmente
 comprobar que la nueva sanitización produce `pass`; el umbral de respuesta
 superior a 2.500 ms conserva `fail`.
 
-**Disponible:** API `GET` de estado e informe y `POST` explícito para solicitar un análisis; límites antiabuso por minuto, capacidad compartida PostgreSQL y proyección que excluye evidencia interna. La consulta `GET` no resuelve hostnames ni encola trabajos. La solicitud `POST` requiere confirmación de autorización y guarda una admisión `on_demand` de forma transaccional. Si se encola, el portal consulta el estado cada cinco segundos, hasta 15 minutos mientras haya trabajo activo, y presenta el informe nuevo cuando queda guardado. Si falla la admisión o no aparece un trabajo activo ni un informe nuevo, detiene el sondeo y permite reintentar. El runtime real está desplegado; el 20 de noviembre de 2026 se verificó una renovación periódica que produjo un informe nuevo y actualizó la certificación.
+**Disponible:** API `GET` de estado e informe y `POST` para solicitar una revisión nueva; límites antiabuso por minuto, capacidad compartida PostgreSQL y proyección que excluye evidencia interna. La consulta GET no encola trabajos cuando ya existe un informe; cuando no hay informe, la acción del buscador solicita una auditoría. La revisión nueva de una URL ya auditada requiere confirmar autorización. El portal consulta el estado cada cinco segundos, hasta 15 minutos mientras haya trabajo activo, y presenta el informe nuevo cuando queda guardado. Si falla la admisión o no aparece un trabajo activo ni un informe nuevo, detiene el sondeo y permite reintentar. El estado temporal incluye progreso real y monotónico por aspecto, persistido en el job y expuesto mientras siga activo. El runtime real está desplegado; el 20 de noviembre de 2026 se verificó una renovación periódica que produjo un informe nuevo y actualizó la certificación.
 
 **Corrección de persistencia `domain-v5`:** el validador SQL de resultados debe admitir el perfil `domain-v5` en los mismos puntos de allowlist que `domain-v4`, conservando la validación acotada de controles, métodos, rutas y evidencia. El control `DS-QUAL-02` debe admitir y validar las 14 métricas móvil/escritorio que requiere el perfil, con los mismos límites enteros seguros del parser TypeScript; un resultado `pass` requiere el conjunto completo. La migración debe extender de forma robusta definiciones históricas que puedan contener entradas duplicadas; su comprobación no puede limitarse a encontrar `domain-v5` en cualquier parte de la función. La regresión PostgreSQL debe ejecutar la persistencia real de un informe solicitado `domain-v5` con métricas completas y volver a leerlas. El job no se considera completado si se generó una observación pero el informe fue rechazado al guardarse.
 

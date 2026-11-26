@@ -10,6 +10,7 @@ import {
   type TransportV1ExecutorRequest,
 } from "./transport-v1-executor-protocol.js";
 import type { RuntimeCoordinatorRunner } from "./runtime-coordinator-server.js";
+import type { PublicAuditProgressEvent } from "@desarrolloseguro/core";
 import { assessPrivacyObservation, getObservedPublicServices } from "./privacy-assessment-builder.js";
 import { mergePrivacyBrowserChecks } from "./privacy-public-browser-evidence.js";
 import { buildLegalCookieFindings } from "./privacy-legal-cookie-findings.js";
@@ -91,7 +92,7 @@ export type DockerRuntimeSession = {
     request: TransportV1ExecutorRequest,
     signal: AbortSignal,
   ): Promise<unknown>;
-  observePrivacy?(request: TransportV1ExecutorRequest, signal: AbortSignal): Promise<PrivacyBrowserObservation>;
+  observePrivacy?(request: TransportV1ExecutorRequest, signal: AbortSignal, onProgress?: (event: PublicAuditProgressEvent) => void): Promise<PrivacyBrowserObservation>;
   close(): Promise<void>;
 };
 
@@ -110,7 +111,7 @@ export function createDockerRuntimeCoordinatorRunner(
 ): RuntimeCoordinatorRunner {
   const diagnostic = factory.diagnostic ?? createJsonLineRuntimeDiagnostic();
   return {
-    async execute(request, signal): Promise<
+    async execute(request, signal, onProgress): Promise<
       Omit<ScanRunInput, "jobId" | "leaseToken" | "hostname" | "profileVersion">
     > {
       if (signal.aborted) throw new Error("request_aborted");
@@ -131,6 +132,7 @@ export function createDockerRuntimeCoordinatorRunner(
         }
         if (signal.aborted) throw new Error("request_aborted");
         let responseInput: unknown;
+        onProgress?.({ aspect: "security", state: "running" });
         try {
           responseInput = await session.execute(request, signal);
         } catch (error) {
@@ -169,12 +171,15 @@ export function createDockerRuntimeCoordinatorRunner(
           );
         }
         const executorResult = response.result;
+        onProgress?.({ aspect: "security", state: "complete" });
         result = executorResult;
         let privacyAssessment = assessPrivacy({ criteria: [] });
         let legalCookieFindings: ReturnType<typeof buildLegalCookieFindings> = [];
         let observation: PrivacyBrowserObservation | undefined;
+        onProgress?.({ aspect: "privacy", state: "running" });
+        onProgress?.({ aspect: "performance", state: "running" });
         try {
-          observation = await session.observePrivacy?.(request, signal);
+          observation = await session.observePrivacy?.(request, signal, onProgress);
         } catch (error) {
           observation = undefined;
           const message = error instanceof Error ? error.message : "";
@@ -183,6 +188,8 @@ export function createDockerRuntimeCoordinatorRunner(
             : "executor_application_failed";
           diagnostic({ type: "runtime_diagnostic", stage: "privacy_browser_observation", code });
         }
+        onProgress?.({ aspect: "privacy", state: "complete" });
+        onProgress?.({ aspect: "performance", state: "complete" });
         if (observation) {
           try {
             privacyAssessment = assessPrivacyObservation(observation);
@@ -197,6 +204,7 @@ export function createDockerRuntimeCoordinatorRunner(
             diagnostic({ type: "runtime_diagnostic", stage: "cookie_legal_findings", code: "executor_application_failed" });
           }
         }
+        onProgress?.({ aspect: "ethics", state: "running" });
         const publicServiceComparison: ReturnType<typeof assessPublicServiceComparison> | null = runRuntimePhase(
           "service_comparison",
           () => executorResult.publicPolicyTransparencyAssessment
@@ -519,7 +527,7 @@ export function createDockerRuntimeSessionFactory(
             throw error;
           }
         },
-        observePrivacy: async (privacyRequest, privacySignal) => {
+        observePrivacy: async (privacyRequest, privacySignal, onProgress) => {
           if (!options.privacyBrowserImage || !options.privacyEgressImage) {
             throw new Error("privacy_runtime_images_missing");
           }
@@ -537,7 +545,7 @@ export function createDockerRuntimeSessionFactory(
           await runDocker(dockerBinary, ["network", "connect", "--alias", "privacy-egress", privacyNetworkName, privacyProxyName], undefined, privacySignal, undefined, undefined, undefined, dockerSocketPath);
           await waitForPrivacyProxy(dockerBinary, dockerSocketPath, privacyProxyName, privacySignal);
           privacyBrowserMayExist = true;
-          const output = await runDocker(dockerBinary, ["run", "--interactive", "--name", privacyBrowserName, ...restrictedPrivacyBrowserArguments(privacyNetworkName), options.privacyBrowserImage], `${browserInput}\n`, privacySignal, PRIVACY_BROWSER_MAX_RESPONSE_BYTES, false, PRIVACY_BROWSER_COMMAND_TIMEOUT_MS, dockerSocketPath);
+          const output = await runDocker(dockerBinary, ["run", "--interactive", "--name", privacyBrowserName, ...restrictedPrivacyBrowserArguments(privacyNetworkName), options.privacyBrowserImage], `${browserInput}\n`, privacySignal, PRIVACY_BROWSER_MAX_RESPONSE_BYTES, false, PRIVACY_BROWSER_COMMAND_TIMEOUT_MS, dockerSocketPath, undefined, onProgress);
           try {
             let observation = parsePrivacyBrowserObservation(JSON.parse(output.trim()) as unknown, privacyRequest);
             const proxyStats = await stopPrivacyProxyAndReadStats(dockerBinary, dockerSocketPath, privacyProxyName, privacySignal);
@@ -821,6 +829,7 @@ async function runDocker(
   timeoutMs = DOCKER_COMMAND_TIMEOUT_MS,
   dockerSocketPath = "/var/run/docker.sock",
   acceptNonZeroStderr?: RegExp,
+  onProgress?: (event: PublicAuditProgressEvent) => void,
 ): Promise<string> {
   if (signal?.aborted) throw new Error("request_aborted");
   return new Promise((resolve, reject) => {
@@ -831,6 +840,7 @@ async function runDocker(
     const errorChunks: Buffer[] = [];
     let receivedBytes = 0;
     let receivedErrorBytes = 0;
+    let pendingStdout = "";
     let settled = false;
     const timeout = setTimeout(() => {
       child.kill("SIGTERM");
@@ -855,7 +865,21 @@ async function runDocker(
         finish(new Error("docker_command_output_too_large"));
         return;
       }
-      chunks.push(Buffer.from(chunk));
+      if (!onProgress) {
+        chunks.push(Buffer.from(chunk));
+        return;
+      }
+      pendingStdout += chunk.toString("utf8");
+      let newline = pendingStdout.indexOf("\n");
+      while (newline >= 0) {
+        const line = pendingStdout.slice(0, newline);
+        pendingStdout = pendingStdout.slice(newline + 1);
+        let payload: unknown;
+        try { payload = JSON.parse(line) as unknown; } catch { chunks.push(Buffer.from(`${line}\n`)); newline = pendingStdout.indexOf("\n"); continue; }
+        if (isBrowserProgressMessage(payload)) onProgress(payload.progressEvent);
+        else chunks.push(Buffer.from(`${line}\n`));
+        newline = pendingStdout.indexOf("\n");
+      }
     });
     child.stderr?.on("data", (chunk: Buffer) => {
       receivedErrorBytes += chunk.byteLength;
@@ -865,6 +889,7 @@ async function runDocker(
     });
     child.once("error", () => finish(new Error("docker_runtime_unavailable")));
     child.once("close", (code) => {
+      if (pendingStdout.length > 0) chunks.push(Buffer.from(pendingStdout));
       if (code !== 0 && !allowNonZeroExit) {
         const errorOutput = Buffer.concat(errorChunks).toString("utf8").trim();
         if (acceptNonZeroStderr?.test(errorOutput)) {
@@ -900,6 +925,19 @@ function classifyDockerCommandFailure(output: string): RuntimeDiagnosticCode {
     return "docker_resource_in_use";
   }
   return "docker_runtime_command_failed";
+}
+
+function isBrowserProgressMessage(value: unknown): value is {
+  progressEvent: PublicAuditProgressEvent;
+} {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const message = value as Record<string, unknown>;
+  if (message.protocolVersion !== 1 || typeof message.requestId !== "string") return false;
+  const event = message.progressEvent;
+  if (typeof event !== "object" || event === null || Array.isArray(event)) return false;
+  const candidate = event as Record<string, unknown>;
+  return ["ethics", "privacy", "security", "performance"].includes(String(candidate.aspect)) &&
+    (candidate.state === "running" || candidate.state === "complete");
 }
 
 async function removeContainer(

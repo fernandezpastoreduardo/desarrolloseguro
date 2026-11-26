@@ -93,6 +93,20 @@ describe("PostgresScanStore unit behavior", () => {
     ]);
   });
 
+  it("persists bounded audit progress through the lease-guarded database operation", async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [{ ds_update_scan_progress: true }] });
+    const store = new PostgresScanStore(makePool({ query }));
+    const progress = {
+      policyVersion: "public-audit-progress-v1" as const,
+      aspects: { ethics: "pending" as const, privacy: "running" as const, security: "complete" as const, performance: "pending" as const },
+    };
+
+    await expect(store.updateScanProgress("job-id", "lease-token", progress)).resolves.toBe(true);
+    expect(query).toHaveBeenCalledWith("SELECT public.ds_update_scan_progress($1, $2, $3::jsonb)", [
+      "job-id", "lease-token", JSON.stringify(progress),
+    ]);
+  });
+
   it("reports storage health as false when the database query fails", async () => {
     const pool = makePool({
       query: vi.fn().mockRejectedValue(new Error("db")),

@@ -521,6 +521,7 @@ async function applyRuntimeGrants(pool: Pool): Promise<void> {
       public.ds_renew_scan_lease(uuid, uuid, integer),
       public.ds_recover_expired_scan_leases(integer),
       public.ds_fail_scan(uuid, uuid, text, integer, jsonb),
+      public.ds_update_scan_progress(uuid, uuid, jsonb),
       public.ds_complete_scan_with_privacy(uuid, uuid, timestamptz, text,
         timestamptz, text, jsonb, jsonb, jsonb, jsonb),
       public.ds_complete_scan_with_transparency(uuid, uuid, timestamptz, text,

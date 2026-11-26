@@ -304,7 +304,7 @@ describePostgres.sequential(
       });
     });
 
-    it("grants the worker only its six lease and report functions", async () => {
+    it("grants the worker only its bounded lease, progress, and report functions", async () => {
       const access = await workerPool?.query<{
         can_claim: boolean;
         can_renew: boolean;
@@ -312,6 +312,7 @@ describePostgres.sequential(
         can_fail: boolean;
         can_complete: boolean;
         can_complete_privacy: boolean;
+        can_update_progress: boolean;
         can_complete_public_policy: boolean;
         can_purge_reports: boolean;
         can_read_reports: boolean;
@@ -326,6 +327,7 @@ describePostgres.sequential(
          has_function_privilege(current_user, 'public.ds_fail_scan(uuid,uuid,text,integer,jsonb)', 'EXECUTE') AS can_fail,
          has_function_privilege(current_user, 'public.ds_complete_scan(uuid,uuid,timestamptz,text,timestamptz,text,jsonb,jsonb,jsonb)', 'EXECUTE') AS can_complete,
          has_function_privilege(current_user, 'public.ds_complete_scan_with_privacy(uuid,uuid,timestamptz,text,timestamptz,text,jsonb,jsonb,jsonb,jsonb)', 'EXECUTE') AS can_complete_privacy,
+         has_function_privilege(current_user, 'public.ds_update_scan_progress(uuid,uuid,jsonb)', 'EXECUTE') AS can_update_progress,
          has_function_privilege(current_user, 'public.ds_complete_scan_with_transparency(uuid,uuid,timestamptz,text,timestamptz,text,jsonb,jsonb,jsonb,jsonb,jsonb,jsonb,jsonb)', 'EXECUTE') AS can_complete_public_policy,
          has_function_privilege(current_user, 'public.ds_purge_expired_reports(timestamptz)', 'EXECUTE') AS can_purge_reports,
          has_table_privilege(current_user, 'public.ds_scan_runs', 'SELECT') AS can_read_reports,
@@ -340,6 +342,7 @@ describePostgres.sequential(
         can_fail: true,
         can_complete: false,
         can_complete_privacy: true,
+        can_update_progress: true,
         can_complete_public_policy: true,
         can_purge_reports: false,
         can_read_reports: false,
@@ -366,6 +369,7 @@ describePostgres.sequential(
          (has_function_privilege(current_user, 'public.ds_claim_next_scan(integer)', 'EXECUTE')
            OR has_function_privilege(current_user, 'public.ds_renew_scan_lease(uuid,uuid,integer)', 'EXECUTE')
            OR has_function_privilege(current_user, 'public.ds_recover_expired_scan_leases(integer)', 'EXECUTE')
+           OR has_function_privilege(current_user, 'public.ds_update_scan_progress(uuid,uuid,jsonb)', 'EXECUTE')
            OR has_function_privilege(current_user, 'public.ds_fail_scan(uuid,uuid,text,integer,jsonb)', 'EXECUTE')
            OR has_function_privilege(current_user, 'public.ds_complete_scan(uuid,uuid,timestamptz,text,timestamptz,text,jsonb,jsonb,jsonb)', 'EXECUTE')
            OR has_function_privilege(current_user, 'public.ds_complete_scan_with_transparency(uuid,uuid,timestamptz,text,timestamptz,text,jsonb,jsonb,jsonb,jsonb,jsonb,jsonb,jsonb)', 'EXECUTE')) AS can_execute_worker_functions,

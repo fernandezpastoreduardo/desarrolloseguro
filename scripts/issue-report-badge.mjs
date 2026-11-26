@@ -9,8 +9,9 @@ const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const BADGE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
 
-export async function issueReportBadge(reportId, issuerToken, fetchImpl = fetch) {
-  if (!UUID_PATTERN.test(reportId) || typeof issuerToken !== "string" || issuerToken.length < 32) {
+export async function issueReportBadge(reportId, issuerToken, fetchImpl = fetch, hostname = "grumphya.com") {
+  if (!UUID_PATTERN.test(reportId) || typeof issuerToken !== "string" || issuerToken.length < 32 ||
+    !["grumphya.com", "www.grumphya.com", "desarrolloseguro.org"].includes(hostname)) {
     throw new Error("invalid_report_badge_issue_input");
   }
   const response = await fetchImpl(BADGE_API_URL, {
@@ -23,7 +24,7 @@ export async function issueReportBadge(reportId, issuerToken, fetchImpl = fetch)
     credentials: "omit",
     cache: "no-store",
     redirect: "error",
-    body: JSON.stringify({ hostname: "grumphya.com", reportId }),
+    body: JSON.stringify({ hostname, reportId }),
   });
   if (!response.ok) throw new Error(`report_badge_issue_failed_${response.status}`);
   const payload = await response.json();
@@ -33,15 +34,17 @@ export async function issueReportBadge(reportId, issuerToken, fetchImpl = fetch)
 
 async function main() {
   const reportId = process.argv[2];
-  if (typeof reportId !== "string" || !UUID_PATTERN.test(reportId)) {
-    throw new Error("usage: node scripts/issue-report-badge.mjs <real-report-uuid>");
+  const hostname = process.argv[3] ?? "grumphya.com";
+  if (typeof reportId !== "string" || !UUID_PATTERN.test(reportId) ||
+    !["grumphya.com", "www.grumphya.com", "desarrolloseguro.org"].includes(hostname)) {
+    throw new Error("usage: node scripts/issue-report-badge.mjs <real-report-uuid> [hostname]");
   }
   const fileStats = await stat(BADGE_ISSUER_SECRET_PATH);
   if (!fileStats.isFile() || fileStats.uid !== 0 || (fileStats.mode & 0o077) !== 0) {
     throw new Error("report_badge_issuer_secret_permissions_invalid");
   }
   const issuerToken = (await readFile(BADGE_ISSUER_SECRET_PATH, "utf8")).trim();
-  const badge = await issueReportBadge(reportId, issuerToken);
+  const badge = await issueReportBadge(reportId, issuerToken, fetch, hostname);
   process.stdout.write(`${JSON.stringify(badge, null, 2)}\n`);
 }
 
@@ -53,7 +56,7 @@ function isIssuedBadge(value, reportId) {
   } catch {
     return false;
   }
-  return ["grumphya.com", "www.grumphya.com"].includes(value.hostname) &&
+  return ["grumphya.com", "www.grumphya.com", "desarrolloseguro.org"].includes(value.hostname) &&
     value.canonicalHostname === value.hostname && value.reportId === reportId &&
     typeof value.token === "string" && BADGE_TOKEN_PATTERN.test(value.token) &&
     verifyUrl.origin === "https://desarrolloseguro.org" &&
