@@ -61,6 +61,15 @@ La nota global sigue siendo la media aritmética de móvil y escritorio.
 Si falta cualquier métrica requerida, el perfil queda sin nota y la tarjeta no
 promedia resultados parciales.
 
+Esperar a que la red quede inactiva tiene un límite de 15 segundos. Si vence,
+Chromium aún evalúa las métricas capturadas dentro del presupuesto de la
+observación; un perfil solo queda `unknown` si sigue faltando un dato requerido
+o si falla la captura. En ese caso el worker registra el perfil y los nombres
+de los datos ausentes, sin guardar la URL, el hostname, contenido de página ni
+texto de excepción. Las métricas parciales no se guardan ni publican. El informe
+identifica la falta de métricas móviles o de escritorio por separado de la
+respuesta HTTP inicial.
+
 La observación de privacidad y los perfiles de rendimiento disponen cada uno
 de hasta 120 segundos. Son plazos independientes: el tiempo empleado por los
 flujos de privacidad no reduce el de móvil y escritorio. El contenedor y el

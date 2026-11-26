@@ -131,6 +131,16 @@ HTTP inicial con las métricas de Chromium requeridas. El estado provisional
 perfiles se completaron; una respuesta lenta sigue siendo `fail`, y la falta
 de cualquier dato requerido sigue siendo `unknown`.
 
+Un timeout al esperar `networkidle` no descarta por sí solo las métricas que
+Chromium ya haya medido: se mantiene el límite de observación y se evalúan los
+datos disponibles. Si un perfil queda `unknown`, el worker registra un
+diagnóstico estructurado con el perfil y los nombres de métricas ausentes, sin
+URL, hostname, texto del sitio ni mensajes de excepción. El resumen ético de
+Rendimiento debe describir la falta de métricas de perfil y no afirmar que
+faltan tiempo o tamaño HTTP inicial cuando esos valores constan en la evidencia.
+Las métricas parciales permanecen dentro del intercambio entre el navegador
+aislado y el coordinador; no se guardan ni se publican como resultado del perfil.
+
 **Criterios:** una URL con ruta y query conserva ambos en el alcance y el
 informe; el fragmento no aparece en solicitudes ni persistencia; una URL con
 credenciales, esquema distinto de HTTPS, host no público o destino no permitido se

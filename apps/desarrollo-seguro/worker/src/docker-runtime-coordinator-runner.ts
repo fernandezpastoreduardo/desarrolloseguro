@@ -548,6 +548,15 @@ export function createDockerRuntimeSessionFactory(
           const output = await runDocker(dockerBinary, ["run", "--interactive", "--name", privacyBrowserName, ...restrictedPrivacyBrowserArguments(privacyNetworkName), options.privacyBrowserImage], `${browserInput}\n`, privacySignal, PRIVACY_BROWSER_MAX_RESPONSE_BYTES, false, PRIVACY_BROWSER_COMMAND_TIMEOUT_MS, dockerSocketPath, undefined, onProgress);
           try {
             let observation = parsePrivacyBrowserObservation(JSON.parse(output.trim()) as unknown, privacyRequest);
+            for (const profile of observation.performance?.profiles ?? []) {
+              if (profile.status === "unknown" && profile.diagnostic) {
+                process.stderr.write(`${JSON.stringify({
+                  type: "performance_profile_incomplete",
+                  profile: profile.profile,
+                  ...profile.diagnostic,
+                })}\n`);
+              }
+            }
             const proxyStats = await stopPrivacyProxyAndReadStats(dockerBinary, dockerSocketPath, privacyProxyName, privacySignal);
             if (!proxyStats || proxyStats.receivedBytes > PRIVACY_BROWSER_BUDGET.receivedBytes || proxyStats.budgetExceeded) {
               observation = {
