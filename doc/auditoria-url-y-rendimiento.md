@@ -32,6 +32,9 @@ TTFB, bytes y la puntuación; TTFB y bytes son datos diagnósticos. El navegador
 se ejecuta detrás del proxy seguro del auditor, con solicitudes GET/HEAD y
 WebSockets bloqueados. No se persiste el informe Lighthouse, capturas ni
 contenido de la página.
+El lanzamiento Puppeteer de Lighthouse usa `--no-sandbox`, igual que Playwright:
+Chromium funciona como usuario sin privilegios y dentro de un contenedor efímero
+con capacidades eliminadas y salida de red limitada al proxy seguro.
 
 Escritorio se mide en Chromium a 1365×768 sin throttling y conserva la rúbrica
 lineal anterior:

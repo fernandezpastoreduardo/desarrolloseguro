@@ -5,6 +5,7 @@ import type { PrivacyBrowserRequestGate } from "./privacy-browser-request-gate.j
 import type { LighthouseRuntimeFailure, PerformanceDiagnosticField, PerformanceProfileEvidence } from "./performance-browser-observer.js";
 
 const CHROME_FLAGS = [
+  "--no-sandbox",
   "--disable-background-networking",
   "--disable-component-update",
   "--disable-sync",
