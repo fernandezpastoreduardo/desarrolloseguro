@@ -209,6 +209,7 @@ describePostgres.sequential(
         worker_cannot_read_public_policy_assessment: boolean;
         api_cannot_read_lease_token: boolean;
         api_cannot_select_all_metrics: boolean;
+        api_can_read_public_audit_progress: boolean;
         api_cannot_insert_jobs: boolean;
         api_cannot_insert_domains: boolean;
         api_can_issue_badges: boolean;
@@ -238,6 +239,7 @@ describePostgres.sequential(
          NOT has_table_privilege('ds_worker', 'public.ds_scan_privacy_assessments', 'SELECT') AS worker_cannot_read_privacy_assessment,
          NOT has_table_privilege('ds_worker', 'public.ds_scan_public_policy_transparency', 'SELECT') AS worker_cannot_read_public_policy_assessment,
          NOT has_column_privilege('ds_api', 'public.ds_scan_jobs', 'lease_token', 'SELECT') AS api_cannot_read_lease_token,
+         has_column_privilege('ds_api', 'public.ds_scan_jobs', 'progress_json', 'SELECT') AS api_can_read_public_audit_progress,
          has_column_privilege('ds_api', 'public.ds_scan_jobs', 'target_url', 'SELECT') AS api_can_read_active_target_url,
          NOT has_table_privilege('ds_api', 'public.ds_scan_metrics', 'SELECT') AS api_cannot_select_all_metrics,
          NOT has_column_privilege('ds_api', 'public.ds_scan_jobs', 'hostname', 'INSERT') AS api_cannot_insert_jobs,
@@ -283,6 +285,7 @@ describePostgres.sequential(
         worker_cannot_read_privacy_assessment: true,
         worker_cannot_read_public_policy_assessment: true,
         api_cannot_read_lease_token: true,
+        api_can_read_public_audit_progress: true,
         api_can_read_active_target_url: true,
         api_cannot_select_all_metrics: true,
         api_cannot_insert_jobs: true,
