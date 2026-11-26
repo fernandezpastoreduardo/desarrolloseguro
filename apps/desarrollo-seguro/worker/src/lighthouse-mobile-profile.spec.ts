@@ -103,6 +103,37 @@ describe("observeLighthouseMobileProfile", () => {
     expect(result).toMatchObject({ profile: "mobile", status: "unknown", score: null });
     expect(result.diagnostic?.missingMetrics).toContain("tbtMs");
   });
+
+  it("logs only a normalized phase and error class when Lighthouse throws", async () => {
+    const browser = { newPage: vi.fn(async () => fakePage()), close: vi.fn(async () => undefined) };
+    const lighthouseError = Object.assign(new Error("Target closed at https://example.com/?token=private"), {
+      name: "TargetCloseError",
+    });
+    const stderrWrite = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+    try {
+      const result = await observeLighthouseMobileProfile({
+        targetUrl: "https://example.com/",
+        proxyUrl: "http://privacy-egress:3128",
+        requestGate: new PrivacyBrowserRequestGate({
+          requestedHostname: "example.com", isThirdPartyHost: () => false, maxRequests: 1_000,
+        }),
+        signal: new AbortController().signal,
+        launchBrowser: vi.fn(async () => browser as never) as never,
+        runLighthouse: vi.fn(async () => { throw lighthouseError; }) as never,
+      });
+
+      expect(result).toMatchObject({ status: "unknown", diagnostic: { code: "browser_observation_error" } });
+      expect(stderrWrite).toHaveBeenCalledWith(`${JSON.stringify({
+        type: "lighthouse_mobile_runtime_error",
+        stage: "run_lighthouse",
+        errorClass: "target_closed",
+      })}\n`);
+      expect(stderrWrite.mock.calls.flat().join(" ")).not.toContain("example.com");
+      expect(stderrWrite.mock.calls.flat().join(" ")).not.toContain("private");
+    } finally {
+      stderrWrite.mockRestore();
+    }
+  });
 });
 
 function fakePage() {
