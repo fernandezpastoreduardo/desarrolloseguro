@@ -20,6 +20,10 @@ export type PerformanceDiagnosticCode = "observation_budget_exhausted" | "observ
   "request_budget_exceeded" | "required_measurement_missing" | "browser_timeout" | "browser_observation_error";
 export type PerformanceDiagnosticField = "fcpMs" | "speedIndexMs" | "lcpMs" | "cls" | "tbtMs" |
   "ttfbMs" | "transferBytes" | "score";
+export type LighthouseRuntimeFailure = {
+  stage: "launch_browser" | "configure_page" | "run_lighthouse" | "read_result";
+  errorClass: "timeout" | "target_closed" | "protocol" | "type" | "other";
+};
 export type PerformanceProfileEvidence = {
   profile: PerformanceProfile;
   status: "complete" | "unknown";
@@ -31,7 +35,11 @@ export type PerformanceProfileEvidence = {
   ttfbMs: number | null;
   transferBytes: number | null;
   score: number | null;
-  diagnostic?: { code: PerformanceDiagnosticCode; missingMetrics?: readonly PerformanceDiagnosticField[] };
+  diagnostic?: {
+    code: PerformanceDiagnosticCode;
+    missingMetrics?: readonly PerformanceDiagnosticField[];
+    runtimeFailure?: LighthouseRuntimeFailure;
+  };
 };
 
 export type PerformanceBrowserEvidence = {

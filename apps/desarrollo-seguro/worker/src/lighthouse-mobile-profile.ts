@@ -2,7 +2,7 @@ import { chromium as playwrightChromium } from "playwright";
 import puppeteer, { type Browser as PuppeteerBrowser, type Page as PuppeteerPage } from "puppeteer-core";
 import lighthouse from "lighthouse";
 import type { PrivacyBrowserRequestGate } from "./privacy-browser-request-gate.js";
-import type { PerformanceDiagnosticField, PerformanceProfileEvidence } from "./performance-browser-observer.js";
+import type { LighthouseRuntimeFailure, PerformanceDiagnosticField, PerformanceProfileEvidence } from "./performance-browser-observer.js";
 
 const CHROME_FLAGS = [
   "--disable-background-networking",
@@ -37,7 +37,7 @@ export async function observeLighthouseMobileProfile(
   let page: PuppeteerPage | undefined;
   let cdp: Awaited<ReturnType<ReturnType<PuppeteerPage["target"]>["createCDPSession"]>> | undefined;
   let timedOut = false;
-  let stage: "launch_browser" | "configure_page" | "run_lighthouse" | "read_result" = "launch_browser";
+  let stage: LighthouseRuntimeFailure["stage"] = "launch_browser";
   const closeBrowser = () => {
     timedOut = true;
     void browser?.close().catch(() => undefined);
@@ -96,15 +96,16 @@ export async function observeLighthouseMobileProfile(
     stage = "read_result";
     return extractMobileProfile(result.lhr as unknown as LighthouseResultShape);
   } catch (error) {
+    const runtimeFailure = { stage, errorClass: classifyError(error) } satisfies LighthouseRuntimeFailure;
     process.stderr.write(`${JSON.stringify({
       type: "lighthouse_mobile_runtime_error",
-      stage,
-      errorClass: classifyError(error),
+      ...runtimeFailure,
     })}\n`);
     return incompleteProfile({
       code: options.signal.aborted || timedOut || error instanceof Error && error.name === "TimeoutError"
         ? "browser_timeout"
         : "browser_observation_error",
+      runtimeFailure,
     });
   } finally {
     options.signal.removeEventListener("abort", closeBrowser);

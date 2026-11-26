@@ -59,6 +59,13 @@ texto de excepción. Las métricas parciales no se guardan ni publican. El infor
 identifica la falta de métricas móviles o de escritorio por separado de la
 respuesta HTTP inicial.
 
+Si Lighthouse lanza una excepción, el contenedor devuelve al coordinador solo
+una fase acotada (`launch_browser`, `configure_page`, `run_lighthouse` o
+`read_result`) y una clase normalizada (`timeout`, `target_closed`, `protocol`,
+`type` u `other`). El coordinador valida estos valores y los escribe en su log
+operativo; no los incluye en la evidencia pública ni conserva el texto de la
+excepción.
+
 La observación de privacidad y los perfiles de rendimiento disponen cada uno
 de hasta 120 segundos. Son plazos independientes: el tiempo empleado por los
 flujos de privacidad no reduce el de móvil y escritorio. El contenedor y el

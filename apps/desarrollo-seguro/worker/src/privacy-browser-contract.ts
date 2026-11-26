@@ -1,5 +1,5 @@
 import type { PrivacyBrowserObservation } from "./privacy-browser-observer.js";
-import type { PerformanceDiagnosticCode, PerformanceDiagnosticField } from "./performance-browser-observer.js";
+import type { LighthouseRuntimeFailure, PerformanceDiagnosticCode, PerformanceDiagnosticField } from "./performance-browser-observer.js";
 
 export const PRIVACY_BROWSER_MAX_RESPONSE_BYTES = 1024 * 1024;
 
@@ -40,14 +40,24 @@ function isPerformance(value: unknown): boolean {
   });
 }
 
-function isPerformanceDiagnostic(value: unknown): value is { code: PerformanceDiagnosticCode; missingMetrics?: readonly PerformanceDiagnosticField[] } {
+function isPerformanceDiagnostic(value: unknown): value is {
+  code: PerformanceDiagnosticCode;
+  missingMetrics?: readonly PerformanceDiagnosticField[];
+  runtimeFailure?: LighthouseRuntimeFailure;
+} {
   const codes: readonly PerformanceDiagnosticCode[] = ["observation_budget_exhausted", "observation_stopped_early",
     "request_budget_exceeded", "required_measurement_missing", "browser_timeout", "browser_observation_error"];
   const fields: readonly PerformanceDiagnosticField[] = ["fcpMs", "speedIndexMs", "lcpMs", "cls", "tbtMs", "ttfbMs", "transferBytes", "score"];
   if (!isRecord(value) || !codes.includes(value.code as PerformanceDiagnosticCode) ||
-      Object.keys(value).some((key) => key !== "code" && key !== "missingMetrics")) return false;
-  return value.missingMetrics === undefined || Array.isArray(value.missingMetrics) &&
-    value.missingMetrics.every((field) => fields.includes(field as PerformanceDiagnosticField));
+      Object.keys(value).some((key) => key !== "code" && key !== "missingMetrics" && key !== "runtimeFailure")) return false;
+  if (value.missingMetrics !== undefined && (!Array.isArray(value.missingMetrics) ||
+      !value.missingMetrics.every((field) => fields.includes(field as PerformanceDiagnosticField)))) return false;
+  if (value.runtimeFailure === undefined) return true;
+  if (!isRecord(value.runtimeFailure) || Object.keys(value.runtimeFailure).length !== 2) return false;
+  const stages: readonly LighthouseRuntimeFailure["stage"][] = ["launch_browser", "configure_page", "run_lighthouse", "read_result"];
+  const errorClasses: readonly LighthouseRuntimeFailure["errorClass"][] = ["timeout", "target_closed", "protocol", "type", "other"];
+  return stages.includes(value.runtimeFailure.stage as LighthouseRuntimeFailure["stage"]) &&
+    errorClasses.includes(value.runtimeFailure.errorClass as LighthouseRuntimeFailure["errorClass"]);
 }
 
 function isFlow(value: unknown): boolean {

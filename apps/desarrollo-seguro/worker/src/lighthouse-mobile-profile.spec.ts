@@ -122,7 +122,10 @@ describe("observeLighthouseMobileProfile", () => {
         runLighthouse: vi.fn(async () => { throw lighthouseError; }) as never,
       });
 
-      expect(result).toMatchObject({ status: "unknown", diagnostic: { code: "browser_observation_error" } });
+      expect(result).toMatchObject({ status: "unknown", diagnostic: {
+        code: "browser_observation_error",
+        runtimeFailure: { stage: "run_lighthouse", errorClass: "target_closed" },
+      } });
       expect(stderrWrite).toHaveBeenCalledWith(`${JSON.stringify({
         type: "lighthouse_mobile_runtime_error",
         stage: "run_lighthouse",

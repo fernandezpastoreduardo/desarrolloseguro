@@ -554,6 +554,7 @@ export function createDockerRuntimeSessionFactory(
                   type: "performance_profile_incomplete",
                   profile: profile.profile,
                   ...profile.diagnostic,
+                  ...(profile.diagnostic.runtimeFailure ? { ...profile.diagnostic.runtimeFailure } : {}),
                 })}\n`);
               }
             }
