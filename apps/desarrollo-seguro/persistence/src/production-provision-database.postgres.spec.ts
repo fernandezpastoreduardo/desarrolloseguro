@@ -389,6 +389,9 @@ describePostgres.sequential(
 
     it("is idempotent and leaves the expected migration state", async () => {
       if (!ADMIN_DATABASE_URL) return;
+      const epochBefore = await targetAdminPool?.query<{ advanced_at: Date }>(
+        "SELECT advanced_at FROM public.ds_scan_admission_epoch WHERE singleton IS TRUE",
+      );
       const targetUrl = new URL(ADMIN_DATABASE_URL);
       targetUrl.username = "ds_api";
       targetUrl.password = API_PASSWORD;
@@ -414,6 +417,12 @@ describePostgres.sequential(
         "SELECT count(*)::integer AS count FROM public.ds_schema_migrations",
       );
       expect(migrationCount?.rows[0]?.count).toBe(DEVELOPMENT_SECURITY_MIGRATION_COUNT);
+      const epochAfter = await targetAdminPool?.query<{ advanced_at: Date }>(
+        "SELECT advanced_at FROM public.ds_scan_admission_epoch WHERE singleton IS TRUE",
+      );
+      expect(epochAfter?.rows[0]?.advanced_at.getTime()).toBeGreaterThan(
+        epochBefore?.rows[0]?.advanced_at.getTime() ?? 0,
+      );
     });
   },
 );

@@ -208,6 +208,7 @@ export async function provisionProductionDevelopmentSecurityDatabase(
     );
     await runDevelopmentSecurityMigrations(migratorPool);
     await applyRuntimeGrants(migratorPool);
+    await migratorPool.query("SELECT public.ds_advance_scan_admission_epoch()");
   } finally {
     await migratorPool.end();
   }

@@ -13,6 +13,12 @@
 - `development-security-runtime-coordinator` no tiene red; es el único servicio autorizado a usar el socket Docker del VPS.
 - `development-security-internal-audit` es un proceso one-shot opt-in del perfil `internal-audit`: no monta PostgreSQL, sale solo por `development-security-egress` y conserva `cap_drop: ALL`, añadiendo únicamente las capacidades necesarias para copiar claves root-only y cambiar al usuario `node`.
 
+En cada deploy, `development-security-migrate` ejecuta el provisionador y este
+avanza el epoch global de admisión tras aplicar las migraciones. Informes previos
+siguen en el historial, pero dejan de consumir los límites de caché de una hora
+y cooldown de 24 horas para permitir pruebas con el código recién desplegado.
+No se inicia ningún análisis desde el provisionador.
+
 El portal no publica puertos del host. Un proxy de borde conectado a la red interna dedicada `development-security-ingress` puede llegar solo al servicio web; la API y la base no tienen puertos de host y la API no pertenece a la red de entrada.
 
 Las redes `development-security-backend` y `development-security-edge` y el volumen `development-security-postgres` pertenecen a esta aplicación. `development-security-ingress` es una red externa dedicada que contiene solo el proxy público y el servicio web; la API y la base de datos no pertenecen a ella. `development-security-egress` solo se asigna a brokers efímeros; el worker y los servicios web/API/base no están conectados a ella. El executor usa `network none`. No se montan sockets Docker, carpetas de otra aplicación, ni sus redes, tablas o secretos dentro del worker.

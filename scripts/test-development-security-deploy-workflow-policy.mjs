@@ -4,11 +4,12 @@ import { readFile } from "node:fs/promises";
 const WORKFLOW_PATH = ".github/workflows/ci.yml";
 const DEPLOY_SCRIPT_PATH = "scripts/deploy-development-security-analysis.sh";
 const ARCHIVE_GATEWAY_PATH = "scripts/deploy-development-security-archive-gateway.sh";
-const [workflow, deployScript, archiveGateway, compose] = await Promise.all([
+const [workflow, deployScript, archiveGateway, compose, provisioner] = await Promise.all([
   readFile(WORKFLOW_PATH, "utf8"),
   readFile(DEPLOY_SCRIPT_PATH, "utf8"),
   readFile(ARCHIVE_GATEWAY_PATH, "utf8"),
   readFile("compose.production.yaml", "utf8"),
+  readFile("apps/desarrollo-seguro/persistence/src/production-provision-database.ts", "utf8"),
 ]);
 const normalizedDeployScript = deployScript.replace(/\\\n/gu, " ");
 
@@ -150,6 +151,11 @@ assert.match(
   normalizedDeployScript,
   /run --rm --no-deps development-security-migrate/u,
   "deployment must run only Desarrollo Seguro migrations before updating services",
+);
+assert.match(
+  provisioner,
+  /await migratorPool\.query\("SELECT public\.ds_advance_scan_admission_epoch\(\)"\)/u,
+  "each deployment must advance the public URL scan admission epoch after migrations",
 );
 assert.match(
   normalizedDeployScript,
