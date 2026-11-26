@@ -30,9 +30,11 @@ de subida. Escritorio usa 1365×768 sin throttling. En móvil se registran FCP,
 Speed Index, LCP, CLS y TBT para la nota; TTFB y bytes transferidos son datos
 diagnósticos. La nota móvil aplica los pesos y curvas lognormales del modelo
 predeterminado de Lighthouse 13.6.0. Speed Index se estima capturando cada
-fotograma hasta un máximo de 100, decodificados en una página aislada en memoria; TBT se limita desde FCP hasta el primer
-período observado de cinco segundos sin tareas largas y con un máximo de dos
-solicitudes activas. Es una puntuación compatible con el modelo de Lighthouse,
+fotograma hasta un máximo de 100, decodificados en una página aislada en memoria. Para TBT se busca desde FCP el primer
+período de cinco segundos sin tareas largas y con un máximo de dos solicitudes
+activas. Si la observación acotada termina antes de encontrar ese período, se
+calcula TBT sobre las tareas observadas desde FCP hasta el final de la
+observación. Es una puntuación compatible con el modelo de Lighthouse,
 no un resultado de su CLI ni un Core Web Vital de usuarios reales. Escritorio
 conserva la rúbrica anterior mientras se define su ajuste.
 
@@ -83,7 +85,8 @@ la evidencia HTTP y las métricas completas de ambos perfiles; una respuesta sup
 mantiene `fail`. Si falta cualquier dato requerido, permanece `unknown`.
 
 El informe público conserva las métricas de ambos perfiles, incluido Speed
-Index móvil, en la evidencia de Rendimiento. PostgreSQL valida los mismos campos y límites numéricos que el
+Index móvil, en la evidencia de Rendimiento. Si el control queda incompleto,
+su resumen nombra el perfil y las métricas que faltan. PostgreSQL valida los mismos campos y límites numéricos que el
 saneador de la aplicación; un resultado de rendimiento marcado como `pass`
 requiere el conjunto móvil y escritorio completo. La cola conserva la URL
 solicitada hasta terminar el trabajo, pero el informe almacena la ruta y query

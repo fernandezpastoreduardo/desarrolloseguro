@@ -20,12 +20,20 @@ describe("calculateTotalBlockingTime", () => {
     expect(result).toBe(50);
   });
 
-  it("returns no TBT when a five-second quiet window was not observed", () => {
+  it("measures TBT through the bounded observation when no five-second quiet window was observed", () => {
     expect(calculateTotalBlockingTime(1_000, [], [
       { startTime: 0, responseEnd: 9_000 },
       { startTime: 0, responseEnd: 9_000 },
       { startTime: 0, responseEnd: 9_000 },
-    ], 9_000)).toBeNull();
-    expect(calculateTotalBlockingTime(1_000, [], [], 5_999)).toBeNull();
+    ], 9_000)).toBe(0);
+    expect(calculateTotalBlockingTime(1_000, [
+      { startTime: 2_000, duration: 180 },
+      { startTime: 4_000, duration: 40 },
+    ], [
+      { startTime: 0, responseEnd: 9_000 },
+      { startTime: 0, responseEnd: 9_000 },
+      { startTime: 0, responseEnd: 9_000 },
+    ], 9_000)).toBe(130);
+    expect(calculateTotalBlockingTime(1_000, [], [], 5_999)).toBe(0);
   });
 });

@@ -140,6 +140,12 @@ Rendimiento debe describir la falta de métricas de perfil y no afirmar que
 faltan tiempo o tamaño HTTP inicial cuando esos valores constan en la evidencia.
 Las métricas parciales permanecen dentro del intercambio entre el navegador
 aislado y el coordinador; no se guardan ni se publican como resultado del perfil.
+Para TBT se busca primero la ventana de cinco segundos sin tareas largas y con
+un máximo de dos solicitudes activas. Si esa ventana no aparece antes del fin
+de la observación acotada, se suman las porciones bloqueantes de las tareas
+observadas desde FCP hasta ese límite; la ausencia de quietud de red no anula
+por sí sola tareas que sí fueron medidas. El resumen de `DS-QUAL-02` nombra
+el perfil y los datos que faltan, y refleja el estado real del control.
 
 **Criterios:** una URL con ruta y query conserva ambos en el alcance y el
 informe; el fragmento no aparece en solicitudes ni persistencia; una URL con
