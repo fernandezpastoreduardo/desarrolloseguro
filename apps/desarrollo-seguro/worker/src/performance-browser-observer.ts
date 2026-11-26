@@ -172,7 +172,7 @@ async function collectProfile(
         quality: 50,
         maxWidth: PERFORMANCE_OBSERVATION_BUDGET.mobile.viewport.width,
         maxHeight: PERFORMANCE_OBSERVATION_BUDGET.mobile.viewport.height,
-        everyNthFrame: 6,
+        everyNthFrame: 1,
       });
       await cdp.send("Emulation.setCPUThrottlingRate", { rate: PERFORMANCE_OBSERVATION_BUDGET.mobile.cpuThrottleRate });
       await cdp.send("Network.emulateNetworkConditions", {

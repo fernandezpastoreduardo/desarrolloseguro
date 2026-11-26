@@ -41,6 +41,8 @@ describe("observePagePerformance", () => {
     expect(fixture.contexts[1].options).toMatchObject({ isMobile: false, serviceWorkers: "block", acceptDownloads: false });
     expect(fixture.cdpCommands).toContainEqual(["Emulation.setCPUThrottlingRate", { rate: 4 }]);
     expect(fixture.cdpCommands).toContainEqual(["Page.startScreencast", expect.any(Object)]);
+    expect(fixture.cdpCommands.find(([command]) => command === "Page.startScreencast")?.[1])
+      .toMatchObject({ everyNthFrame: 1 });
     expect(fixture.cdpCommands).toContainEqual(["Page.stopScreencast", undefined]);
     expect(fixture.cdpCommands).toContainEqual(["Network.emulateNetworkConditions", {
       offline: false,
