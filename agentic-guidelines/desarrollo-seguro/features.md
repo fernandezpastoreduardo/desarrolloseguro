@@ -4,13 +4,15 @@ Este documento separa capacidades ya disponibles de los siguientes incrementos. 
 
 ## F1. Consultar informes públicos
 
-Una persona introduce una URL HTTPS pública y consulta el informe asociado a esa URL. La consulta conserva la ruta y la query, elimina el fragmento, y rechaza credenciales, IP literal, puertos alternativos y esquemas distintos de HTTPS. Los perfiles históricos conservan sus rutas originales; los trabajos nuevos usan `domain-v5` y auditan únicamente la ruta solicitada.
+Una persona introduce una dirección web pública con o sin esquema y consulta el informe asociado. Si falta el esquema, el portal añade HTTPS; los esquemas explícitos se conservan y se rechazan los que no sean HTTPS. La consulta conserva la ruta y la query, elimina el fragmento y rechaza credenciales, IP literal y puertos alternativos. Los perfiles históricos conservan sus rutas originales; los trabajos nuevos usan `domain-v5` y auditan únicamente la ruta solicitada.
 
 ### Perfil vigente: auditoría de URL completa
 
-El buscador público aceptará solo una URL `https://` completa, incluida su ruta
-y query. No convertirá dominios sin esquema ni aceptará URLs HTTP. El fragmento
-se elimina antes de consultar o auditar. Se audita esa URL
+El buscador público aceptará una dirección web completa o una URL `https://`,
+incluidas su ruta y query. Si no se ha escrito un esquema, añadirá `https://`;
+si ya hay uno, conservará lo escrito y la validación existente rechazará
+esquemas distintos de HTTPS. El fragmento se elimina antes de consultar o
+auditar. Se audita esa URL
 exacta en todos los bloques del informe; no se reemplaza por la portada ni por
 las rutas fijas existentes. La identidad, límites antiabuso y validación de
 destino siguen aplicándose al hostname, con la protección SSRF vigente. La query
@@ -23,6 +25,8 @@ El límite antiabuso de 24 horas se aplica a la URL completa normalizada
 auditoría de otra ruta/query no consume ese límite. Para evitar ejecuciones
 simultáneas abusivas, solo puede haber un análisis solicitado activo por
 hostname; una segunda URL espera a que termine ese trabajo y no lo reutiliza.
+El campo de búsqueda muestra como ejemplo un dominio genérico sin esquema,
+ruta ni parámetros; no promueve introducir queries.
 Cada deploy autorizado de Desarrollo Seguro avanza un epoch global de
 admisión. Los trabajos encolados antes del epoch no consumen ni la caché de una
 hora ni el cooldown de 24 horas para ninguna URL, aunque terminen después del

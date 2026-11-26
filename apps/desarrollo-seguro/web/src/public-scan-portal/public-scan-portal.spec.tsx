@@ -1743,7 +1743,38 @@ describe("PublicScanPortal", () => {
     expect(screen.queryByText("rate_limited")).not.toBeInTheDocument();
   });
 
-  it("rejects HTTP URLs instead of auditing an insecure URL", async () => {
+  it("adds HTTPS to an address without a scheme and keeps the placeholder generic", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({
+      hostname: "cualquierdominio.com",
+      enrollment: "on_demand",
+      state: "not_scanned",
+      failureCode: null,
+      activeJobId: null,
+      lastReport: null,
+      checkedAt: "2026-11-03T08:00:00.000Z",
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+
+    render(<PublicScanPortal />);
+    const input = screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME });
+    expect(input).toHaveAttribute("placeholder", "cualquierdominio.com");
+    await user.type(input, "cualquierdominio.com/ruta?plan=basico");
+    await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
+
+    expect(input).toHaveValue("https://cualquierdominio.com/ruta?plan=basico");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/desarrollo-seguro/v1/domains/cualquierdominio.com/status?targetUrl=https%3A%2F%2Fcualquierdominio.com%2Fruta%3Fplan%3Dbasico",
+      {
+        method: "GET",
+        headers: { Accept: "application/json" },
+        credentials: "omit",
+        cache: "no-store",
+      },
+    );
+  });
+
+  it("rejects explicit HTTP URLs instead of auditing an insecure URL", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
@@ -1757,7 +1788,7 @@ describe("PublicScanPortal", () => {
 
     expect(fetchMock).not.toHaveBeenCalled();
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Escribe una URL HTTPS pública completa",
+      "Escribe una dirección HTTPS pública válida",
     );
   });
 
@@ -1776,7 +1807,7 @@ describe("PublicScanPortal", () => {
       "aria-errormessage",
       "ds-portal-domain-error",
     );
-    expect(screen.getByText("Escribe una URL HTTPS pública completa, por ejemplo https://ejemplo.es/servicio.")).toHaveAttribute(
+    expect(screen.getByText("Escribe una dirección HTTPS pública válida, por ejemplo cualquierdominio.com.")).toHaveAttribute(
       "id",
       "ds-portal-domain-error",
     );

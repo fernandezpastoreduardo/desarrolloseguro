@@ -17,7 +17,7 @@ const GENERIC_ERROR =
 const RATE_LIMIT_MESSAGE =
   "Has hecho varias consultas seguidas. Espera un minuto y vuelve a intentarlo.";
 const INVALID_DOMAIN_MESSAGE =
-  "Escribe una URL HTTPS pública completa, por ejemplo https://ejemplo.es/servicio.";
+  "Escribe una dirección HTTPS pública válida, por ejemplo cualquierdominio.com.";
 const NO_REPORT_MESSAGE =
   "Todavía no hay un informe completo guardado para esta dirección.";
 const UPDATING_WITHOUT_REPORT_MESSAGE =
@@ -577,10 +577,11 @@ export function PublicScanPortal() {
   }
 
   async function loadTargetStatus(inputUrl: string, focusOnError = false) {
-    setDomain(inputUrl);
+    const normalizedInputUrl = addDefaultHttpsScheme(inputUrl);
+    setDomain(normalizedInputUrl);
     let target: ReturnType<typeof parseScanTargetUrl>;
     try {
-      target = parseScanTargetUrl(inputUrl);
+      target = parseScanTargetUrl(normalizedInputUrl);
     } catch {
       setState("error");
       setMessage(INVALID_DOMAIN_MESSAGE);
@@ -766,7 +767,7 @@ export function PublicScanPortal() {
               type="text"
               inputMode="url"
               autoComplete="url"
-              placeholder="https://ejemplo.es/servicio?plan=basico"
+              placeholder="cualquierdominio.com"
               value={domain}
               onChange={(event) => setDomain(event.currentTarget.value)}
               aria-describedby="ds-portal-help"
@@ -2167,6 +2168,14 @@ function CertificationStatus({ certification, hostname }: {
       </p>
     </section>
   );
+}
+
+function addDefaultHttpsScheme(input: string): string {
+  if (input.trim() === "") return input;
+  if (/^[a-z][a-z\d+.-]*:\/\//iu.test(input) || /^https?:/iu.test(input)) {
+    return input;
+  }
+  return `https://${input}`;
 }
 
 function getReportTargetUrl(report: PublicReport): string {

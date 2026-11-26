@@ -38,7 +38,7 @@ contrato legal vigente en
   público. La ficha sirve únicamente como referencia visual durante el rediseño.
 
 El portal informa sobre funciones y estados que ya existen: consulta de una
-URL HTTPS completa, lectura del informe disponible, solicitud de análisis tras
+URL HTTPS completa o una dirección sin esquema (se añade HTTPS), lectura del informe disponible, solicitud de análisis tras
 confirmar autorización, estados incompletos o fallidos, historial, categorías,
 transparencia pública, auditoría legal acreditada y sello verificable cuando
 corresponda. Cada explicación mantiene el alcance real del perfil y de la

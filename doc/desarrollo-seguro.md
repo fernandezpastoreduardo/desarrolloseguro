@@ -1,6 +1,6 @@
 # Desarrollo Seguro: alcance actual
 
-Desarrollo Seguro publica páginas de presentación, metodología, privacidad y alcance, información sobre el sello verificable y un portal para consultar informes. El portal permite pegar una URL HTTPS completa o abrirla desde un enlace directo; la consulta lee el estado guardado y no inicia un análisis. Para solicitarlo, la persona debe confirmar que tiene autorización. La disponibilidad de nuevos resultados depende del servicio desplegado.
+Desarrollo Seguro publica páginas de presentación, metodología, privacidad y alcance, información sobre el sello verificable y un portal para consultar informes. El portal permite pegar una dirección web con o sin esquema —si falta, añade HTTPS— o abrirla desde un enlace directo; la consulta lee el estado guardado y no inicia un análisis. La ruta y la query se conservan y el fragmento se elimina. Para solicitar un análisis, la persona debe confirmar que tiene autorización. La disponibilidad de nuevos resultados depende del servicio desplegado.
 
 La portada ofrece enlaces a los informes públicos actuales de `grumphya.com` y `desarrolloseguro.org`. Cada informe conserva sus datos, puntuaciones, categorías, estados y clasificaciones; el portal permite consultar su evidencia y alcance. La ficha estática de prototipo se retiró porque sus cifras eran históricas y no representaban un informe vigente.
 

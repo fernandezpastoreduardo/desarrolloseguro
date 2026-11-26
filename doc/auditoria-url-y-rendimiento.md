@@ -1,10 +1,13 @@
 # Auditoría de URL y medición de rendimiento
 
-El buscador público admite una URL HTTPS completa. La auditoría se limita a
-esa ruta y conserva su query; elimina el fragmento, rechaza credenciales y
-puertos distintos del HTTPS por defecto. La cola guarda la URL hasta que el
-trabajo termina y la elimina entonces. El informe persistido conserva la ruta
-y la query como parte de su alcance.
+El buscador público admite una dirección web con o sin esquema. Si se omite,
+añade `https://`; un esquema explícito se conserva y se validan únicamente
+URLs HTTPS. El ejemplo del campo muestra solo un dominio, sin ruta ni
+parámetros. La auditoría se limita a la ruta introducida y conserva su query;
+elimina el fragmento, rechaza credenciales y puertos distintos del HTTPS por
+defecto. La cola guarda la URL hasta que el trabajo termina y la elimina
+entonces. El informe persistido conserva la ruta y la query como parte de su
+alcance.
 
 La protección contra abuso aplica un límite de 24 horas a cada URL normalizada
 (hostname, ruta y query, sin fragmento), además del límite de solicitudes por
