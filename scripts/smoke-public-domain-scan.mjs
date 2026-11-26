@@ -17,6 +17,7 @@ const SCAN_FAILURE_CODES = new Set([
 ]);
 export const SCAN_TIMEOUT_MS = 15 * 60 * 1000;
 const POLL_INTERVAL_MS = 5_000;
+const ADMISSION_RETRY_INTERVAL_MS = 30_000;
 const PROGRESS_INTERVAL_MS = 30_000;
 
 export function validateCompletedReport(status, previousReportId, hostname = VALIDATION_HOSTNAME) {
@@ -283,6 +284,47 @@ export async function waitForPublicScanReport({
   throw new Error(`public_scan_completion_timeout_${diagnostic}`);
 }
 
+export async function requestPublicScanWhenAvailable({
+  requestAnalysis,
+  getStatus,
+  hostname = VALIDATION_HOSTNAME,
+  previousReportId = null,
+  timeoutMs = SCAN_TIMEOUT_MS,
+  retryIntervalMs = ADMISSION_RETRY_INTERVAL_MS,
+  now = Date.now,
+  wait = delay,
+  onProgress = () => {},
+}) {
+  if (!VALIDATION_HOSTNAMES.has(hostname)) throw new Error("public_scan_hostname_invalid");
+  const deadline = now() + timeoutMs;
+  while (now() < deadline) {
+    const admission = await requestAnalysis();
+    if (admission?.hostname !== hostname) throw new Error("public_scan_admission_invalid");
+    if (["queued", "running"].includes(admission.state)) return { admission, report: null };
+    if (!["cached", "rate_limited"].includes(admission.state)) {
+      throw new Error("public_scan_admission_invalid");
+    }
+    const status = await getStatus();
+    if (status?.lastReport) {
+      if (status.lastReport.id === previousReportId) {
+        if (admission.state === "cached") {
+          throw new Error("public_scan_cached_report_not_refreshed");
+        }
+        if (now() >= deadline) break;
+        onProgress("public_scan_waiting_for_other_url");
+        await wait(Math.min(retryIntervalMs, deadline - now()));
+        continue;
+      }
+      return { admission, report: validateReusableAdmission(admission, status, hostname) };
+    }
+    if (admission.state === "cached") throw new Error("public_scan_cached_report_missing");
+    if (now() >= deadline) break;
+    onProgress("public_scan_waiting_for_other_url");
+    await wait(Math.min(retryIntervalMs, deadline - now()));
+  }
+  throw new Error("public_scan_other_url_slot_timeout");
+}
+
 function emitProgressIfDue(status, now, nextProgressAt, onProgress) {
   if (now < nextProgressAt) return;
   onProgress(describeStatusProgress(status));
@@ -309,13 +351,17 @@ async function runSmoke() {
 
   const initialStatus = await fetchJson(statusPath);
   const previousReportId = initialStatus?.lastReport?.id ?? null;
-  const admission = await fetchJson(
-    `domains/${VALIDATION_HOSTNAME}/analysis-requests`,
-    { method: "POST", body: JSON.stringify({ authorized: true, targetUrl }) },
-  );
-  if (["cached", "rate_limited"].includes(admission.state)) {
-    const status = await fetchJson(statusPath);
-    const report = validateReusableAdmission(admission, status);
+  const { admission, report: reusableReport } = await requestPublicScanWhenAvailable({
+    requestAnalysis: () => fetchJson(
+      `domains/${VALIDATION_HOSTNAME}/analysis-requests`,
+      { method: "POST", body: JSON.stringify({ authorized: true, targetUrl }) },
+    ),
+    getStatus: () => fetchJson(statusPath),
+    previousReportId,
+    onProgress: (message) => process.stdout.write(`${message}\n`),
+  });
+  if (reusableReport) {
+    const report = reusableReport;
     writeNonBlockingDiagnostics(report);
     process.stdout.write(
       `Live domain scan reused existing report (${admission.state}): ${report.checks.filter(({ status: value }) => value !== "unknown").length}/9 checks conclusive; score ${report.ethicsAssessment.score}/100.\n`,

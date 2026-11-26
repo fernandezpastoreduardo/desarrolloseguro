@@ -6,11 +6,20 @@ puertos distintos del HTTPS por defecto. La cola guarda la URL hasta que el
 trabajo termina y la elimina entonces. El informe persistido conserva la ruta
 y la query como parte de su alcance.
 
-La protección contra abuso se aplica al hostname: un análisis solicitado por
-hostname cada 24 horas, un único trabajo solicitado activo por hostname,
-límite de solicitudes por minuto y límite de cola. Una petición duplicada de
-la URL que ya tiene un trabajo activo reutiliza ese trabajo; otra URL activa
-del mismo hostname se limita.
+La protección contra abuso aplica un límite de 24 horas a cada URL normalizada
+(hostname, ruta y query, sin fragmento), además del límite de solicitudes por
+minuto y de cola. Solo puede ejecutarse un análisis solicitado por hostname a
+la vez. Una petición duplicada de la misma URL activa reutiliza ese trabajo;
+otra ruta/query espera a que termine sin reutilizar el resultado ajeno. Los
+escaneos programados tampoco consumen el límite de una URL solicitada.
+
+En cada deploy autorizado, el provisionador avanza un epoch global de admisión
+antes de actualizar los servicios. Los trabajos encolados antes del deploy no
+consumen la caché de 60 minutos ni el cooldown de 24 horas para ninguna URL,
+aunque terminen después. Los informes se conservan intactos en el historial y
+el cambio no genera análisis por sí solo. Una nueva solicitud puede producir
+un informe con el código desplegado, sujeta a los límites de cola, solicitudes
+y ejecución concurrente.
 
 Rendimiento se mide en Chromium, en contextos nuevos para móvil y escritorio.
 Móvil usa 375×812, CPU 4× y red de 150 ms RTT, 1,6 Mbps de bajada y 750 Kbps

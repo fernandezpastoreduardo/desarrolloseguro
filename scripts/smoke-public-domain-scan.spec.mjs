@@ -10,6 +10,7 @@ import {
   describeTerminalFailure,
   describeStatusProgress,
   waitForPublicScanReport,
+  requestPublicScanWhenAvailable,
 } from "./smoke-public-domain-scan.mjs";
 
 function completedStatus() {
@@ -145,6 +146,86 @@ test("rejects a reusable admission without a valid existing report", () => {
       { hostname: "grumphya.com", lastReport: null },
     ),
     { message: "public_scan_report_missing" },
+  );
+});
+
+test("retries a hostname slot held by a different URL until the requested URL is admitted", async () => {
+  let currentTime = 0;
+  let requests = 0;
+  let statusReads = 0;
+  const result = await requestPublicScanWhenAvailable({
+    timeoutMs: 90_000,
+    retryIntervalMs: 30_000,
+    now: () => currentTime,
+    wait: async (milliseconds) => { currentTime += milliseconds; },
+    requestAnalysis: async () => {
+      requests += 1;
+      return {
+        hostname: "grumphya.com",
+        state: requests === 1 ? "rate_limited" : "queued",
+      };
+    },
+    getStatus: async () => {
+      statusReads += 1;
+      return { hostname: "grumphya.com", lastReport: null };
+    },
+  });
+
+  assert.equal(result.admission.state, "queued");
+  assert.equal(result.report, null);
+  assert.equal(requests, 2);
+  assert.equal(statusReads, 1);
+});
+
+test("reuses a valid matching-scope report when an admission is rate-limited", async () => {
+  const report = await requestPublicScanWhenAvailable({
+    requestAnalysis: async () => ({ hostname: "grumphya.com", state: "rate_limited" }),
+    getStatus: async () => completedStatus(),
+  });
+  assert.equal(report.report.id, completedStatus().lastReport.id);
+});
+
+test("does not treat a cached admission without its matching report as reusable", async () => {
+  await assert.rejects(
+    requestPublicScanWhenAvailable({
+      requestAnalysis: async () => ({ hostname: "grumphya.com", state: "cached" }),
+      getStatus: async () => ({ hostname: "grumphya.com", lastReport: null }),
+    }),
+    { message: "public_scan_cached_report_missing" },
+  );
+});
+
+test("does not reuse a pre-deploy report when another URL temporarily holds the hostname slot", async () => {
+  let currentTime = 0;
+  let requests = 0;
+  const previousReportId = completedStatus().lastReport.id;
+  const result = await requestPublicScanWhenAvailable({
+    previousReportId,
+    timeoutMs: 90_000,
+    retryIntervalMs: 30_000,
+    now: () => currentTime,
+    wait: async (milliseconds) => { currentTime += milliseconds; },
+    requestAnalysis: async () => ({
+      hostname: "grumphya.com",
+      state: requests++ === 0 ? "rate_limited" : "queued",
+    }),
+    getStatus: async () => completedStatus(),
+  });
+
+  assert.equal(result.admission.state, "queued");
+  assert.equal(result.report, null);
+  assert.equal(requests, 2);
+});
+
+test("blocks deployment when the cache still returns the pre-deploy report", async () => {
+  const previousReportId = completedStatus().lastReport.id;
+  await assert.rejects(
+    requestPublicScanWhenAvailable({
+      previousReportId,
+      requestAnalysis: async () => ({ hostname: "grumphya.com", state: "cached" }),
+      getStatus: async () => completedStatus(),
+    }),
+    { message: "public_scan_cached_report_not_refreshed" },
   );
 });
 

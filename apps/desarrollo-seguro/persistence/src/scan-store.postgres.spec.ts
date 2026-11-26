@@ -1,4 +1,5 @@
 import { Pool } from "pg";
+import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   assessDevelopmentSecurityProcessorRegistry,
@@ -947,6 +948,116 @@ describePostgres.sequential("PostgresScanStore", () => {
       [retriedClaim.id],
     );
     expect(terminal.rows[0]).toEqual({ target_url: null, state: "failed" });
+  });
+
+  it("does not let a completed scheduled legacy scan consume an exact URL request cooldown", async () => {
+    const targetUrl = "https://sample.example.net/careers?campaign=summer";
+    await pool.query(
+      `INSERT INTO ds_scan_jobs(hostname, profile_version, trigger, state, queued_at, finished_at)
+       VALUES ($1, 'domain-v4', 'scheduled', 'completed', clock_timestamp() - interval '5 minutes', clock_timestamp() - interval '4 minutes')`,
+      [TEST_HOSTNAME],
+    );
+
+    await expect(store.requestOnDemandScan(TEST_HOSTNAME, targetUrl)).resolves.toMatchObject({
+      kind: "queued",
+    });
+  });
+
+  it("lets each deployment epoch refresh a URL without deleting its prior report", async () => {
+    const targetUrl = "https://sample.example.net/careers?campaign=summer";
+    const targetPath = "/careers?campaign=summer";
+    const jobId = randomUUID();
+    const reportId = randomUUID();
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        "UPDATE ds_scan_admission_epoch SET advanced_at = clock_timestamp() - interval '3 hours' WHERE singleton IS TRUE",
+      );
+      await client.query("SET LOCAL session_replication_role = replica");
+      await client.query(
+        `INSERT INTO ds_scan_jobs(id, hostname, profile_version, trigger, state, queued_at, finished_at)
+         VALUES ($1, $2, 'domain-v5', 'requested', 'completed', clock_timestamp() - interval '2 hours', clock_timestamp() - interval '2 hours')`,
+        [jobId, TEST_HOSTNAME],
+      );
+      await client.query(
+        `WITH timing AS (
+           SELECT clock_timestamp() - interval '2 hours' AS completed_at
+         )
+         INSERT INTO ds_scan_runs(id, job_id, hostname, profile_version, scanner_version, vantage,
+          trigger, started_at, completed_at, expires_at, verdict, scope_json)
+         SELECT $1, $2, $3, 'domain-v5', 'test', 'same_vps', 'requested',
+          timing.completed_at - interval '1 second', timing.completed_at,
+          timing.completed_at + interval '60 minutes', 'inconclusive', jsonb_build_array($4::text)
+         FROM timing`,
+        [reportId, jobId, TEST_HOSTNAME, targetPath],
+      );
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    await expect(store.requestOnDemandScan(TEST_HOSTNAME, targetUrl)).resolves.toMatchObject({
+      kind: "rate_limited",
+    });
+    await pool.query("SELECT public.ds_advance_scan_admission_epoch()");
+    await expect(store.requestOnDemandScan(TEST_HOSTNAME, targetUrl)).resolves.toMatchObject({
+      kind: "queued",
+    });
+    await expect(
+      pool.query("SELECT id FROM ds_scan_runs WHERE id = $1", [reportId]),
+    ).resolves.toMatchObject({ rows: [{ id: reportId }] });
+  });
+
+  it("does not treat an old job completed after deployment as a current URL report", async () => {
+    const targetUrl = "https://sample.example.net/careers?campaign=summer";
+    const targetPath = "/careers?campaign=summer";
+    const jobId = randomUUID();
+    const reportId = randomUUID();
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        "UPDATE ds_scan_admission_epoch SET advanced_at = clock_timestamp() - interval '3 hours' WHERE singleton IS TRUE",
+      );
+      await client.query("SET LOCAL session_replication_role = replica");
+      await client.query(
+        `INSERT INTO ds_scan_jobs(id, hostname, profile_version, trigger, state, queued_at, finished_at)
+         VALUES ($1, $2, 'domain-v5', 'requested', 'completed', clock_timestamp() - interval '2 hours', clock_timestamp() - interval '30 minutes')`,
+        [jobId, TEST_HOSTNAME],
+      );
+      await client.query(
+        `WITH timing AS (
+           SELECT clock_timestamp() - interval '30 minutes' AS completed_at
+         )
+         INSERT INTO ds_scan_runs(id, job_id, hostname, profile_version, scanner_version, vantage,
+          trigger, started_at, completed_at, expires_at, verdict, scope_json)
+         SELECT $1, $2, $3, 'domain-v5', 'test', 'same_vps', 'requested',
+          timing.completed_at - interval '1 minute', timing.completed_at,
+          timing.completed_at + interval '60 minutes', 'inconclusive', jsonb_build_array($4::text)
+         FROM timing`,
+        [reportId, jobId, TEST_HOSTNAME, targetPath],
+      );
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+    await pool.query(
+      "UPDATE ds_scan_admission_epoch SET advanced_at = clock_timestamp() - interval '1 hour' WHERE singleton IS TRUE",
+    );
+
+    await expect(store.requestOnDemandScan(TEST_HOSTNAME, targetUrl)).resolves.toMatchObject({
+      kind: "queued",
+    });
+    await expect(
+      pool.query("SELECT id FROM ds_scan_runs WHERE id = $1", [reportId]),
+    ).resolves.toMatchObject({ rows: [{ id: reportId }] });
   });
 
   it("caps the shared waiting queue when callers race across domains", async () => {

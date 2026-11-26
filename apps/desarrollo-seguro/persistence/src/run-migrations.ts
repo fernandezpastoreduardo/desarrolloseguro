@@ -168,6 +168,8 @@ const MIGRATIONS = [
   { version: "061_legal_cookie_blocked_request_evidence", file: "061_legal_cookie_blocked_request_evidence.sql" },
   { version: "062_public_browser_evidence_contract", file: "062_public_browser_evidence_contract.sql" },
   { version: "063_exact_target_url_jobs", file: "063_exact_target_url_jobs.sql" },
+  { version: "064_target_url_admission_cooldown", file: "064_target_url_admission_cooldown.sql" },
+  { version: "065_deploy_refresh_scan_admission", file: "065_deploy_refresh_scan_admission.sql" },
 ] as const;
 
 export const DEVELOPMENT_SECURITY_MIGRATION_COUNT = MIGRATIONS.length;
