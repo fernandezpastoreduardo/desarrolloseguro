@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
+import { chromium as playwrightChromium } from "playwright";
 import { PrivacyBrowserRequestGate } from "./privacy-browser-request-gate.js";
-import { observeLighthouseMobileProfile } from "./lighthouse-mobile-profile.js";
+import { observeLighthouseMobileProfile, resolveLighthouseHeadlessShellPath } from "./lighthouse-mobile-profile.js";
 
 describe("observeLighthouseMobileProfile", () => {
   it("runs Lighthouse simulate through the safe proxy and retains only numeric evidence", async () => {
@@ -61,8 +62,10 @@ describe("observeLighthouseMobileProfile", () => {
     });
     expect(JSON.stringify(result)).not.toContain("example.com");
     expect(launchBrowser).toHaveBeenCalledWith(expect.objectContaining({
+      executablePath: resolveLighthouseHeadlessShellPath(playwrightChromium.executablePath()),
       args: expect.arrayContaining([
         "--no-sandbox",
+        "--disable-breakpad",
         "--proxy-server=http://privacy-egress:3128",
         "--proxy-bypass-list=<-loopback>",
       ]),
@@ -84,6 +87,19 @@ describe("observeLighthouseMobileProfile", () => {
     expect(cdp.send).toHaveBeenCalledWith("Network.setBlockedURLs", { urls: ["ws://*", "wss://*"] });
     expect(cdp.detach).toHaveBeenCalledOnce();
     expect(browser.close).toHaveBeenCalledOnce();
+  });
+
+  it("resolves the headless-shell executable that matches Playwright's Chromium revision and architecture", () => {
+    expect(resolveLighthouseHeadlessShellPath("/ms-playwright/chromium-1254/chrome-linux64/chrome", "x64", "linux"))
+      .toBe("/ms-playwright/chromium_headless_shell-1254/chrome-headless-shell-linux64/chrome-headless-shell");
+    expect(resolveLighthouseHeadlessShellPath("/ms-playwright/chromium-1254/chrome-linux-arm64/chrome", "arm64", "linux"))
+      .toBe("/ms-playwright/chromium_headless_shell-1254/chrome-headless-shell-linux-arm64/chrome-headless-shell");
+    expect(resolveLighthouseHeadlessShellPath("/ms-playwright/chromium-1254/chrome-mac/Chromium.app/Contents/MacOS/Chromium", "arm64", "darwin"))
+      .toBe("/ms-playwright/chromium_headless_shell-1254/chrome-headless-shell-mac-arm64/chrome-headless-shell");
+    expect(resolveLighthouseHeadlessShellPath("C:\\ms-playwright\\chromium-1254\\chrome-win64\\chrome.exe", "x64", "win32"))
+      .toBe("C:\\ms-playwright\\chromium_headless_shell-1254\\chrome-headless-shell-win64\\chrome-headless-shell.exe");
+    expect(() => resolveLighthouseHeadlessShellPath("/invalid/chrome"))
+      .toThrow("lighthouse_chromium_installation_invalid");
   });
 
   it("keeps the profile unknown when a required Lighthouse metric is absent", async () => {

@@ -3,9 +3,18 @@ import process from "node:process";
 import { randomUUID } from "node:crypto";
 import { URL } from "node:url";
 import { chromium } from "playwright";
+import puppeteer from "puppeteer-core";
+import { resolveLighthouseHeadlessShellPath } from "../dist/lighthouse-mobile-profile.js";
 import { observePrivacyBehavior } from "../dist/privacy-browser-observer.js";
 
 async function main() {
+  const lighthouseBrowser = await puppeteer.launch({
+    headless: true,
+    executablePath: resolveLighthouseHeadlessShellPath(chromium.executablePath()),
+    args: ["--no-sandbox", "--disable-breakpad", "--disable-background-networking", "--disable-dev-shm-usage"],
+  });
+  await lighthouseBrowser.close();
+
   const hostname = "solistos.example.org";
   const browserInput = {
     protocolVersion: 1,
