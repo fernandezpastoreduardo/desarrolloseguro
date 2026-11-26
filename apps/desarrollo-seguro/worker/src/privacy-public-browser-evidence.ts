@@ -58,9 +58,17 @@ export function mergePrivacyBrowserChecks(
         ].filter(([, value]) => typeof value === "number") as Array<[string, number]>;
       }));
       const complete = observation.performance.profiles.every(({ status }) => status === "complete");
+      const responseTimeMs = check.evidence.responseTimeMs;
+      const responseBytes = check.evidence.responseBytes;
+      const httpObserved = check.evidence.inspected === true &&
+        typeof responseTimeMs === "number" && Number.isSafeInteger(responseTimeMs) &&
+        typeof responseBytes === "number" && Number.isSafeInteger(responseBytes);
+      const status = httpObserved && responseTimeMs > 2_500
+        ? "fail"
+        : httpObserved && complete ? "pass" : "unknown";
       return {
         ...check,
-        status: complete ? check.status : "unknown",
+        status,
         evidence: { ...check.evidence, ...profileEvidence },
       };
     }

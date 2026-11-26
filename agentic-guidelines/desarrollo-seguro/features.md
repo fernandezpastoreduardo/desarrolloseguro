@@ -56,6 +56,11 @@ comparte ni se consume antes de iniciar el perfil móvil o escritorio. El
 timeout del contenedor y el del coordinador cubren ambas ventanas más el
 escaneo base, el inicio y la limpieza del runtime; un perfil no debe quedar
 incompleto solo porque la observación anterior usó su propio presupuesto.
+El estado final de `DS-QUAL-02` se calcula después de combinar la evidencia
+HTTP inicial con las catorce métricas de Chromium. El estado provisional
+`unknown` por ausencia temporal de métricas no puede sobrevivir si ambos
+perfiles se completaron; una respuesta lenta sigue siendo `fail`, y la falta
+de cualquier dato requerido sigue siendo `unknown`.
 
 **Criterios:** una URL con ruta y query conserva ambos en el alcance y el
 informe; el fragmento no aparece en solicitudes ni persistencia; una URL con
@@ -68,6 +73,10 @@ señales de cancelación separadas y cada una conserva su límite de 120 segundo
 El límite exterior permite terminar las dos observaciones secuenciales y su
 limpieza. Una prueba de regresión debe demostrar que agotar el plazo de
 privacidad no presenta a rendimiento una señal ya abortada.
+Una regresión adicional debe empezar con `DS-QUAL-02` provisionalmente
+`unknown`, aportar después respuesta HTTP válida y las catorce métricas, y
+comprobar que la nueva sanitización produce `pass`; el umbral de respuesta
+superior a 2.500 ms conserva `fail`.
 
 **Disponible:** API `GET` de estado e informe y `POST` explícito para solicitar un análisis; límites antiabuso por minuto, capacidad compartida PostgreSQL y proyección que excluye evidencia interna. La consulta `GET` no resuelve hostnames ni encola trabajos. La solicitud `POST` requiere confirmación de autorización y guarda una admisión `on_demand` de forma transaccional. Si se encola, el portal consulta el estado cada cinco segundos, hasta 15 minutos mientras haya trabajo activo, y presenta el informe nuevo cuando queda guardado. Si falla la admisión o no aparece un trabajo activo ni un informe nuevo, detiene el sondeo y permite reintentar. El runtime real está desplegado; el 20 de noviembre de 2026 se verificó una renovación periódica que produjo un informe nuevo y actualizó la certificación.
 

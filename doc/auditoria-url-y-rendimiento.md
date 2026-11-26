@@ -48,6 +48,12 @@ flujos de privacidad no reduce el de móvil y escritorio. El contenedor y el
 coordinador tienen un límite exterior que permite completar ambas mediciones,
 además del escaneo base y la limpieza.
 
+El estado de Rendimiento se resuelve al final, cuando se combinan la respuesta
+HTTP inicial y los dos perfiles de Chromium. Un `unknown` provisional por datos
+de Chromium aún no disponibles se convierte en `pass` solo si están presentes
+la evidencia HTTP y las catorce métricas; una respuesta superior a 2.500 ms
+mantiene `fail`. Si falta cualquier dato requerido, permanece `unknown`.
+
 El informe público conserva las catorce métricas del perfil en la evidencia
 de Rendimiento. PostgreSQL valida los mismos campos y límites numéricos que el
 saneador de la aplicación; un resultado de rendimiento marcado como `pass`
