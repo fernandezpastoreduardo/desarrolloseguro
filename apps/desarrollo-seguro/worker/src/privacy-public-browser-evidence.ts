@@ -73,6 +73,12 @@ export function mergePrivacyBrowserChecks(
       return {
         ...check,
         status,
+        summary: performanceSummary(
+          status,
+          httpObserved,
+          typeof responseTimeMs === "number" ? responseTimeMs : undefined,
+          observation.performance.profiles,
+        ),
         evidence: { ...check.evidence, ...profileEvidence },
       };
     }
@@ -99,3 +105,38 @@ export function mergePrivacyBrowserChecks(
     return check;
   });
 }
+
+function performanceSummary(
+  status: "pass" | "fail" | "unknown",
+  httpObserved: boolean,
+  responseTimeMs: number | undefined,
+  profiles: NonNullable<PrivacyBrowserObservation["performance"]>["profiles"],
+): string {
+  if (status === "pass") return "Respuesta inicial y perfiles de móvil y escritorio medidos.";
+  if (status === "fail") {
+    return `Respuesta inicial: ${responseTimeMs ?? "más de 2.500"} ms; supera el umbral de 2.500 ms.`;
+  }
+
+  const missing: string[] = [];
+  if (!httpObserved) missing.push("respuesta HTTP inicial (tiempo y tamaño)");
+  for (const profile of profiles) {
+    if (profile.status === "complete") continue;
+    const label = profile.profile === "mobile" ? "Móvil" : "Escritorio";
+    const missingMetrics = (profile.diagnostic?.missingMetrics ?? []).map((metric) => PERFORMANCE_METRIC_LABELS[metric]);
+    missing.push(missingMetrics.length > 0
+      ? `${label}: faltan ${missingMetrics.join(", ")}`
+      : `${label}: perfil incompleto (${profile.diagnostic?.code ?? "sin diagnóstico"})`);
+  }
+  return `Medición incompleta: ${missing.join("; ") || "faltan datos requeridos"}.`;
+}
+
+const PERFORMANCE_METRIC_LABELS = {
+  fcpMs: "FCP",
+  speedIndexMs: "Speed Index",
+  lcpMs: "LCP",
+  cls: "CLS",
+  tbtMs: "TBT",
+  ttfbMs: "TTFB",
+  transferBytes: "bytes transferidos",
+  score: "puntuación",
+} as const;

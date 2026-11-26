@@ -10,7 +10,7 @@ export function calculateTotalBlockingTime(
   resources: readonly ResourceTiming[],
   observedUntilMs: number,
 ): number | null {
-  if (![fcpMs, observedUntilMs].every(Number.isFinite) || observedUntilMs < fcpMs + TTI_QUIET_WINDOW_MS) return null;
+  if (![fcpMs, observedUntilMs].every(Number.isFinite) || observedUntilMs < fcpMs) return null;
 
   const taskEnds = tasks.map(({ startTime, duration }) => startTime + duration);
   const resourceEnds = resources.map(({ responseEnd }) => responseEnd);
@@ -18,10 +18,10 @@ export function calculateTotalBlockingTime(
     .filter((value) => value >= fcpMs && value <= observedUntilMs - TTI_QUIET_WINDOW_MS)
     .sort((left, right) => left - right);
   const ttiMs = candidates.find((candidate) => isQuietWindow(candidate, tasks, resources));
-  if (ttiMs === undefined) return null;
+  const measurementEndMs = ttiMs ?? observedUntilMs;
 
   return Math.round(tasks.reduce((total, task) => {
-    const overlap = Math.min(task.startTime + task.duration, ttiMs) - Math.max(task.startTime, fcpMs);
+    const overlap = Math.min(task.startTime + task.duration, measurementEndMs) - Math.max(task.startTime, fcpMs);
     return total + Math.max(0, overlap - 50);
   }, 0));
 }
