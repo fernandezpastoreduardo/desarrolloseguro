@@ -19,23 +19,23 @@ const RATE_LIMIT_MESSAGE =
 const INVALID_DOMAIN_MESSAGE =
   "Escribe una URL HTTPS pública completa, por ejemplo https://ejemplo.es/servicio.";
 const NO_REPORT_MESSAGE =
-  "Todavía no hay un informe completo guardado para este dominio.";
+  "Todavía no hay un informe completo guardado para esta dirección.";
 const UPDATING_WITHOUT_REPORT_MESSAGE =
   "Hay una revisión en curso. Puede tardar unos minutos; vuelve a consultar para ver el resultado cuando termine.";
 const UNAVAILABLE_DOMAIN_MESSAGE =
-  "Este dominio no está disponible para consulta pública.";
+  "Esta dirección no está disponible para consulta pública.";
 const ANALYSIS_REQUEST_MESSAGES: Record<string, string> = {
   queued: "La solicitud está en cola. El análisis empezará cuando haya un turno disponible.",
-  running: "Estamos comprobando el dominio. Puede tardar unos minutos; te avisaremos cuando el informe esté listo.",
-  cached: "Ya hay un informe reciente disponible. Vuelve a consultar el dominio.",
+  running: "Estamos comprobando la dirección. Puede tardar unos minutos; te avisaremos cuando el informe esté listo.",
+  cached: "Ya hay un informe reciente disponible. Vuelve a consultar esta dirección.",
   rate_limited: "La solicitud está limitada temporalmente. Inténtalo más tarde.",
   capacity_reached: "La cola de análisis está completa. Inténtalo más tarde.",
-  unavailable: "Este dominio no está disponible para análisis.",
+  unavailable: "Esta dirección no está disponible para análisis.",
   error: "No se ha podido registrar la solicitud. Inténtalo más tarde.",
   poll_error:
-    "No se pudo actualizar el estado automáticamente. Consulta el dominio de nuevo dentro de un momento.",
+    "No se pudo actualizar el estado automáticamente. Consulta esta dirección de nuevo dentro de un momento.",
   poll_timeout:
-    "Todavía no hay un informe nuevo. Consulta el dominio de nuevo dentro de un momento.",
+    "Todavía no hay un informe nuevo. Consulta esta dirección de nuevo dentro de un momento.",
   admission_lost:
     "La solicitud se aceptó, pero el estado no muestra ningún trabajo activo ni un informe nuevo. No se puede confirmar el análisis; puedes volver a solicitarlo.",
   failed: "El análisis terminó sin generar un informe. Puedes volver a intentarlo.",
@@ -94,10 +94,10 @@ const PUBLIC_SCOPE_PATHS = ["/", "/precios", "/informe"] as const;
 const MAX_REPORT_CHECKS = 32;
 
 const REPORT_CATEGORIES = [
-  { id: "ethics", label: "Ética", description: "Valora la transparencia sobre servicios externos y otras prácticas que pueden afectar a las personas. Separa lo que el sitio declara de lo que el análisis observa.", criteria: ["third-party-data-use", "external-service-transparency", "backend-processor-transparency", "tracking"], controls: ["DS-PRIV-06"] },
-  { id: "privacy", label: "Privacidad", description: "Comprueba qué datos guarda la página, si se conecta con otros servicios y si respeta la opción de rechazarlos. Después vuelve a cargarla para comprobar que la elección se mantiene.", criteria: ["initial-cookie-risk"], controls: ["DS-PRIV-05"] },
-  { id: "security", label: "Seguridad", description: "Comprueba que el dominio se encuentre, que la conexión proteja la información y que el navegador reciba barreras frente a algunos ataques.", criteria: ["dns-integrity", "transport-security", "http-availability", "security-headers"], controls: ["DS-DNS-01", "DS-TLS-01", "DS-TLS-02", "DS-HTTP-01", "DS-HDR-01"] },
-  { id: "performance", label: "Rendimiento", description: "Mide la carga de esta página en móvil y escritorio con métricas propias tipo Lighthouse. La puntuación no es una puntuación oficial de Lighthouse.", criteria: ["performance"], controls: ["DS-QUAL-02"] },
+  { id: "ethics", label: "Ética", description: "Compara lo que el sitio cuenta sobre los servicios externos que usa con lo que se observó. Si falta información importante, el informe lo dice.", criteria: ["third-party-data-use", "external-service-transparency", "backend-processor-transparency", "tracking"], controls: ["DS-PRIV-06"] },
+  { id: "privacy", label: "Privacidad", description: "Comprueba qué datos guarda la página al abrirse, si se conecta con otros servicios y si muestra opciones para rechazarlos.", criteria: ["initial-cookie-risk"], controls: ["DS-PRIV-05"] },
+  { id: "security", label: "Seguridad", description: "Comprueba si el sitio se encuentra, si la conexión protege la información y si el navegador recibe barreras frente a algunos ataques.", criteria: ["dns-integrity", "transport-security", "http-availability", "security-headers"], controls: ["DS-DNS-01", "DS-TLS-01", "DS-TLS-02", "DS-HTTP-01", "DS-HDR-01"] },
+  { id: "performance", label: "Rendimiento", description: "Mide cuánto tarda en responder esta página en móvil y escritorio. Es una medición propia, no una puntuación oficial de Lighthouse.", criteria: ["performance"], controls: ["DS-QUAL-02"] },
 ] as const;
 const BETA_EVALUATION_LEVELS = [
   { id: "observed", label: "Observado", statuses: ["pass"] },
@@ -106,8 +106,8 @@ const BETA_EVALUATION_LEVELS = [
   { id: "not-applicable", label: "No aplica", statuses: ["not_applicable"] },
 ] as const;
 const CRITERION_EXPLANATIONS: Record<string, string> = {
-  "dns-integrity": "Comprobamos que el dominio se encuentre en Internet. Esto no confirma quién es su titular.",
-  "transport-security": "Revisamos si la conexión cifra la información y si su certificado corresponde a este sitio.",
+  "dns-integrity": "Comprobamos si el sitio tiene una dirección pública en Internet. Esto no confirma quién es su titular.",
+  "transport-security": "Revisamos si la conexión cifra la información y si el certificado identifica este sitio.",
   "http-availability": "Comprobamos si la página principal responde y si termina en una conexión cifrada.",
   "security-headers": "Revisamos instrucciones que ayudan al navegador a proteger a quienes visitan el sitio.",
   "third-party-data-use": "Buscamos información pública sobre qué servicios externos participan y qué explican sobre el uso de datos.",
@@ -115,10 +115,10 @@ const CRITERION_EXPLANATIONS: Record<string, string> = {
   "backend-processor-transparency": "Comparamos los servicios que el titular declara con su lista interna de sistemas activos. No podemos comprobar aquí si cada proveedor cumple lo declarado.",
   "initial-cookie-risk": "Revisamos los datos que la página guarda en el navegador al abrirla. Esta comprobación no cubre lo que ocurre después.",
   tracking: "Buscamos en el contenido inicial referencias a herramientas de seguimiento conocidas. Esto no confirma que se conecten o se ejecuten.",
-  performance: "Medimos la carga en móvil y escritorio con métricas propias tipo Lighthouse; la puntuación no es oficial de Lighthouse.",
+  performance: "Medimos cuánto tarda en responder la página en móvil y escritorio. La puntuación es propia, no oficial de Lighthouse.",
 };
 const CRITERION_FAIL_MEANINGS: Record<string, string> = {
-  "dns-integrity": "No pudimos encontrar la dirección pública del dominio.",
+  "dns-integrity": "No pudimos encontrar la dirección pública del sitio.",
   "transport-security": "La conexión o su certificado no superó una de las comprobaciones de protección.",
   "http-availability": "La página principal no respondió como se esperaba o no terminó en una conexión cifrada.",
   "security-headers": "Falta al menos una indicación que ayuda al navegador a proteger la visita.",
@@ -394,6 +394,7 @@ const VERDICT_LABELS: Record<string, string> = {
 
 export function PublicScanPortal() {
   const reportId = getReportIdFromLocation();
+  const targetUrl = getTargetUrlFromLocation();
   const [domain, setDomain] = useState("");
   const [auditTargetUrl, setAuditTargetUrl] = useState("");
   const [state, setState] = useState<PortalState>("idle");
@@ -424,7 +425,8 @@ export function PublicScanPortal() {
 
   useEffect(() => {
     if (reportId) void loadReport(reportId);
-  }, [reportId]);
+    else if (targetUrl) void loadTargetStatus(targetUrl);
+  }, [reportId, targetUrl]);
 
   useEffect(() => {
     const pollingHostname = status?.hostname;
@@ -473,7 +475,7 @@ export function PublicScanPortal() {
         if (payload.state === "unavailable") {
           announceScanPhase(
             "failed",
-            "El dominio no está disponible para este análisis.",
+            "La dirección no está disponible para este análisis.",
           );
           setAnalysisRequestState("unavailable");
           return;
@@ -489,7 +491,7 @@ export function PublicScanPortal() {
         if (payload.state === "updating") {
           announceScanPhase(
             "running",
-            "La comprobación del dominio está en curso. Te avisaremos cuando el informe esté listo.",
+            "La comprobación está en curso. Te avisaremos cuando el informe esté listo.",
           );
         }
         if (
@@ -574,18 +576,20 @@ export function PublicScanPortal() {
     }
   }
 
-  async function submitDomain(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function loadTargetStatus(inputUrl: string, focusOnError = false) {
+    setDomain(inputUrl);
     let target: ReturnType<typeof parseScanTargetUrl>;
     try {
-      target = parseScanTargetUrl(domain);
+      target = parseScanTargetUrl(inputUrl);
     } catch {
       setState("error");
       setMessage(INVALID_DOMAIN_MESSAGE);
       setDomainInputInvalid(true);
       setStatus(null);
       setReport(null);
-      domainInputRef.current?.focus();
+      setAuditTargetUrl("");
+      setHistory([]);
+      if (focusOnError) domainInputRef.current?.focus();
       return;
     }
 
@@ -630,6 +634,11 @@ export function PublicScanPortal() {
       setState("error");
       setMessage(publicError);
     }
+  }
+
+  async function submitDomain(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await loadTargetStatus(domain, true);
   }
 
   async function loadHistory(hostname: string): Promise<void> {
@@ -744,8 +753,8 @@ export function PublicScanPortal() {
           <p className="ds-portal__eyebrow">Observación técnica acotada</p>
           <h1 id="ds-portal-heading">¿Qué se ve desde fuera?</h1>
           <p className="ds-portal__intro">
-            Consulta el estado y los controles observados de un dominio. Esta
-            lectura no inicia un análisis.
+            Consulta qué se pudo comprobar en una dirección web y qué sigue
+            pendiente.
           </p>
         </div>
         <form className="ds-portal__search" onSubmit={submitDomain} noValidate>
@@ -770,13 +779,14 @@ export function PublicScanPortal() {
             </button>
           </div>
           <span id="ds-portal-help" className="ds-portal__help">
-            Consultar no inicia el análisis. La solicitud autorizada carga esta
-            URL y sus recursos GET/HEAD, incluidos los de terceros, con límites.
+            Consultar solo muestra el informe guardado. Si autorizas un
+            análisis, se visitará esta dirección y los recursos que permita el
+            perfil; algunos pueden pertenecer a otros servicios.
           </span>
         </form>
         <div className="ds-portal__hero-footnote" aria-hidden="true">
           <span>01</span>
-          <span>Consulta del estado guardado de un dominio</span>
+          <span>Consulta del informe guardado para una dirección</span>
         </div>
       </section>
 
@@ -819,6 +829,7 @@ export function PublicScanPortal() {
           className="ds-portal__empty"
           aria-labelledby="ds-empty-heading"
         >
+          <img className="ds-portal__empty-mark" src="/app/assets/desarrollo-seguro-logo-v1.svg" alt="" aria-hidden="true" />
           <p className="ds-portal__eyebrow">{status.hostname}</p>
           <h2 id="ds-empty-heading">{EMPTY_REPORT_TITLE}</h2>
           <p>
@@ -826,9 +837,9 @@ export function PublicScanPortal() {
             controles observados.
           </p>
           <p className="ds-portal__disclaimer">
-            La consulta solo lee información guardada. Solicitar un análisis
-            enviará las comprobaciones GET/HEAD limitadas del perfil, sin
-            credenciales, formularios ni exploración de rutas adicionales.
+            Esta dirección aún no tiene un informe. Si solicitas el análisis,
+            las comprobaciones seguirán el alcance indicado en el perfil y no
+            usarán credenciales ni enviarán formularios.
           </p>
           <AnalysisRequestPanel
             authorizationConfirmed={authorizationConfirmed}
@@ -918,7 +929,7 @@ function DomainResult({
             {getScanFailureMessage(status.failureCode)}
           </p>
           <p className="ds-portal__disclaimer">
-            El informe anterior se conserva como histórico. Puedes solicitar una comprobación nueva si tienes autorización.
+            El informe anterior sigue disponible como histórico. Puedes pedir una comprobación nueva si tienes autorización.
           </p>
           <AnalysisRequestPanel
             authorizationConfirmed={authorizationConfirmed}
@@ -1029,7 +1040,7 @@ function ScanProgress({ phase }: { phase: "submitting" | "queued" | "running" })
       ? "Estamos registrando la solicitud. Puede tardar unos segundos."
       : phase === "queued"
         ? "La solicitud está en cola y empezará cuando haya un turno disponible."
-        : "Estamos comprobando el dominio. Puede tardar unos minutos; no hay un porcentaje fiable porque cada prueba tarda distinto.";
+        : "Estamos comprobando esta dirección. El tiempo depende de las pruebas necesarias.";
 
   return (
     <div
@@ -1138,6 +1149,19 @@ function ReportSummary({
                 <p className="ds-portal__category-summary">{performanceScoreApplies
                   ? getPerformanceCategorySummary(performanceScore)
                   : getCategorySummary(criteria, state)}</p>
+                {!performanceScoreApplies && criteria.length > 0 && (
+                  <ul className="ds-portal__category-evidence" aria-label={`Resultados destacados de ${category.label}`}>
+                    {[...criteria]
+                      .sort((left, right) => getCriterionPriority(left.status) - getCriterionPriority(right.status))
+                      .slice(0, 2)
+                      .map((criterion) => (
+                        <li key={criterion.id} data-status={criterion.status}>
+                          <strong>{getCheckStatusLabel(criterion.status)}</strong>
+                          <span>{getCriterionDisplayLabel(criterion.id, criterion.label)}</span>
+                        </li>
+                      ))}
+                  </ul>
+                )}
                 <button
                   className="ds-portal__category-more"
                   type="button"
@@ -2158,6 +2182,11 @@ function getReportIdFromLocation(): string | null {
   return isUuid(reportId) ? reportId.toLowerCase() : null;
 }
 
+function getTargetUrlFromLocation(): string | null {
+  if (typeof window === "undefined") return null;
+  return new URLSearchParams(window.location.search).get("url");
+}
+
 function isDomainStatus(value: unknown): value is DomainStatus {
   if (!isRecord(value)) return false;
   if (
@@ -2779,15 +2808,22 @@ function getCategorySummary(criteria: Array<{ status: string }>, state: string):
   }
   if (problems > 0) {
     return unknown > 0
-      ? `${problems} comprobación${problems === 1 ? "" : "es"} con hallazgos; ${unknown} no se pudo${unknown === 1 ? "" : "n"} completar.`
-      : `${problems} comprobación${problems === 1 ? "" : "es"} con hallazgos.`;
+      ? `${problems} criterio${problems === 1 ? "" : "s"} que no se cumple${problems === 1 ? "" : "n"}; ${unknown} no se pudo${unknown === 1 ? "" : "n"} comprobar.`
+      : `${problems} criterio${problems === 1 ? "" : "s"} que no se cumple${problems === 1 ? "" : "n"}.`;
   }
   if (unknown > 0) {
     return state === "updating"
       ? "Esta parte sigue en comprobación."
       : `${unknown} comprobación${unknown === 1 ? "" : "es"} no se pudo${unknown === 1 ? "" : "n"} completar.`;
   }
-  return "Las comprobaciones de esta parte no encontraron riesgos.";
+  return "No se detectaron incumplimientos en los criterios comprobados.";
+}
+
+function getCriterionPriority(status: CheckStatus): number {
+  if (status === "fail") return 0;
+  if (status === "unknown") return 1;
+  if (status === "pass") return 2;
+  return 3;
 }
 
 function getPerformanceCategorySummary(score: number | null): string {
@@ -2812,11 +2848,11 @@ function getReportTakeaway(report: PublicReport, state: string): string {
   if (report.globalAssessment.status === "review") {
     if (state !== "updating") {
       return problems > 0
-        ? `El informe terminó con ${problems} hallazgo${problems === 1 ? "" : "s"} y ${unknown} comprobación${unknown === 1 ? "" : "es"} sin completar.`
+        ? `En Ética hay ${problems} criterio${problems === 1 ? "" : "s"} que no se cumple${problems === 1 ? "" : "n"} y ${unknown} que no se pudo${unknown === 1 ? "" : "n"} comprobar.`
         : "El informe terminó con comprobaciones sin completar.";
     }
     return problems > 0
-      ? "Hay hallazgos y la revisión sigue en curso."
+      ? "Hay criterios de Ética que no se cumplen y la revisión sigue en curso."
       : "La revisión sigue en curso.";
   }
   if (assessed.length === 0) {
@@ -2825,21 +2861,21 @@ function getReportTakeaway(report: PublicReport, state: string): string {
       : "El informe terminó sin datos suficientes para una valoración.";
   }
   if (problems > 0) {
-    return `La revisión encontró ${problems} hallazgo${problems === 1 ? "" : "s"}. Consulta el detalle.`;
+    return `En Ética hay ${problems} criterio${problems === 1 ? "" : "s"} que no se cumple${problems === 1 ? "" : "n"}. Consulta el detalle.`;
   }
   if (unknown > 0) {
     return state === "updating"
       ? "Las comprobaciones restantes siguen en curso."
       : "El informe terminó con comprobaciones sin completar.";
   }
-  return "La revisión no encontró riesgos en los aspectos comprobados.";
+  return "No se detectaron incumplimientos en los criterios de Ética comprobados. Esto no descarta problemas fuera de su alcance.";
 }
 
 function getCriterionOutcome(criterionId: string, status: string): string {
-  if (status === "unknown") return "Comprobación incompleta por un error técnico del auditor; no se atribuye al dominio.";
+  if (status === "unknown") return "No se pudo completar esta comprobación. El resultado queda desconocido y no se atribuye al sitio.";
   if (status === "fail") return CRITERION_FAIL_MEANINGS[criterionId] ?? "La comprobación detectó un incumplimiento del criterio.";
   const outcomes: Record<string, string> = {
-    "dns-integrity": "El dominio resolvió a direcciones públicas durante esta comprobación; esto no confirma quién lo controla.",
+    "dns-integrity": "El sitio respondió con direcciones públicas durante esta comprobación; esto no confirma quién lo controla.",
     "transport-security": "La conexión superó las comprobaciones de TLS incluidas en este informe.",
     "http-availability": "La portada respondió según lo esperado y usó una conexión segura en esta comprobación.",
     "security-headers": "Las protecciones comprobadas estaban presentes en la respuesta observada.",
@@ -2849,7 +2885,7 @@ function getCriterionOutcome(criterionId: string, status: string): string {
     tracking: "No se observaron solicitudes iniciadas a rastreadores conocidos durante la visita inicial.",
     performance: "La respuesta inicial quedó dentro del umbral orientativo de esta comprobación; no representa la experiencia completa.",
   };
-  return outcomes[criterionId] ?? "Esta comprobación no encontró una señal de riesgo.";
+  return outcomes[criterionId] ?? "No se detectó un incumplimiento en este criterio durante la comprobación.";
 }
 
 function getCriterionEvidenceSummary(

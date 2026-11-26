@@ -14,23 +14,23 @@ const htmlPages = [
   "privacidad.html",
   "sello.html",
   "verificar.html",
-  "informe-grumphya-prototipo.html",
 ];
 const publicScripts = ["badge-widget.js", "verificar.js"];
-const publicAssets = ["assets/desarrollo-seguro-logo-v1.svg"];
-const prototypeStylesPath = resolve(repositoryRoot, "desarrollo-seguro/informe-grumphya-prototipo.scss");
+const publicAssets = [
+  "assets/desarrollo-seguro-logo-v1.svg",
+  "assets/grumphya-mascot-isotype.svg",
+  "assets/fonts/Fredoka-Variable-latin.woff2",
+  "assets/fonts/Fredoka-OFL.txt",
+];
 const badgeWidgetStylesPath = resolve(repositoryRoot, "desarrollo-seguro/badge-widget.scss");
 const badgeWidgetLogoPath = resolve(repositoryRoot, "desarrollo-seguro/assets/desarrollo-seguro-logo-v1.svg");
 
 export async function buildPublicSiteAssets(outputDirectory = defaultOutputDirectory) {
   const { css } = sass.compile(sourcePath, { style: "compressed", sourceMap: false });
-  const { css: prototypeCss } = sass.compile(prototypeStylesPath, { style: "compressed", sourceMap: false });
   const { css: badgeWidgetCss } = sass.compile(badgeWidgetStylesPath, { style: "compressed", sourceMap: false });
   const logoSvg = await readFile(badgeWidgetLogoPath, "utf8");
   const digest = createHash("sha256").update(css).digest("hex").slice(0, 16);
-  const prototypeDigest = createHash("sha256").update(prototypeCss).digest("hex").slice(0, 16);
   const stylesheetName = `site-${digest}.css`;
-  const prototypeStylesheetName = `prototype-report-${prototypeDigest}.css`;
   const assetDirectory = join(outputDirectory, "assets");
   const publicSiteDirectory = join(outputDirectory, "desarrollo-seguro");
   await Promise.all([
@@ -39,14 +39,12 @@ export async function buildPublicSiteAssets(outputDirectory = defaultOutputDirec
   ]);
   await Promise.all([
     writeFile(join(assetDirectory, stylesheetName), css),
-    writeFile(join(assetDirectory, prototypeStylesheetName), prototypeCss),
     writeFile(join(outputDirectory, "site.css"), css),
   ]);
 
   await Promise.all(htmlPages.map(async (page) => {
     const source = await readFile(join(repositoryRoot, "desarrollo-seguro", page), "utf8");
     let generated = source.replaceAll("/app/site.css", `/app/assets/${stylesheetName}`);
-    generated = generated.replaceAll("/app/prototype-report.css", `/app/assets/${prototypeStylesheetName}`);
     if (generated === source) throw new Error("public_site_stylesheet_reference_missing");
     await writeFile(join(publicSiteDirectory, page), generated);
   }));

@@ -27,6 +27,8 @@ El código del escáner admite observaciones reales en el broker aislado. Las pr
 ## Guías
 
 - [`features.md`](features.md): capacidades y criterios de aceptación.
+- [`ux-ui-copy-refresh.md`](ux-ui-copy-refresh.md): identidad visual, copy,
+  portada, portal y páginas informativas para la revisión UX/UI actual.
 - [`controls-and-evidence.md`](controls-and-evidence.md): rúbricas, evidencia y límites.
 - [`scanner-safety.md`](scanner-safety.md): SSRF, solicitudes permitidas y aislamiento de red.
 - [`persistence.md`](persistence.md): roles, migraciones y lectura pública.

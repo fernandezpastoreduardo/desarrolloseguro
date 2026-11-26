@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { access, mkdtemp, readFile, rm } from "node:fs/promises";
+import { access, mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { runInNewContext } from "node:vm";
@@ -13,7 +13,6 @@ const pages = [
   "desarrollo-seguro/privacidad.html",
   "desarrollo-seguro/sello.html",
   "desarrollo-seguro/verificar.html",
-  "desarrollo-seguro/informe-grumphya-prototipo.html",
 ];
 const pageContents = await Promise.all(pages.map((path) => readFile(path, "utf8")));
 const [home, methodology, privacy, seal] = pageContents;
@@ -23,7 +22,6 @@ const styleSources = [
   "apps/desarrollo-seguro/web/src/public-scan-portal/public-scan-portal.scss",
 ];
 const styles = await Promise.all(styleSources.map((path) => readFile(path, "utf8")));
-const prototypeStyles = await readFile("desarrollo-seguro/informe-grumphya-prototipo.scss", "utf8");
 const badgeWidgetStyles = await readFile("desarrollo-seguro/badge-widget.scss", "utf8");
 
 for (const [index, html] of pageContents.entries()) {
@@ -43,7 +41,10 @@ for (const [index, html] of pageContents.entries()) {
 assert.match(home, /href="\/desarrollo-seguro\/metodologia\.html"/u);
 assert.match(home, /href="\/desarrollo-seguro\/privacidad\.html"/u);
 assert.match(home, /href="\/desarrollo-seguro\/sello\.html"/u);
-assert.match(home, /href="\/desarrollo-seguro\/informe-grumphya-prototipo\.html"/u, "home page links to the Grumphya prototype report");
+assert.doesNotMatch(home, /informe-grumphya-prototipo/u, "home page no longer links to the retired prototype report");
+assert.match(home, /client-reports/u, "home page shows the current client reports");
+assert.match(home, /href="\/app\/\?url=https%3A%2F%2Fgrumphya\.com%2F"/u);
+assert.match(home, /href="\/app\/\?url=https%3A%2F%2Fdesarrolloseguro\.org%2F"/u);
 assert.match(methodology, /Metodología|metodología/u);
 assert.match(privacy, /Privacidad|privacidad/u);
 assert.match(seal, /sello|distintivo/iu);
@@ -57,23 +58,8 @@ assert.match(verifier, /id="verification-report-link"/u, "verification page link
 assert.match(verifier, /Logotipo de Desarrollo Seguro/u, "verification page shows the approved logo beside authenticity status");
 assert.match(seal, /badge-widget\.js/u, "seal page documents the live embeddable widget");
 assert.doesNotMatch(seal, /data-report-id/u, "the public embed does not pin the seal to a report that will age out");
-const prototypeReport = pageContents.at(-1);
-assert.match(prototypeReport, /FICHA PROTOTIPO/u);
-assert.match(prototypeReport, /Seguridad/u);
-assert.match(prototypeReport, /Privacidad/u);
-assert.match(prototypeReport, /Calidad/u);
-assert.match(prototypeReport, /Rendimiento/u);
-assert.match(prototypeReport, /puntuación ética/iu);
-assert.match(prototypeReport, /dejan señales/u);
-assert.match(prototypeReport, /64\/100/u, "prototype preserves the score shown in the supplied historical report");
-assert.match(prototypeReport, /4 de 8 criterios/u);
-assert.match(prototypeReport, /854<\/strong><span>pruebas aprobadas · API/u, "Grumphya API test evidence is represented separately from the external scan");
-assert.match(prototypeReport, /321<\/strong><span>pruebas aprobadas · web/u, "Grumphya web test evidence is represented separately from the external scan");
-assert.match(prototypeReport, /94,07<span>%/u, "the API coverage value is represented from the Grumphya baseline");
-assert.match(prototypeReport, /89,66<span>%/u, "the web coverage value is represented from the Grumphya baseline");
-assert.match(prototypeReport, /100<small>\/100/u, "owner-supplied Lighthouse evidence is retained as a distinct measurement");
-assert.match(prototypeReport, /no es un análisis actual/u);
-assert.match(prototypeStyles, /\.prototype-report__hero/u, "prototype report has its own high-impact Sass hero");
+await assert.rejects(access("desarrollo-seguro/informe-grumphya-prototipo.html"), { code: "ENOENT" });
+await assert.rejects(access("desarrollo-seguro/informe-grumphya-prototipo.scss"), { code: "ENOENT" });
 assert.match(verifier, /no-referrer/u, "verification links do not leak tokens through referrers");
 assert.match(styles[0], /\$navy:\s*#/u, "the public site uses Sass design tokens");
 assert.match(styles[1], /\$ds-teal:\s*#/u, "the app uses Sass design tokens");
@@ -98,6 +84,8 @@ const portalScript = await readFile(
   "utf8",
 );
 assert.match(portalScript, /new URLSearchParams\(window\.location\.search\)\.get\("report"\)/u);
+assert.match(portalScript, /new URLSearchParams\(window\.location\.search\)\.get\("url"\)/u, "the public portal accepts a complete URL deep link");
+assert.match(portalScript, /else if \(targetUrl\) void loadTargetStatus\(targetUrl\)/u, "deep links use the existing public status read");
 assert.match(
   verifierScript,
   /reportLink\.href = `\/app\/\?report=\$\{encodeURIComponent\(result\.reportId\)\}`/u,
@@ -321,12 +309,13 @@ try {
     const generatedPage = await readFile(join(buildDirectory, page), "utf8");
     assert.match(generatedPage, new RegExp(`href="/app/assets/site-${stylesheetHash}\\.css"`, "u"));
   }
-  const generatedPrototype = await readFile(join(buildDirectory, pages.at(-1)), "utf8");
-  const reportStylesheet = generatedPrototype.match(/href="(\/app\/assets\/prototype-report-[a-f0-9]{16}\.css)"/u)?.[1];
-  assert.ok(reportStylesheet, "prototype page references a fingerprinted Sass stylesheet");
-  const prototypeCss = await readFile(join(buildDirectory, reportStylesheet.replace(/^\/app\//u, "")), "utf8");
-  const prototypeHash = createHash("sha256").update(prototypeCss).digest("hex").slice(0, 16);
-  assert.equal(reportStylesheet, `/app/assets/prototype-report-${prototypeHash}.css`);
+  await assert.rejects(access(join(buildDirectory, "desarrollo-seguro/informe-grumphya-prototipo.html")), { code: "ENOENT" });
+  const builtAssets = await readFile(join(buildDirectory, "desarrollo-seguro/assets/grumphya-mascot-isotype.svg"), "utf8");
+  assert.match(builtAssets, /<svg\b/u, "the Grumphya brand mark is bundled locally");
+  const assetFiles = await readdir(join(buildDirectory, "assets"));
+  await access(join(buildDirectory, "desarrollo-seguro/assets/fonts/Fredoka-Variable-latin.woff2"));
+  await access(join(buildDirectory, "desarrollo-seguro/assets/fonts/Fredoka-OFL.txt"));
+  assert.doesNotMatch(assetFiles.join("\n"), /prototype-report/u, "the retired prototype stylesheet is absent from the public build");
   const generatedVerifier = await readFile(join(buildDirectory, "desarrollo-seguro/verificar.html"), "utf8");
   const verifierTag = generatedVerifier.match(/<script\b[^>]*src="\/desarrollo-seguro\/verificar\.js"[^>]*>/u)?.[0];
   assert.ok(verifierTag?.includes('integrity="sha256-'), "the verification page pins its script with SRI");

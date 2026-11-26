@@ -6,7 +6,7 @@
     <meta name="robots" content="noindex, nofollow, noarchive" />
     <meta name="referrer" content="no-referrer" />
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; form-action 'none'" />
-    <meta name="description" content="Verificación pública de un sello vinculado a un informe de dominio." />
+    <meta name="description" content="Comprueba si un sello sigue vigente y a qué informe corresponde." />
     <title>Verificar sello · Desarrollo Seguro</title>
     <link rel="stylesheet" href="/app/site.css" />
     <script type="module" src="/desarrollo-seguro/verificar.js"></script>
@@ -21,14 +21,14 @@
     <main id="contenido" class="page-shell">
       <section class="inner-hero">
         <p class="eyebrow"><span class="eyebrow-dot" aria-hidden="true"></span> COMPROBACIÓN PÚBLICA</p>
-        <h1>Verificación del <em>sello.</em></h1>
-        <p class="inner-lead">El estado se consulta en Desarrollo Seguro al abrir esta página. Si no se puede confirmar ahora, el sello no se considera válido.</p>
+        <h1>Comprueba un <em>sello.</em></h1>
+        <p class="inner-lead">Al abrir esta página consultamos al servidor. Si no podemos confirmar el sello ahora, no lo damos por válido.</p>
       </section>
       <section class="seal-content verification-route" aria-labelledby="verification-title">
         <div id="verification-panel" class="verification-panel" data-state="pending" role="status" aria-live="polite">
           <img class="verification-panel__logo" src="/desarrollo-seguro/assets/desarrollo-seguro-logo-v1.svg" alt="Logotipo de Desarrollo Seguro" />
           <div class="verification-panel__copy">
-            <p class="eyebrow">SELLO DE APROBACIÓN</p>
+            <p class="eyebrow">SELLO VERIFICABLE</p>
             <h2 id="verification-result" data-state="pending">Comprobando sello…</h2>
             <p id="verification-message">Estamos comprobando el sello y el informe vigente directamente con Desarrollo Seguro.</p>
           </div>
@@ -37,13 +37,13 @@
 
         <section id="verification-report-summary" class="verification-report" aria-labelledby="verification-title" hidden>
           <div class="verification-report__heading">
-            <div><p class="eyebrow">INFORME CERTIFICADO</p><h2 id="verification-title">Resultados de la evaluación</h2></div>
-            <div class="verification-score"><strong id="verification-score">—</strong><span>puntuación beta</span></div>
+            <div><p class="eyebrow">INFORME VINCULADO</p><h2 id="verification-title">Resultados de la evaluación</h2></div>
+            <div class="verification-score"><strong id="verification-score">—</strong><span>nota beta</span></div>
           </div>
           <dl class="verification-details">
-            <div><dt>Dominio evaluado</dt><dd id="verification-hostname">Cargando…</dd></div>
+            <div><dt>Sitio evaluado</dt><dd id="verification-hostname">Cargando…</dd></div>
             <div><dt>Resultado del informe</dt><dd id="verification-verdict">Cargando…</dd></div>
-            <div><dt>Certificación</dt><dd id="verification-certification">Cargando…</dd></div>
+            <div><dt>Estado del sello</dt><dd id="verification-certification">Cargando…</dd></div>
             <div><dt>Evaluado</dt><dd id="verification-completed-at">Cargando…</dd></div>
             <div><dt>Alcance comprobado</dt><dd id="verification-scope">Cargando…</dd></div>
             <div><dt>Vigencia del informe</dt><dd id="verification-expires-at">Cargando…</dd></div>
@@ -55,9 +55,9 @@
           <p id="verification-summary-message" class="verification-summary-message" hidden></p>
         </section>
 
-        <p class="verification-limit">La comprobación confirma que este sello está vigente, no ha sido revocado y corresponde al informe certificado indicado. El informe describe únicamente el alcance y los controles observados; no garantiza la seguridad completa del sitio.</p>
+        <p class="verification-limit">La consulta confirma que el sello corresponde al informe y estado que muestra. El informe solo describe las rutas y comprobaciones incluidas.</p>
       </section>
     </main>
-    <footer class="site-footer"><div class="page-shell footer-main"><a class="brand brand-footer" href="/desarrollo-seguro/"><img class="brand-logo brand-logo--footer" src="/desarrollo-seguro/assets/desarrollo-seguro-logo-v1.svg" alt="DesarrolloSeguro.org" /></a><p>Informes técnicos con evidencia, alcance y límites visibles.</p><nav aria-label="Navegación del pie"><a href="/desarrollo-seguro/sello.html">Sello e informes</a><a href="/app/">Buscador</a></nav></div><div class="footer-bottom">© Desarrollo Seguro · desarrolloseguro.org</div></footer>
+    <footer class="site-footer"><div class="page-shell footer-main"><a class="brand brand-footer" href="/desarrollo-seguro/"><img class="brand-logo brand-logo--footer" src="/desarrollo-seguro/assets/desarrollo-seguro-logo-v1.svg" alt="DesarrolloSeguro.org" /></a><nav aria-label="Navegación del pie"><a href="/desarrollo-seguro/sello.html">Sello e informes</a><a href="/app/">Buscador</a></nav></div><div class="footer-bottom">© Desarrollo Seguro · desarrolloseguro.org</div></footer>
   </body>
 </html>

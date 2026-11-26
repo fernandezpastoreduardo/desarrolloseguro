@@ -240,6 +240,32 @@ describe("PublicScanPortal", () => {
     expect(screen.getByText(/Medición incompleta: móvil 84\/100; escritorio 92\/100/u)).toBeVisible();
   });
 
+  it("loads a direct URL link from the existing public status endpoint without starting an analysis", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({
+      hostname: "example.com",
+      enrollment: "on_demand",
+      state: "not_scanned",
+      failureCode: null,
+      activeJobId: null,
+      lastReport: null,
+      checkedAt: "2026-11-03T08:00:00.000Z",
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    window.history.replaceState({}, "", "/app/?url=https%3A%2F%2Fexample.com%2F");
+
+    render(<PublicScanPortal />);
+
+    expect(await screen.findByRole("heading", { name: "Aún no hay un informe" })).toBeVisible();
+    expect(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME })).toHaveValue("https://example.com/");
+    expect(fetchMock).toHaveBeenCalledWith(STATUS_ENDPOINT, {
+      headers: { Accept: "application/json" },
+      method: "GET",
+      credentials: "omit",
+      cache: "no-store",
+    });
+    expect(fetchMock.mock.calls.every(([, options]) => options?.method !== "POST")).toBe(true);
+  });
+
   it("lets an authorized user request a bounded analysis for an unscanned domain", async () => {
     const fetchMock = vi
       .fn()
@@ -277,7 +303,7 @@ describe("PublicScanPortal", () => {
     expect(
       await screen.findByRole("heading", { name: "Aún no hay un informe" }),
     ).toBeVisible();
-    expect(screen.getByText(/la consulta solo lee información guardada/i)).toBeVisible();
+    expect(screen.getByText(/si solicitas el análisis, las comprobaciones seguirán el alcance/i)).toBeVisible();
     const authorization = screen.getByRole("checkbox", {
       name: /tengo autorización para solicitar este análisis/i,
     });
@@ -629,7 +655,7 @@ describe("PublicScanPortal", () => {
 
     expect(await screen.findByRole("heading", { name: "Qué significa esta valoración" })).toBeVisible();
     await user.click(screen.getAllByRole("button", { name: "Ver detalle" })[0]);
-    expect(screen.getByText("Información pública sobre servicios externos")).toBeVisible();
+    expect(screen.getAllByText("Información pública sobre servicios externos").length).toBeGreaterThan(0);
     expect(screen.getByText(/la información pública del sitio explica servicios externos y para qué se usan/i)).toBeVisible();
   });
 
@@ -902,10 +928,10 @@ describe("PublicScanPortal", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     await user.click(categoryButtons[0]);
     expect(screen.getByRole("dialog", { name: "Ética" })).toBeVisible();
-    expect(screen.getAllByText(/Comprobación incompleta por un error técnico del auditor/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/no se pudo completar esta comprobación\. el resultado queda desconocido/i).length).toBeGreaterThan(0);
     await user.click(screen.getByRole("button", { name: "Cerrar detalle" }));
     await user.click(categoryButtons[2]);
-    expect(screen.getAllByText(/Comprobación incompleta por un error técnico/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/no se pudo completar esta comprobación/i).length).toBeGreaterThan(0);
     expect(screen.getByText("100/100 provisional · 1 de 4 aspectos evaluados"))
       .toBeVisible();
     expect(screen.getAllByText(/qué implica:/i)).toHaveLength(4);
@@ -1357,7 +1383,7 @@ describe("PublicScanPortal", () => {
     });
     expect(progress).toHaveAttribute(
       "aria-valuetext",
-      expect.stringContaining("no hay un porcentaje fiable"),
+      expect.stringContaining("El tiempo depende de las pruebas necesarias"),
     );
     expect(progress).not.toHaveAttribute("aria-valuenow");
   });
@@ -1588,7 +1614,7 @@ describe("PublicScanPortal", () => {
 
     expect(
       await screen.findByText(
-        "Este dominio no está disponible para consulta pública.",
+        "Esta dirección no está disponible para consulta pública.",
       ),
     ).toBeVisible();
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -1810,7 +1836,7 @@ describe("PublicScanPortal", () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(5_000);
     });
-    expect(announcement).toHaveTextContent("La comprobación del dominio está en curso");
+    expect(announcement).toHaveTextContent("La comprobación está en curso");
     const firstRunningAnnouncement = announcement.textContent;
 
     await act(async () => {
