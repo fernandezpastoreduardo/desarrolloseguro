@@ -102,6 +102,10 @@ la búsqueda convencional siguen siendo vías disponibles.
   El rediseño puede cambiar su jerarquía, distribución y presentación; no
   puede omitirlos, convertirlos en otros estados, promediarlos de otra forma
   ni sustituirlos por valores del prototipo.
+- Las modales de categoría y sus paneles de evidencia técnica deben mantener
+  texto y datos legibles sobre su fondo oscuro, tanto con el portal en tema
+  claro como oscuro. Los estados se presentan como etiquetas rellenas con
+  contraste suficiente; se conservan sus nombres y diferencias semánticas.
 - Las hojas de estilo se escriben exclusivamente en SCSS. No se añaden
   dependencias ni recursos remotos.
 
@@ -183,7 +187,8 @@ la búsqueda convencional siguen siendo vías disponibles.
    analítica ni dependencias externas.
 10. La navegación, las ilustraciones, los cuadros de resultados y los estados
     mantienen semántica, contraste y uso por teclado. El movimiento decorativo
-    respeta `prefers-reduced-motion`.
+    respeta `prefers-reduced-motion`. En las modales, las etiquetas de estado y
+    las evidencias desplegadas se leen con claridad en ambos temas.
 11. Lighthouse de laboratorio alcanza al menos 96 en Rendimiento,
     Accesibilidad y Buenas prácticas en escritorio y móvil. SEO se registra
     como informativo mientras la aplicación permanezca bajo `noindex`, de

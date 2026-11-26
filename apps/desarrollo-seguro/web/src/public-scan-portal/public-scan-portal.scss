@@ -39,6 +39,18 @@ $ds-space-block: 40px;
   --ds-score-good: #c49a26;
   --ds-score-low: #d94f45;
   --ds-score-unknown: #8b929a;
+  --ds-status-pass-bg: #bdeecb;
+  --ds-status-pass-ink: #123e24;
+  --ds-status-pass-border: #83cb96;
+  --ds-status-fail-bg: #ffd6d0;
+  --ds-status-fail-ink: #671e18;
+  --ds-status-fail-border: #e69b8f;
+  --ds-status-unknown-bg: #ffe8a8;
+  --ds-status-unknown-ink: #4a3607;
+  --ds-status-unknown-border: #dfbb55;
+  --ds-status-na-bg: #e3e9ef;
+  --ds-status-na-ink: #2f3b48;
+  --ds-status-na-border: #a4b0bc;
   min-height: 100vh;
   border-left: 4px solid var(--ds-accent);
   background: var(--ds-canvas);
@@ -1256,15 +1268,36 @@ $ds-space-block: 40px;
 }
 
 .ds-portal__category-evidence strong {
-  color: var(--ds-accent-strong);
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  width: fit-content;
+  border: 1px solid var(--ds-status-pass-border);
+  border-radius: 999px;
+  padding: 3px 8px;
+  color: var(--ds-status-pass-ink);
+  background: var(--ds-status-pass-bg);
+  font-size: 0.7rem;
+  font-weight: 800;
+  line-height: 1.25;
 }
 
 .ds-portal__category-evidence li[data-status="fail"] strong {
-  color: var(--ds-danger, #8d352d);
+  border-color: var(--ds-status-fail-border);
+  color: var(--ds-status-fail-ink);
+  background: var(--ds-status-fail-bg);
 }
 
 .ds-portal__category-evidence li[data-status="unknown"] strong {
-  color: var(--ds-muted);
+  border-color: var(--ds-status-unknown-border);
+  color: var(--ds-status-unknown-ink);
+  background: var(--ds-status-unknown-bg);
+}
+
+.ds-portal__category-evidence li[data-status="not_applicable"] strong {
+  border-color: var(--ds-status-na-border);
+  color: var(--ds-status-na-ink);
+  background: var(--ds-status-na-bg);
 }
 
 .ds-portal__category-more {
@@ -1419,6 +1452,18 @@ $ds-space-block: 40px;
   color: #f5ede1;
 }
 
+.ds-portal__category-modal .ds-portal__evidence div {
+  border-left-color: color-mix(in srgb, #f5ede1 38%, transparent);
+}
+
+.ds-portal__category-modal .ds-portal__evidence dt {
+  color: #c5cdd8;
+}
+
+.ds-portal__category-modal .ds-portal__evidence dd {
+  color: #fffaf0;
+}
+
 .ds-portal__category-modal .ds-portal__criterion-evidence b {
   color: var(--ds-accent-soft);
 }
@@ -1430,7 +1475,7 @@ $ds-space-block: 40px;
   align-self: flex-start;
   flex: 0 0 auto;
   border: 1px solid currentColor;
-  border-radius: var(--ds-radius);
+  border-radius: 999px;
   padding: $ds-space-min $ds-space-tight;
   color: #d4d9e1;
   font-family: var(--ds-mono);
@@ -1443,30 +1488,30 @@ $ds-space-block: 40px;
 
 .ds-portal__category-modal .ds-portal__ethics-criteria li[data-status="pass"] > span,
 .ds-portal__category-modal .ds-portal__checks li[data-status="pass"] div span {
-  border-color: var(--ds-score-excellent);
-  color: var(--ds-score-excellent);
-  background: color-mix(in srgb, var(--ds-score-excellent) 16%, transparent);
+  border-color: var(--ds-status-pass-border);
+  color: var(--ds-status-pass-ink);
+  background: var(--ds-status-pass-bg);
 }
 
 .ds-portal__category-modal .ds-portal__ethics-criteria li[data-status="unknown"] > span,
 .ds-portal__category-modal .ds-portal__checks li[data-status="unknown"] div span {
-  border-color: var(--ds-score-good);
-  color: #f0c956;
-  background: color-mix(in srgb, var(--ds-score-good) 18%, transparent);
+  border-color: var(--ds-status-unknown-border);
+  color: var(--ds-status-unknown-ink);
+  background: var(--ds-status-unknown-bg);
 }
 
 .ds-portal__category-modal .ds-portal__ethics-criteria li[data-status="fail"] > span,
 .ds-portal__category-modal .ds-portal__checks li[data-status="fail"] div span {
-  border-color: var(--ds-score-low);
-  color: #ff8579;
-  background: color-mix(in srgb, var(--ds-score-low) 18%, transparent);
+  border-color: var(--ds-status-fail-border);
+  color: var(--ds-status-fail-ink);
+  background: var(--ds-status-fail-bg);
 }
 
 .ds-portal__category-modal .ds-portal__ethics-criteria li[data-status="not_applicable"] > span,
 .ds-portal__category-modal .ds-portal__checks li[data-status="not_applicable"] div span {
-  border-color: var(--ds-score-unknown);
-  color: #c5ccd4;
-  background: color-mix(in srgb, var(--ds-score-unknown) 18%, transparent);
+  border-color: var(--ds-status-na-border);
+  color: var(--ds-status-na-ink);
+  background: var(--ds-status-na-bg);
 }
 
 .ds-portal__category-modal .ds-portal__technical-details {
