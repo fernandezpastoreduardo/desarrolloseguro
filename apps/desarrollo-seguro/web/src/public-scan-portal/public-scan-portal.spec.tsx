@@ -659,6 +659,61 @@ describe("PublicScanPortal", () => {
     expect(screen.getByText(/la información pública del sitio explica servicios externos y para qué se usan/i)).toBeVisible();
   });
 
+  it("loads a domain-v5-network-adapter-2 report with ethics v6 and service comparison", async () => {
+    const report = {
+      ...SCORED_PUBLIC_REPORT,
+      profileVersion: "domain-v5",
+      scannerVersion: "domain-v5-network-adapter-2",
+      ethicsAssessment: {
+        ...SCORED_PUBLIC_REPORT.ethicsAssessment,
+        policyVersion: "domain-ethics-v6",
+        criteria: SCORED_PUBLIC_REPORT.ethicsAssessment.criteria.map((criterion) =>
+          criterion.id === "third-party-data-use"
+            ? { ...criterion, id: "external-service-transparency" }
+            : criterion,
+        ),
+      },
+      publicPolicyTransparencyAssessment: {
+        policyVersion: "public-policy-v1",
+        status: "pass",
+        reasonCode: "disclosure_found",
+        evidence: {
+          linksFound: 1,
+          pagesInspected: 1,
+          unavailablePages: 0,
+          accessDeniedPages: 0,
+          providerMentions: 1,
+          providersMissingPurpose: 0,
+          categories: ["analytics"],
+        },
+      },
+      publicServiceComparison: {
+        policyVersion: "public-service-comparison-v1",
+        status: "pass",
+        reasonCode: "services_disclosed",
+        items: [
+          { providerId: "openai-api", observation: "declared", observedDomains: [], declaredPurposes: ["ai_processing"] },
+        ],
+      },
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({
+      hostname: "example.com",
+      enrollment: "on_demand",
+      state: "fresh",
+      failureCode: null,
+      activeJobId: null,
+      lastReport: report,
+      checkedAt: "2026-11-03T10:01:00.000Z",
+    })));
+
+    const user = userEvent.setup();
+    render(<PublicScanPortal />);
+    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "https://example.com/");
+    await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
+
+    expect(await screen.findByRole("heading", { name: "Qué significa esta valoración" })).toBeVisible();
+  });
+
   it("explains observed, undeclared and declaration-only services with public sources", async () => {
     const report = {
       ...SCORED_PUBLIC_REPORT,

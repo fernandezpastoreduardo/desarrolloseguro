@@ -4,6 +4,8 @@ Desarrollo Seguro publica páginas de presentación, metodología, privacidad y 
 
 La portada muestra `grumphya.com` y `desarrolloseguro.org` como sitios certificados y enlaza con el resultado vigente de cada uno. El buscador permite consultar cualquier URL válida. Cada informe conserva sus datos, puntuaciones, categorías, estados y clasificaciones; el portal permite consultar su evidencia y alcance. La ficha estática de prototipo se retiró porque sus cifras eran históricas y no representaban un informe vigente.
 
+El portal admite los informes vigentes `domain-v5` del adaptador `domain-v5-network-adapter-2`, incluidos sus bloques de transparencia de políticas, comparación de servicios externos y evaluación ética v6.
+
 El sello verificable enlaza con el informe actual y permite comprobar su estado. Solo acredita el vínculo y vigencia mostrados por la comprobación; el informe describe su alcance concreto y no sustituye una auditoría integral.
 
 La visita pública no usa analítica, cookies no esenciales ni envía datos de visitantes a servicios externos desde el navegador. El inventario de proveedores de infraestructura y los destinos observados durante los análisis se explican por separado en la página de privacidad y alcance.

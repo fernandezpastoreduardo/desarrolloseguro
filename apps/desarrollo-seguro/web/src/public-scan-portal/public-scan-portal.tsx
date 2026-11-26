@@ -2271,8 +2271,10 @@ function isPublicReport(value: unknown): value is PublicReport {
   const hasPublicServiceComparison = value.publicServiceComparison != null;
   const usesV5PublicPolicy = value.ethicsAssessment.policyVersion === "domain-ethics-v5" &&
     value.profileVersion === "domain-v4" && value.scannerVersion === "domain-v4-network-adapter-2";
-  const usesV6ServiceComparison = value.ethicsAssessment.policyVersion === "domain-ethics-v6" &&
-    value.profileVersion === "domain-v4" && ["domain-v4-network-adapter-5", "domain-v4-network-adapter-6", "domain-v4-network-adapter-7"].includes(value.scannerVersion);
+  const usesV6ServiceComparison = value.ethicsAssessment.policyVersion === "domain-ethics-v6" && (
+    value.profileVersion === "domain-v4" && ["domain-v4-network-adapter-5", "domain-v4-network-adapter-6", "domain-v4-network-adapter-7"].includes(value.scannerVersion) ||
+    value.profileVersion === "domain-v5" && value.scannerVersion === "domain-v5-network-adapter-2"
+  );
   if ((value.ethicsAssessment.policyVersion === "domain-ethics-v3" && (hasProcessorAssessment || hasPublicPolicyAssessment)) ||
       (value.ethicsAssessment.policyVersion === "domain-ethics-v4" && (!hasProcessorAssessment || hasPublicPolicyAssessment)) ||
       usesV5PublicPolicy && !hasPublicPolicyAssessment ||

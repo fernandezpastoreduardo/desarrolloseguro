@@ -59,10 +59,17 @@ el catálogo oficial. Un fallo técnico real del auditor conserva `unknown` y
 su diagnóstico; estos bloques no se omiten por usar una ruta exacta en vez de
 las rutas históricas del dominio.
 
+El portal público debe aceptar la comparación de servicios y la evaluación
+ética v6 de `domain-v5-network-adapter-2`, así como las combinaciones v6 ya
+publicadas por los adaptadores `domain-v4-network-adapter-5`, `-6` y `-7`.
+Un informe válido devuelto por la API no puede convertirse en un error de
+consulta por usar la versión vigente del perfil.
+
 **Criterios:** el smoke de despliegue obtiene un informe `domain-v5` con
 evaluación pública de políticas y comparación de servicios presentes, ocho
 criterios éticos evaluados y métricas completas de rendimiento móvil y
-escritorio. Los tests cubren la propagación de esos bloques desde el executor
+escritorio. El portal carga un informe `domain-v5-network-adapter-2` con
+comparación de servicios y ética v6. Los tests cubren la propagación de esos bloques desde el executor
 hasta el informe público, tanto con resultados conclusivos como con un error
 verificable del auditor.
 
