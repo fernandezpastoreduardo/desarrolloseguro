@@ -2,7 +2,9 @@
 
 Desarrollo Seguro publica páginas de presentación, metodología, privacidad y alcance, información sobre el sello verificable y un portal para consultar informes. El portal permite pegar una dirección web con o sin esquema —si falta, añade HTTPS— o abrirla desde un enlace directo. Si se consulta una URL sin informe, inicia automáticamente el análisis y muestra el resultado al completarse; al consultar una URL con informe, muestra lo guardado. La ruta y la query se conservan y el fragmento se elimina. Para pedir una revisión nueva de una URL que ya tiene informe, la persona debe confirmar que tiene autorización. Mientras se ejecuta el análisis, el portal actualiza el estado sin recargar y muestra por separado el progreso de Ética, Privacidad, Seguridad y Rendimiento.
 
-La portada muestra `grumphya.com` y `desarrolloseguro.org` como sitios certificados y enlaza con el resultado vigente de cada uno. El buscador permite consultar cualquier URL válida. Cada informe conserva sus datos, puntuaciones, categorías, estados y clasificaciones; el portal permite consultar su evidencia y alcance. La ficha estática de prototipo se retiró porque sus cifras eran históricas y no representaban un informe vigente.
+La portada muestra `grumphya.com` y `desarrolloseguro.org` como sitios certificados y enlaza con el resultado vigente de cada uno. El buscador permite consultar cualquier URL válida. Cada informe conserva sus datos, puntuaciones, categorías, estados y clasificaciones; las modales de categoría presentan estados y evidencias técnicas con contraste legible en tema claro y oscuro. La ficha estática de prototipo se retiró porque sus cifras eran históricas y no representaban un informe vigente.
+
+La puntuación de rendimiento es una media de seis métricas propias estándar tomadas en móvil y escritorio; no es una puntuación oficial de Lighthouse.
 
 El portal admite los informes vigentes `domain-v5` del adaptador `domain-v5-network-adapter-2`, incluidos sus bloques de transparencia de políticas, comparación de servicios externos y evaluación ética v6.
 

@@ -2876,7 +2876,7 @@ function getCriterionPriority(status: CheckStatus): number {
 function getPerformanceCategorySummary(score: number | null): string {
   return score === null
     ? "Medición incompleta: falta algún dato requerido de móvil o escritorio."
-    : "Nota media de las pruebas móviles y de escritorio, calculada con seis métricas propias tipo Lighthouse.";
+    : "Nota media de las pruebas móviles y de escritorio, calculada con seis métricas propias estándar.";
 }
 
 function getReportTakeaway(report: PublicReport, state: string): string {
@@ -3051,7 +3051,7 @@ function getCriterionEvidenceSummary(
         const desktopScore = number("desktopScore");
         return score === null
           ? `Medición incompleta: móvil ${mobileScore === null ? "sin puntuación" : `${mobileScore}/100`}; escritorio ${desktopScore === null ? "sin puntuación" : `${desktopScore}/100`}. No se calcula la media si falta un dato requerido.`
-          : `Móvil ${mobileScore}/100 y escritorio ${desktopScore}/100; nota media ${score}/100. Métricas propias tipo Lighthouse, no puntuación oficial de Lighthouse.`;
+          : `Móvil ${mobileScore}/100 y escritorio ${desktopScore}/100; nota media ${score}/100. Métricas propias estándar.`;
       }
       const responseTime = number("responseTimeMs");
       const responseBytes = number("responseBytes");
