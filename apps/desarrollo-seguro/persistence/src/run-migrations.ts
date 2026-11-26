@@ -170,6 +170,7 @@ const MIGRATIONS = [
   { version: "063_exact_target_url_jobs", file: "063_exact_target_url_jobs.sql" },
   { version: "064_target_url_admission_cooldown", file: "064_target_url_admission_cooldown.sql" },
   { version: "065_deploy_refresh_scan_admission", file: "065_deploy_refresh_scan_admission.sql" },
+  { version: "066_domain_v5_persistence_contract", file: "066_domain_v5_persistence_contract.sql" },
 ] as const;
 
 export const DEVELOPMENT_SECURITY_MIGRATION_COUNT = MIGRATIONS.length;

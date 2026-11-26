@@ -595,7 +595,8 @@ function deriveSafeStatus(
       profileVersion === PROFILE_VERSION_DOMAIN_V1 ||
       profileVersion === PROFILE_VERSION_DOMAIN_V2 ||
       profileVersion === PROFILE_VERSION_DOMAIN_V3 ||
-      profileVersion === PROFILE_VERSION_DOMAIN_V4) &&
+      profileVersion === PROFILE_VERSION_DOMAIN_V4 ||
+      profileVersion === PROFILE_VERSION_DOMAIN_V5) &&
     controlId === "DS-HTTP-01" &&
     method === "HEAD" &&
     [405, 501].includes(Number(evidence.statusCode)) &&
@@ -610,7 +611,8 @@ function deriveSafeStatus(
       profileVersion === PROFILE_VERSION_DOMAIN_V1 ||
       profileVersion === PROFILE_VERSION_DOMAIN_V2 ||
       profileVersion === PROFILE_VERSION_DOMAIN_V3 ||
-      profileVersion === PROFILE_VERSION_DOMAIN_V4) &&
+      profileVersion === PROFILE_VERSION_DOMAIN_V4 ||
+      profileVersion === PROFILE_VERSION_DOMAIN_V5) &&
     controlId === "DS-HDR-01" &&
     evidence.finalScheme !== "https"
   ) {
@@ -710,7 +712,8 @@ function getRequiredEvidence(
       profileVersion === PROFILE_VERSION_TRANSPORT_V1 ||
       profileVersion === PROFILE_VERSION_DOMAIN_V1 ||
       profileVersion === PROFILE_VERSION_DOMAIN_V2 ||
-      profileVersion === PROFILE_VERSION_DOMAIN_V4) &&
+      profileVersion === PROFILE_VERSION_DOMAIN_V4 ||
+      profileVersion === PROFILE_VERSION_DOMAIN_V5) &&
     controlId === "DS-HDR-01"
   ) {
     return [...(controlEvidence ?? []), "finalScheme"];
@@ -845,7 +848,8 @@ function sanitizeEvidence(
       profileVersion !== PROFILE_VERSION_DOMAIN_V1 &&
       profileVersion !== PROFILE_VERSION_DOMAIN_V2 &&
       profileVersion !== PROFILE_VERSION_DOMAIN_V3 &&
-      profileVersion !== PROFILE_VERSION_DOMAIN_V4
+      profileVersion !== PROFILE_VERSION_DOMAIN_V4 &&
+      profileVersion !== PROFILE_VERSION_DOMAIN_V5
     ) {
       continue;
     }
