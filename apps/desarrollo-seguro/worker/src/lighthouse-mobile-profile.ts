@@ -1,11 +1,13 @@
 import { chromium as playwrightChromium } from "playwright";
 import puppeteer, { type Browser as PuppeteerBrowser, type Page as PuppeteerPage } from "puppeteer-core";
 import lighthouse from "lighthouse";
+import { posix as posixPath, win32 as windowsPath } from "node:path";
 import type { PrivacyBrowserRequestGate } from "./privacy-browser-request-gate.js";
 import type { LighthouseRuntimeFailure, PerformanceDiagnosticField, PerformanceProfileEvidence } from "./performance-browser-observer.js";
 
 const CHROME_FLAGS = [
   "--no-sandbox",
+  "--disable-breakpad",
   "--disable-background-networking",
   "--disable-component-update",
   "--disable-sync",
@@ -48,7 +50,7 @@ export async function observeLighthouseMobileProfile(
     if (options.signal.aborted) return incompleteProfile({ code: "observation_budget_exhausted" });
     browser = await launchBrowser({
       headless: true,
-      executablePath: playwrightChromium.executablePath(),
+      executablePath: resolveLighthouseHeadlessShellPath(playwrightChromium.executablePath()),
       args: [
         ...CHROME_FLAGS,
         `--proxy-server=${options.proxyUrl}`,
@@ -113,6 +115,24 @@ export async function observeLighthouseMobileProfile(
     await cdp?.detach().catch(() => undefined);
     await browser?.close().catch(() => undefined);
   }
+}
+
+/** Resolves the matching headless-shell binary installed beside Playwright's pinned Chromium. */
+export function resolveLighthouseHeadlessShellPath(
+  chromiumExecutablePath: string,
+  architecture: "x64" | "arm64" = process.arch === "arm64" ? "arm64" : "x64",
+  platform: "linux" | "darwin" | "win32" = process.platform as "linux" | "darwin" | "win32",
+): string {
+  const match = /^(?<root>.*?)[\\/]chromium-(?<revision>\d+)[\\/]/u.exec(chromiumExecutablePath);
+  if (!match?.groups?.root || !match.groups.revision) throw new Error("lighthouse_chromium_installation_invalid");
+  const executable = platform === "win32" ? "chrome-headless-shell.exe" : "chrome-headless-shell";
+  const platformDirectory = platform === "linux"
+    ? architecture === "arm64" ? "chrome-headless-shell-linux-arm64" : "chrome-headless-shell-linux64"
+    : platform === "darwin"
+      ? architecture === "arm64" ? "chrome-headless-shell-mac-arm64" : "chrome-headless-shell-mac-x64"
+      : "chrome-headless-shell-win64";
+  const join = platform === "win32" ? windowsPath.join : posixPath.join;
+  return join(match.groups.root, `chromium_headless_shell-${match.groups.revision}`, platformDirectory, executable);
 }
 
 function classifyError(error: unknown): "timeout" | "target_closed" | "protocol" | "type" | "other" {
