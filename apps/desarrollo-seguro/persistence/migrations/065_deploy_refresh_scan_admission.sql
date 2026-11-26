@@ -73,10 +73,13 @@ BEGIN
   ELSIF left(target_path, 1) = '?' THEN target_path := '/' || target_path;
   END IF;
 
-  SELECT reports.id INTO existing_report FROM public.ds_scan_runs AS reports
+  SELECT reports.id INTO existing_report
+  FROM public.ds_scan_runs AS reports
+  INNER JOIN public.ds_scan_jobs AS scan_jobs
+    ON scan_jobs.id = reports.job_id
   WHERE reports.hostname = p_hostname AND reports.profile_version = 'domain-v5'
     AND reports.scope_json @> jsonb_build_array(target_path)
-    AND reports.completed_at > deployment_epoch
+    AND scan_jobs.queued_at > deployment_epoch
     AND reports.completed_at <= now_at AND reports.completed_at > now_at - interval '60 minutes'
   ORDER BY reports.completed_at DESC LIMIT 1;
   IF existing_report IS NOT NULL THEN
@@ -95,11 +98,13 @@ BEGIN
   END IF;
   SELECT reports.completed_at INTO prior_admission
   FROM public.ds_scan_runs AS reports
+  INNER JOIN public.ds_scan_jobs AS scan_jobs
+    ON scan_jobs.id = reports.job_id
   WHERE reports.hostname = p_hostname
     AND reports.profile_version = 'domain-v5'
     AND reports.trigger = 'requested'
     AND reports.scope_json @> jsonb_build_array(target_path)
-    AND reports.completed_at > deployment_epoch
+    AND scan_jobs.queued_at > deployment_epoch
     AND reports.completed_at <= now_at
     AND reports.completed_at > now_at - interval '24 hours'
   ORDER BY reports.completed_at DESC LIMIT 1;

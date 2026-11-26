@@ -24,11 +24,12 @@ auditoría de otra ruta/query no consume ese límite. Para evitar ejecuciones
 simultáneas abusivas, solo puede haber un análisis solicitado activo por
 hostname; una segunda URL espera a que termine ese trabajo y no lo reutiliza.
 Cada deploy autorizado de Desarrollo Seguro avanza un epoch global de
-admisión. Los informes anteriores al epoch no consumen ni la caché de una hora
-ni el cooldown de 24 horas para ninguna URL, así quien pruebe producción puede
-solicitar de nuevo un informe con el código desplegado. Los informes históricos
-no se borran ni se modifican y no se encolan análisis automáticamente; los
-límite por minuto, de cola y de un trabajo activo por hostname siguen vigentes.
+admisión. Los trabajos encolados antes del epoch no consumen ni la caché de una
+hora ni el cooldown de 24 horas para ninguna URL, aunque terminen después del
+deploy. Así quien pruebe producción puede solicitar un informe generado por un
+trabajo nuevo. Los informes históricos no se borran ni se modifican y no se
+encolan análisis automáticamente; los límites por minuto, de cola y de un
+trabajo activo por hostname siguen vigentes.
 
 La URL completa se propaga por admisión, job temporal, transporte/worker,
 perfil y validación del informe. Rendimiento usa mediciones propias tipo
@@ -172,7 +173,7 @@ admisión; SSE es opcional y no forma parte de la aceptación de B.
 
 ## F3. Escaneo automatizado
 
-El worker y el coordinador están en Compose; el coordinador crea un executor de red deshabilitada y un broker de salida acotado. La admisión compartida limita la cola a diez trabajos simultáneos en espera y una ejecución global, con máximo 1000 dominios `on_demand`. El límite por minuto permanece activo, junto con el cooldown de 24 horas por URL completa, la exclusión de trabajos activos simultáneos por hostname y la deduplicación de URL activas. Cada deploy autorizado avanza el epoch de admisión global para permitir renovar cualquier URL auditada, sin borrar informes ni iniciar trabajos por sí mismo. Los trabajos `domain-v5` conservan la URL completa en PostgreSQL mientras esperan o se ejecutan; una vez terminal, la columna temporal se limpia. El workflow manual valida un informe `domain-v5` reciente de `grumphya.com`, incluidas las métricas de rendimiento por perfil. Si otra ruta del mismo hostname ocupa el slot, el smoke de deploy espera y vuelve a solicitar la URL objetivo; no interpreta la ausencia de un informe de esa ruta como un resultado reutilizable. No se hacen POST al sitio analizado, autenticación en esos sitios, fuzzing, fuerza bruta ni exploración arbitraria.
+El worker y el coordinador están en Compose; el coordinador crea un executor de red deshabilitada y un broker de salida acotado. La admisión compartida limita la cola a diez trabajos simultáneos en espera y una ejecución global, con máximo 1000 dominios `on_demand`. El límite por minuto permanece activo, junto con el cooldown de 24 horas por URL completa, la exclusión de trabajos activos simultáneos por hostname y la deduplicación de URL activas. Cada deploy autorizado avanza el epoch de admisión global para permitir renovar cualquier URL auditada, sin borrar informes ni iniciar trabajos por sí mismo. Un trabajo encolado antes del epoch no puede satisfacer esa renovación aunque complete después del deploy. Los trabajos `domain-v5` conservan la URL completa en PostgreSQL mientras esperan o se ejecutan; una vez terminal, la columna temporal se limpia. El workflow manual valida un informe `domain-v5` reciente de `grumphya.com`, incluidas las métricas de rendimiento por perfil. Si otra ruta del mismo hostname ocupa el slot, el smoke de deploy espera y vuelve a solicitar la URL objetivo; no interpreta la ausencia de un informe de esa ruta como un resultado reutilizable. No se hacen POST al sitio analizado, autenticación en esos sitios, fuzzing, fuerza bruta ni exploración arbitraria.
 
 **Criterios:** cualquier fallo de cobertura, transporte o política deja el control como `unknown`/no evaluable; no se convierte en aprobado. El modelo de amenazas y los límites de confianza están en [scanner-safety.md](scanner-safety.md); el executor permanece apagado hasta demostrar allí los gates de red, aislamiento y evidencia.
 

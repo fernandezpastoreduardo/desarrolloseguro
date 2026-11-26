@@ -14,11 +14,12 @@ otra ruta/query espera a que termine sin reutilizar el resultado ajeno. Los
 escaneos programados tampoco consumen el límite de una URL solicitada.
 
 En cada deploy autorizado, el provisionador avanza un epoch global de admisión
-antes de actualizar los servicios. Los informes anteriores al deploy dejan de
-consumir la caché de 60 minutos y el cooldown de 24 horas para cualquier URL;
-se conservan intactos en el historial y el cambio no genera análisis por sí
-solo. Una nueva solicitud puede producir un informe con el código desplegado,
-sujeta a los límites de cola, solicitudes y ejecución concurrente.
+antes de actualizar los servicios. Los trabajos encolados antes del deploy no
+consumen la caché de 60 minutos ni el cooldown de 24 horas para ninguna URL,
+aunque terminen después. Los informes se conservan intactos en el historial y
+el cambio no genera análisis por sí solo. Una nueva solicitud puede producir
+un informe con el código desplegado, sujeta a los límites de cola, solicitudes
+y ejecución concurrente.
 
 Rendimiento se mide en Chromium, en contextos nuevos para móvil y escritorio.
 Móvil usa 375×812, CPU 4× y red de 150 ms RTT, 1,6 Mbps de bajada y 750 Kbps
