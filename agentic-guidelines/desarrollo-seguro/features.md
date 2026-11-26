@@ -50,11 +50,24 @@ pública, solo puertos 80/443 y los límites de tiempo, solicitudes y bytes ya
 definidos para el navegador. No se envían formularios ni se ejecutan acciones
 de escritura para medir rendimiento.
 
+La observación de privacidad y la medición de rendimiento tienen plazos
+independientes de hasta 120 segundos cada una. El plazo de privacidad no se
+comparte ni se consume antes de iniciar el perfil móvil o escritorio. El
+timeout del contenedor y el del coordinador cubren ambas ventanas más el
+escaneo base, el inicio y la limpieza del runtime; un perfil no debe quedar
+incompleto solo porque la observación anterior usó su propio presupuesto.
+
 **Criterios:** una URL con ruta y query conserva ambos en el alcance y el
 informe; el fragmento no aparece en solicitudes ni persistencia; una URL con
 credenciales, esquema distinto de HTTPS, host no público o destino no permitido se
 rechaza; la consulta no inspecciona otras rutas. Los datos temporales de cola
 se eliminan al terminar el job.
+
+**Criterios de plazos de observación:** privacidad y rendimiento reciben
+señales de cancelación separadas y cada una conserva su límite de 120 segundos.
+El límite exterior permite terminar las dos observaciones secuenciales y su
+limpieza. Una prueba de regresión debe demostrar que agotar el plazo de
+privacidad no presenta a rendimiento una señal ya abortada.
 
 **Disponible:** API `GET` de estado e informe y `POST` explícito para solicitar un análisis; límites antiabuso por minuto, capacidad compartida PostgreSQL y proyección que excluye evidencia interna. La consulta `GET` no resuelve hostnames ni encola trabajos. La solicitud `POST` requiere confirmación de autorización y guarda una admisión `on_demand` de forma transaccional. Si se encola, el portal consulta el estado cada cinco segundos, hasta 15 minutos mientras haya trabajo activo, y presenta el informe nuevo cuando queda guardado. Si falla la admisión o no aparece un trabajo activo ni un informe nuevo, detiene el sondeo y permite reintentar. El runtime real está desplegado; el 20 de noviembre de 2026 se verificó una renovación periódica que produjo un informe nuevo y actualizó la certificación.
 

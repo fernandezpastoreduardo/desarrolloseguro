@@ -3,10 +3,12 @@ import { isThirdPartyPrivacyHost, normalizeHostname, PRIVACY_BROWSER_BUDGET, sco
 import { PrivacyBrowserRequestGate } from "./privacy-browser-request-gate.js";
 import { authorizePrivacyTarget } from "./privacy-egress-policy.js";
 
+export const PERFORMANCE_OBSERVATION_DURATION_MS = 120_000;
+
 const PERFORMANCE_OBSERVATION_BUDGET = {
   requests: 1_000,
   receivedBytes: 64 * 1024 * 1024,
-  durationMs: 120_000,
+  durationMs: PERFORMANCE_OBSERVATION_DURATION_MS,
   contexts: 2,
   settleMs: 2_500,
   mobile: {

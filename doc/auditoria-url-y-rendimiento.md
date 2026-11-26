@@ -42,6 +42,12 @@ Cada subnota se interpola linealmente entre ambos umbrales y se limita a
 0–100. Si falta cualquier métrica del perfil, ese perfil queda sin nota y la
 tarjeta no promedia resultados parciales.
 
+La observación de privacidad y los perfiles de rendimiento disponen cada uno
+de hasta 120 segundos. Son plazos independientes: el tiempo empleado por los
+flujos de privacidad no reduce el de móvil y escritorio. El contenedor y el
+coordinador tienen un límite exterior que permite completar ambas mediciones,
+además del escaneo base y la limpieza.
+
 El informe público conserva las catorce métricas del perfil en la evidencia
 de Rendimiento. PostgreSQL valida los mismos campos y límites numéricos que el
 saneador de la aplicación; un resultado de rendimiento marcado como `pass`

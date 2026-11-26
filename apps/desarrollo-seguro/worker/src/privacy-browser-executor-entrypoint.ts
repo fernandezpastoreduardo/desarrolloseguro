@@ -1,5 +1,5 @@
-import { observePrivacyBehavior, type PrivacyBrowserInput, type PrivacyBrowserObservation } from "./privacy-browser-observer.js";
-import { observePagePerformance, type PerformanceBrowserEvidence } from "./performance-browser-observer.js";
+import { type PrivacyBrowserInput } from "./privacy-browser-observer.js";
+import { observePrivacyAndPerformance } from "./privacy-browser-observation.js";
 import { parseScanTargetUrl } from "@desarrolloseguro/core";
 import { PRIVACY_BROWSER_MAX_RESPONSE_BYTES } from "./privacy-browser-contract.js";
 
@@ -17,45 +17,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  let result: PrivacyBrowserObservation;
-  const browserSignal = AbortSignal.timeout(120_000);
-  try {
-    result = await observePrivacyBehavior(input, { proxyUrl: PROXY_URL, signal: browserSignal });
-  } catch {
-    result = {
-      protocolVersion: 1,
-      requestId: input.requestId,
-      hostname: input.hostname,
-      status: "unknown",
-      context: { browser: "Chromium", locale: "es-ES", timezone: "Europe/Madrid", viewport: "desktop-1365x768" },
-      initial: unknownFlow(),
-      policyLinkVisit: { status: "unknown", link: null, documentAccess: "unknown", navigationStartedAtMs: null, beforeNavigation: null, afterNavigation: null },
-      accept: unknownFlow(),
-      reject: unknownFlow(),
-      vendorControlCoverage: "unknown",
-      vendorControlCount: 0,
-      vendorControls: [],
-      requestCount: 0,
-      blockedRequestCount: 0,
-      requestBudgetExceeded: false,
-      thirdPartyRequestHosts: [],
-      receivedBytes: null,
-    };
-  }
-  if (input.targetUrl) {
-    let performance: PerformanceBrowserEvidence;
-    try {
-      performance = await observePagePerformance({
-        targetUrl: input.targetUrl,
-        hostname: input.hostname,
-        proxyUrl: PROXY_URL,
-        signal: browserSignal,
-      });
-    } catch {
-      performance = unknownPerformanceEvidence();
-    }
-    result = { ...result, performance };
-  }
+  const result = await observePrivacyAndPerformance(input, { proxyUrl: PROXY_URL });
   const serialized = `${JSON.stringify(result)}\n`;
   if (Buffer.byteLength(serialized, "utf8") > PRIVACY_BROWSER_MAX_RESPONSE_BYTES) {
     process.stdout.write(`${JSON.stringify({ protocolVersion: 1, requestId: input.requestId, hostname: input.hostname, status: "unknown", code: "privacy_browser_output_too_large" })}\n`);
@@ -89,53 +51,6 @@ function parseInput(input: string): PrivacyBrowserInput {
     return { protocolVersion: 1, requestId: value.requestId, hostname: value.hostname, targetUrl: target.targetUrl };
   }
   return { protocolVersion: 1, requestId: value.requestId, hostname: value.hostname };
-}
-
-function unknownPerformanceEvidence(): PerformanceBrowserEvidence {
-  const unknown = (profile: "mobile" | "desktop") => ({
-    profile,
-    status: "unknown" as const,
-    fcpMs: null,
-    lcpMs: null,
-    cls: null,
-    tbtMs: null,
-    ttfbMs: null,
-    transferBytes: null,
-    score: null,
-  });
-  return { profiles: [unknown("mobile"), unknown("desktop")] };
-}
-
-function unknownFlow(): PrivacyBrowserObservation["initial"] {
-  return {
-    status: "unknown",
-    pageLoaded: false,
-    consentPromptDetected: null,
-    acceptVisibleAtFirstLayer: null,
-    rejectVisibleAtFirstLayer: null,
-    actionsToAccept: null,
-    actionsToReject: null,
-    preferenceWriteAllowed: false,
-    rejectionPersistedAfterReload: null,
-    signalHostsAfterChoice: [],
-    completedHostsAfterChoice: [],
-    cookiesAfterChoice: [],
-    storageKeysAfterChoice: [],
-    cookieReadComplete: false,
-    storageReadComplete: false,
-    firstEntryPolicyLinks: { status: "unknown", consentComponentDetected: null, consentComponentLink: null, consentComponentDocumentAccess: "unknown", informationNoticeLink: null, informationNoticeDocumentAccess: "unknown", footerLink: null, footerLinkDocumentAccess: "unknown" },
-    phaseEvidence: {
-      beforeChoice: null,
-      choiceActionAtMs: null,
-      afterChoice: null,
-      reloadStartedAtMs: null,
-      afterReload: null,
-      rejectionChoiceStateAfterReload: "unknown",
-      rejectionChoiceEvidence: null,
-      networkRequests: [],
-      networkRequestsComplete: true,
-    },
-  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
