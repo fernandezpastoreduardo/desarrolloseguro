@@ -106,6 +106,9 @@ la búsqueda convencional siguen siendo vías disponibles.
   texto y datos legibles sobre su fondo oscuro, tanto con el portal en tema
   claro como oscuro. Los estados se presentan como etiquetas rellenas con
   contraste suficiente; se conservan sus nombres y diferencias semánticas.
+- El resumen y la evidencia del rendimiento describen la puntuación como una
+  media de seis métricas propias estándar. No la presentan como equivalente a
+  Lighthouse.
 - Las hojas de estilo se escriben exclusivamente en SCSS. No se añaden
   dependencias ni recursos remotos.
 
