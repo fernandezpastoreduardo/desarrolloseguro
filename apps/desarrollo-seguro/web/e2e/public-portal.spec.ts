@@ -43,7 +43,9 @@ test("renders the public portal and allows changing its theme", async ({
     page.getByRole("textbox", { name: "URL HTTPS que quieres auditar" }),
   ).toBeVisible();
   await expect(
-    page.getByText("Consultar solo muestra el informe guardado."),
+    page.getByText(
+      "Si ya hay un informe, lo verás aquí. Si todavía no existe, iniciaremos la revisión de esta dirección y los recursos que permita el perfil.",
+    ),
   ).toBeVisible();
 
   const portal = page.locator("main.ds-portal");
@@ -62,7 +64,7 @@ test("renders the public portal and allows changing its theme", async ({
   expect(externalRequests).toEqual([]);
 });
 
-test("preserves the selected HTTPS path and query when requesting an authorized analysis", async ({
+test("automatically requests an analysis for the exact HTTPS URL when no report exists", async ({
   page,
 }) => {
   const targetUrl = "https://demo.example.org/careers?role=pm";
@@ -100,8 +102,7 @@ test("preserves the selected HTTPS path and query when requesting an authorized 
     .fill(`${targetUrl}#opening`);
   await page.getByRole("button", { name: "Consultar informe" }).click();
   await expect(page.getByRole("heading", { name: "Aún no hay un informe" })).toBeVisible();
-  await page.getByRole("checkbox", { name: /tengo autorización/i }).check();
-  await page.getByRole("button", { name: "Solicitar análisis" }).click();
+  await expect(page.getByRole("checkbox", { name: /tengo autorización/i })).toHaveCount(0);
   await expect(page.getByRole("progressbar", { name: "Progreso del análisis" }))
     .toHaveAttribute("data-phase", "queued");
   await expect(page.getByRole("progressbar", { name: "Progreso del análisis" }))
@@ -109,7 +110,9 @@ test("preserves the selected HTTPS path and query when requesting an authorized 
   expect(externalRequests).toEqual([]);
 });
 
-test("shows the report and Grumphya's private review when an authorized analysis finishes", async ({ page }, testInfo) => {
+test(
+  "shows aspect progress and the report when an automatically started analysis finishes",
+  async ({ page }, testInfo) => {
   let statusReads = 0;
   let completedResponseServed = false;
   await page.route("**/domains/grumphya.com/history", (route) =>
@@ -124,6 +127,17 @@ test("shows the report and Grumphya's private review when an authorized analysis
       state,
       failureCode: null,
       activeJobId: state === "updating" ? "123e4567-e89b-42d3-a456-426614174000" : null,
+      ...(state === "updating" ? {
+        auditProgress: {
+          policyVersion: "public-audit-progress-v1",
+          aspects: {
+            ethics: "running",
+            privacy: "pending",
+            security: "complete",
+            performance: "running",
+          },
+        },
+      } : {}),
       lastReport: null,
       checkedAt: "2026-11-11T00:00:00.000Z",
     };
@@ -288,16 +302,19 @@ test("shows the report and Grumphya's private review when an authorized analysis
   await page.getByRole("textbox", { name: "URL HTTPS que quieres auditar" })
     .fill("https://grumphya.com/perfil?source=e2e");
   await page.getByRole("button", { name: "Consultar informe" }).click();
-  await page.getByRole("checkbox", { name: /tengo autorización/i }).check();
-  await page.getByRole("button", { name: "Solicitar análisis" }).click();
   await expect(page.getByRole("progressbar", { name: "Progreso del análisis" }))
     .toHaveAttribute("data-phase", "queued");
   await expect(page.getByRole("progressbar", { name: "Progreso del análisis" }))
     .toHaveAttribute("aria-valuetext", /La solicitud está en cola/i);
 
   await expect.poll(() => statusReads, { timeout: 10_000 }).toBeGreaterThanOrEqual(2);
-  await expect(page.getByRole("progressbar", { name: "Progreso del análisis" }))
-    .toHaveAttribute("data-phase", "running");
+  const aspectProgress = page.getByRole("list", {
+    name: "Progreso de las comprobaciones",
+  });
+  await expect(aspectProgress).toContainText("Ética: en curso");
+  await expect(aspectProgress).toContainText("Privacidad: pendiente");
+  await expect(aspectProgress).toContainText("Seguridad: comprobado");
+  await expect(aspectProgress).toContainText("Rendimiento: en curso");
   await expect.poll(() => completedResponseServed, { timeout: 25_000 }).toBe(true);
 
   await expect(page.getByRole("heading", { name: "Informe vigente" })).toBeVisible();
@@ -385,7 +402,8 @@ test("shows the report and Grumphya's private review when an authorized analysis
   expect(mobileHorizontalPadding).toMatchObject({ left: "10px", right: "10px" });
   await expect(page.locator(".ds-portal__ethics")).toHaveCSS("padding-left", "10px");
   await expect(page.locator(".ds-portal__ethics")).toHaveCSS("padding-right", "10px");
-});
+  },
+);
 
 test("stops polling and reports an admission mismatch when no scan job appears", async ({
   page,
@@ -417,8 +435,6 @@ test("stops polling and reports an admission mismatch when no scan job appears",
   await page.goto("/");
   await page.getByRole("textbox", { name: "URL HTTPS que quieres auditar" }).fill("https://stuck.example.org/");
   await page.getByRole("button", { name: "Consultar informe" }).click();
-  await page.getByRole("checkbox", { name: /tengo autorización/i }).check();
-  await page.getByRole("button", { name: "Solicitar análisis" }).click();
 
   await expect(
     page.getByRole("alert").filter({ hasText: /no muestra ningún trabajo activo/i }),
