@@ -20,9 +20,10 @@ describe("observePagePerformance", () => {
     ]);
     expect(result.profiles[0]).toMatchObject({
       fcpMs: 1_000,
+      speedIndexMs: 2_200,
       lcpMs: 1_700,
       cls: 0.04,
-      tbtMs: 80,
+      tbtMs: 50,
       ttfbMs: 320,
       transferBytes: 12_345,
       score: expect.any(Number),
@@ -39,6 +40,8 @@ describe("observePagePerformance", () => {
     expect(fixture.contexts[0].options).toMatchObject({ isMobile: true, hasTouch: true, serviceWorkers: "block", acceptDownloads: false });
     expect(fixture.contexts[1].options).toMatchObject({ isMobile: false, serviceWorkers: "block", acceptDownloads: false });
     expect(fixture.cdpCommands).toContainEqual(["Emulation.setCPUThrottlingRate", { rate: 4 }]);
+    expect(fixture.cdpCommands).toContainEqual(["Page.startScreencast", expect.any(Object)]);
+    expect(fixture.cdpCommands).toContainEqual(["Page.stopScreencast", undefined]);
     expect(fixture.cdpCommands).toContainEqual(["Network.emulateNetworkConditions", {
       offline: false,
       latency: 150,
@@ -106,12 +109,18 @@ function makeBrowserFixture(options: {
       contexts.push({ options: contextOptions });
       let routeHandler: ((route: never) => Promise<void>) | undefined;
       let finishedHandler: ((event: { encodedDataLength: number }) => void) | undefined;
+      let screencastHandler: ((event: { data: string; metadata: { timestamp?: number }; sessionId: number }) => void) | undefined;
       const session = {
-        on: vi.fn((event: string, handler: (event: { encodedDataLength: number }) => void) => {
+        on: vi.fn((event: string, handler: (event: { encodedDataLength: number } & { data?: string; metadata?: { timestamp?: number }; sessionId?: number }) => void) => {
           if (event === "Network.loadingFinished") finishedHandler = handler;
+          if (event === "Page.screencastFrame") screencastHandler = handler as never;
         }),
         send: vi.fn(async (command: string, params?: Record<string, unknown>) => {
           cdpCommands.push([command, params]);
+          if (command === "Page.startScreencast") {
+            screencastHandler?.({ data: "frame-a", metadata: { timestamp: 1 }, sessionId: 1 });
+            screencastHandler?.({ data: "frame-b", metadata: { timestamp: 1.1 }, sessionId: 2 });
+          }
         }),
         detach: vi.fn(async () => undefined),
       };
@@ -122,14 +131,22 @@ function makeBrowserFixture(options: {
         }),
         waitForLoadState: vi.fn(async () => undefined),
         waitForTimeout: vi.fn(async () => undefined),
-        evaluate: vi.fn(async () => ({
-          fcpMs: 1_000,
-          lcpMs: 1_700,
-          cls: 0.04,
-          tbtMs: 80,
-          ttfbMs: 320,
-          ...((profileCount === 2 ? options.desktopMetrics : undefined) ?? {}),
-        })),
+        evaluate: vi.fn(async (_callback, args?: unknown) => Array.isArray(args)
+          ? 2_200
+          : {
+            fcpMs: 1_000,
+            lcpMs: 1_700,
+            cls: 0.04,
+            tasks: profileCount === 1
+              ? [{ startTime: 100, duration: 600 }, { startTime: 2_000, duration: 100 }, { startTime: 8_200, duration: 200 }]
+              : [{ startTime: 100, duration: 130 }],
+            resources: profileCount === 1
+              ? [{ startTime: 0, responseEnd: 3_000 }, { startTime: 1_500, responseEnd: 2_500 }]
+              : [],
+            observedUntilMs: 10_000,
+            ttfbMs: 320,
+            ...((profileCount === 2 ? options.desktopMetrics : undefined) ?? {}),
+          }),
       };
       return {
         route: vi.fn(async (_pattern: string, handler: (route: never) => Promise<void>) => {

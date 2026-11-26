@@ -1584,6 +1584,8 @@ describePostgres.sequential("PostgresScanStore", () => {
       responseTimeMs: 800,
       responseBytes: 40_000,
       mobileFcpMs: 800,
+      mobileSpeedIndexMs: 900,
+      mobileScoreModelVersion: "lighthouse-13.6.0",
       mobileLcpMs: 1_200,
       mobileClsMilli: 40,
       mobileTbtMs: 45,

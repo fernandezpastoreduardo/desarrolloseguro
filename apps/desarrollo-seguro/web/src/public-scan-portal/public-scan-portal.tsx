@@ -146,7 +146,8 @@ const EVIDENCE_LABELS: Record<string, string> = {
   browserTrackingResponseCount: "Solicitudes a rastreadores con respuesta recibida",
   policyLanguageCatalogVersion: "Catálogo local de información pública",
   responseTimeMs: "Tiempo de respuesta inicial", responseBytes: "Tamaño recibido de la página",
-  mobileFcpMs: "Móvil · FCP", mobileLcpMs: "Móvil · LCP", mobileClsMilli: "Móvil · CLS",
+  mobileFcpMs: "Móvil · FCP", mobileSpeedIndexMs: "Móvil · Speed Index", mobileLcpMs: "Móvil · LCP", mobileClsMilli: "Móvil · CLS",
+  mobileScoreModelVersion: "Móvil · modelo de puntuación",
   mobileTbtMs: "Móvil · TBT", mobileTtfbMs: "Móvil · TTFB", mobileTransferBytes: "Móvil · Datos transferidos",
   mobileScore: "Móvil · puntuación", desktopFcpMs: "Escritorio · FCP", desktopLcpMs: "Escritorio · LCP",
   desktopClsMilli: "Escritorio · CLS", desktopTbtMs: "Escritorio · TBT", desktopTtfbMs: "Escritorio · TTFB",
@@ -2124,7 +2125,7 @@ function CategoryDetailsModal({
                     ? "Medimos cuánto tarda y cuánto ocupa la primera respuesta. No representa toda la experiencia de uso."
                     : CRITERION_EXPLANATIONS[criterion.id]}</p>
                   <p><b>Qué implica:</b> {criterion.id === "performance" && profileVersion === "domain-v5"
-                    ? "La puntuación combina seis métricas medidas en móvil y escritorio; no es una puntuación oficial de Lighthouse."
+                    ? "La puntuación móvil usa los pesos y curvas de Lighthouse 13.6.0. El Speed Index y TBT se miden en Chromium; TTFB y bytes se muestran como datos diagnósticos. Escritorio conserva la rúbrica anterior."
                     : getCriterionOutcome(criterion.id, criterion.status)}</p>
                   <p className="ds-portal__criterion-evidence"><b>Dato observado:</b> {getCriterionEvidenceSummary(criterion.id, checks, publicPolicyAssessment, profileVersion)}</p>
                 </div>
@@ -2876,7 +2877,7 @@ function getCriterionPriority(status: CheckStatus): number {
 function getPerformanceCategorySummary(score: number | null): string {
   return score === null
     ? "Medición incompleta: falta algún dato requerido de móvil o escritorio."
-    : "Nota media de las pruebas móviles y de escritorio, calculada con seis métricas propias estándar.";
+    : "Nota media de las pruebas móviles y de escritorio. Móvil sigue los pesos y curvas de Lighthouse 13.6.0; escritorio mantiene la rúbrica anterior.";
 }
 
 function getReportTakeaway(report: PublicReport, state: string): string {
@@ -3178,7 +3179,7 @@ function formatEvidenceValue(value: string | number | boolean, key: string): str
   if (typeof value === "number") {
     if (key === "responseTimeMs") return `${value} ms`;
     if (key === "responseBytes") return `${new Intl.NumberFormat("es-ES").format(value)} bytes`;
-    if (["mobileFcpMs", "mobileLcpMs", "mobileTbtMs", "mobileTtfbMs", "desktopFcpMs", "desktopLcpMs", "desktopTbtMs", "desktopTtfbMs"].includes(key)) return `${value} ms`;
+    if (["mobileFcpMs", "mobileSpeedIndexMs", "mobileLcpMs", "mobileTbtMs", "mobileTtfbMs", "desktopFcpMs", "desktopLcpMs", "desktopTbtMs", "desktopTtfbMs"].includes(key)) return `${value} ms`;
     if (key === "mobileClsMilli" || key === "desktopClsMilli") return new Intl.NumberFormat("es-ES", { minimumFractionDigits: 3, maximumFractionDigits: 3 }).format(value / 1_000);
     if (key === "mobileTransferBytes" || key === "desktopTransferBytes") return `${new Intl.NumberFormat("es-ES").format(value)} bytes (${formatByteCount(value)})`;
     if (key === "mobileScore" || key === "desktopScore") return `${value}/100`;

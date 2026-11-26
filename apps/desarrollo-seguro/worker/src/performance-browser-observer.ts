@@ -1,7 +1,9 @@
 import { chromium, type Browser, type BrowserContext, type CDPSession, type Page, type Route } from "playwright";
-import { isThirdPartyPrivacyHost, normalizeHostname, PRIVACY_BROWSER_BUDGET, scoreScanPerformance } from "@desarrolloseguro/core";
+import { isThirdPartyPrivacyHost, normalizeHostname, PRIVACY_BROWSER_BUDGET, scoreLighthouseMobilePerformance, scoreScanPerformance } from "@desarrolloseguro/core";
 import { PrivacyBrowserRequestGate } from "./privacy-browser-request-gate.js";
 import { authorizePrivacyTarget } from "./privacy-egress-policy.js";
+import { calculateTotalBlockingTime, type LongTaskTiming, type ResourceTiming } from "./performance-timing.js";
+import { estimateSpeedIndexMs, type SpeedIndexFrame } from "./speed-index.js";
 
 export const PERFORMANCE_OBSERVATION_DURATION_MS = 120_000;
 
@@ -10,15 +12,16 @@ const PERFORMANCE_OBSERVATION_BUDGET = {
   receivedBytes: 64 * 1024 * 1024,
   durationMs: PERFORMANCE_OBSERVATION_DURATION_MS,
   contexts: 2,
-  settleMs: 2_500,
+  screencastFrames: 100,
   mobile: {
     viewport: { width: 375, height: 812 },
     cpuThrottleRate: 4,
     latencyMs: 150,
     downloadThroughput: Math.floor(1_600_000 / 8),
     uploadThroughput: Math.floor(750_000 / 8),
+    settleMs: 5_000,
   },
-  desktop: { viewport: { width: 1_365, height: 768 } },
+  desktop: { viewport: { width: 1_365, height: 768 }, settleMs: 2_500 },
 } as const;
 
 export type PerformanceProfile = "mobile" | "desktop";
@@ -26,6 +29,7 @@ export type PerformanceProfileEvidence = {
   profile: PerformanceProfile;
   status: "complete" | "unknown";
   fcpMs: number | null;
+  speedIndexMs: number | null;
   lcpMs: number | null;
   cls: number | null;
   tbtMs: number | null;
@@ -49,11 +53,15 @@ export type PerformanceBrowserObserverOptions = {
 
 type CollectedMetrics = {
   fcpMs: number | null;
+  speedIndexMs: number | null;
   lcpMs: number | null;
   cls: number | null;
   tbtMs: number | null;
   ttfbMs: number | null;
   transferBytes: number | null;
+  tasks: LongTaskTiming[];
+  resources: ResourceTiming[];
+  observedUntilMs: number;
 };
 
 /** Collects bounded, numeric-only performance evidence in two fresh Chromium contexts. */
@@ -132,11 +140,12 @@ async function collectProfile(
     await context.routeWebSocket("**/*", (route) => route.close({ code: 1000, reason: "blocked" }));
 
     const page = await context.newPage();
-    await page.addInitScript(installPerformanceObservers);
+    await page.addInitScript(installPerformanceObservers, { captureResources: mobile });
     cdp = await context.newCDPSession(page);
     let transferBytes = 0;
     let transferEvents = 0;
     let transferBudgetExceeded = false;
+    const screencastFrames: SpeedIndexFrame[] = [];
     cdp.on("Network.loadingFinished", (event: { encodedDataLength?: number }) => {
       if (typeof event.encodedDataLength === "number" && Number.isFinite(event.encodedDataLength) && event.encodedDataLength >= 0) {
         transferBytes += event.encodedDataLength;
@@ -149,6 +158,22 @@ async function collectProfile(
     });
     await cdp.send("Network.enable");
     if (mobile) {
+      cdp.on("Page.screencastFrame", (event: { data: string; metadata: { timestamp?: number }; sessionId: number }) => {
+        if (typeof event.data === "string" && typeof event.metadata?.timestamp === "number" && Number.isFinite(event.metadata.timestamp)) {
+          const frame = { data: event.data, timestamp: event.metadata.timestamp };
+          if (screencastFrames.length < PERFORMANCE_OBSERVATION_BUDGET.screencastFrames) screencastFrames.push(frame);
+          else screencastFrames[PERFORMANCE_OBSERVATION_BUDGET.screencastFrames - 1] = frame;
+        }
+        void cdp?.send("Page.screencastFrameAck", { sessionId: event.sessionId }).catch(() => undefined);
+      });
+      await cdp.send("Page.enable");
+      await cdp.send("Page.startScreencast", {
+        format: "jpeg",
+        quality: 50,
+        maxWidth: PERFORMANCE_OBSERVATION_BUDGET.mobile.viewport.width,
+        maxHeight: PERFORMANCE_OBSERVATION_BUDGET.mobile.viewport.height,
+        everyNthFrame: 6,
+      });
       await cdp.send("Emulation.setCPUThrottlingRate", { rate: PERFORMANCE_OBSERVATION_BUDGET.mobile.cpuThrottleRate });
       await cdp.send("Network.emulateNetworkConditions", {
         offline: false,
@@ -165,19 +190,38 @@ async function collectProfile(
     const idleTimeout = boundedTimeout(Math.min(15_000, remainingMs()));
     if (signal.aborted || idleTimeout === null) return unknownEvidence(profile);
     await page.waitForLoadState("networkidle", { timeout: idleTimeout });
-    const settleTimeout = boundedTimeout(Math.min(PERFORMANCE_OBSERVATION_BUDGET.settleMs, remainingMs()));
+    const settleMs = mobile
+      ? PERFORMANCE_OBSERVATION_BUDGET.mobile.settleMs
+      : PERFORMANCE_OBSERVATION_BUDGET.desktop.settleMs;
+    const settleTimeout = boundedTimeout(Math.min(settleMs, remainingMs()));
     if (signal.aborted || settleTimeout === null || transferBudgetExceeded) return unknownEvidence(profile);
     await page.waitForTimeout(settleTimeout);
     if (signal.aborted || gate.hasExceededBudget() || transferBudgetExceeded) return unknownEvidence(profile);
+    if (mobile) await cdp.send("Page.stopScreencast").catch(() => undefined);
 
     const metrics = await readCollectedMetrics(page);
+    if (mobile) metrics.speedIndexMs = await estimateSpeedIndexMs(page, screencastFrames);
+    metrics.tbtMs = mobile && metrics.fcpMs !== null
+      ? calculateTotalBlockingTime(metrics.fcpMs, metrics.tasks, metrics.resources, metrics.observedUntilMs)
+      : sumBlockingTime(metrics.tasks);
     metrics.transferBytes = transferEvents > 0 ? transferBytes : null;
-    const completed = transferEvents > 0 && hasAllMetrics(metrics);
-    const score = completed ? scoreScanPerformance(metrics)?.score ?? null : null;
+    const completed = transferEvents > 0 && hasAllMetrics(metrics, mobile);
+    const score = completed
+      ? (mobile ? scoreLighthouseMobilePerformance(metrics)?.score : scoreScanPerformance(metrics)?.score) ?? null
+      : null;
+    const profileMetrics: Omit<CollectedMetrics, "tasks" | "resources" | "observedUntilMs"> = {
+      fcpMs: metrics.fcpMs,
+      speedIndexMs: metrics.speedIndexMs,
+      lcpMs: metrics.lcpMs,
+      cls: metrics.cls,
+      tbtMs: metrics.tbtMs,
+      ttfbMs: metrics.ttfbMs,
+      transferBytes: metrics.transferBytes,
+    };
     return {
       profile,
       status: completed && score !== null ? "complete" : "unknown",
-      ...metrics,
+      ...profileMetrics,
       transferBytes: transferEvents > 0 ? transferBytes : null,
       score: completed ? score : null,
     };
@@ -205,22 +249,35 @@ async function readCollectedMetrics(page: Page): Promise<CollectedMetrics> {
       fcpMs: number | null;
       lcpMs: number | null;
       cls: number;
-      tbtMs: number;
+      tasks: LongTaskTiming[];
+      resources: ResourceTiming[];
     } }).__dsPerformanceMetrics;
     const navigation = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
+    const resources = captured?.resources ?? [];
+    if (navigation) resources.unshift({ startTime: navigation.startTime, responseEnd: navigation.responseEnd });
     return {
       fcpMs: captured?.fcpMs ?? null,
       lcpMs: captured?.lcpMs ?? null,
       cls: captured?.cls ?? null,
-      tbtMs: captured?.tbtMs ?? null,
+      tbtMs: null,
+      speedIndexMs: null,
+      tasks: captured?.tasks ?? [],
+      resources,
+      observedUntilMs: performance.now(),
       ttfbMs: navigation && navigation.responseStart > 0 ? Math.round(navigation.responseStart) : null,
       transferBytes: null,
     };
   });
 }
 
-function installPerformanceObservers(): void {
-  const metrics = { fcpMs: null as number | null, lcpMs: null as number | null, cls: 0, tbtMs: 0 };
+function installPerformanceObservers(options: { captureResources: boolean }): void {
+  const metrics = {
+    fcpMs: null as number | null,
+    lcpMs: null as number | null,
+    cls: 0,
+    tasks: [] as LongTaskTiming[],
+    resources: [] as ResourceTiming[],
+  };
   (window as Window & { __dsPerformanceMetrics?: typeof metrics }).__dsPerformanceMetrics = metrics;
   try {
     new PerformanceObserver((list) => {
@@ -239,13 +296,22 @@ function installPerformanceObservers(): void {
       }
     }).observe({ type: "layout-shift", buffered: true } as PerformanceObserverInit);
     new PerformanceObserver((list) => {
-      for (const entry of list.getEntries()) metrics.tbtMs += Math.max(0, Math.round(entry.duration - 50));
+      for (const entry of list.getEntries()) metrics.tasks.push({ startTime: entry.startTime, duration: entry.duration });
     }).observe({ type: "longtask", buffered: true });
+    if (options.captureResources) {
+      new PerformanceObserver((list) => {
+        for (const entry of list.getEntries() as PerformanceResourceTiming[]) {
+          metrics.resources.push({
+            startTime: entry.startTime,
+            responseEnd: entry.responseEnd > 0 ? entry.responseEnd : performance.now(),
+          });
+        }
+      }).observe({ type: "resource", buffered: true });
+    }
   } catch {
     metrics.fcpMs = null;
     metrics.lcpMs = null;
     metrics.cls = Number.NaN;
-    metrics.tbtMs = Number.NaN;
   }
 }
 
@@ -258,10 +324,15 @@ function boundedTimeout(value: number): number | null {
   return Number.isFinite(value) && value > 0 ? Math.max(1, Math.floor(value)) : null;
 }
 
-function hasAllMetrics(metrics: CollectedMetrics): boolean {
-  return [metrics.fcpMs, metrics.lcpMs, metrics.cls, metrics.tbtMs, metrics.ttfbMs].every(
+function hasAllMetrics(metrics: CollectedMetrics, mobile: boolean): boolean {
+  return [metrics.fcpMs, metrics.lcpMs, metrics.cls, metrics.tbtMs, metrics.ttfbMs,
+    ...(mobile ? [metrics.speedIndexMs] : []),].every(
     (value) => typeof value === "number" && Number.isFinite(value) && value >= 0,
   );
+}
+
+function sumBlockingTime(tasks: readonly LongTaskTiming[]): number {
+  return tasks.reduce((total, task) => total + Math.max(0, Math.round(task.duration - 50)), 0);
 }
 
 function unknownEvidence(profile: PerformanceProfile): PerformanceProfileEvidence {
@@ -269,6 +340,7 @@ function unknownEvidence(profile: PerformanceProfile): PerformanceProfileEvidenc
     profile,
     status: "unknown",
     fcpMs: null,
+    speedIndexMs: null,
     lcpMs: null,
     cls: null,
     tbtMs: null,

@@ -126,6 +126,8 @@ describe("PublicScanPortal", () => {
     const performanceEvidence = {
       inspected: true,
       mobileFcpMs: 1_820,
+      mobileSpeedIndexMs: 2_200,
+      mobileScoreModelVersion: "lighthouse-13.6.0",
       mobileLcpMs: 2_700,
       mobileClsMilli: 120,
       mobileTbtMs: 220,
@@ -190,6 +192,8 @@ describe("PublicScanPortal", () => {
     const incompleteEvidence = {
       inspected: true,
       mobileFcpMs: 1_820,
+      mobileSpeedIndexMs: 2_200,
+      mobileScoreModelVersion: "lighthouse-13.6.0",
       mobileClsMilli: 120,
       mobileTbtMs: 220,
       mobileTtfbMs: 900,

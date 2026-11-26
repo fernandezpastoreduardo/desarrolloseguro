@@ -104,8 +104,8 @@ describe("assessPrivacyObservation", () => {
   it("adds complete browser performance metrics to a provisional unknown DS-QUAL-02", () => {
     const performance = {
       profiles: [
-        { profile: "mobile", status: "complete", fcpMs: 800, lcpMs: 1_200, cls: 0.04, tbtMs: 45, ttfbMs: 100, transferBytes: 12_000, score: 94 },
-        { profile: "desktop", status: "complete", fcpMs: 400, lcpMs: 700, cls: 0.01, tbtMs: 20, ttfbMs: 50, transferBytes: 8_000, score: 100 },
+        { profile: "mobile", status: "complete", fcpMs: 800, speedIndexMs: 1_000, lcpMs: 1_200, cls: 0.04, tbtMs: 45, ttfbMs: 100, transferBytes: 12_000, score: 94 },
+        { profile: "desktop", status: "complete", fcpMs: 400, speedIndexMs: null, lcpMs: 700, cls: 0.01, tbtMs: 20, ttfbMs: 50, transferBytes: 8_000, score: 100 },
       ],
     } as const;
     const result = mergePrivacyBrowserChecks([{
@@ -118,6 +118,8 @@ describe("assessPrivacyObservation", () => {
       status: "pass",
       evidence: {
         mobileFcpMs: 800,
+        mobileSpeedIndexMs: 1_000,
+        mobileScoreModelVersion: "lighthouse-13.6.0",
         mobileLcpMs: 1_200,
         mobileClsMilli: 40,
         mobileTbtMs: 45,
@@ -134,8 +136,8 @@ describe("assessPrivacyObservation", () => {
   it("keeps DS-QUAL-02 unknown for incomplete profiles and fails a slow observed response", () => {
     const performance = {
       profiles: [
-        { profile: "mobile", status: "complete", fcpMs: 800, lcpMs: 1_200, cls: 0.04, tbtMs: 45, ttfbMs: 100, transferBytes: 12_000, score: 94 },
-        { profile: "desktop", status: "unknown", fcpMs: null, lcpMs: null, cls: null, tbtMs: null, ttfbMs: null, transferBytes: null, score: null },
+        { profile: "mobile", status: "complete", fcpMs: 800, speedIndexMs: 1_000, lcpMs: 1_200, cls: 0.04, tbtMs: 45, ttfbMs: 100, transferBytes: 12_000, score: 94 },
+        { profile: "desktop", status: "unknown", fcpMs: null, speedIndexMs: null, lcpMs: null, cls: null, tbtMs: null, ttfbMs: null, transferBytes: null, score: null },
       ],
     } as const;
     const result = mergePrivacyBrowserChecks([{
@@ -148,6 +150,8 @@ describe("assessPrivacyObservation", () => {
       status: "unknown",
       evidence: {
         mobileFcpMs: 800,
+        mobileSpeedIndexMs: 1_000,
+        mobileScoreModelVersion: "lighthouse-13.6.0",
         mobileLcpMs: 1_200,
         mobileClsMilli: 40,
         mobileTbtMs: 45,
@@ -164,8 +168,8 @@ describe("assessPrivacyObservation", () => {
       evidence: { inspected: true, responseTimeMs: 2_501, responseBytes: 45_000 },
     }], observation({ performance: {
       profiles: [
-        { profile: "mobile", status: "unknown", fcpMs: null, lcpMs: null, cls: null, tbtMs: null, ttfbMs: null, transferBytes: null, score: null },
-        { profile: "desktop", status: "unknown", fcpMs: null, lcpMs: null, cls: null, tbtMs: null, ttfbMs: null, transferBytes: null, score: null },
+        { profile: "mobile", status: "unknown", fcpMs: null, speedIndexMs: null, lcpMs: null, cls: null, tbtMs: null, ttfbMs: null, transferBytes: null, score: null },
+        { profile: "desktop", status: "unknown", fcpMs: null, speedIndexMs: null, lcpMs: null, cls: null, tbtMs: null, ttfbMs: null, transferBytes: null, score: null },
       ],
     } }));
     expect(slow[0]).toMatchObject({ status: "fail", evidence: { responseTimeMs: 2_501 } });

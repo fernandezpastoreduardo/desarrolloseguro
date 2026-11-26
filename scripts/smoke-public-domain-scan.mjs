@@ -55,10 +55,11 @@ export function validateCompletedReport(status, previousReportId, hostname = VAL
   }
   const performanceEvidence = report.checks.find(({ controlId }) => controlId === "DS-QUAL-02")?.evidence;
   const requiredPerformanceMetrics = [
-    "mobileFcpMs", "mobileLcpMs", "mobileClsMilli", "mobileTbtMs", "mobileTtfbMs", "mobileTransferBytes", "mobileScore",
+    "mobileFcpMs", "mobileSpeedIndexMs", "mobileLcpMs", "mobileClsMilli", "mobileTbtMs", "mobileTtfbMs", "mobileTransferBytes", "mobileScore",
     "desktopFcpMs", "desktopLcpMs", "desktopClsMilli", "desktopTbtMs", "desktopTtfbMs", "desktopTransferBytes", "desktopScore",
   ];
-  if (!performanceEvidence || !requiredPerformanceMetrics.every((key) =>
+  if (!performanceEvidence || performanceEvidence.mobileScoreModelVersion !== "lighthouse-13.6.0" ||
+      !requiredPerformanceMetrics.every((key) =>
     Number.isSafeInteger(performanceEvidence[key]) && performanceEvidence[key] >= 0
   )) {
     throw new Error("public_scan_performance_metrics_incomplete");

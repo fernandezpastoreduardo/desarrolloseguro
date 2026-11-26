@@ -22,8 +22,8 @@ describe("observePrivacyAndPerformance", () => {
     });
     const performance: PerformanceBrowserEvidence = {
       profiles: [
-        { profile: "mobile", status: "complete", fcpMs: 100, lcpMs: 200, cls: 0, tbtMs: 0, ttfbMs: 50, transferBytes: 100, score: 100 },
-        { profile: "desktop", status: "complete", fcpMs: 100, lcpMs: 200, cls: 0, tbtMs: 0, ttfbMs: 50, transferBytes: 100, score: 100 },
+        { profile: "mobile", status: "complete", fcpMs: 100, speedIndexMs: 150, lcpMs: 200, cls: 0, tbtMs: 0, ttfbMs: 50, transferBytes: 100, score: 100 },
+        { profile: "desktop", status: "complete", fcpMs: 100, speedIndexMs: null, lcpMs: 200, cls: 0, tbtMs: 0, ttfbMs: 50, transferBytes: 100, score: 100 },
       ],
     };
     const observePrivacy = vi.fn(async (_: unknown, options: { signal?: AbortSignal }) => {
