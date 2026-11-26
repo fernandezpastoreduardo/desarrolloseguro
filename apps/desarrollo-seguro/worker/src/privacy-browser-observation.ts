@@ -5,12 +5,14 @@ import {
   type PrivacyBrowserInput,
   type PrivacyBrowserObservation,
 } from "./privacy-browser-observer.js";
+import type { PublicAuditProgressEvent } from "@desarrolloseguro/core";
 
 export type PrivacyBrowserObservationOptions = {
   proxyUrl: string;
   createTimeoutSignal?: (durationMs: number) => AbortSignal;
   observePrivacy?: typeof observePrivacyBehavior;
   observePerformance?: typeof observePagePerformance;
+  onProgress?: (event: PublicAuditProgressEvent) => void;
 };
 
 /** Runs privacy and performance with separate bounded cancellation deadlines. */
@@ -24,6 +26,7 @@ export async function observePrivacyAndPerformance(
   let result: PrivacyBrowserObservation;
 
   try {
+    options.onProgress?.({ aspect: "privacy", state: "running" });
     result = await observePrivacy(input, {
       proxyUrl: options.proxyUrl,
       signal: createTimeoutSignal(PRIVACY_BROWSER_BUDGET.durationMs),
@@ -31,11 +34,13 @@ export async function observePrivacyAndPerformance(
   } catch {
     result = unknownPrivacyObservation(input);
   }
+  options.onProgress?.({ aspect: "privacy", state: "complete" });
 
   if (!input.targetUrl) return result;
 
   let performance: PerformanceBrowserEvidence;
   try {
+    options.onProgress?.({ aspect: "performance", state: "running" });
     performance = await observePerformance({
       targetUrl: input.targetUrl,
       hostname: input.hostname,
@@ -45,6 +50,7 @@ export async function observePrivacyAndPerformance(
   } catch {
     performance = unknownPerformanceEvidence();
   }
+  options.onProgress?.({ aspect: "performance", state: "complete" });
   return { ...result, performance };
 }
 

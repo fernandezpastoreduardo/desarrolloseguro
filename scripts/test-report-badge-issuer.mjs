@@ -29,12 +29,33 @@ assert.equal(observedRequest.options.headers.Authorization, `Bearer ${issuerToke
 assert.equal(observedRequest.options.body, JSON.stringify({ hostname: "grumphya.com", reportId }));
 assert.doesNotMatch(observedRequest.url, /private-issuer-token/u);
 
+const dsBadge = await issueReportBadge(reportId, issuerToken, async (_url, options) => {
+  assert.equal(options.body, JSON.stringify({ hostname: "desarrolloseguro.org", reportId }));
+  return {
+    ok: true,
+    json: async () => ({
+      hostname: "desarrolloseguro.org",
+      canonicalHostname: "desarrolloseguro.org",
+      reportId,
+      token: publicToken,
+      verifyUrl: `https://desarrolloseguro.org/desarrollo-seguro/verificar.html#token=${publicToken}&hostname=desarrolloseguro.org&reportId=${reportId}`,
+      expiresAt: "2026-12-11T12:00:00.000Z",
+    }),
+  };
+}, "desarrolloseguro.org");
+assert.equal(dsBadge.hostname, "desarrolloseguro.org");
+
 await assert.rejects(
   issueReportBadge("not-a-report-id", issuerToken, async () => { throw new Error("fetch_must_not_run"); }),
   { message: "invalid_report_badge_issue_input" },
 );
 await assert.rejects(
   issueReportBadge(reportId, "too-short", async () => { throw new Error("fetch_must_not_run"); }),
+  { message: "invalid_report_badge_issue_input" },
+);
+
+await assert.rejects(
+  issueReportBadge(reportId, issuerToken, async () => { throw new Error("fetch_must_not_run"); }, "attacker.example"),
   { message: "invalid_report_badge_issue_input" },
 );
 

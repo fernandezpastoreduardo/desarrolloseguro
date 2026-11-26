@@ -22,6 +22,8 @@ import {
   type PublicServiceComparison,
   parseFirstEntryPolicyAccess,
   parseScanTargetUrl,
+  parsePublicAuditProgress,
+  type PublicAuditProgress,
   type FirstEntryPolicyAccess,
   type PublicServiceDeclarationEvidence,
   type ScanFailureDiagnostic,
@@ -198,6 +200,7 @@ export type PublicDomainSnapshot = {
   profileVersion: string;
   optedOut: boolean;
   activeJobId: string | null;
+  activeProgress?: PublicAuditProgress | null;
   lastReport: PublicScanReport | null;
   lastFailure?: { code: ScanFailureCode; failedAt: Date; diagnostic?: ScanFailureDiagnostic | null } | null;
   hostnameResolution?: {
@@ -288,6 +291,7 @@ export interface ScanJobStore {
     now: Date,
     leaseDurationMs: number,
   ): Promise<boolean>;
+  updateScanProgress?(jobId: string, leaseToken: string, progress: PublicAuditProgress): Promise<boolean>;
   failScan(
     jobId: string,
     leaseToken: string,
@@ -315,6 +319,14 @@ export class PostgresScanStore implements ScanJobStore {
     } catch {
       return false;
     }
+  }
+
+  async updateScanProgress(jobId: string, leaseToken: string, progress: PublicAuditProgress): Promise<boolean> {
+    const result = await this.pool.query<{ ds_update_scan_progress: boolean }>(
+      "SELECT public.ds_update_scan_progress($1, $2, $3::jsonb)",
+      [jobId, leaseToken, JSON.stringify(progress)],
+    );
+    return result.rows[0]?.ds_update_scan_progress ?? false;
   }
 
   async issueReportBadge(record: ReportBadgeRecord): Promise<boolean> {
@@ -429,13 +441,14 @@ export class PostgresScanStore implements ScanJobStore {
       `SELECT domains.hostname, domains.enrollment,
          CASE WHEN $2::text IS NULL THEN domains.profile_version ELSE 'domain-v5' END AS profile_version,
          domains.opted_out_at, active_job.id AS active_job_id,
+         active_job.progress_json AS active_progress,
          failed_job.public_error_code AS last_failure_code,
          failed_job.failure_diagnostic AS last_failure_diagnostic,
          failed_job.finished_at AS last_failure_at,
        ${PUBLIC_REPORT_COLUMNS}, check_rows.checks
        FROM public.ds_domains AS domains
        LEFT JOIN LATERAL (
-         SELECT id FROM public.ds_scan_jobs
+         SELECT id, progress_json FROM public.ds_scan_jobs
          WHERE hostname = domains.hostname
            AND profile_version = CASE WHEN $2::text IS NULL
              THEN domains.profile_version ELSE 'domain-v5' END
@@ -494,6 +507,7 @@ export class PostgresScanStore implements ScanJobStore {
       profileVersion: parseProfileVersion(row.profile_version),
       optedOut: row.opted_out_at !== null,
       activeJobId: row.active_job_id ? requireString(row.active_job_id) : null,
+      activeProgress: parsePublicAuditProgress(row.active_progress),
       lastReport: report,
       lastFailure: parsePublicScanFailure(row),
     };

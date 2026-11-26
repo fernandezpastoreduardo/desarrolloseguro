@@ -172,6 +172,8 @@ const MIGRATIONS = [
   { version: "065_deploy_refresh_scan_admission", file: "065_deploy_refresh_scan_admission.sql" },
   { version: "066_domain_v5_persistence_contract", file: "066_domain_v5_persistence_contract.sql" },
   { version: "067_domain_v5_browser_summary_contract", file: "067_domain_v5_browser_summary_contract.sql" },
+  { version: "068_public_audit_progress", file: "068_public_audit_progress.sql" },
+  { version: "069_domain_v5_host_check_scope", file: "069_domain_v5_host_check_scope.sql" },
 ] as const;
 
 export const DEVELOPMENT_SECURITY_MIGRATION_COUNT = MIGRATIONS.length;

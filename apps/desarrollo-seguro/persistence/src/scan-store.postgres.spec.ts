@@ -105,6 +105,8 @@ describePostgres.sequential("PostgresScanStore", () => {
     const definition = result.rows[0]?.definition ?? "";
     expect(definition).toContain("run_profile_version IN ('domain-v4', 'domain-v5')");
     expect(definition).toContain("NEW.control_id = 'DS-PRIV-06'");
+    expect(definition).toContain("run_profile_version = 'domain-v5'");
+    expect(definition).toContain("NOT run_scope @> jsonb_build_array(NEW.target_path)");
   });
 
   it("accepts first-entry policy evidence linked from an informational notice", async () => {
@@ -1478,6 +1480,7 @@ describePostgres.sequential("PostgresScanStore", () => {
     expect(admission.kind).toBe("queued");
     const job = await store.claimNextScan(new Date(), TEST_LEASE_MS);
     if (!job) throw new Error("expected_claimed_domain_v5_scan");
+    expect(job.profileVersion).toBe("domain-v5");
 
     const performanceEvidence = {
       inspected: true,

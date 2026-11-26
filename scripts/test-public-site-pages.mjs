@@ -61,6 +61,13 @@ assert.match(verifier, /id="verification-report-link"/u, "verification page link
 assert.match(verifier, /Logotipo de Desarrollo Seguro/u, "verification page shows the approved logo beside authenticity status");
 assert.match(seal, /badge-widget\.js/u, "seal page documents the live embeddable widget");
 assert.doesNotMatch(seal, /data-report-id/u, "the public embed does not pin the seal to a report that will age out");
+for (const html of pageContents.slice(0, 4)) {
+  assert.equal((html.match(/<a data-ds-verified-badge/gu) ?? []).length, 1, "each informational page has one dynamic footer badge");
+  assert.match(html, /data-hostname="desarrolloseguro\.org"/u, "the footer badge is bound to Desarrollo Seguro");
+  assert.match(html, /src="\/desarrollo-seguro\/badge-widget\.js"/u, "the footer loads the same-origin badge widget");
+  assert.match(html, /script-src 'self';[\s\S]*?img-src 'self'; connect-src 'self'/u, "footer badge capabilities are narrowly declared in CSP");
+}
+assert.doesNotMatch(verifier, /data-ds-verified-badge/u, "the verifier page does not show a self-referential badge");
 await assert.rejects(access("desarrollo-seguro/informe-grumphya-prototipo.html"), { code: "ENOENT" });
 await assert.rejects(access("desarrollo-seguro/informe-grumphya-prototipo.scss"), { code: "ENOENT" });
 assert.match(verifier, /no-referrer/u, "verification links do not leak tokens through referrers");
@@ -195,10 +202,11 @@ assert.match(widgetScript, /cache: "no-store"/u);
 assert.match(widgetScript, /async function fetchJsonWithTimeout[\s\S]*?await response\.json\(\)[\s\S]*?clearTimeout\(timeout\)/u, "widget request timeout covers response-body parsing");
 assert.match(widgetScript, /widget\.hidden = false/u, "badge link is exposed only after server verification");
 assert.match(widgetScript, /widget\.dataset\.diagnostic = result\.code[\s\S]*?widget\.hidden = true/u, "failed verification keeps the dynamic seal hidden while retaining a safe diagnostic");
-assert.match(widgetScript, /createBrandLogo\(\)/u, "the verified badge displays the approved brand logo");
+assert.match(widgetScript, /createBrandLogo\(/u, "the verified badge displays the approved brand logo");
 assert.match(widgetScript, /createElement\("style"\)/u, "the widget applies its build-time Sass styles under the host CSP");
 assert.match(badgeWidgetStyles, /width:\s*min\(270px,\s*100%\)/u, "the compact badge stays within a narrow footer column");
 assert.match(widgetScript, /Beta activa/u, "the badge summarizes current beta approval");
+assert.match(widgetScript, /"desarrolloseguro\.org"/u, "the widget authorizes the Desarrollo Seguro identity");
 
 async function executeBadgeWidget(state, certificationState, verificationResult, settings = {}) {
   class TestElement {
@@ -221,7 +229,7 @@ async function executeBadgeWidget(state, certificationState, verificationResult,
       super("a");
       this.dataset = {
         token: "A".repeat(43),
-        hostname: "grumphya.com",
+        hostname: settings.hostname ?? "grumphya.com",
         reportId: "6bff5c3e-ff99-4f68-bfe9-fb5f5dfb2823",
       };
       this.hidden = false;
@@ -237,6 +245,7 @@ async function executeBadgeWidget(state, certificationState, verificationResult,
   );
   const context = {
     document: { querySelectorAll: () => [anchor], createElement: (tagName) => new TestElement(tagName) },
+    window: { location: { hostname: settings.browserHostname ?? settings.hostname ?? "grumphya.com" } },
     HTMLAnchorElement: TestAnchor,
     URLSearchParams,
     URL: { createObjectURL: () => "blob:development-seguro-logo", revokeObjectURL() {} },
@@ -257,7 +266,7 @@ async function executeBadgeWidget(state, certificationState, verificationResult,
       return {
         ok: true,
         json: async () => options.method === "GET"
-          ? statusResponse("grumphya.com", state, certificationState)
+          ? statusResponse(settings.hostname ?? "grumphya.com", state, certificationState)
           : verificationResult,
       };
     },
@@ -273,6 +282,14 @@ const renderedBadge = await executeBadgeWidget("fresh", "active", {
   canonicalHostname: "grumphya.com",
   reportId: currentReportId,
 });
+const renderedSelfBadge = await executeBadgeWidget("fresh", "active", {
+  verified: true,
+  hostname: "desarrolloseguro.org",
+  canonicalHostname: "desarrolloseguro.org",
+  reportId: currentReportId,
+}, { hostname: "desarrolloseguro.org" });
+assert.equal(renderedSelfBadge.anchor.hidden, false, "the widget can reveal the self-domain badge after server verification");
+assert.equal(renderedSelfBadge.anchor.children[0].src, "/desarrollo-seguro/assets/desarrollo-seguro-logo-v1.svg", "the same-origin badge logo stays within img-src self");
 assert.equal(renderedBadge.anchor.hidden, false, "the live widget appears for the current active report");
 assert.equal(renderedBadge.anchor.dataset.state, "valid");
 const stalledBadge = await executeBadgeWidget("fresh", "active", {}, { timeoutMs: 5, stallJson: true });

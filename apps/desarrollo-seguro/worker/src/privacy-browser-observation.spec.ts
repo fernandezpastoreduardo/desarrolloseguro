@@ -37,17 +37,25 @@ describe("observePrivacyAndPerformance", () => {
       expect(options.signal?.aborted).toBe(false);
       return performance;
     });
+    const onProgress = vi.fn();
 
     const result = await observePrivacyAndPerformance(input, {
       proxyUrl: "http://privacy-egress:3128",
       createTimeoutSignal,
       observePrivacy: observePrivacy as never,
       observePerformance: observePerformance as never,
+      onProgress,
     });
 
     expect(durations).toEqual([PRIVACY_BROWSER_BUDGET.durationMs, PERFORMANCE_OBSERVATION_DURATION_MS]);
     expect(observePerformance).toHaveBeenCalledOnce();
     expect(result.performance).toEqual(performance);
+    expect(onProgress.mock.calls.map(([event]) => event)).toEqual([
+      { aspect: "privacy", state: "running" },
+      { aspect: "privacy", state: "complete" },
+      { aspect: "performance", state: "running" },
+      { aspect: "performance", state: "complete" },
+    ]);
   });
 
   it("does not launch performance when the request has no exact URL", async () => {

@@ -20,6 +20,17 @@ describe("ReportBadgeService", () => {
     expect(store.issue.mock.calls[0]?.[0].tokenHash).not.toBe(result.token);
   });
 
+  it("issues and verifies a badge for the Desarrollo Seguro hostname", async () => {
+    const store = { resolveCanonicalHostname: vi.fn().mockResolvedValue(null), issue: vi.fn().mockResolvedValue(true), verify: vi.fn().mockResolvedValue("verified"), revoke: vi.fn() };
+    const issuerToken = "a-secret-issuer-token-that-is-long-enough-32";
+    const service = new ReportBadgeService(store, { issuerToken }, () => now);
+    const issued = await service.issue(issuerToken, "desarrolloseguro.org", report.id);
+    expect(issued.hostname).toBe("desarrolloseguro.org");
+    expect(store.issue).toHaveBeenCalledWith(expect.objectContaining({ hostname: "desarrolloseguro.org", reportId: report.id }));
+    await expect(service.verify(issued.token, "desarrolloseguro.org", report.id, undefined, "same-origin"))
+      .resolves.toEqual({ verified: true, hostname: "desarrolloseguro.org", canonicalHostname: "desarrolloseguro.org", reportId: report.id });
+  });
+
   it("rejects an invalid issuer credential and non-allowlisted domains", async () => {
     const store = { resolveCanonicalHostname: vi.fn().mockResolvedValue(null), issue: vi.fn().mockResolvedValue(true), verify: vi.fn(), revoke: vi.fn() };
     const issuerToken = "a-secret-issuer-token-that-is-long-enough-32";

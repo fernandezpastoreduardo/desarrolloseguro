@@ -14,6 +14,7 @@ import {
 import type { TransportV1ScanJob } from "./transport-v1-executor.js";
 import type { ScanExecutor } from "./scan-job-processor.js";
 import { RUNTIME_COORDINATOR_CLIENT_TIMEOUT_MS } from "./runtime-coordinator-timeouts.js";
+import { parsePublicAuditProgressEvent, type PublicAuditProgressEvent } from "@desarrolloseguro/core";
 
 export type RuntimeCoordinatorExecutorOptions = {
   socketPath: string;
@@ -47,6 +48,7 @@ export class RuntimeCoordinatorExecutor implements ScanExecutor {
   async execute(
     job: TransportV1ScanJob,
     signal: AbortSignal,
+    onProgress?: (event: PublicAuditProgressEvent) => Promise<void>,
   ): Promise<
     Omit<ScanRunInput, "jobId" | "leaseToken" | "hostname" | "profileVersion">
   > {
@@ -69,7 +71,7 @@ export class RuntimeCoordinatorExecutor implements ScanExecutor {
     }
 
     await this.assertReady();
-    return this.exchange(request, serializedRequest, signal);
+    return this.exchange(request, serializedRequest, signal, onProgress);
   }
 
   async assertReady(): Promise<void> {
@@ -99,6 +101,7 @@ export class RuntimeCoordinatorExecutor implements ScanExecutor {
     request: TransportV1ExecutorRequest,
     serializedRequest: string,
     signal: AbortSignal,
+    onProgress?: (event: PublicAuditProgressEvent) => Promise<void>,
   ): Promise<
     Omit<ScanRunInput, "jobId" | "leaseToken" | "hostname" | "profileVersion">
   > {
@@ -106,7 +109,9 @@ export class RuntimeCoordinatorExecutor implements ScanExecutor {
       const socket = createConnection(this.options.socketPath);
       let settled = false;
       let receivedBytes = 0;
-      const chunks: Buffer[] = [];
+      let pending = Buffer.alloc(0);
+      let progressChain = Promise.resolve();
+      let responsePayload: unknown;
       const timer = setTimeout(() => finishWithError("coordinator_unavailable"), this.timeoutMs);
       const onAbort = () => finishWithError("request_aborted");
       const cleanup = () => {
@@ -133,15 +138,46 @@ export class RuntimeCoordinatorExecutor implements ScanExecutor {
           finishWithError("transport_failed");
           return;
         }
-        chunks.push(chunk);
+        pending = Buffer.concat([pending, chunk]);
+        let newline = pending.indexOf(0x0a);
+        while (newline >= 0) {
+          const line = pending.subarray(0, newline).toString("utf8");
+          pending = pending.subarray(newline + 1);
+          progressChain = progressChain.then(async () => {
+            const payload = JSON.parse(line) as unknown;
+            if (isProgressMessage(payload, request.requestId)) {
+              const event = parsePublicAuditProgressEvent(payload.progressEvent);
+              if (!event) throw new Error("invalid_progress_event");
+              await onProgress?.(event);
+            } else {
+              if (responsePayload !== undefined) throw new Error("duplicate_response");
+              responsePayload = payload;
+            }
+          }).catch(() => finishWithError("transport_failed"));
+          newline = pending.indexOf(0x0a);
+        }
       });
       socket.once("error", () => finishWithError("coordinator_unavailable"));
-      socket.once("end", () => {
+      socket.once("end", async () => {
         if (settled) return;
         try {
-          const responseText = Buffer.concat(chunks).toString("utf8").trim();
+          await progressChain;
+          if (settled) return;
+          const finalLine = pending.toString("utf8").trim();
+          if (finalLine.length > 0) {
+            const payload = JSON.parse(finalLine) as unknown;
+            if (isProgressMessage(payload, request.requestId)) {
+              const event = parsePublicAuditProgressEvent(payload.progressEvent);
+              if (!event) throw new Error("invalid_progress_event");
+              await onProgress?.(event);
+            } else {
+              if (responsePayload !== undefined) throw new Error("duplicate_response");
+              responsePayload = payload;
+            }
+          }
+          if (responsePayload === undefined) throw new Error("missing_response");
           const response = parseTransportV1ExecutorResponse(
-            JSON.parse(responseText) as unknown,
+            responsePayload,
             request.requestId,
             request.profileVersion,
             request.targetUrl ? parseScanTargetUrl(request.targetUrl).targetPath : "/",
@@ -168,4 +204,11 @@ export class RuntimeCoordinatorExecutor implements ScanExecutor {
       }
     });
   }
+}
+
+function isProgressMessage(value: unknown, requestId: string): value is { progressEvent: unknown } {
+  return typeof value === "object" && value !== null && !Array.isArray(value) &&
+    (value as Record<string, unknown>).protocolVersion === 1 &&
+    (value as Record<string, unknown>).requestId === requestId &&
+    Object.hasOwn(value, "progressEvent");
 }

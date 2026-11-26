@@ -17,7 +17,10 @@ async function main(): Promise<void> {
     return;
   }
 
-  const result = await observePrivacyAndPerformance(input, { proxyUrl: PROXY_URL });
+  const result = await observePrivacyAndPerformance(input, {
+    proxyUrl: PROXY_URL,
+    onProgress: (progressEvent) => process.stdout.write(`${JSON.stringify({ protocolVersion: 1, requestId: input.requestId, progressEvent })}\n`),
+  });
   const serialized = `${JSON.stringify(result)}\n`;
   if (Buffer.byteLength(serialized, "utf8") > PRIVACY_BROWSER_MAX_RESPONSE_BYTES) {
     process.stdout.write(`${JSON.stringify({ protocolVersion: 1, requestId: input.requestId, hostname: input.hostname, status: "unknown", code: "privacy_browser_output_too_large" })}\n`);

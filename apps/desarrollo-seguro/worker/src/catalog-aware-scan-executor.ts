@@ -5,6 +5,7 @@ import {
   type ProviderCatalogSnapshot,
 } from "@desarrolloseguro/persistence/provider-catalog";
 import type { ScanExecutor } from "./scan-job-processor.js";
+import type { PublicAuditProgressEvent } from "@desarrolloseguro/core";
 import type { ScanExecutorResult } from "./public-policy-document-boundary.js";
 import { identifyUnattributedProviderDestination } from "./provider-destination-identity.js";
 import { toCatalogedProviderDocumentDiscovery } from "./provider-document-discovery.js";
@@ -30,8 +31,12 @@ export class CatalogAwareScanExecutor implements ScanExecutor {
     return this.executor.assertReady?.() ?? Promise.resolve();
   }
 
-  async execute(job: ClaimedScanJob, signal: AbortSignal): Promise<ScanExecutorResult> {
-    const result = await this.executor.execute(job, signal);
+  async execute(
+    job: ClaimedScanJob,
+    signal: AbortSignal,
+    onProgress?: (event: PublicAuditProgressEvent) => Promise<void>,
+  ): Promise<ScanExecutorResult> {
+    const result = await this.executor.execute(job, signal, onProgress);
     let snapshot = await withScanFailureStage("provider_catalog_initial_read", async () => {
       const active = await this.providerCatalog.readActive();
       if (!active) throw new Error("provider_catalog_active_missing");
@@ -108,7 +113,7 @@ export class CatalogAwareScanExecutor implements ScanExecutor {
       ),
     );
 
-    return withScanFailureStage("provider_catalog_result_assembly", () => {
+    const completedResult = await withScanFailureStage("provider_catalog_result_assembly", () => {
       const completed = { ...result, providerCatalogVersion: snapshot.catalogVersion };
       delete completed.publicServiceDeclarations;
       return {
@@ -116,6 +121,8 @@ export class CatalogAwareScanExecutor implements ScanExecutor {
         ...(publicServiceComparison ? { publicServiceComparison } : {}),
       };
     });
+    await onProgress?.({ aspect: "ethics", state: "complete" });
+    return completedResult;
   }
 }
 

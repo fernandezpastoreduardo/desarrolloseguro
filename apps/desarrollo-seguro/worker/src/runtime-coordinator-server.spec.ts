@@ -70,6 +70,7 @@ describe("runtime coordinator server", () => {
     expect(runner.execute).toHaveBeenCalledWith(
       expect.objectContaining({ hostname: "sample.example.net", profileVersion: "transport-v1" }),
       expect.any(AbortSignal),
+      expect.any(Function),
     );
   });
 

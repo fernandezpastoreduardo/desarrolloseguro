@@ -298,7 +298,7 @@ async function applyRuntimeGrants(pool: Pool): Promise<void> {
       ON public.ds_domains TO ds_read;
     GRANT SELECT (
       id, hostname, profile_version, state, queued_at, finished_at,
-      public_error_code, failure_diagnostic, target_url
+      public_error_code, failure_diagnostic, target_url, progress_json
     )
       ON public.ds_scan_jobs TO ds_read;
     GRANT SELECT (id, hostname, profile_version, scanner_version, vantage,
@@ -354,6 +354,7 @@ async function applyRuntimeGrants(pool: Pool): Promise<void> {
     GRANT EXECUTE ON FUNCTION ds_claim_next_scan(integer),
       ds_renew_scan_lease(uuid, uuid, integer),
       ds_recover_expired_scan_leases(integer),
+      public.ds_update_scan_progress(uuid, uuid, jsonb),
       ds_complete_scan_with_privacy(uuid, uuid, timestamptz, text, timestamptz, text, jsonb, jsonb, jsonb, jsonb),
       ds_complete_scan_with_transparency(uuid, uuid, timestamptz, text,
         timestamptz, text, jsonb, jsonb, jsonb, jsonb, jsonb, jsonb, jsonb)

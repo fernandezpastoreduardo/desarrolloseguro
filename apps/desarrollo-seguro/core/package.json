@@ -12,6 +12,10 @@
       "types": "./dist/public-service-catalog.d.ts",
       "import": "./dist/public-service-catalog.js"
     },
+    "./public-audit-progress": {
+      "types": "./dist/public-audit-progress.d.ts",
+      "import": "./dist/public-audit-progress.js"
+    },
     "./public-service-comparison": {
       "types": "./dist/public-service-comparison.d.ts",
       "import": "./dist/public-service-comparison.js"

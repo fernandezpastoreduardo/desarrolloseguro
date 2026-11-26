@@ -281,6 +281,10 @@ describe("PublicScanService", () => {
           profileVersion: report.profileVersion,
           optedOut: false,
           activeJobId: "7d140e17-68d6-489a-b451-7e87408187ae",
+          activeProgress: {
+            policyVersion: "public-audit-progress-v1",
+            aspects: { ethics: "pending", privacy: "running", security: "complete", performance: "pending" },
+          },
           lastReport: report,
         }),
         readPublicReport: vi.fn(),
@@ -292,6 +296,9 @@ describe("PublicScanService", () => {
     expect(status.state).toBe("updating");
     expect(status.activeJobId).toBe("7d140e17-68d6-489a-b451-7e87408187ae");
     expect(status.lastReport?.id).toBe(report.id);
+    expect(status.auditProgress?.aspects).toEqual({
+      ethics: "pending", privacy: "running", security: "complete", performance: "pending",
+    });
   });
 
   it("projects a terminal scan failure as failed with only a safe stage code", async () => {
