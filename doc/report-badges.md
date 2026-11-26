@@ -10,6 +10,10 @@ como vigentes. Una suspensión oculta automáticamente el sello y una evaluació
 elegible posterior lo reactiva sin cambiar el dominio autorizado ni el snippet
 del sitio.
 
+En el portal de informes, la tarjeta de estado de certificación beta solo se
+muestra para los clientes actuales `grumphya.com` y `desarrolloseguro.org`.
+Las auditorías de otros dominios no presentan estados de certificación.
+
 El scheduler de certificaciones comprueba cada cinco minutos si hay auditorías
 que llevan 40 minutos pendientes. Solo las auditorías programadas reutilizan
 informes de menos de 40 minutos; las solicitudes manuales mantienen la política

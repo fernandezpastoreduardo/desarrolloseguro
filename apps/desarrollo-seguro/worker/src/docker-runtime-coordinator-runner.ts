@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { isAbsolute } from "node:path";
 import type { ScanRunInput } from "@desarrolloseguro/persistence";
-import { assessPrivacy, assessPublicServiceComparison, evaluateVerdict, PRIVACY_BROWSER_BUDGET } from "@desarrolloseguro/core";
+import { assessPrivacy, assessPublicServiceComparison, evaluateVerdict, parseScanTargetUrl, PRIVACY_BROWSER_BUDGET } from "@desarrolloseguro/core";
 import { SCAN_FAILURE_CODES, type ScanFailureCode } from "@desarrolloseguro/core";
 import {
   MAX_EXECUTOR_RESPONSE_BYTES,
@@ -465,7 +465,8 @@ export function createDockerRuntimeSessionFactory(
           brokerNetwork,
           brokerName,
           volumeName,
-          { hostname: request.hostname, profileVersion: request.profileVersion },
+          { hostname: request.hostname, profileVersion: request.profileVersion,
+            targetPath: request.targetUrl ? parseScanTargetUrl(request.targetUrl).targetPath : "/" },
         );
         startupFailureCode = "runtime_broker_ready_failed";
         await waitForBrokerReady(brokerProcess, signal, brokerStartupTimeoutMs);
@@ -523,7 +524,12 @@ export function createDockerRuntimeSessionFactory(
             throw new Error("privacy_runtime_images_missing");
           }
           if (closed || privacySignal.aborted) throw new Error("request_aborted");
-          const browserInput = JSON.stringify({ protocolVersion: 1, requestId: privacyRequest.requestId, hostname: privacyRequest.hostname });
+          const browserInput = JSON.stringify({
+            protocolVersion: 1,
+            requestId: privacyRequest.requestId,
+            hostname: privacyRequest.hostname,
+            ...(privacyRequest.targetUrl ? { targetUrl: privacyRequest.targetUrl } : {}),
+          });
           privacyNetworkMayExist = true;
           await runDocker(dockerBinary, ["network", "create", "--internal", "--label", "io.desarrolloseguro.role=ephemeral-privacy", privacyNetworkName], undefined, privacySignal, undefined, undefined, undefined, dockerSocketPath);
           privacyProxyMayExist = true;
@@ -600,7 +606,7 @@ function startBroker(
   brokerNetwork: string,
   brokerName: string,
   volumeName: string,
-  options: { hostname: string; profileVersion: TransportV1ExecutorRequest["profileVersion"] },
+  options: { hostname: string; profileVersion: TransportV1ExecutorRequest["profileVersion"]; targetPath: string },
 ): ChildProcessWithoutNullStreams {
   const child = spawn(dockerBinary, dockerCommandArguments(dockerSocketPath, [
     "run", "--interactive",
@@ -613,6 +619,7 @@ function startBroker(
     protocolVersion: 1,
     hostname: options.hostname,
     profileVersion: options.profileVersion,
+    ...(options.profileVersion === "domain-v5" ? { targetPath: options.targetPath } : {}),
   })}\n`);
   return child;
 }

@@ -61,7 +61,7 @@ describe("runtime coordinator server", () => {
     const executor = await createClient(socketPath);
 
     const result = await executor.execute(
-      { hostname: " SAMPLE.EXAMPLE.NET. ", profileVersion: "transport-v1" },
+      { hostname: " SAMPLE.EXAMPLE.NET. ", targetUrl: null, profileVersion: "transport-v1" },
       new AbortController().signal,
     );
 
@@ -84,7 +84,7 @@ describe("runtime coordinator server", () => {
 
     await expect(
       executor.execute(
-        { hostname: "sample.example.net", profileVersion: "transport-v1" },
+        { hostname: "sample.example.net", targetUrl: null, profileVersion: "transport-v1" },
         new AbortController().signal,
       ),
     ).rejects.toMatchObject({
@@ -108,7 +108,7 @@ describe("runtime coordinator server", () => {
     const executor = await createClient(socketPath);
 
     await expect(executor.execute(
-      { hostname: "sample.example.net", profileVersion: "transport-v1" },
+      { hostname: "sample.example.net", targetUrl: null, profileVersion: "transport-v1" },
       new AbortController().signal,
     )).rejects.toMatchObject({
       message: "executor_failed",
@@ -129,7 +129,7 @@ describe("runtime coordinator server", () => {
     const executor = await createClient(socketPath);
 
     await expect(executor.execute(
-      { hostname: "sample.example.net", profileVersion: "transport-v1" },
+      { hostname: "sample.example.net", targetUrl: null, profileVersion: "transport-v1" },
       new AbortController().signal,
     )).rejects.toMatchObject({
       message: "executor_failed",
@@ -150,7 +150,7 @@ describe("runtime coordinator server", () => {
     const executor = await createClient(socketPath);
 
     await expect(executor.execute(
-      { hostname: "sample.example.net", profileVersion: "transport-v1" },
+      { hostname: "sample.example.net", targetUrl: null, profileVersion: "transport-v1" },
       new AbortController().signal,
     )).rejects.toMatchObject({
       message: "executor_failed",
@@ -172,7 +172,7 @@ describe("runtime coordinator server", () => {
 
     await expect(
       executor.execute(
-        { hostname: "sample.example.net", profileVersion: "transport-v1" },
+        { hostname: "sample.example.net", targetUrl: null, profileVersion: "transport-v1" },
         new AbortController().signal,
       ),
     ).rejects.toThrow("broker_failed");
@@ -203,6 +203,7 @@ describe("runtime coordinator server", () => {
       claimNextScan: vi.fn().mockResolvedValue({
         id: "d1d1d1d1-d1d1-41d1-81d1-d1d1d1d1d1d1",
         hostname: "sample.example.net",
+        targetUrl: null,
         profileVersion: "transport-v1",
         trigger: "requested",
         attempts: 3,
@@ -259,7 +260,7 @@ describe("runtime coordinator server", () => {
     const executor = await createClient(socketPath);
 
     await expect(executor.execute(
-      { hostname: "sample.example.net", profileVersion: "transport-v1" },
+      { hostname: "sample.example.net", targetUrl: null, profileVersion: "transport-v1" },
       new AbortController().signal,
     )).rejects.toMatchObject({
       message: "executor_failed",
@@ -284,6 +285,7 @@ describe("runtime coordinator server", () => {
       protocolVersion: 1,
       requestId: "11111111-1111-4111-8111-111111111111",
       hostname: "sample.example.net",
+      targetUrl: null,
       profileVersion: "transport-v1",
       leaseToken: "must-not-be-accepted",
     })}\n`);
@@ -303,14 +305,14 @@ describe("runtime coordinator server", () => {
     const executor = await createClient(socketPath);
     const signal = new AbortController().signal;
     const firstExecution = executor.execute(
-      { hostname: "sample.example.net", profileVersion: "transport-v1" },
+      { hostname: "sample.example.net", targetUrl: null, profileVersion: "transport-v1" },
       signal,
     );
     await vi.waitFor(() => expect(runner.execute).toHaveBeenCalledOnce());
 
     await expect(
       executor.execute(
-        { hostname: "sample.example.net", profileVersion: "transport-v1" },
+        { hostname: "sample.example.net", targetUrl: null, profileVersion: "transport-v1" },
         signal,
       ),
     ).rejects.toThrow("coordinator_unavailable");
@@ -339,7 +341,7 @@ describe("runtime coordinator server", () => {
     const executor = await createClient(socketPath);
     const controller = new AbortController();
     const execution = executor.execute(
-      { hostname: "sample.example.net", profileVersion: "transport-v1" },
+      { hostname: "sample.example.net", targetUrl: null, profileVersion: "transport-v1" },
       controller.signal,
     );
     const rejectedExecution = expect(execution).rejects.toThrow("request_aborted");
@@ -366,7 +368,7 @@ describe("runtime coordinator server", () => {
     const socketPath = await startCoordinator(runner);
     const executor = await createClient(socketPath);
     const execution = executor.execute(
-      { hostname: "sample.example.net", profileVersion: "transport-v1" },
+      { hostname: "sample.example.net", targetUrl: null, profileVersion: "transport-v1" },
       new AbortController().signal,
     ).catch(() => undefined);
     await vi.waitFor(() => expect(runner.execute).toHaveBeenCalledOnce());

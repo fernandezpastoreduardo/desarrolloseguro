@@ -72,7 +72,7 @@ describe("transport-v1 egress IPC", () => {
         createUnixSocketObservationSource(path),
       );
       const result = await executor.execute(
-        { hostname: HOSTNAME, profileVersion: "transport-v1" },
+        { hostname: HOSTNAME, targetUrl: null, profileVersion: "transport-v1" },
         new AbortController().signal,
       );
 

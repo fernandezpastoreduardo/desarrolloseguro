@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
-import { normalizeHostname } from "@desarrolloseguro/core";
+import { normalizeHostname, parseScanTargetUrl } from "@desarrolloseguro/core";
 import type { ScanRunInput } from "@desarrolloseguro/persistence";
 import {
   MAX_EXECUTOR_REQUEST_BYTES,
@@ -38,7 +38,7 @@ export class IsolatedTransportV1Executor {
     Omit<ScanRunInput, "jobId" | "leaseToken" | "hostname" | "profileVersion">
   > {
     if (signal.aborted) return Promise.reject(new Error("request_aborted"));
-    if (job.profileVersion !== "transport-v1" && job.profileVersion !== "domain-v1" && job.profileVersion !== "domain-v2" && job.profileVersion !== "domain-v3" && job.profileVersion !== "domain-v4") {
+    if (job.profileVersion !== "transport-v1" && job.profileVersion !== "domain-v1" && job.profileVersion !== "domain-v2" && job.profileVersion !== "domain-v3" && job.profileVersion !== "domain-v4" && job.profileVersion !== "domain-v5") {
       return Promise.reject(new Error("unsupported_scan_profile"));
     }
 
@@ -49,6 +49,7 @@ export class IsolatedTransportV1Executor {
         requestId: randomUUID(),
         hostname: normalizeHostname(job.hostname),
         profileVersion: job.profileVersion,
+        ...(job.profileVersion === "domain-v5" && job.targetUrl !== null ? { targetUrl: job.targetUrl } : {}),
       });
     } catch {
       return Promise.reject(new Error("executor_request_invalid"));
@@ -121,6 +122,7 @@ export class IsolatedTransportV1Executor {
             JSON.parse(responseText) as unknown,
             request.requestId,
             request.profileVersion,
+            request.targetUrl ? parseScanTargetUrl(request.targetUrl).targetPath : "/",
           );
           if ("errorCode" in response) {
             finishWithError(response.errorCode === "request_invalid"

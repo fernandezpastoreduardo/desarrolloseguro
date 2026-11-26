@@ -40,7 +40,7 @@ describe("RuntimeCoordinatorExecutor", () => {
     const result = await executor.execute(
       {
         hostname: " SAMPLE.EXAMPLE.NET. ",
-        profileVersion: "transport-v1",
+        targetUrl: null, profileVersion: "transport-v1",
       },
       new AbortController().signal,
     );
@@ -64,7 +64,7 @@ describe("RuntimeCoordinatorExecutor", () => {
 
     await expect(
       executor.execute(
-        { hostname: "sample.example.net", profileVersion: "transport-v1" },
+        { hostname: "sample.example.net", targetUrl: null, profileVersion: "transport-v1" },
         new AbortController().signal,
       ),
     ).rejects.toThrow("coordinator_socket_untrusted");
@@ -86,7 +86,7 @@ describe("RuntimeCoordinatorExecutor", () => {
 
     await expect(
       executor.execute(
-        { hostname: "sample.example.net", profileVersion: "transport-v1" },
+        { hostname: "sample.example.net", targetUrl: null, profileVersion: "transport-v1" },
         new AbortController().signal,
       ),
     ).rejects.toThrow("coordinator_socket_untrusted");
@@ -107,7 +107,7 @@ describe("RuntimeCoordinatorExecutor", () => {
 
     await expect(
       executor.execute(
-        { hostname: "sample.example.net", profileVersion: "transport-v1" },
+        { hostname: "sample.example.net", targetUrl: null, profileVersion: "transport-v1" },
         new AbortController().signal,
       ),
     ).rejects.toThrow("transport_failed");
@@ -124,7 +124,7 @@ describe("RuntimeCoordinatorExecutor", () => {
 
     await expect(
       executor.execute(
-        { hostname: "127.0.0.1", profileVersion: "transport-v1" },
+        { hostname: "127.0.0.1", targetUrl: null, profileVersion: "transport-v1" },
         new AbortController().signal,
       ),
     ).rejects.toThrow("executor_request_invalid");

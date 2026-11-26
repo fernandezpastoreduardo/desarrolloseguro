@@ -46,6 +46,24 @@ export function mergePrivacyBrowserChecks(
   };
 
   return checks.map((check) => {
+    if (check.controlId === "DS-QUAL-02" && observation.performance) {
+      const profileEvidence = Object.fromEntries(observation.performance.profiles.flatMap((profile) => {
+        if (profile.status !== "complete") return [];
+        const prefix = profile.profile;
+        return [
+          [`${prefix}FcpMs`, profile.fcpMs], [`${prefix}LcpMs`, profile.lcpMs],
+          [`${prefix}ClsMilli`, profile.cls === null ? null : Math.round(profile.cls * 1_000)],
+          [`${prefix}TbtMs`, profile.tbtMs], [`${prefix}TtfbMs`, profile.ttfbMs],
+          [`${prefix}TransferBytes`, profile.transferBytes], [`${prefix}Score`, profile.score],
+        ].filter(([, value]) => typeof value === "number") as Array<[string, number]>;
+      }));
+      const complete = observation.performance.profiles.every(({ status }) => status === "complete");
+      return {
+        ...check,
+        status: complete ? check.status : "unknown",
+        evidence: { ...check.evidence, ...profileEvidence },
+      };
+    }
     if (check.controlId === "DS-PRIV-05") {
       const inspected = cookieReadComplete;
       return {

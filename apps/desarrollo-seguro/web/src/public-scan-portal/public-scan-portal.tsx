@@ -2,10 +2,12 @@ import { type FormEvent, useEffect, useRef, useState } from "react";
 import { parseFirstEntryPolicyAccess, type FirstEntryPolicyAccess } from "@desarrolloseguro/core/first-entry-policy-access";
 import { parseLegalCookieFindings, type LegalCookieFinding } from "@desarrolloseguro/core/legal-cookie-findings";
 import { parsePublicServiceComparison } from "@desarrolloseguro/core/public-service-comparison";
+import { parseScanTargetUrl } from "@desarrolloseguro/core/scan-target-url";
 import { PUBLIC_SERVICE_PROVIDER_INFO } from "@desarrolloseguro/core/public-service-catalog";
 import "./public-scan-portal.scss";
 
 const API_ROOT = "/api/desarrollo-seguro/v1";
+const CLIENT_CERTIFICATION_HOSTNAMES = new Set(["grumphya.com", "desarrolloseguro.org"]);
 const DOMAIN_INPUT_ID = "public-scan-domain";
 const DOMAIN_ERROR_ID = "ds-portal-domain-error";
 const SEARCH_BUTTON_TEXT = "Consultar informe";
@@ -15,7 +17,7 @@ const GENERIC_ERROR =
 const RATE_LIMIT_MESSAGE =
   "Has hecho varias consultas seguidas. Espera un minuto y vuelve a intentarlo.";
 const INVALID_DOMAIN_MESSAGE =
-  "Escribe un dominio válido, por ejemplo ejemplo.es.";
+  "Escribe una URL HTTPS pública completa, por ejemplo https://ejemplo.es/servicio.";
 const NO_REPORT_MESSAGE =
   "Todavía no hay un informe completo guardado para este dominio.";
 const UPDATING_WITHOUT_REPORT_MESSAGE =
@@ -81,6 +83,7 @@ const PROFILE_VERSIONS = [
   "domain-v2",
   "domain-v3",
   "domain-v4",
+  "domain-v5",
 ] as const;
 const SCAN_VERDICTS = ["pass", "fail", "inconclusive"] as const;
 const SCAN_TRIGGERS = ["scheduled", "requested"] as const;
@@ -94,7 +97,7 @@ const REPORT_CATEGORIES = [
   { id: "ethics", label: "Ética", description: "Valora la transparencia sobre servicios externos y otras prácticas que pueden afectar a las personas. Separa lo que el sitio declara de lo que el análisis observa.", criteria: ["third-party-data-use", "external-service-transparency", "backend-processor-transparency", "tracking"], controls: ["DS-PRIV-06"] },
   { id: "privacy", label: "Privacidad", description: "Comprueba qué datos guarda la página, si se conecta con otros servicios y si respeta la opción de rechazarlos. Después vuelve a cargarla para comprobar que la elección se mantiene.", criteria: ["initial-cookie-risk"], controls: ["DS-PRIV-05"] },
   { id: "security", label: "Seguridad", description: "Comprueba que el dominio se encuentre, que la conexión proteja la información y que el navegador reciba barreras frente a algunos ataques.", criteria: ["dns-integrity", "transport-security", "http-availability", "security-headers"], controls: ["DS-DNS-01", "DS-TLS-01", "DS-TLS-02", "DS-HTTP-01", "DS-HDR-01"] },
-  { id: "performance", label: "Rendimiento", description: "Mide cuánto tarda y cuánto ocupa la respuesta inicial. Es una medición puntual: otras páginas, dispositivos y conexiones pueden dar resultados distintos.", criteria: ["performance"], controls: ["DS-QUAL-02"] },
+  { id: "performance", label: "Rendimiento", description: "Mide la carga de esta página en móvil y escritorio con métricas propias tipo Lighthouse. La puntuación no es una puntuación oficial de Lighthouse.", criteria: ["performance"], controls: ["DS-QUAL-02"] },
 ] as const;
 const BETA_EVALUATION_LEVELS = [
   { id: "observed", label: "Observado", statuses: ["pass"] },
@@ -112,7 +115,7 @@ const CRITERION_EXPLANATIONS: Record<string, string> = {
   "backend-processor-transparency": "Comparamos los servicios que el titular declara con su lista interna de sistemas activos. No podemos comprobar aquí si cada proveedor cumple lo declarado.",
   "initial-cookie-risk": "Revisamos los datos que la página guarda en el navegador al abrirla. Esta comprobación no cubre lo que ocurre después.",
   tracking: "Buscamos en el contenido inicial referencias a herramientas de seguimiento conocidas. Esto no confirma que se conecten o se ejecuten.",
-  performance: "Medimos cuánto tarda y cuánto ocupa la primera respuesta. No representa toda la experiencia de uso.",
+  performance: "Medimos la carga en móvil y escritorio con métricas propias tipo Lighthouse; la puntuación no es oficial de Lighthouse.",
 };
 const CRITERION_FAIL_MEANINGS: Record<string, string> = {
   "dns-integrity": "No pudimos encontrar la dirección pública del dominio.",
@@ -144,6 +147,11 @@ const EVIDENCE_LABELS: Record<string, string> = {
   browserTrackingResponseCount: "Solicitudes a rastreadores con respuesta recibida",
   policyLanguageCatalogVersion: "Catálogo local de información pública",
   responseTimeMs: "Tiempo de respuesta inicial", responseBytes: "Tamaño recibido de la página",
+  mobileFcpMs: "Móvil · FCP", mobileLcpMs: "Móvil · LCP", mobileClsMilli: "Móvil · CLS",
+  mobileTbtMs: "Móvil · TBT", mobileTtfbMs: "Móvil · TTFB", mobileTransferBytes: "Móvil · Datos transferidos",
+  mobileScore: "Móvil · puntuación", desktopFcpMs: "Escritorio · FCP", desktopLcpMs: "Escritorio · LCP",
+  desktopClsMilli: "Escritorio · CLS", desktopTbtMs: "Escritorio · TBT", desktopTtfbMs: "Escritorio · TTFB",
+  desktopTransferBytes: "Escritorio · Datos transferidos", desktopScore: "Escritorio · puntuación",
 };
 
 type PortalState = "idle" | "loading" | "ready" | "error";
@@ -387,6 +395,7 @@ const VERDICT_LABELS: Record<string, string> = {
 export function PublicScanPortal() {
   const reportId = getReportIdFromLocation();
   const [domain, setDomain] = useState("");
+  const [auditTargetUrl, setAuditTargetUrl] = useState("");
   const [state, setState] = useState<PortalState>("idle");
   const [status, setStatus] = useState<DomainStatus | null>(null);
   const [report, setReport] = useState<PublicReport | null>(null);
@@ -421,6 +430,7 @@ export function PublicScanPortal() {
     const pollingHostname = status?.hostname;
     if (
       !pollingHostname ||
+      !auditTargetUrl ||
       (analysisRequestState !== "queued" && analysisRequestState !== "running")
     ) {
       return;
@@ -433,7 +443,7 @@ export function PublicScanPortal() {
       analysisStatusPollCount.current += 1;
       try {
         const response = await fetch(
-          `${API_ROOT}/domains/${encodeURIComponent(pollingHostname)}/status`,
+          `${API_ROOT}/domains/${encodeURIComponent(pollingHostname)}/status?${new URLSearchParams({ targetUrl: auditTargetUrl })}`,
           {
             method: "GET",
             headers: { Accept: ACCEPT_JSON_HEADER },
@@ -518,7 +528,7 @@ export function PublicScanPortal() {
       controller.abort();
       if (pollTimer !== undefined) window.clearTimeout(pollTimer);
     };
-  }, [analysisRequestState, status?.hostname]);
+  }, [analysisRequestState, auditTargetUrl, status?.hostname]);
 
   async function loadReport(id: string) {
     setState("loading");
@@ -551,8 +561,11 @@ export function PublicScanPortal() {
         throw new Error("invalid_report_response");
       }
       setReport(payload);
-      setDomain(payload.hostname);
-      await loadHistory(payload.hostname);
+      const reportTargetUrl = getReportTargetUrl(payload);
+      setDomain(reportTargetUrl);
+      setAuditTargetUrl(reportTargetUrl);
+      if (payload.profileVersion === "domain-v5") setHistory([]);
+      else await loadHistory(payload.hostname);
       setState("ready");
     } catch {
       setReport(null);
@@ -563,8 +576,10 @@ export function PublicScanPortal() {
 
   async function submitDomain(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const hostname = normalizeDomainInput(domain);
-    if (hostname === null) {
+    let target: ReturnType<typeof parseScanTargetUrl>;
+    try {
+      target = parseScanTargetUrl(domain);
+    } catch {
       setState("error");
       setMessage(INVALID_DOMAIN_MESSAGE);
       setDomainInputInvalid(true);
@@ -574,7 +589,9 @@ export function PublicScanPortal() {
       return;
     }
 
-    setDomain(hostname);
+    const { hostname, targetUrl } = target;
+    setDomain(targetUrl);
+    setAuditTargetUrl(targetUrl);
     setDomainInputInvalid(false);
     setAuthorizationConfirmed(false);
     setAnalysisRequestState(null);
@@ -587,7 +604,7 @@ export function PublicScanPortal() {
     let publicError = GENERIC_ERROR;
     try {
       const response = await fetch(
-        `${API_ROOT}/domains/${encodeURIComponent(hostname)}/status`,
+        `${API_ROOT}/domains/${encodeURIComponent(hostname)}/status?${new URLSearchParams({ targetUrl })}`,
         {
           method: "GET",
           headers: { Accept: ACCEPT_JSON_HEADER },
@@ -603,7 +620,9 @@ export function PublicScanPortal() {
       if (!isDomainStatus(payload)) throw new Error("invalid_status_response");
       setStatus(payload);
       setReport(payload.lastReport);
-      if (payload.lastReport) void loadHistory(payload.hostname);
+      if (payload.lastReport && payload.lastReport.profileVersion !== "domain-v5") {
+        void loadHistory(payload.hostname);
+      }
       setState("ready");
     } catch {
       setStatus(null);
@@ -636,6 +655,7 @@ export function PublicScanPortal() {
   async function requestAnalysis() {
     if (
       !status ||
+      !auditTargetUrl ||
       !authorizationConfirmed ||
       state === "loading" ||
       analysisRequestInFlight.current
@@ -657,14 +677,15 @@ export function PublicScanPortal() {
           },
           credentials: "omit",
           cache: "no-store",
-          body: JSON.stringify({ authorized: true }),
+          body: JSON.stringify({ authorized: true, targetUrl: auditTargetUrl }),
         },
       );
       if (!response.ok) throw new Error("invalid_analysis_request_response");
       const payload: unknown = await readPublicJson(response);
       if (
         !isAnalysisRequest(payload) ||
-        payload.hostname !== status.hostname
+        payload.hostname !== status.hostname ||
+        payload.targetUrl !== undefined && payload.targetUrl !== auditTargetUrl
       ) {
         throw new Error("invalid_analysis_request_response");
       }
@@ -728,7 +749,7 @@ export function PublicScanPortal() {
           </p>
         </div>
         <form className="ds-portal__search" onSubmit={submitDomain} noValidate>
-          <label htmlFor={DOMAIN_INPUT_ID}>Dominio que quieres consultar</label>
+          <label htmlFor={DOMAIN_INPUT_ID}>URL HTTPS que quieres auditar</label>
           <div className="ds-portal__search-row">
             <input
               id={DOMAIN_INPUT_ID}
@@ -736,7 +757,7 @@ export function PublicScanPortal() {
               type="text"
               inputMode="url"
               autoComplete="url"
-              placeholder="ejemplo.es"
+              placeholder="https://ejemplo.es/servicio?plan=basico"
               value={domain}
               onChange={(event) => setDomain(event.currentTarget.value)}
               aria-describedby="ds-portal-help"
@@ -749,8 +770,8 @@ export function PublicScanPortal() {
             </button>
           </div>
           <span id="ds-portal-help" className="ds-portal__help">
-            Solo se consulta información guardada. No se envían solicitudes al
-            dominio.
+            Consultar no inicia el análisis. La solicitud autorizada carga esta
+            URL y sus recursos GET/HEAD, incluidos los de terceros, con límites.
           </span>
         </form>
         <div className="ds-portal__hero-footnote" aria-hidden="true">
@@ -1067,7 +1088,7 @@ function ReportSummary({
 
   return (
     <>
-      <CertificationStatus certification={report.certification} />
+      <CertificationStatus certification={report.certification} hostname={report.hostname} />
       <section className="ds-portal__ethics" aria-labelledby="ethics-summary-heading">
         <div className="ds-portal__score-lead">
           <GlobalScoreRing score={report.globalAssessment.score} status={report.globalAssessment.status} />
@@ -1089,6 +1110,10 @@ function ReportSummary({
             const criteria = report.ethicsAssessment.criteria.filter((criterion) =>
               (category.criteria as readonly string[]).includes(criterion.id),
             );
+            const performanceScore = category.id === "performance" && report.profileVersion === "domain-v5"
+              ? getPerformanceScore(report.checks)
+              : null;
+            const performanceScoreApplies = category.id === "performance" && report.profileVersion === "domain-v5";
             const isExpanded = activeCategoryId === category.id;
             return (
               <section
@@ -1100,11 +1125,19 @@ function ReportSummary({
                 <div className="ds-portal__category-heading">
                   <div>
                     <h4>{category.label}</h4>
-                    <strong>{getCategoryScoreLabel(criteria)}</strong>
+                    <strong>{performanceScoreApplies
+                      ? getPerformanceScoreLabel(performanceScore)
+                      : getCategoryScoreLabel(criteria)}</strong>
                   </div>
-                  <CategoryScoreRing label={category.label} criteria={criteria} />
+                  <CategoryScoreRing
+                    label={category.label}
+                    criteria={criteria}
+                    scoreOverride={performanceScoreApplies ? performanceScore : undefined}
+                  />
                 </div>
-                <p className="ds-portal__category-summary">{getCategorySummary(criteria, state)}</p>
+                <p className="ds-portal__category-summary">{performanceScoreApplies
+                  ? getPerformanceCategorySummary(performanceScore)
+                  : getCategorySummary(criteria, state)}</p>
                 <button
                   className="ds-portal__category-more"
                   type="button"
@@ -1138,6 +1171,7 @@ function ReportSummary({
               category={activeCategory}
               criteria={activeCriteria}
               checks={activeChecks}
+              profileVersion={report.profileVersion}
               publicPolicyAssessment={report.publicPolicyTransparencyAssessment}
               detailsId={`report-category-details-${activeCategory.id}`}
               onClose={() => setActiveCategoryId(null)}
@@ -1910,26 +1944,31 @@ function BetaEvaluationChart({
 function CategoryScoreRing({
   label,
   criteria,
+  scoreOverride,
 }: {
   label: string;
   criteria: PublicEthicsCriterion[];
+  scoreOverride?: number | null;
 }) {
   const { ref, isVisible } = useRevealOnView<HTMLDivElement>();
   const categoryScore = getCategoryScore(criteria);
-  const value = categoryScore.score ?? 0;
+  const score = scoreOverride === undefined ? categoryScore.score : scoreOverride;
+  const assessedCriteria = scoreOverride === undefined ? categoryScore.assessedCriteria : score === null ? 0 : 1;
+  const totalCriteria = scoreOverride === undefined ? categoryScore.totalCriteria : 1;
+  const value = score ?? 0;
   const radius = 30;
   const circumference = 2 * Math.PI * radius;
-  const accessibleLabel = categoryScore.score === null
-    ? `${label}: sin puntuación; ${categoryScore.assessedCriteria} de ${categoryScore.totalCriteria} aspectos evaluados`
-    : `${label}: ${categoryScore.score} de 100 puntos; ${categoryScore.assessedCriteria} de ${categoryScore.totalCriteria} aspectos evaluados`;
+  const accessibleLabel = score === null
+    ? `${label}: sin puntuación; ${assessedCriteria} de ${totalCriteria} aspectos evaluados`
+    : `${label}: ${score} de 100 puntos; ${assessedCriteria} de ${totalCriteria} aspectos evaluados`;
 
   return (
     <div
       ref={ref}
       className="ds-portal__category-score-ring"
       data-visible={isVisible}
-      data-score-state={categoryScore.score === null ? "unknown" : "scored"}
-      data-score-band={getScoreBand(categoryScore.score)}
+      data-score-state={score === null ? "unknown" : "scored"}
+      data-score-band={getScoreBand(score)}
       aria-label={accessibleLabel}
     >
       <svg
@@ -1949,7 +1988,7 @@ function CategoryScoreRing({
           strokeDashoffset={isVisible ? circumference * (1 - value / 100) : circumference}
         />
         <text className="ds-portal__category-score-ring-value" x="42" y="40" textAnchor="middle">
-          {categoryScore.score === null ? "—" : categoryScore.score}
+          {score === null ? "—" : score}
         </text>
         <text className="ds-portal__category-score-ring-unit" x="42" y="53" textAnchor="middle">
           /100
@@ -1963,6 +2002,7 @@ function CategoryDetailsModal({
   category,
   criteria,
   checks,
+  profileVersion,
   publicPolicyAssessment,
   detailsId,
   onClose,
@@ -1970,6 +2010,7 @@ function CategoryDetailsModal({
   category: ReportCategory;
   criteria: PublicEthicsCriterion[];
   checks: PublicReport["checks"];
+  profileVersion: ProfileVersion;
   publicPolicyAssessment: PublicPolicyTransparencyAssessment | null;
   detailsId: string;
   onClose: () => void;
@@ -2026,15 +2067,21 @@ function CategoryDetailsModal({
           </button>
         </header>
         <div className="ds-portal__category-details" id={detailsId}>
-          <p>{category.description}</p>
+          <p>{category.id === "performance" && profileVersion !== "domain-v5"
+            ? "Mide cuánto tarda y cuánto ocupa la respuesta inicial. Es una medición puntual: otras páginas, dispositivos y conexiones pueden dar resultados distintos."
+            : category.description}</p>
           <ul className="ds-portal__ethics-criteria">
             {criteria.map((criterion) => (
               <li key={criterion.id} data-status={criterion.status}>
                 <div>
                   <strong>{getCriterionDisplayLabel(criterion.id, criterion.label)}</strong>
-                  <p><b>Comprobación:</b> {CRITERION_EXPLANATIONS[criterion.id]}</p>
-                  <p><b>Qué implica:</b> {getCriterionOutcome(criterion.id, criterion.status)}</p>
-                  <p className="ds-portal__criterion-evidence"><b>Dato observado:</b> {getCriterionEvidenceSummary(criterion.id, checks, publicPolicyAssessment)}</p>
+                  <p><b>Comprobación:</b> {criterion.id === "performance" && profileVersion !== "domain-v5"
+                    ? "Medimos cuánto tarda y cuánto ocupa la primera respuesta. No representa toda la experiencia de uso."
+                    : CRITERION_EXPLANATIONS[criterion.id]}</p>
+                  <p><b>Qué implica:</b> {criterion.id === "performance" && profileVersion === "domain-v5"
+                    ? "La puntuación combina seis métricas medidas en móvil y escritorio; no es una puntuación oficial de Lighthouse."
+                    : getCriterionOutcome(criterion.id, criterion.status)}</p>
+                  <p className="ds-portal__criterion-evidence"><b>Dato observado:</b> {getCriterionEvidenceSummary(criterion.id, checks, publicPolicyAssessment, profileVersion)}</p>
                 </div>
                 <span>{getCheckStatusLabel(criterion.status)}</span>
               </li>
@@ -2070,8 +2117,11 @@ function CategoryDetailsModal({
   );
 }
 
-function CertificationStatus({ certification }: { certification: PublicReport["certification"] }) {
-  if (!certification) return null;
+function CertificationStatus({ certification, hostname }: {
+  certification: PublicReport["certification"];
+  hostname: string;
+}) {
+  if (!certification || !CLIENT_CERTIFICATION_HOSTNAMES.has(hostname)) return null;
   const labels = {
     pending: "En revisión",
     active: "Certificación beta activa",
@@ -2095,9 +2145,11 @@ function CertificationStatus({ certification }: { certification: PublicReport["c
   );
 }
 
-function normalizeDomainInput(input: string): string | null {
-  const hostname = input.trim().toLowerCase();
-  return isPublicHostname(hostname) ? hostname : null;
+function getReportTargetUrl(report: PublicReport): string {
+  const targetPath = report.profileVersion === "domain-v5" && report.scope.length === 1
+    ? report.scope[0]
+    : "/";
+  return parseScanTargetUrl(`https://${report.hostname}${targetPath}`).targetUrl;
 }
 
 function getReportIdFromLocation(): string | null {
@@ -2196,7 +2248,7 @@ function isPublicReport(value: unknown): value is PublicReport {
     value.privacyAssessment as PublicReport["privacyAssessment"],
     hasAccreditedLegalViolation(value.legalCookieFindings, value.publicServiceComparison),
   )) return false;
-  if (!isScope(value.scope)) return false;
+  if (!isScope(value.scope, value.profileVersion)) return false;
   const scope = value.scope;
   const checkKeys = value.checks.map(
     (check) => `${check.controlId}:${check.targetPath}:${check.method}`,
@@ -2511,10 +2563,11 @@ function isBoundedScore(value: unknown): value is number {
 
 function isAnalysisRequest(
   value: unknown,
-): value is { hostname: string; state: (typeof ANALYSIS_REQUEST_STATES)[number] } {
+): value is { hostname: string; targetUrl?: string; state: (typeof ANALYSIS_REQUEST_STATES)[number] } {
   return (
     isRecord(value) &&
     isBoundedString(value.hostname, 253) &&
+    (value.targetUrl === undefined || isBoundedString(value.targetUrl, 2_048)) &&
     typeof value.state === "string" &&
     ANALYSIS_REQUEST_STATES.includes(
       value.state as (typeof ANALYSIS_REQUEST_STATES)[number],
@@ -2531,7 +2584,7 @@ function isPublicCheck(value: unknown): value is PublicCheck {
     value.required === true &&
     isOneOf(value.severity, CHECK_SEVERITIES) &&
     isIsoTimestamp(value.observedAt) &&
-    isOneOf(value.targetPath, PUBLIC_SCOPE_PATHS) &&
+    isSafePublicTargetPath(value.targetPath) &&
     isOneOf(value.method, CHECK_METHODS) &&
     isBoundedString(value.summary, 500) &&
     isBoundedString(value.limitation, 220) &&
@@ -2540,7 +2593,7 @@ function isPublicCheck(value: unknown): value is PublicCheck {
     Object.entries(value.evidence).every(([key, item]) =>
       /^[a-z][a-zA-Z0-9]{0,39}$/u.test(key) &&
       ((typeof item === "string" && item.length <= 40) ||
-        (typeof item === "number" && Number.isSafeInteger(item) && item >= 0 && item <= 1_000_000) ||
+        (typeof item === "number" && Number.isSafeInteger(item) && item >= 0 && item <= 64 * 1024 * 1024) ||
         typeof item === "boolean"),
     )
   );
@@ -2579,7 +2632,11 @@ function isIsoTimestamp(value: unknown): value is string {
   );
 }
 
-function isScope(value: unknown): value is string[] {
+function isScope(value: unknown, profileVersion: string): value is string[] {
+  if (profileVersion === "domain-v5") {
+    return Array.isArray(value) && value.length === 1 &&
+      typeof value[0] === "string" && isSafePublicTargetPath(value[0]);
+  }
   return (
     Array.isArray(value) &&
     value.length >= 1 &&
@@ -2588,6 +2645,19 @@ function isScope(value: unknown): value is string[] {
     value.includes("/") &&
     new Set(value).size === value.length
   );
+}
+
+function isSafePublicTargetPath(value: unknown): value is string {
+  return typeof value === "string" && value.length <= 2_048 && value.startsWith("/") &&
+    !value.startsWith("//") && !value.includes("#") && !value.includes("\\") &&
+    !hasAsciiControlCharacter(value);
+}
+
+function hasAsciiControlCharacter(value: string): boolean {
+  return Array.from(value).some((character) => {
+    const codePoint = character.codePointAt(0) ?? 0;
+    return codePoint <= 0x1f || codePoint === 0x7f;
+  });
 }
 
 function isBoundedString(
@@ -2674,6 +2744,30 @@ function getCategoryScoreLabel(criteria: Array<{ status: string; weight: number 
   return `${categoryScore.score}/100 · ${coverage}`;
 }
 
+function getPerformanceScore(checks: PublicCheck[]): number | null {
+  const evidence = checks.find(({ controlId }) => controlId === "DS-QUAL-02")?.evidence;
+  if (!evidence) return null;
+  for (const profile of ["mobile", "desktop"] as const) {
+    const required = [
+      `${profile}FcpMs`, `${profile}LcpMs`, `${profile}ClsMilli`, `${profile}TbtMs`,
+      `${profile}TtfbMs`, `${profile}TransferBytes`, `${profile}Score`,
+    ];
+    if (!required.every((key) => typeof evidence[key] === "number" && Number.isFinite(evidence[key]))) {
+      return null;
+    }
+  }
+  const mobile = evidence.mobileScore;
+  const desktop = evidence.desktopScore;
+  if (typeof mobile !== "number" || typeof desktop !== "number") return null;
+  return Math.round((mobile + desktop) / 2);
+}
+
+function getPerformanceScoreLabel(score: number | null): string {
+  return score === null
+    ? "Sin datos suficientes"
+    : `${score}/100 · media de móvil y escritorio`;
+}
+
 function getCategorySummary(criteria: Array<{ status: string }>, state: string): string {
   const assessed = criteria.filter((criterion) => criterion.status !== "unknown");
   const problems = assessed.filter((criterion) => criterion.status === "fail").length;
@@ -2694,6 +2788,12 @@ function getCategorySummary(criteria: Array<{ status: string }>, state: string):
       : `${unknown} comprobación${unknown === 1 ? "" : "es"} no se pudo${unknown === 1 ? "" : "n"} completar.`;
   }
   return "Las comprobaciones de esta parte no encontraron riesgos.";
+}
+
+function getPerformanceCategorySummary(score: number | null): string {
+  return score === null
+    ? "Medición incompleta: falta algún dato requerido de móvil o escritorio."
+    : "Nota media de las pruebas móviles y de escritorio, calculada con seis métricas propias tipo Lighthouse.";
 }
 
 function getReportTakeaway(report: PublicReport, state: string): string {
@@ -2756,6 +2856,7 @@ function getCriterionEvidenceSummary(
   criterionId: string,
   checks: PublicCheck[],
   publicPolicyAssessment: PublicPolicyTransparencyAssessment | null = null,
+  profileVersion?: ProfileVersion,
 ): string {
   if (criterionId === "external-service-transparency" && publicPolicyAssessment) {
     return publicPolicyAssessment.status === "pass"
@@ -2861,6 +2962,14 @@ function getCriterionEvidenceSummary(
       return `El HTML inicial contenía ${thirdParty ?? "sin dato"} referencias a recursos de terceros y ${known ?? "sin dato"} coincidencias con rastreadores conocidos.`;
     }
     case "performance": {
+      if (profileVersion === "domain-v5") {
+        const score = getPerformanceScore(checks);
+        const mobileScore = number("mobileScore");
+        const desktopScore = number("desktopScore");
+        return score === null
+          ? `Medición incompleta: móvil ${mobileScore === null ? "sin puntuación" : `${mobileScore}/100`}; escritorio ${desktopScore === null ? "sin puntuación" : `${desktopScore}/100`}. No se calcula la media si falta un dato requerido.`
+          : `Móvil ${mobileScore}/100 y escritorio ${desktopScore}/100; nota media ${score}/100. Métricas propias tipo Lighthouse, no puntuación oficial de Lighthouse.`;
+      }
       const responseTime = number("responseTimeMs");
       const responseBytes = number("responseBytes");
       if (responseTime === null && responseBytes === null) break;
@@ -2986,6 +3095,10 @@ function formatEvidenceValue(value: string | number | boolean, key: string): str
   if (typeof value === "number") {
     if (key === "responseTimeMs") return `${value} ms`;
     if (key === "responseBytes") return `${new Intl.NumberFormat("es-ES").format(value)} bytes`;
+    if (["mobileFcpMs", "mobileLcpMs", "mobileTbtMs", "mobileTtfbMs", "desktopFcpMs", "desktopLcpMs", "desktopTbtMs", "desktopTtfbMs"].includes(key)) return `${value} ms`;
+    if (key === "mobileClsMilli" || key === "desktopClsMilli") return new Intl.NumberFormat("es-ES", { minimumFractionDigits: 3, maximumFractionDigits: 3 }).format(value / 1_000);
+    if (key === "mobileTransferBytes" || key === "desktopTransferBytes") return `${new Intl.NumberFormat("es-ES").format(value)} bytes (${formatByteCount(value)})`;
+    if (key === "mobileScore" || key === "desktopScore") return `${value}/100`;
     return String(value);
   }
   const labels: Record<string, string> = {

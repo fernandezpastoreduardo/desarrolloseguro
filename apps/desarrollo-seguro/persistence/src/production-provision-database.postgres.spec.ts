@@ -216,8 +216,10 @@ describePostgres.sequential(
         api_cannot_change_badge_expiry: boolean;
         api_can_execute_scan_admission: boolean;
         api_can_execute_on_demand_request: boolean;
+        api_can_execute_target_url_request: boolean;
         worker_cannot_execute_scan_admission: boolean;
         worker_cannot_execute_on_demand_request: boolean;
+        worker_cannot_execute_target_url_request: boolean;
         retention_cannot_execute_scan_admission: boolean;
         public_cannot_execute_scan_admission: boolean;
         public_cannot_execute_on_demand_request: boolean;
@@ -236,6 +238,7 @@ describePostgres.sequential(
          NOT has_table_privilege('ds_worker', 'public.ds_scan_privacy_assessments', 'SELECT') AS worker_cannot_read_privacy_assessment,
          NOT has_table_privilege('ds_worker', 'public.ds_scan_public_policy_transparency', 'SELECT') AS worker_cannot_read_public_policy_assessment,
          NOT has_column_privilege('ds_api', 'public.ds_scan_jobs', 'lease_token', 'SELECT') AS api_cannot_read_lease_token,
+         has_column_privilege('ds_api', 'public.ds_scan_jobs', 'target_url', 'SELECT') AS api_can_read_active_target_url,
          NOT has_table_privilege('ds_api', 'public.ds_scan_metrics', 'SELECT') AS api_cannot_select_all_metrics,
          NOT has_column_privilege('ds_api', 'public.ds_scan_jobs', 'hostname', 'INSERT') AS api_cannot_insert_jobs,
          NOT has_table_privilege('ds_api', 'public.ds_domains', 'INSERT') AS api_cannot_insert_domains,
@@ -244,8 +247,10 @@ describePostgres.sequential(
          NOT has_column_privilege('ds_api', 'public.ds_report_badges', 'expires_at', 'UPDATE') AS api_cannot_change_badge_expiry,
          has_function_privilege('ds_api', 'public.ds_ensure_fresh_scan(text,text,text)', 'EXECUTE') AS api_can_execute_scan_admission,
          has_function_privilege('ds_api', 'public.ds_request_on_demand_scan(text)', 'EXECUTE') AS api_can_execute_on_demand_request,
+         has_function_privilege('ds_api', 'public.ds_request_on_demand_target_scan(text,text)', 'EXECUTE') AS api_can_execute_target_url_request,
          NOT has_function_privilege('ds_worker', 'public.ds_ensure_fresh_scan(text,text,text)', 'EXECUTE') AS worker_cannot_execute_scan_admission,
          NOT has_function_privilege('ds_worker', 'public.ds_request_on_demand_scan(text)', 'EXECUTE') AS worker_cannot_execute_on_demand_request,
+         NOT has_function_privilege('ds_worker', 'public.ds_request_on_demand_target_scan(text,text)', 'EXECUTE') AS worker_cannot_execute_target_url_request,
          NOT has_function_privilege('ds_retention', 'public.ds_ensure_fresh_scan(text,text,text)', 'EXECUTE') AS retention_cannot_execute_scan_admission,
          NOT EXISTS (
            SELECT 1 FROM pg_proc AS procedure
@@ -278,6 +283,7 @@ describePostgres.sequential(
         worker_cannot_read_privacy_assessment: true,
         worker_cannot_read_public_policy_assessment: true,
         api_cannot_read_lease_token: true,
+        api_can_read_active_target_url: true,
         api_cannot_select_all_metrics: true,
         api_cannot_insert_jobs: true,
         api_cannot_insert_domains: true,
@@ -286,8 +292,10 @@ describePostgres.sequential(
         api_cannot_change_badge_expiry: true,
         api_can_execute_scan_admission: true,
         api_can_execute_on_demand_request: true,
+        api_can_execute_target_url_request: true,
         worker_cannot_execute_scan_admission: true,
         worker_cannot_execute_on_demand_request: true,
+        worker_cannot_execute_target_url_request: true,
         retention_cannot_execute_scan_admission: true,
         public_cannot_execute_scan_admission: true,
         public_cannot_execute_on_demand_request: true,

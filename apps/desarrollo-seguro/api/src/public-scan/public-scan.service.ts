@@ -15,6 +15,7 @@ import {
   toInternalAuditPublicSummary,
   type InternalAuditPublicSummary,
   normalizeHostname,
+  parseScanTargetUrl,
   projectPublicEvidence,
   type BetaControlId,
   type BetaControlObservation,
@@ -136,6 +137,7 @@ export type PublicAnalysisRequestState = EnsureScanResult["kind"];
 export type PublicAnalysisRequest = {
   hostname: string;
   state: PublicAnalysisRequestState;
+  targetUrl: string;
 };
 
 type PublicReadStore = Pick<
@@ -147,7 +149,7 @@ type PublicReadStore = Pick<
     limit: number,
   ) => Promise<PublicScanReport[]>;
   resolveCanonicalHostname?: (hostname: string) => Promise<string | null>;
-  requestOnDemandScan?: (hostname: string) => Promise<EnsureScanResult>;
+  requestOnDemandScan?: (hostname: string, targetUrl?: string) => Promise<EnsureScanResult>;
 };
 
 @Injectable()
@@ -156,12 +158,17 @@ export class PublicScanService {
 
   constructor(private readonly store: { scanStore: PublicReadStore }) {}
 
-  async getDomainStatus(input: unknown): Promise<PublicDomainStatus> {
+  async getDomainStatus(input: unknown, targetUrlInput?: unknown): Promise<PublicDomainStatus> {
     const hostname = normalizeRequestHostname(input);
+    const targetUrl = targetUrlInput === undefined
+      ? undefined
+      : normalizeTargetUrl(targetUrlInput, hostname);
     const checkedAt = new Date();
     let snapshot: PublicDomainSnapshot | null;
     try {
-      snapshot = await this.store.scanStore.readPublicDomainSnapshot(hostname);
+      snapshot = targetUrl === undefined
+        ? await this.store.scanStore.readPublicDomainSnapshot(hostname)
+        : await this.store.scanStore.readPublicDomainSnapshot(hostname, targetUrl);
     } catch {
       this.logger.error(PUBLIC_SCAN_READ_FAILED);
       throw new ServiceUnavailableException(PUBLIC_STORAGE_ERROR);
@@ -262,9 +269,10 @@ export class PublicScanService {
     body: unknown,
   ): Promise<PublicAnalysisRequest> {
     const hostname = normalizeRequestHostname(input);
-    if (!isAuthorizedAnalysisRequest(body)) {
+    if (!isAuthorizedAnalysisRequest(body) || !isRecord(body) || !("targetUrl" in body)) {
       throw new BadRequestException(ANALYSIS_AUTHORIZATION_REQUIRED);
     }
+    const targetUrl = normalizeTargetUrl(body.targetUrl, hostname);
     const scanStore = this.store.scanStore;
     if (!scanStore.requestOnDemandScan) {
       this.logger.error(PUBLIC_SCAN_ADMISSION_FAILED);
@@ -272,9 +280,8 @@ export class PublicScanService {
     }
 
     try {
-      const canonicalHostname = await scanStore.resolveCanonicalHostname?.(hostname);
-      const result = await scanStore.requestOnDemandScan(canonicalHostname ?? hostname);
-      return { hostname, state: result.kind };
+      const result = await scanStore.requestOnDemandScan(hostname, targetUrl);
+      return { hostname, state: result.kind, targetUrl };
     } catch {
       this.logger.error(PUBLIC_SCAN_ADMISSION_FAILED);
       throw new ServiceUnavailableException(PUBLIC_STORAGE_ERROR);
@@ -287,10 +294,28 @@ function isAuthorizedAnalysisRequest(value: unknown): boolean {
     typeof value === "object" &&
     value !== null &&
     !Array.isArray(value) &&
-    Object.keys(value).length === 1 &&
+    Object.keys(value).length === 2 &&
     "authorized" in value &&
-    value.authorized === true
+    value.authorized === true &&
+    "targetUrl" in value
   );
+}
+
+function normalizeTargetUrl(input: unknown, hostname: string): string {
+  let target: ReturnType<typeof parseScanTargetUrl>;
+  try {
+    target = parseScanTargetUrl(input);
+  } catch {
+    throw new BadRequestException("invalid_scan_target_url");
+  }
+  if (target.hostname !== hostname) {
+    throw new BadRequestException("scan_target_hostname_mismatch");
+  }
+  return target.targetUrl;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function normalizeRequestHostname(input: unknown): string {

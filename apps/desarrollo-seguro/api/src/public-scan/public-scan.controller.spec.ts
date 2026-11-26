@@ -6,6 +6,7 @@ import {
   METHOD_METADATA,
   PATH_METADATA,
   HTTP_CODE_METADATA,
+  ROUTE_ARGS_METADATA,
 } from "@nestjs/common/constants";
 import { describe, expect, it } from "vitest";
 import { PublicScanController } from "./public-scan.controller.js";
@@ -19,6 +20,17 @@ describe("PublicScanController routes", () => {
     expect(
       Reflect.getMetadata(GUARDS_METADATA, PublicScanController),
     ).toContain(PublicScanRateLimitGuard);
+  });
+
+  it("accepts the exact target URL as an optional status query", () => {
+    const metadata = Reflect.getMetadata(
+      ROUTE_ARGS_METADATA,
+      PublicScanController,
+      "getDomainStatus",
+    ) as Record<string, { data?: string; pipes?: unknown[] }>;
+    expect(Object.values(metadata)).toContainEqual(
+      expect.objectContaining({ data: "targetUrl" }),
+    );
   });
 
   it.each([

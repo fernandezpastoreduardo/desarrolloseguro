@@ -7,7 +7,7 @@ import {
   NetworkObservationUnavailableError,
   TransportV1NetworkExecutor,
 } from "./transport-v1-executor.js";
-import { parseScanFailureDiagnostic } from "@desarrolloseguro/core";
+import { parseScanFailureDiagnostic, parseScanTargetUrl } from "@desarrolloseguro/core";
 
 const EGRESS_BROKER_SOCKET = "/run/development-security-egress/broker.sock";
 
@@ -33,11 +33,12 @@ async function main(): Promise<void> {
     }
     const request = parseTransportV1ExecutorRequest(input);
     const result = await new TransportV1NetworkExecutor(
-      createUnixSocketObservationSource(EGRESS_BROKER_SOCKET, request.profileVersion),
+      createUnixSocketObservationSource(EGRESS_BROKER_SOCKET, request.profileVersion, request.targetUrl ? parseScanTargetUrl(request.targetUrl).targetPath : "/"),
     ).execute(
       {
         hostname: request.hostname,
         profileVersion: request.profileVersion,
+        targetUrl: request.targetUrl ?? null,
       },
       new AbortController().signal,
     );

@@ -21,6 +21,7 @@ import {
   parsePublicServiceComparison,
   type PublicServiceComparison,
   parseFirstEntryPolicyAccess,
+  parseScanTargetUrl,
   type FirstEntryPolicyAccess,
   type PublicServiceDeclarationEvidence,
   type ScanFailureDiagnostic,
@@ -40,6 +41,7 @@ const PROFILE_VERSIONS = [
   "domain-v2",
   "domain-v3",
   "domain-v4",
+  "domain-v5",
 ] as const;
 const CHECK_STATUSES = ["pass", "fail", "unknown", "not_applicable"] as const;
 const ENROLLMENTS = ["monitored", "on_demand"] as const;
@@ -228,6 +230,7 @@ export type ClaimedScanJob = {
   attempts: number;
   leaseToken: string;
   leaseUntil: Date;
+  targetUrl: string | null;
 };
 
 export type ScanCheck = {
@@ -415,10 +418,16 @@ export class PostgresScanStore implements ScanJobStore {
 
   async readPublicDomainSnapshot(
     hostname: string,
+    targetUrl?: string,
     resolveAlias = true,
   ): Promise<PublicDomainSnapshot | null> {
+    const parsedTarget = targetUrl === undefined ? null : parseScanTargetUrl(targetUrl);
+    if (parsedTarget && parsedTarget.hostname !== hostname) throw new Error("invalid_scan_target_url");
+    const normalizedTargetUrl = parsedTarget?.targetUrl ?? null;
+    const targetPath = parsedTarget?.targetPath ?? null;
     const result = await this.pool.query<Record<string, unknown>>(
-      `SELECT domains.hostname, domains.enrollment, domains.profile_version,
+      `SELECT domains.hostname, domains.enrollment,
+         CASE WHEN $2::text IS NULL THEN domains.profile_version ELSE 'domain-v5' END AS profile_version,
          domains.opted_out_at, active_job.id AS active_job_id,
          failed_job.public_error_code AS last_failure_code,
          failed_job.failure_diagnostic AS last_failure_diagnostic,
@@ -428,15 +437,19 @@ export class PostgresScanStore implements ScanJobStore {
        LEFT JOIN LATERAL (
          SELECT id FROM public.ds_scan_jobs
          WHERE hostname = domains.hostname
-           AND profile_version = domains.profile_version
+           AND profile_version = CASE WHEN $2::text IS NULL
+             THEN domains.profile_version ELSE 'domain-v5' END
            AND state IN ('queued', 'running')
+           AND ($3::text IS NULL OR target_url = $3)
          ORDER BY queued_at ASC LIMIT 1
        ) AS active_job ON true
        LEFT JOIN LATERAL (
          SELECT public_error_code, failure_diagnostic, finished_at FROM public.ds_scan_jobs
          WHERE hostname = domains.hostname
-           AND profile_version = domains.profile_version
+           AND profile_version = CASE WHEN $2::text IS NULL
+             THEN domains.profile_version ELSE 'domain-v5' END
            AND state = 'failed'
+           AND $2::text IS NULL
          ORDER BY finished_at DESC NULLS LAST, queued_at DESC LIMIT 1
        ) AS failed_job ON true
        LEFT JOIN LATERAL (
@@ -454,7 +467,9 @@ export class PostgresScanStore implements ScanJobStore {
             WHERE c.hostname = ds_scan_runs.hostname AND c.policy_version = 'beta-0.1') AS certification_report_id
          FROM public.ds_scan_runs
          WHERE hostname = domains.hostname
-           AND profile_version = domains.profile_version
+           AND profile_version = CASE WHEN $2::text IS NULL
+             THEN domains.profile_version ELSE 'domain-v5' END
+           AND ($2::text IS NULL OR scope_json @> jsonb_build_array($2::text))
          ORDER BY completed_at DESC LIMIT 1
        ) AS reports ON true
        ${PUBLIC_CHECKS_LATERAL}
@@ -467,7 +482,7 @@ export class PostgresScanStore implements ScanJobStore {
        ${PUBLIC_FIRST_ENTRY_POLICY_ACCESS_LATERAL}
        ${PUBLIC_INTERNAL_AUDIT_LATERAL}
        WHERE domains.hostname = $1`,
-      [hostname],
+      [hostname, targetPath, normalizedTargetUrl],
     );
     const row = result.rows[0];
     if (!row) return null;
@@ -482,10 +497,10 @@ export class PostgresScanStore implements ScanJobStore {
       lastReport: report,
       lastFailure: parsePublicScanFailure(row),
     };
-    if (!resolveAlias || !report) return snapshot;
+    if (!resolveAlias || targetUrl !== undefined || !report) return snapshot;
     const redirect = readGrumphyaRedirect(report, hostname);
     if (!redirect) return snapshot;
-    const canonicalSnapshot = await this.readPublicDomainSnapshot(redirect.canonicalHostname, false);
+    const canonicalSnapshot = await this.readPublicDomainSnapshot(redirect.canonicalHostname);
     if (canonicalSnapshot) {
       return {
         ...canonicalSnapshot,
@@ -582,11 +597,22 @@ export class PostgresScanStore implements ScanJobStore {
     return parseScanAdmission(result.rows[0]);
   }
 
-  async requestOnDemandScan(hostname: string): Promise<EnsureScanResult> {
+  async requestOnDemandScan(hostname: string, targetUrl?: string): Promise<EnsureScanResult> {
+    if (targetUrl !== undefined) return this.requestOnDemandTargetScan(hostname, targetUrl);
     const result = await this.pool.query<{
       outcome: string;
       entity_id: string | null;
     }>("SELECT outcome, entity_id FROM ds_request_on_demand_scan($1)", [hostname]);
+    return parseScanAdmission(result.rows[0]);
+  }
+
+  async requestOnDemandTargetScan(hostname: string, targetUrl: string): Promise<EnsureScanResult> {
+    const parsedTarget = parseScanTargetUrl(targetUrl);
+    if (parsedTarget.hostname !== hostname) throw new Error("invalid_scan_target_url");
+    const result = await this.pool.query<{
+      outcome: string;
+      entity_id: string | null;
+    }>("SELECT outcome, entity_id FROM ds_request_on_demand_target_scan($1, $2)", [hostname, parsedTarget.targetUrl]);
     return parseScanAdmission(result.rows[0]);
   }
 
@@ -610,6 +636,7 @@ export class PostgresScanStore implements ScanJobStore {
       attempts: number;
       lease_token: string;
       lease_until: Date;
+      target_url: string | null;
     }>("SELECT * FROM ds_claim_next_scan($1)", [leaseDurationMs]);
     const job = result.rows[0];
     if (!job) return null;
@@ -622,6 +649,7 @@ export class PostgresScanStore implements ScanJobStore {
       attempts: job.attempts,
       leaseToken: job.lease_token,
       leaseUntil: job.lease_until,
+      targetUrl: job.target_url,
     };
   }
 

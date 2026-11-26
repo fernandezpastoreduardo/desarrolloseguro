@@ -468,7 +468,7 @@ async function applyRuntimeGrants(pool: Pool): Promise<void> {
       ON public.ds_domains TO ${READ_ROLE};
     GRANT SELECT (
       id, hostname, profile_version, state, queued_at, finished_at,
-      public_error_code, failure_diagnostic
+      public_error_code, failure_diagnostic, target_url
     )
       ON public.ds_scan_jobs TO ${READ_ROLE};
     GRANT SELECT (id, hostname, profile_version, scanner_version, vantage,
@@ -550,6 +550,8 @@ async function applyRuntimeGrants(pool: Pool): Promise<void> {
     GRANT EXECUTE ON FUNCTION public.ds_ensure_fresh_scan(text, text, text)
       TO ${API_ROLE};
     GRANT EXECUTE ON FUNCTION public.ds_request_on_demand_scan(text)
+      TO ${API_ROLE};
+    GRANT EXECUTE ON FUNCTION public.ds_request_on_demand_target_scan(text, text)
       TO ${API_ROLE};
     ALTER DEFAULT PRIVILEGES FOR ROLE ${MIGRATOR_ROLE} IN SCHEMA public
       REVOKE SELECT ON TABLES FROM ${READ_ROLE};

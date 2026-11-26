@@ -55,6 +55,29 @@ describePostgres.sequential("PostgresScanStore", () => {
     await store.ensureDomain(TEST_HOSTNAME, "monitored", TEST_PROFILE);
   });
 
+  it("registers domain-v5 and atomically clears the target URL on all terminal paths", async () => {
+    const result = await pool.query<{
+      control_count: number;
+      claim_definition: string;
+      complete_definition: string;
+      fail_definition: string;
+      recover_definition: string;
+    }>(
+      `SELECT
+         (SELECT count(*)::integer FROM public.ds_profile_controls WHERE profile_version = 'domain-v5') AS control_count,
+         pg_get_functiondef('public.ds_claim_next_scan(integer)'::regprocedure) AS claim_definition,
+         pg_get_functiondef('public.ds_complete_scan(uuid,uuid,timestamptz,text,timestamptz,text,jsonb,jsonb,jsonb)'::regprocedure) AS complete_definition,
+         pg_get_functiondef('public.ds_fail_scan(uuid,uuid,text,integer,jsonb)'::regprocedure) AS fail_definition,
+         pg_get_functiondef('public.ds_recover_expired_scan_leases(integer)'::regprocedure) AS recover_definition`,
+    );
+    const definitions = result.rows[0];
+    expect(definitions?.control_count).toBeGreaterThan(0);
+    expect(definitions?.claim_definition).toContain("target_url text");
+    expect(definitions?.complete_definition).toContain("public_error_code = NULL, target_url = NULL");
+    expect(definitions?.fail_definition).toContain("target_url = CASE WHEN next_state = 'failed' THEN NULL ELSE target_url END");
+    expect(definitions?.recover_definition).toContain("target_url = CASE WHEN attempts >= p_max_attempts THEN NULL ELSE target_url END");
+  });
+
   it("keeps check payload SQL failures separated into bounded diagnostic codes", async () => {
     const result = await pool.query<{ definition: string }>(
       "SELECT pg_get_functiondef('public.ds_validate_check_result_before_insert()'::regprocedure) AS definition",
@@ -881,6 +904,49 @@ describePostgres.sequential("PostgresScanStore", () => {
     expect(jobIds.size).toBe(1);
     expect([...jobIds][0]).toBeTruthy();
     expect(results.every((result) => result.kind === "queued")).toBe(true);
+  });
+
+  it("deduplicates the same active URL, rate-limits a different URL, and clears terminal job URLs", async () => {
+    const targetUrl = "https://sample.example.net/careers?campaign=summer";
+    const otherTargetUrl = "https://sample.example.net/careers?campaign=winter";
+    const first = await store.requestOnDemandScan(TEST_HOSTNAME, targetUrl);
+    const repeated = await store.requestOnDemandScan(TEST_HOSTNAME, targetUrl);
+    const other = await store.requestOnDemandScan(TEST_HOSTNAME, otherTargetUrl);
+
+    expect(first.kind).toBe("queued");
+    expect(repeated).toEqual(first);
+    expect(other.kind).toBe("rate_limited");
+    if (first.kind !== "queued") throw new Error("expected_target_url_job");
+
+    const activeJobs = await pool.query<{ target_url: string | null }>(
+      "SELECT target_url FROM ds_scan_jobs WHERE hostname = $1 AND state = 'queued' ORDER BY target_url",
+      [TEST_HOSTNAME],
+    );
+    expect(activeJobs.rows.map(({ target_url }) => target_url)).toEqual([targetUrl]);
+
+    const claimed = await store.claimNextScan(new Date(), TEST_LEASE_MS);
+    expect(claimed?.targetUrl).toBe(targetUrl);
+    if (!claimed) throw new Error("expected_claimed_target_url_job");
+    await store.failScan(claimed.id, claimed.leaseToken, "executor_failed", 2);
+    const retried = await pool.query<{ target_url: string | null; state: string }>(
+      "SELECT target_url, state FROM ds_scan_jobs WHERE id = $1",
+      [claimed.id],
+    );
+    expect(retried.rows[0]).toEqual({ target_url: targetUrl, state: "queued" });
+    await pool.query(
+      "UPDATE ds_scan_jobs SET available_at = clock_timestamp() WHERE id = $1",
+      [claimed.id],
+    );
+
+    const retriedClaim = await store.claimNextScan(new Date(), TEST_LEASE_MS);
+    expect(retriedClaim?.targetUrl).toBe(targetUrl);
+    if (!retriedClaim) throw new Error("expected_retried_target_url_job");
+    await store.failScan(retriedClaim.id, retriedClaim.leaseToken, "executor_failed", 2);
+    const terminal = await pool.query<{ target_url: string | null; state: string }>(
+      "SELECT target_url, state FROM ds_scan_jobs WHERE id = $1",
+      [retriedClaim.id],
+    );
+    expect(terminal.rows[0]).toEqual({ target_url: null, state: "failed" });
   });
 
   it("caps the shared waiting queue when callers race across domains", async () => {

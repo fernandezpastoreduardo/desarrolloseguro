@@ -40,10 +40,10 @@ test("renders the public portal and allows changing its theme", async ({
     page.getByRole("heading", { name: "¿Qué se ve desde fuera?" }),
   ).toBeVisible();
   await expect(
-    page.getByRole("textbox", { name: "Dominio que quieres consultar" }),
+    page.getByRole("textbox", { name: "URL HTTPS que quieres auditar" }),
   ).toBeVisible();
   await expect(
-    page.getByText("Solo se consulta información guardada."),
+    page.getByText("Consultar no inicia el análisis."),
   ).toBeVisible();
 
   const portal = page.locator("main.ds-portal");
@@ -62,20 +62,21 @@ test("renders the public portal and allows changing its theme", async ({
   expect(externalRequests).toEqual([]);
 });
 
-test("searches a domain and requests an authorized analysis without third-party traffic", async ({
+test("preserves the selected HTTPS path and query when requesting an authorized analysis", async ({
   page,
 }) => {
+  const targetUrl = "https://demo.example.org/careers?role=pm";
   const externalRequests: string[] = [];
   page.on("request", (request) => {
     if (!request.url().startsWith("http://127.0.0.1:4173/")) {
       externalRequests.push(request.url());
     }
   });
-  await page.route("**/domains/demo.example/status", async (route) =>
+  await page.route("**/domains/demo.example.org/status*", async (route) =>
     route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
-        hostname: "demo.example",
+        hostname: "demo.example.org",
         enrollment: "on_demand",
         state: "not_scanned",
         failureCode: null,
@@ -85,16 +86,18 @@ test("searches a domain and requests an authorized analysis without third-party 
       }),
     }),
   );
-  await page.route("**/analysis-requests", async (route) =>
-    route.fulfill({
+  await page.route("**/analysis-requests", async (route) => {
+    expect(route.request().postDataJSON()).toEqual({ authorized: true, targetUrl });
+    await route.fulfill({
       status: 202,
       contentType: "application/json",
-      body: JSON.stringify({ hostname: "demo.example", state: "queued" }),
-    }),
-  );
+      body: JSON.stringify({ hostname: "demo.example.org", targetUrl, state: "queued" }),
+    });
+  });
 
   await page.goto("/");
-  await page.getByRole("textbox", { name: "Dominio que quieres consultar" }).fill("demo.example");
+  await page.getByRole("textbox", { name: "URL HTTPS que quieres auditar" })
+    .fill(`${targetUrl}#opening`);
   await page.getByRole("button", { name: "Consultar informe" }).click();
   await expect(page.getByRole("heading", { name: "Aún no hay un informe" })).toBeVisible();
   await page.getByRole("checkbox", { name: /tengo autorización/i }).check();
@@ -112,7 +115,7 @@ test("shows the report and Grumphya's private review when an authorized analysis
   await page.route("**/domains/grumphya.com/history", (route) =>
     route.fulfill({ contentType: "application/json", body: "[]" }),
   );
-  await page.route("**/domains/grumphya.com/status", async (route) => {
+  await page.route("**/domains/grumphya.com/status*", async (route) => {
     statusReads += 1;
     const state = statusReads >= 2 ? "updating" : "not_scanned";
     const response = {
@@ -282,7 +285,8 @@ test("shows the report and Grumphya's private review when an authorized analysis
   );
 
   await page.goto("/");
-  await page.getByRole("textbox", { name: "Dominio que quieres consultar" }).fill("grumphya.com");
+  await page.getByRole("textbox", { name: "URL HTTPS que quieres auditar" })
+    .fill("https://grumphya.com/perfil?source=e2e");
   await page.getByRole("button", { name: "Consultar informe" }).click();
   await page.getByRole("checkbox", { name: /tengo autorización/i }).check();
   await page.getByRole("button", { name: "Solicitar análisis" }).click();
@@ -387,12 +391,12 @@ test("stops polling and reports an admission mismatch when no scan job appears",
   page,
 }) => {
   let statusReads = 0;
-  await page.route("**/domains/stuck.example/status", async (route) => {
+  await page.route("**/domains/stuck.example.org/status*", async (route) => {
     statusReads += 1;
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
-        hostname: "stuck.example",
+        hostname: "stuck.example.org",
         enrollment: "on_demand",
         state: "not_scanned",
         failureCode: null,
@@ -406,12 +410,12 @@ test("stops polling and reports an admission mismatch when no scan job appears",
     route.fulfill({
       status: 202,
       contentType: "application/json",
-      body: JSON.stringify({ hostname: "stuck.example", state: "queued" }),
+      body: JSON.stringify({ hostname: "stuck.example.org", targetUrl: "https://stuck.example.org/", state: "queued" }),
     }),
   );
 
   await page.goto("/");
-  await page.getByRole("textbox", { name: "Dominio que quieres consultar" }).fill("stuck.example");
+  await page.getByRole("textbox", { name: "URL HTTPS que quieres auditar" }).fill("https://stuck.example.org/");
   await page.getByRole("button", { name: "Consultar informe" }).click();
   await page.getByRole("checkbox", { name: /tengo autorización/i }).check();
   await page.getByRole("button", { name: "Solicitar análisis" }).click();

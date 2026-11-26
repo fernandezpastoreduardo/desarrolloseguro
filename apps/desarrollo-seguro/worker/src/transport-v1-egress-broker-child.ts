@@ -32,12 +32,14 @@ async function main(): Promise<void> {
     EGRESS_BROKER_SOCKET,
     request.hostname,
     createTransportV1NetworkObserver({
-      inspectPage: request.profileVersion === "domain-v1" || request.profileVersion === "domain-v2" || request.profileVersion === "domain-v3" || request.profileVersion === "domain-v4",
-      probeTlsVersions: request.profileVersion === "domain-v3" || request.profileVersion === "domain-v4",
-      inspectPublicPolicies: request.profileVersion === "domain-v4",
+      inspectPage: request.profileVersion === "domain-v1" || request.profileVersion === "domain-v2" || request.profileVersion === "domain-v3" || request.profileVersion === "domain-v4" || request.profileVersion === "domain-v5",
+      probeTlsVersions: request.profileVersion === "domain-v3" || request.profileVersion === "domain-v4" || request.profileVersion === "domain-v5",
+      inspectPublicPolicies: request.profileVersion === "domain-v4" || request.profileVersion === "domain-v5",
+      allowCustomTargetPath: request.profileVersion === "domain-v5",
 
     }),
     request.profileVersion,
+    request.targetPath,
   );
   process.stdout.write('{"protocolVersion":1,"state":"ready"}\n');
 

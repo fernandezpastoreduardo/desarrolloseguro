@@ -4,7 +4,7 @@
 
 ## Alcance y veredicto
 
-Los perfiles miden páginas **públicas y anónimas**. Las rutas admitidas por el perfil actual son `/`, `/precios` y `/informe` para cualquier hostname que supere las validaciones de admisión. Cada informe enumera exactamente host, rutas, método, versión del perfil, hora UTC y vantage=same_vps. No extrapolar a cuentas autenticadas, otras rutas, código, base de datos, backups, proveedores o cumplimiento legal.
+Los perfiles miden páginas **públicas y anónimas**. Los perfiles históricos mantienen su scope de `/`, `/precios` y `/informe`. El perfil vigente `domain-v5` admite una URL HTTPS exacta, con ruta y query, y solo mide esa página. Cada informe enumera hostname, ruta con query, método, versión del perfil, hora UTC y vantage=same_vps. No extrapolar a cuentas autenticadas, otras rutas, código, base de datos, backups o condiciones internas de proveedores.
 
 Cada control devuelve pass, fail, unknown o not_applicable con evidencia mínima y límite. Una comprobación bloqueada, en timeout o incompleta da unknown; not_applicable exige una justificación auditable y no oculta errores. Un fail obligatorio decide fail; sin fails, cualquier unknown obligatorio decide inconclusive; solo todos los obligatorios aplicables en pass permiten pass. Un control puede ser advisory sin decidir el veredicto. La fecha de caducidad del informe decide su vigencia, no recalifica el veredicto histórico.
 

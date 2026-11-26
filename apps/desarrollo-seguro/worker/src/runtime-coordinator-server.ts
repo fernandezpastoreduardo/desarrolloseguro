@@ -10,6 +10,7 @@ import {
   parseTransportV1ExecutorResponse,
   type TransportV1ExecutorRequest,
 } from "./transport-v1-executor-protocol.js";
+import { parseScanTargetUrl } from "@desarrolloseguro/core";
 import { readScanFailureDiagnostic } from "./runtime-diagnostics.js";
 import { RUNTIME_COORDINATOR_EXECUTION_TIMEOUT_MS } from "./runtime-coordinator-timeouts.js";
 
@@ -228,6 +229,7 @@ function handleRequest(
                 },
                 request.requestId,
                 request.profileVersion,
+                request.targetUrl ? parseScanTargetUrl(request.targetUrl).targetPath : "/",
               );
             } catch {
               sendFailure(socket, request.requestId, "executor_failed", {

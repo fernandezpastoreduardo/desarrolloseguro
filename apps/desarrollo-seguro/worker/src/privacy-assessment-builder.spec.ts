@@ -101,6 +101,33 @@ describe("assessPrivacyObservation", () => {
     });
   });
 
+  it("adds complete browser performance metrics to DS-QUAL-02 and leaves incomplete profiles unknown", () => {
+    const performance = {
+      profiles: [
+        { profile: "mobile", status: "complete", fcpMs: 800, lcpMs: 1_200, cls: 0.04, tbtMs: 45, ttfbMs: 100, transferBytes: 12_000, score: 94 },
+        { profile: "desktop", status: "unknown", fcpMs: null, lcpMs: null, cls: null, tbtMs: null, ttfbMs: null, transferBytes: null, score: null },
+      ],
+    } as const;
+    const result = mergePrivacyBrowserChecks([{
+      controlId: "DS-QUAL-02", status: "pass", required: true, severity: "medium", observedAt: new Date(),
+      targetPath: "/careers?source=lab", method: "GET", summary: "", limitation: "", evidence: {},
+    }], observation({ performance }));
+
+    expect(result[0]).toMatchObject({
+      status: "unknown",
+      evidence: {
+        mobileFcpMs: 800,
+        mobileLcpMs: 1_200,
+        mobileClsMilli: 40,
+        mobileTbtMs: 45,
+        mobileTtfbMs: 100,
+        mobileTransferBytes: 12_000,
+        mobileScore: 94,
+      },
+    });
+    expect(result[0]?.evidence).not.toHaveProperty("desktopScore");
+  });
+
   it("retains confirmed services and completed third-party destinations without assigning unknown companies", () => {
     const result = getObservedPublicServices(observation({
       initial: flow({

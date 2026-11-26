@@ -13,6 +13,7 @@ describe("parseTransportV1EgressBrokerStartupRequest", () => {
       protocolVersion: 1,
       hostname: "example.org",
       profileVersion: "transport-v1",
+      targetPath: "/",
     });
   });
 

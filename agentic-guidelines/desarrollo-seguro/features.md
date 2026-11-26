@@ -4,7 +4,48 @@ Este documento separa capacidades ya disponibles de los siguientes incrementos. 
 
 ## F1. Consultar informes públicos
 
-Una persona puede introducir un hostname público normalizado y consultar si existe un informe reciente. La consulta no admite URL, credenciales, IP literal, puerto ni ruta aportada por el usuario. Las rutas públicas aprobadas por el perfil actual son `/`, `/precios` y `/informe`; la API aplica esa lista por igual a cada hostname.
+Una persona introduce una URL HTTPS pública y consulta el informe asociado a esa URL. La consulta conserva la ruta y la query, elimina el fragmento, y rechaza credenciales, IP literal, puertos alternativos y esquemas distintos de HTTPS. Los perfiles históricos conservan sus rutas originales; los trabajos nuevos usan `domain-v5` y auditan únicamente la ruta solicitada.
+
+### Perfil vigente: auditoría de URL completa
+
+El buscador público aceptará solo una URL `https://` completa, incluida su ruta
+y query. No convertirá dominios sin esquema ni aceptará URLs HTTP. El fragmento
+se elimina antes de consultar o auditar. Se audita esa URL
+exacta en todos los bloques del informe; no se reemplaza por la portada ni por
+las rutas fijas existentes. La identidad, límites antiabuso y validación de
+destino siguen aplicándose al hostname, con la protección SSRF vigente. La query
+se persiste en el informe público y, mientras el trabajo espera o se ejecuta,
+en la cola; al completar o fallar el trabajo se elimina de los datos temporales
+de cola. No se envían credenciales embebidas ni fragmentos. Solo se admite el
+puerto HTTPS por defecto; se rechazan puertos explícitos alternativos.
+El límite antiabuso de 24 horas sigue aplicándose al hostname completo y solo
+puede haber un análisis solicitado activo por hostname; otra URL no reutiliza
+el job que esté analizando una ruta distinta.
+
+La URL completa se propaga por admisión, job temporal, transporte/worker,
+perfil y validación del informe. Rendimiento usa mediciones propias tipo
+Lighthouse para móvil y escritorio, sin librerías externas ni atribución de
+puntuación oficial de Lighthouse. Móvil usa viewport 375×812, ralentización CPU 4× y red con RTT
+150 ms, bajada 1,6 Mbps y subida 750 Kbps. Escritorio usa viewport 1365×768
+sin throttling. La puntuación combina FCP (15 %), LCP (25 %), CLS (20 %), TBT
+(20 %), TTFB (15 %) y bytes transferidos (5 %). Cada métrica recibe 100 en el
+umbral bueno y 0 en el malo, con interpolación lineal entre ambos: FCP 1,8/3 s;
+LCP 2,5/4 s; CLS 0,1/0,25; TBT 200/600 ms; TTFB 0,8/1,8 s; transferencia
+1,6/4 MB. Si falta una métrica requerida, el perfil queda sin puntuación y se
+indica la comprobación incompleta; la ausencia de medición no se convierte en
+un valor cero.
+
+Las cargas del navegador incluyen los recursos de terceros que la página
+solicite con GET/HEAD. Salen por el proxy por análisis, con DNS fijado a IPv4
+pública, solo puertos 80/443 y los límites de tiempo, solicitudes y bytes ya
+definidos para el navegador. No se envían formularios ni se ejecutan acciones
+de escritura para medir rendimiento.
+
+**Criterios:** una URL con ruta y query conserva ambos en el alcance y el
+informe; el fragmento no aparece en solicitudes ni persistencia; una URL con
+credenciales, esquema distinto de HTTPS, host no público o destino no permitido se
+rechaza; la consulta no inspecciona otras rutas. Los datos temporales de cola
+se eliminan al terminar el job.
 
 **Disponible:** API `GET` de estado e informe y `POST` explícito para solicitar un análisis; límites antiabuso por minuto, capacidad compartida PostgreSQL y proyección que excluye evidencia interna. La consulta `GET` no resuelve hostnames ni encola trabajos. La solicitud `POST` requiere confirmación de autorización y guarda una admisión `on_demand` de forma transaccional. Si se encola, el portal consulta el estado cada cinco segundos, hasta 15 minutos mientras haya trabajo activo, y presenta el informe nuevo cuando queda guardado. Si falla la admisión o no aparece un trabajo activo ni un informe nuevo, detiene el sondeo y permite reintentar. El runtime real está desplegado; el 20 de noviembre de 2026 se verificó una renovación periódica que produjo un informe nuevo y actualizó la certificación.
 
@@ -85,6 +126,15 @@ es el certificado vigente. Los fallos muestran una explicación categórica y no
 se quedan en estado pendiente. Token: fragmento de URL al abrir, cuerpo JSON
 al verificar y nunca texto visible, telemetría ni URL de petición.
 
+La tarjeta de estado de certificación beta en la ficha pública solo se muestra
+para los clientes actuales `grumphya.com` y `desarrolloseguro.org`. Los
+resultados de auditoría de dominios ajenos no muestran una certificación
+pendiente, bloqueada o suspendida que no les corresponde.
+
+**Criterio de presentación:** la tarjeta de estado puede aparecer para esos dos
+hostnames y queda ausente para cualquier otro, incluso si la respuesta de API
+incluye por compatibilidad un objeto `certification`.
+
 El consumidor de Grumphya aplica `img-src 'self' blob:` y `connect-src
 'self' https://desarrolloseguro.org`; por ello el widget debe incluir el SVG
 aprobado como recurso `blob:` local creado desde el asset compilado. Los
@@ -114,7 +164,7 @@ admisión; SSE es opcional y no forma parte de la aceptación de B.
 
 ## F3. Escaneo automatizado
 
-El worker y el coordinador están en Compose; el coordinador crea un executor de red deshabilitada y un broker de salida acotado. La admisión compartida limita la cola a diez trabajos simultáneos en espera y una ejecución global, con máximo 1000 dominios `on_demand`. Las migraciones `012` y `013` desactivaron temporalmente el cooldown de 24 horas y la caché de informes; `025` reactiva ambas políticas para la Beta y `027` permite reintentar fallos terminales sin tratar un trabajo fallido como admisión completada. Los límites antiabuso por minuto y de capacidad permanecen activos. Antes de considerar completo el runtime público, el workflow manual debe pasar sus gates, aplicar solo Desarrollo Seguro y validar un informe `domain-v4` reciente de `grumphya.com`. No se hacen POST al sitio analizado, autenticación en esos sitios, fuzzing, fuerza bruta ni exploración arbitraria.
+El worker y el coordinador están en Compose; el coordinador crea un executor de red deshabilitada y un broker de salida acotado. La admisión compartida limita la cola a diez trabajos simultáneos en espera y una ejecución global, con máximo 1000 dominios `on_demand`. El límite por minuto permanece activo, junto con el cooldown de 24 horas por hostname y la deduplicación de trabajos activos. Los trabajos `domain-v5` conservan la URL completa en PostgreSQL mientras esperan o se ejecutan; una vez terminal, la columna temporal se limpia. El workflow manual valida un informe `domain-v5` reciente de `grumphya.com`, incluidas las métricas de rendimiento por perfil. No se hacen POST al sitio analizado, autenticación en esos sitios, fuzzing, fuerza bruta ni exploración arbitraria.
 
 **Criterios:** cualquier fallo de cobertura, transporte o política deja el control como `unknown`/no evaluable; no se convierte en aprobado. El modelo de amenazas y los límites de confianza están en [scanner-safety.md](scanner-safety.md); el executor permanece apagado hasta demostrar allí los gates de red, aislamiento y evidencia.
 

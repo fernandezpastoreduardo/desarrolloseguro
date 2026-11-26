@@ -20,6 +20,10 @@
       "types": "./dist/first-entry-policy-access.d.ts",
       "import": "./dist/first-entry-policy-access.js"
     },
+    "./scan-target-url": {
+      "types": "./dist/scan-target-url.d.ts",
+      "import": "./dist/scan-target-url.js"
+    },
     "./legal-cookie-findings": {
       "types": "./dist/legal-cookie-findings.d.ts",
       "import": "./dist/legal-cookie-findings.js"

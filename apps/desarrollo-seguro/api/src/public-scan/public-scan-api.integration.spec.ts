@@ -12,6 +12,7 @@ import { parseTrustedProxyCidrs } from "../trusted-proxy-cidrs.js";
 const API_PREFIX = "api/desarrollo-seguro/v1";
 const STATUS_PATH = "domains/example.com/status";
 const ANALYSIS_REQUEST_PATH = "domains/example.com/analysis-requests";
+const TARGET_URL = "https://example.com/legal/privacy?lang=es";
 const REPORT_ID = "123e4567-e89b-42d3-a456-426614174000";
 const CLIENT_IP_HEADER = "X-Forwarded-For";
 const RATE_LIMIT = 60;
@@ -27,7 +28,7 @@ const STATUS_BODY = {
   checkedAt: "2026-11-03T00:00:00.000Z",
 };
 const REPORT_BODY = { id: REPORT_ID, hostname: "example.com" };
-const ANALYSIS_REQUEST_BODY = { hostname: "example.com", state: "queued" };
+const ANALYSIS_REQUEST_BODY = { hostname: "example.com", state: "queued", targetUrl: TARGET_URL };
 const service = {
   getDomainStatus: vi.fn().mockResolvedValue(STATUS_BODY),
   getReport: vi.fn().mockResolvedValue(REPORT_BODY),
@@ -72,6 +73,11 @@ describe("public scan API over HTTP", () => {
     );
     expect(statusResponse.headers.get("cache-control")).toBe("no-store");
     await expect(statusResponse.json()).resolves.toEqual(STATUS_BODY);
+    const targetStatusResponse = await fetch(
+      `${baseUrl}/${API_PREFIX}/${STATUS_PATH}?targetUrl=${encodeURIComponent(`${TARGET_URL}#fragment`)}`,
+    );
+    expect(targetStatusResponse.status).toBe(200);
+    expect(service.getDomainStatus).toHaveBeenCalledWith("example.com", `${TARGET_URL}#fragment`);
     expect(reportResponse.status).toBe(200);
     expect(reportResponse.headers.get("cache-control")).toBe("no-store");
     await expect(reportResponse.json()).resolves.toEqual(REPORT_BODY);
@@ -86,7 +92,7 @@ describe("public scan API over HTTP", () => {
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ authorized: true }),
+        body: JSON.stringify({ authorized: true, targetUrl: TARGET_URL }),
       },
     );
 
@@ -95,7 +101,7 @@ describe("public scan API over HTTP", () => {
     await expect(response.json()).resolves.toEqual(ANALYSIS_REQUEST_BODY);
     expect(service.requestAnalysis).toHaveBeenCalledWith(
       "example.com",
-      { authorized: true },
+      { authorized: true, targetUrl: TARGET_URL },
     );
   });
 

@@ -7,6 +7,7 @@ import { readScanFailureDiagnostic } from "./runtime-diagnostics.js";
 const JOB: ClaimedScanJob = {
   id: "d1d1d1d1-d1d1-41d1-81d1-d1d1d1d1d1d1",
   hostname: "grumphya.com",
+  targetUrl: null,
   profileVersion: "domain-v4",
   trigger: "requested",
   attempts: 1,

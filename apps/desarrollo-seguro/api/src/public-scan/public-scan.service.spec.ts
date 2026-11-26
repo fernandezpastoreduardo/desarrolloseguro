@@ -7,6 +7,7 @@ const REPORT_ID = "8d140e17-68d6-489a-b451-7e87408187ae";
 const INTERNAL_STORAGE_ERROR = "postgres password must not escape";
 const PRIVATE_RESPONSE_BODY = "<html>customer-private-content</html>";
 const FIXED_NOW = new Date("2026-11-03T10:00:00.000Z");
+const TARGET_URL = "https://example.com/legal/privacy?lang=es";
 
 afterEach(() => vi.useRealTimers());
 
@@ -98,6 +99,32 @@ describe("PublicScanService", () => {
     expect(readPublicDomainSnapshot).toHaveBeenCalledWith("example.com");
   });
 
+  it("reads status for the canonical target URL while preserving its query", async () => {
+    const readPublicDomainSnapshot = vi.fn().mockResolvedValue(null);
+    const service = new PublicScanService({
+      scanStore: { readPublicDomainSnapshot, readPublicReport: vi.fn() },
+    });
+
+    await service.getDomainStatus(" EXAMPLE.COM. ", `${TARGET_URL}#section`);
+
+    expect(readPublicDomainSnapshot).toHaveBeenCalledExactlyOnceWith(
+      "example.com",
+      TARGET_URL,
+    );
+  });
+
+  it("rejects a target URL whose hostname differs from the route", async () => {
+    const readPublicDomainSnapshot = vi.fn();
+    const service = new PublicScanService({
+      scanStore: { readPublicDomainSnapshot, readPublicReport: vi.fn() },
+    });
+
+    await expect(
+      service.getDomainStatus("example.com", "https://other.example.net/legal"),
+    ).rejects.toMatchObject({ status: 400, message: "scan_target_hostname_mismatch" });
+    expect(readPublicDomainSnapshot).not.toHaveBeenCalled();
+  });
+
   it("presents the canonical report with separate redirect evidence for the requested alias", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(FIXED_NOW);
@@ -145,24 +172,32 @@ describe("PublicScanService", () => {
     });
 
     await expect(
-      service.requestAnalysis("example.com", { authorized: false }),
+      service.requestAnalysis("example.com", { authorized: false, targetUrl: TARGET_URL }),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(requestOnDemandScan).not.toHaveBeenCalled();
   });
 
-  it("requests the canonical hostname after recent permanent redirect evidence", async () => {
+  it("requests the canonical target URL without losing its path or query", async () => {
     const requestOnDemandScan = vi.fn().mockResolvedValue({ kind: "queued" });
     const service = new PublicScanService({
       scanStore: {
         readPublicDomainSnapshot: vi.fn(),
         readPublicReport: vi.fn(),
-        resolveCanonicalHostname: vi.fn().mockResolvedValue("grumphya.com"),
         requestOnDemandScan,
       },
     });
-    await expect(service.requestAnalysis("www.grumphya.com", { authorized: true }))
-      .resolves.toEqual({ hostname: "www.grumphya.com", state: "queued" });
-    expect(requestOnDemandScan).toHaveBeenCalledExactlyOnceWith("grumphya.com");
+    await expect(service.requestAnalysis("www.grumphya.com", {
+      authorized: true,
+      targetUrl: "https://www.grumphya.com/politica?lang=es#section",
+    })).resolves.toEqual({
+      hostname: "www.grumphya.com",
+      state: "queued",
+      targetUrl: "https://www.grumphya.com/politica?lang=es",
+    });
+    expect(requestOnDemandScan).toHaveBeenCalledExactlyOnceWith(
+      "www.grumphya.com",
+      "https://www.grumphya.com/politica?lang=es",
+    );
   });
 
   it("does not accept client-selected scan profiles or options", async () => {
@@ -179,6 +214,7 @@ describe("PublicScanService", () => {
       service.requestAnalysis("example.com", {
         authorized: true,
         profileVersion: "controls-v1",
+        targetUrl: TARGET_URL,
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(requestOnDemandScan).not.toHaveBeenCalled();
@@ -199,9 +235,9 @@ describe("PublicScanService", () => {
     });
 
     await expect(
-      service.requestAnalysis(" EXAMPLE.COM. ", { authorized: true }),
-    ).resolves.toEqual({ hostname: "example.com", state: "queued" });
-    expect(requestOnDemandScan).toHaveBeenCalledWith("example.com");
+      service.requestAnalysis(" EXAMPLE.COM. ", { authorized: true, targetUrl: TARGET_URL }),
+    ).resolves.toEqual({ hostname: "example.com", state: "queued", targetUrl: TARGET_URL });
+    expect(requestOnDemandScan).toHaveBeenCalledWith("example.com", TARGET_URL);
   });
 
   it("does not expose storage errors from analysis admission", async () => {
@@ -213,11 +249,26 @@ describe("PublicScanService", () => {
     });
 
     await expect(
-      service.requestAnalysis("example.com", { authorized: true }),
+      service.requestAnalysis("example.com", { authorized: true, targetUrl: TARGET_URL }),
     ).rejects.toMatchObject({
       status: 503,
       message: "development_security_unavailable",
     });
+  });
+
+  it("requires a valid target URL with exactly the route hostname for admission", async () => {
+    const requestOnDemandScan = vi.fn();
+    const service = new PublicScanService({
+      scanStore: { readPublicDomainSnapshot: vi.fn(), readPublicReport: vi.fn(), requestOnDemandScan },
+    });
+
+    await expect(service.requestAnalysis("example.com", { authorized: true }))
+      .rejects.toMatchObject({ status: 400 });
+    await expect(service.requestAnalysis("example.com", {
+      authorized: true,
+      targetUrl: "https://other.example.net/private?token=secret",
+    })).rejects.toMatchObject({ status: 400, message: "scan_target_hostname_mismatch" });
+    expect(requestOnDemandScan).not.toHaveBeenCalled();
   });
 
   it("marks active work as updating while keeping its prior report historical", async () => {

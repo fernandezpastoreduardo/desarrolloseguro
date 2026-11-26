@@ -3,7 +3,8 @@ export type TransportProfileVersion =
   | "domain-v1"
   | "domain-v2"
   | "domain-v3"
-  | "domain-v4";
+  | "domain-v4"
+  | "domain-v5";
 
 export type TransportBudget = {
   maxRequests: number;
@@ -23,7 +24,7 @@ const DOMAIN_V4_BUDGET: TransportBudget = {
   maxDurationMs: 120_000,
 };
 
-/** Gives only the public-policy profile its separately approved network budget. */
+/** Gives public-policy profiles their separately approved network budget. */
 export function getTransportBudget(profileVersion: string): TransportBudget {
-  return profileVersion === "domain-v4" ? DOMAIN_V4_BUDGET : DEFAULT_BUDGET;
+  return profileVersion === "domain-v4" || profileVersion === "domain-v5" ? DOMAIN_V4_BUDGET : DEFAULT_BUDGET;
 }

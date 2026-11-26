@@ -5,6 +5,7 @@ import {
   type PublicServiceDeclarationEvidence,
   evaluateVerdict,
   sanitizeScanObservations,
+  parseScanTargetUrl,
 } from "@desarrolloseguro/core";
 import type { ScanFailureDiagnostic } from "@desarrolloseguro/core";
 import type { ClaimedScanJob, ScanCheck, ScanRunInput } from "@desarrolloseguro/persistence";
@@ -32,6 +33,7 @@ const DOMAIN_V2_SCANNER_VERSION = "domain-v2-network-adapter-1";
 const DOMAIN_V3_SCANNER_VERSION = "domain-v3-network-adapter-1";
 const DOMAIN_V4_SCANNER_VERSION = "domain-v4-network-adapter-1";
 const DOMAIN_V4_PUBLIC_POLICY_SCANNER_VERSION = "domain-v4-network-adapter-7";
+const DOMAIN_V5_SCANNER_VERSION = "domain-v5-network-adapter-1";
 const MAX_CONCURRENT_NETWORK_PROBES = 2;
 const CHECKS = [
   { controlId: "DS-DNS-01", method: "DNS", severity: "high" },
@@ -99,10 +101,10 @@ export class NetworkObservationUnavailableError extends Error {
 
 export type TransportV1ScanJob = Pick<
   ClaimedScanJob,
-  "hostname" | "profileVersion"
+  "hostname" | "profileVersion" | "targetUrl"
 >;
 
-export type ScanProfileVersion = typeof TRANSPORT_PROFILE_VERSION | typeof DOMAIN_PROFILE_VERSION | typeof DOMAIN_PROFILE_VERSION_V2 | typeof DOMAIN_PROFILE_VERSION_V3 | typeof DOMAIN_PROFILE_VERSION_V4;
+export type ScanProfileVersion = typeof TRANSPORT_PROFILE_VERSION | typeof DOMAIN_PROFILE_VERSION | typeof DOMAIN_PROFILE_VERSION_V2 | typeof DOMAIN_PROFILE_VERSION_V3 | typeof DOMAIN_PROFILE_VERSION_V4 | "domain-v5";
 
 /**
  * Observation boundary for the reduced profile. Implementations must return
@@ -110,26 +112,28 @@ export type ScanProfileVersion = typeof TRANSPORT_PROFILE_VERSION | typeof DOMAI
  */
 export interface TransportV1ObservationSource {
   readonly sourceKind: "network";
-  observeDns(hostname: string, signal: AbortSignal): Promise<TransportV1ProbeResult>;
-  observeTls(hostname: string, signal: AbortSignal): Promise<TransportV1ProbeResult>;
+  observeDns(hostname: string, signal: AbortSignal, targetPath?: string): Promise<TransportV1ProbeResult>;
+  observeTls(hostname: string, signal: AbortSignal, targetPath?: string): Promise<TransportV1ProbeResult>;
   observeHttp(
     hostname: string,
     method: "HEAD" | "GET",
     signal: AbortSignal,
+    targetPath?: string,
   ): Promise<TransportV1ProbeResult>;
-  observeHeaders(hostname: string, signal: AbortSignal): Promise<TransportV1ProbeResult>;
+  observeHeaders(hostname: string, signal: AbortSignal, targetPath?: string): Promise<TransportV1ProbeResult>;
 }
 
 export interface TransportV1FixtureObservationSource {
   readonly sourceKind: "fixture";
-  observeDns(hostname: string, signal: AbortSignal): Promise<TransportV1Evidence>;
-  observeTls(hostname: string, signal: AbortSignal): Promise<TransportV1Evidence>;
+  observeDns(hostname: string, signal: AbortSignal, targetPath?: string): Promise<TransportV1Evidence>;
+  observeTls(hostname: string, signal: AbortSignal, targetPath?: string): Promise<TransportV1Evidence>;
   observeHttp(
     hostname: string,
     method: "HEAD" | "GET",
     signal: AbortSignal,
+    targetPath?: string,
   ): Promise<TransportV1Evidence>;
-  observeHeaders(hostname: string, signal: AbortSignal): Promise<TransportV1Evidence>;
+  observeHeaders(hostname: string, signal: AbortSignal, targetPath?: string): Promise<TransportV1Evidence>;
 }
 
 export class TransportV1FixtureExecutor {
@@ -217,11 +221,14 @@ export class TransportV1NetworkExecutor {
       throw new Error("unsupported_scan_profile");
     }
     const profileVersion = job.profileVersion;
+    const parsedTarget = profileVersion === "domain-v5" ? parseScanTargetUrl(job.targetUrl) : null;
+    if (parsedTarget && parsedTarget.hostname !== job.hostname) throw new Error("executor_request_invalid");
+    const targetPath = parsedTarget?.targetPath ?? "/";
 
     const startedAt = this.now();
     const operations = NETWORK_PROBE_OPERATIONS;
     const probes = await runExecutorPhase("network_probe_collection", async () => {
-      const broker = createTransportV1EgressBroker(job.hostname, this.source, profileVersion);
+      const broker = createTransportV1EgressBroker(job.hostname, this.source, profileVersion, targetPath);
       const observations = operations.map((operation) => async () => {
         const requestId = randomUUID();
         const response = await broker(
@@ -230,6 +237,7 @@ export class TransportV1NetworkExecutor {
             requestId,
             hostname: job.hostname,
             operation,
+            targetPath,
           },
           signal,
         );
@@ -256,15 +264,15 @@ export class TransportV1NetworkExecutor {
         status: "pass",
         required: true,
         observedAt: completedAt,
-        targetPath: "/",
+        targetPath,
         summary: "",
         limitation: "",
         evidence: probes[index]?.evidence ?? {},
       }));
-      appendTlsVersionCheck(candidateChecks, profileVersion, probes[1]?.evidence ?? {}, completedAt);
-      appendInitialCookieCheck(candidateChecks, profileVersion, probes[4]?.evidence ?? {}, completedAt);
-      appendPassivePageSignalChecks(candidateChecks, profileVersion, probes[4]?.evidence ?? {}, completedAt);
-      appendPublicPolicyCheck(candidateChecks, profileVersion, probes[4]?.evidence ?? {}, completedAt);
+      appendTlsVersionCheck(candidateChecks, profileVersion, probes[1]?.evidence ?? {}, completedAt, targetPath);
+      appendInitialCookieCheck(candidateChecks, profileVersion, probes[4]?.evidence ?? {}, completedAt, targetPath);
+      appendPassivePageSignalChecks(candidateChecks, profileVersion, probes[4]?.evidence ?? {}, completedAt, targetPath);
+      appendPublicPolicyCheck(candidateChecks, profileVersion, probes[4]?.evidence ?? {}, completedAt, targetPath);
       const pageProbeError = probes[4]?.errorCode;
       if (pageProbeError) {
         for (const check of candidateChecks) {
@@ -275,7 +283,7 @@ export class TransportV1NetworkExecutor {
       }
       return {
         completedAt,
-        sanitized: sanitizeScanObservations(job.hostname, profileVersion, ["/"], candidateChecks),
+        sanitized: sanitizeScanObservations(job.hostname, profileVersion, [targetPath], candidateChecks),
       };
     });
     const { publicPolicyTransparencyAssessment, publicServiceDeclarations, publicPolicyDiscoveredDocuments } = await runExecutorPhase(
@@ -288,8 +296,10 @@ export class TransportV1NetworkExecutor {
     );
 
     return await runExecutorPhase("result_assembly", () => ({
-      scannerVersion: publicPolicyTransparencyAssessment
+      scannerVersion: publicPolicyTransparencyAssessment && profileVersion === DOMAIN_PROFILE_VERSION_V4
         ? DOMAIN_V4_PUBLIC_POLICY_SCANNER_VERSION
+        : profileVersion === "domain-v5"
+          ? DOMAIN_V5_SCANNER_VERSION
         : getScannerVersion(profileVersion),
       startedAt,
       completedAt,
@@ -407,6 +417,7 @@ function appendInitialCookieCheck(
   profileVersion: ScanProfileVersion,
   headersEvidence: TransportV1Evidence,
   observedAt: Date,
+  targetPath = "/",
 ): void {
   if (profileVersion === TRANSPORT_PROFILE_VERSION) return;
   const inspected = headersEvidence.inspected === true;
@@ -444,7 +455,7 @@ function appendInitialCookieCheck(
         : "pass",
     required: true,
     observedAt,
-    targetPath: "/",
+    targetPath,
     summary: "",
     limitation: "",
     evidence,
@@ -452,6 +463,7 @@ function appendInitialCookieCheck(
 }
 
 function getScannerVersion(profileVersion: ScanProfileVersion): string {
+  if (profileVersion === "domain-v5") return "domain-v5-network-adapter-1";
   if (profileVersion === DOMAIN_PROFILE_VERSION_V4) return DOMAIN_V4_SCANNER_VERSION;
   if (profileVersion === DOMAIN_PROFILE_VERSION_V3) return DOMAIN_V3_SCANNER_VERSION;
   if (profileVersion === DOMAIN_PROFILE_VERSION_V2) return DOMAIN_V2_SCANNER_VERSION;
@@ -461,7 +473,7 @@ function getScannerVersion(profileVersion: ScanProfileVersion): string {
 }
 
 function isSupportedProfile(value: string): value is ScanProfileVersion {
-  return value === TRANSPORT_PROFILE_VERSION || value === DOMAIN_PROFILE_VERSION || value === DOMAIN_PROFILE_VERSION_V2 || value === DOMAIN_PROFILE_VERSION_V3 || value === DOMAIN_PROFILE_VERSION_V4;
+  return value === TRANSPORT_PROFILE_VERSION || value === DOMAIN_PROFILE_VERSION || value === DOMAIN_PROFILE_VERSION_V2 || value === DOMAIN_PROFILE_VERSION_V3 || value === DOMAIN_PROFILE_VERSION_V4 || value === "domain-v5";
 }
 
 function getFixtureScannerVersion(profileVersion: ScanProfileVersion): string {
@@ -476,8 +488,9 @@ function appendTlsVersionCheck(
   profileVersion: ScanProfileVersion,
   evidence: TransportV1Evidence,
   observedAt: Date,
+  targetPath = "/",
 ): void {
-  if (profileVersion !== DOMAIN_PROFILE_VERSION_V3 && profileVersion !== DOMAIN_PROFILE_VERSION_V4) return;
+  if (profileVersion !== DOMAIN_PROFILE_VERSION_V3 && profileVersion !== DOMAIN_PROFILE_VERSION_V4 && profileVersion !== "domain-v5") return;
   const versionKeys = ["tls10Accepted", "tls11Accepted", "tls12Accepted", "tls13Accepted"] as const;
   const complete = versionKeys.every((key) => typeof evidence[key] === "boolean");
   let status: ScanCheck["status"] = "unknown";
@@ -505,7 +518,7 @@ function appendTlsVersionCheck(
     status,
     required: true,
     observedAt,
-    targetPath: "/",
+    targetPath,
     summary: complete
       ? "Se probaron por separado las cuatro versiones de TLS incluidas en este control."
       : "No se pudieron comprobar todas las versiones de TLS; el criterio queda sin conclusión.",
@@ -519,8 +532,9 @@ function appendPassivePageSignalChecks(
   profileVersion: ScanProfileVersion,
   headersEvidence: TransportV1Evidence,
   observedAt: Date,
+  targetPath = "/",
 ): void {
-  if (profileVersion !== DOMAIN_PROFILE_VERSION_V2 && profileVersion !== DOMAIN_PROFILE_VERSION_V3 && profileVersion !== DOMAIN_PROFILE_VERSION_V4) return;
+  if (profileVersion !== DOMAIN_PROFILE_VERSION_V2 && profileVersion !== DOMAIN_PROFILE_VERSION_V3 && profileVersion !== DOMAIN_PROFILE_VERSION_V4 && profileVersion !== "domain-v5") return;
 
   const inspected = headersEvidence.inspected === true;
   const trackingEvidence = pickNumericEvidence(headersEvidence, [
@@ -546,7 +560,7 @@ function appendPassivePageSignalChecks(
         : trackerCount > 0 ? "fail" : "pass",
       required: true,
       observedAt,
-      targetPath: "/",
+      targetPath,
       summary: "",
       limitation: "Solo se contaron referencias visibles en el HTML inicial; no se ejecutó JavaScript ni se confirmó ninguna conexión.",
       evidence: trackingEvidence,
@@ -560,7 +574,7 @@ function appendPassivePageSignalChecks(
         : elapsedMs > 2_500 ? "fail" : "pass",
       required: true,
       observedAt,
-      targetPath: "/",
+      targetPath,
       summary: "Medición provisional del tiempo de respuesta y tamaño recibido de la portada; no equivale a métricas de experiencia real.",
       limitation: "Una única respuesta GET desde el VPS; no mide Core Web Vitals, carga de recursos ni experiencia del visitante.",
       evidence: performanceEvidence,
@@ -573,8 +587,9 @@ function appendPublicPolicyCheck(
   profileVersion: ScanProfileVersion,
   sourceEvidence: TransportV1Evidence,
   observedAt: Date,
+  targetPath = "/",
 ): void {
-  if (profileVersion !== DOMAIN_PROFILE_VERSION_V4) return;
+  if (profileVersion !== DOMAIN_PROFILE_VERSION_V4 && profileVersion !== "domain-v5") return;
   const booleanKeys = [
     "inspected", "sitePrivacyPolicyFetched", "policyRecipientsMentioned",
     "policyPurposesMentioned", "policyTextBlocked", "policyProbeFailed",
@@ -629,7 +644,7 @@ function appendPublicPolicyCheck(
     status,
     required: true,
     observedAt,
-    targetPath: "/",
+    targetPath,
     summary: status === "pass"
       ? "Se encontró una política pública accesible con información sobre finalidades y destinatarios."
       : status === "fail"
