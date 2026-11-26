@@ -62,6 +62,7 @@ describe("observeLighthouseMobileProfile", () => {
     expect(JSON.stringify(result)).not.toContain("example.com");
     expect(launchBrowser).toHaveBeenCalledWith(expect.objectContaining({
       args: expect.arrayContaining([
+        "--no-sandbox",
         "--proxy-server=http://privacy-egress:3128",
         "--proxy-bypass-list=<-loopback>",
       ]),

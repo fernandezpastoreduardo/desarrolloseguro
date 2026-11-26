@@ -74,10 +74,13 @@ WebSockets y no se ejecutan acciones de escritura. El motor recibe únicamente
 la categoría Performance. Solo se conservan las métricas numéricas aprobadas y
 la puntuación, nunca el informe Lighthouse completo, el contenido ni recursos
 capturados. El contenedor de navegador dispone de hasta 1 GiB de memoria y 1 CPU.
-Ante errores se incluye en el diagnóstico interno solo la fase y clase
-normalizada, sin mensaje, URL ni datos de la página. El coordinador que invoca
-el contenedor debe conservar esos dos campos en su log operativo; los valida
-con allowlist y no los copia a la evidencia pública.
+La ruta Lighthouse de Puppeteer debe usar `--no-sandbox`, igual que la ruta
+Playwright, porque Chromium opera como usuario sin privilegios, con capacidades
+eliminadas y dentro de un contenedor efímero aislado. La salida a red sigue
+forzada por el proxy seguro. Ante errores se incluye en el diagnóstico interno
+solo la fase y clase normalizada, sin mensaje, URL ni datos de la página. El
+coordinador que invoca el contenedor debe conservar esos dos campos en su log
+operativo; los valida con allowlist y no los copia a la evidencia pública.
 
 El perfil móvil usa las métricas FCP (10 %), Speed Index (10 %), LCP (25 %),
 TBT (30 %) y CLS (25 %) y la puntuación del modo `simulate` de una versión
