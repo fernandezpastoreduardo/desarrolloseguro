@@ -1100,11 +1100,15 @@ describePostgres.sequential("PostgresScanStore", () => {
         [firstRefresh.jobId],
       );
       await client.query(
-        `INSERT INTO ds_scan_runs(id, job_id, hostname, profile_version, scanner_version, vantage,
+        `WITH timing AS (
+           SELECT clock_timestamp() AS completed_at
+         )
+         INSERT INTO ds_scan_runs(id, job_id, hostname, profile_version, scanner_version, vantage,
           trigger, started_at, completed_at, expires_at, verdict, scope_json)
-         VALUES ($1, $2, $3, 'domain-v5', 'test', 'same_vps', 'requested',
-          clock_timestamp() - interval '1 second', clock_timestamp(),
-          clock_timestamp() + interval '60 minutes', 'inconclusive', jsonb_build_array($4::text))`,
+         SELECT $1, $2, $3, 'domain-v5', 'test', 'same_vps', 'requested',
+          timing.completed_at - interval '1 second', timing.completed_at,
+          timing.completed_at + interval '60 minutes', 'inconclusive', jsonb_build_array($4::text)
+         FROM timing`,
         [refreshedReportId, firstRefresh.jobId, TEST_HOSTNAME, targetPath],
       );
       await client.query("COMMIT");
