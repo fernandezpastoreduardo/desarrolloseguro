@@ -30,7 +30,7 @@ de subida. Escritorio usa 1365×768 sin throttling. En móvil se registran FCP,
 Speed Index, LCP, CLS y TBT para la nota; TTFB y bytes transferidos son datos
 diagnósticos. La nota móvil aplica los pesos y curvas lognormales del modelo
 predeterminado de Lighthouse 13.6.0. Speed Index se estima desde un muestreo
-acotado de fotogramas del navegador; TBT se limita desde FCP hasta el primer
+acotado de fotogramas del navegador, decodificados en una página aislada en memoria; TBT se limita desde FCP hasta el primer
 período observado de cinco segundos sin tareas largas y con un máximo de dos
 solicitudes activas. Es una puntuación compatible con el modelo de Lighthouse,
 no un resultado de su CLI ni un Core Web Vital de usuarios reales. Escritorio
