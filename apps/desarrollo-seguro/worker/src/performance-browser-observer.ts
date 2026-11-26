@@ -1,9 +1,9 @@
 import { chromium, type Browser, type BrowserContext, type CDPSession, type Page, type Route } from "playwright";
-import { isThirdPartyPrivacyHost, normalizeHostname, PRIVACY_BROWSER_BUDGET, scoreLighthouseMobilePerformance, scoreScanPerformance } from "@desarrolloseguro/core";
+import { isThirdPartyPrivacyHost, normalizeHostname, PRIVACY_BROWSER_BUDGET, scoreScanPerformance } from "@desarrolloseguro/core";
 import { PrivacyBrowserRequestGate } from "./privacy-browser-request-gate.js";
 import { authorizePrivacyTarget } from "./privacy-egress-policy.js";
-import { calculateTotalBlockingTime, type LongTaskTiming, type ResourceTiming } from "./performance-timing.js";
-import { estimateSpeedIndexMs, type SpeedIndexFrame } from "./speed-index.js";
+import { type LongTaskTiming, type ResourceTiming } from "./performance-timing.js";
+import { observeLighthouseMobileProfile } from "./lighthouse-mobile-profile.js";
 
 export const PERFORMANCE_OBSERVATION_DURATION_MS = 120_000;
 
@@ -12,15 +12,6 @@ const PERFORMANCE_OBSERVATION_BUDGET = {
   receivedBytes: 64 * 1024 * 1024,
   durationMs: PERFORMANCE_OBSERVATION_DURATION_MS,
   contexts: 2,
-  screencastFrames: 100,
-  mobile: {
-    viewport: { width: 375, height: 812 },
-    cpuThrottleRate: 4,
-    latencyMs: 150,
-    downloadThroughput: Math.floor(1_600_000 / 8),
-    uploadThroughput: Math.floor(750_000 / 8),
-    settleMs: 5_000,
-  },
   desktop: { viewport: { width: 1_365, height: 768 }, settleMs: 2_500 },
 } as const;
 
@@ -53,6 +44,7 @@ export type PerformanceBrowserObserverOptions = {
   proxyUrl: string;
   signal?: AbortSignal;
   launchBrowser?: typeof chromium.launch;
+  observeMobileProfile?: typeof observeLighthouseMobileProfile;
   now?: () => number;
 };
 
@@ -95,23 +87,28 @@ export async function observePagePerformance(
   const now = options.now ?? Date.now;
   const startedAt = now();
   const launch = options.launchBrowser ?? chromium.launch.bind(chromium);
+  const observeMobileProfile = options.observeMobileProfile ?? observeLighthouseMobileProfile;
   const timeoutSignal = AbortSignal.timeout(PERFORMANCE_OBSERVATION_BUDGET.durationMs);
   const signal = options.signal ? AbortSignal.any([options.signal, timeoutSignal]) : timeoutSignal;
   let browser: Browser | undefined;
   let totalTransferBytes = 0;
 
   try {
+    const mobile = await observeMobileProfile({
+      targetUrl: options.targetUrl,
+      proxyUrl: options.proxyUrl,
+      requestGate: gate,
+      signal,
+    });
+    totalTransferBytes += mobile.transferBytes ?? 0;
+
     browser = await launch({
       headless: true,
       proxy: { server: options.proxyUrl, bypass: "<-loopback>" },
       args: ["--disable-background-networking", "--disable-component-update", "--disable-sync", "--no-first-run", "--disable-dev-shm-usage"],
     });
 
-    const mobile = await collectProfile(browser, "mobile", options.targetUrl, gate, signal, () => remainingBudget(now, startedAt), (bytes) => {
-      totalTransferBytes += bytes;
-      return totalTransferBytes <= PERFORMANCE_OBSERVATION_BUDGET.receivedBytes;
-    });
-    const desktop = await collectProfile(browser, "desktop", options.targetUrl, gate, signal, () => remainingBudget(now, startedAt), (bytes) => {
+    const desktop = await collectDesktopProfile(browser, options.targetUrl, gate, signal, () => remainingBudget(now, startedAt), (bytes) => {
       totalTransferBytes += bytes;
       return totalTransferBytes <= PERFORMANCE_OBSERVATION_BUDGET.receivedBytes;
     });
@@ -121,9 +118,8 @@ export async function observePagePerformance(
   }
 }
 
-async function collectProfile(
+async function collectDesktopProfile(
   browser: Browser,
-  profile: PerformanceProfile,
   targetUrl: string,
   gate: PrivacyBrowserRequestGate,
   signal: AbortSignal,
@@ -133,11 +129,10 @@ async function collectProfile(
   let context: BrowserContext | undefined;
   let cdp: CDPSession | undefined;
   try {
-    const mobile = profile === "mobile";
     context = await browser.newContext({
-      viewport: mobile ? PERFORMANCE_OBSERVATION_BUDGET.mobile.viewport : PERFORMANCE_OBSERVATION_BUDGET.desktop.viewport,
-      isMobile: mobile,
-      hasTouch: mobile,
+      viewport: PERFORMANCE_OBSERVATION_BUDGET.desktop.viewport,
+      isMobile: false,
+      hasTouch: false,
       serviceWorkers: "block",
       acceptDownloads: false,
     });
@@ -145,12 +140,11 @@ async function collectProfile(
     await context.routeWebSocket("**/*", (route) => route.close({ code: 1000, reason: "blocked" }));
 
     const page = await context.newPage();
-    await page.addInitScript(installPerformanceObservers, { captureResources: mobile });
+    await page.addInitScript(installPerformanceObservers, { captureResources: false });
     cdp = await context.newCDPSession(page);
     let transferBytes = 0;
     let transferEvents = 0;
     let transferBudgetExceeded = false;
-    const screencastFrames: SpeedIndexFrame[] = [];
     cdp.on("Network.loadingFinished", (event: { encodedDataLength?: number }) => {
       if (typeof event.encodedDataLength === "number" && Number.isFinite(event.encodedDataLength) && event.encodedDataLength >= 0) {
         transferBytes += event.encodedDataLength;
@@ -162,83 +156,46 @@ async function collectProfile(
       }
     });
     await cdp.send("Network.enable");
-    if (mobile) {
-      cdp.on("Page.screencastFrame", (event: { data: string; metadata: { timestamp?: number }; sessionId: number }) => {
-        if (typeof event.data === "string" && typeof event.metadata?.timestamp === "number" && Number.isFinite(event.metadata.timestamp)) {
-          const frame = { data: event.data, timestamp: event.metadata.timestamp };
-          if (screencastFrames.length < PERFORMANCE_OBSERVATION_BUDGET.screencastFrames) screencastFrames.push(frame);
-          else screencastFrames[PERFORMANCE_OBSERVATION_BUDGET.screencastFrames - 1] = frame;
-        }
-        void cdp?.send("Page.screencastFrameAck", { sessionId: event.sessionId }).catch(() => undefined);
-      });
-      await cdp.send("Page.enable");
-      await cdp.send("Page.startScreencast", {
-        format: "jpeg",
-        quality: 50,
-        maxWidth: PERFORMANCE_OBSERVATION_BUDGET.mobile.viewport.width,
-        maxHeight: PERFORMANCE_OBSERVATION_BUDGET.mobile.viewport.height,
-        everyNthFrame: 1,
-      });
-      await cdp.send("Emulation.setCPUThrottlingRate", { rate: PERFORMANCE_OBSERVATION_BUDGET.mobile.cpuThrottleRate });
-      await cdp.send("Network.emulateNetworkConditions", {
-        offline: false,
-        latency: PERFORMANCE_OBSERVATION_BUDGET.mobile.latencyMs,
-        downloadThroughput: PERFORMANCE_OBSERVATION_BUDGET.mobile.downloadThroughput,
-        uploadThroughput: PERFORMANCE_OBSERVATION_BUDGET.mobile.uploadThroughput,
-        connectionType: "cellular3g",
-      });
-    }
-
     const navigationTimeout = boundedTimeout(remainingMs());
     if (signal.aborted || navigationTimeout === null) {
-      return unknownEvidence(profile, { code: "observation_budget_exhausted" });
+      return unknownEvidence("desktop", { code: "observation_budget_exhausted" });
     }
     await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: navigationTimeout });
     const idleTimeout = boundedTimeout(Math.min(15_000, remainingMs()));
     if (signal.aborted || idleTimeout === null) {
-      return unknownEvidence(profile, { code: "observation_budget_exhausted" });
+      return unknownEvidence("desktop", { code: "observation_budget_exhausted" });
     }
     try {
       await page.waitForLoadState("networkidle", { timeout: idleTimeout });
     } catch (error) {
       if (!(error instanceof Error && error.name === "TimeoutError")) throw error;
       if (signal.aborted) {
-        return unknownEvidence(profile, { code: "observation_budget_exhausted" });
+        return unknownEvidence("desktop", { code: "observation_budget_exhausted" });
       }
     }
-    const settleMs = mobile
-      ? PERFORMANCE_OBSERVATION_BUDGET.mobile.settleMs
-      : PERFORMANCE_OBSERVATION_BUDGET.desktop.settleMs;
+    const settleMs = PERFORMANCE_OBSERVATION_BUDGET.desktop.settleMs;
     const settleTimeout = boundedTimeout(Math.min(settleMs, remainingMs()));
     if (signal.aborted || settleTimeout === null || transferBudgetExceeded) {
-      return unknownEvidence(profile, {
+      return unknownEvidence("desktop", {
         code: signal.aborted ? "observation_budget_exhausted" : "observation_stopped_early",
       });
     }
     await page.waitForTimeout(settleTimeout);
     if (signal.aborted || gate.hasExceededBudget() || transferBudgetExceeded) {
-      return unknownEvidence(profile, {
+      return unknownEvidence("desktop", {
         code: signal.aborted ? "observation_budget_exhausted" : "request_budget_exceeded",
       });
     }
-    if (mobile) await cdp.send("Page.stopScreencast").catch(() => undefined);
-
     const metrics = await readCollectedMetrics(page);
-    if (mobile) metrics.speedIndexMs = await estimateSpeedIndexMs(page, screencastFrames);
-    metrics.tbtMs = mobile && metrics.fcpMs !== null
-      ? calculateTotalBlockingTime(metrics.fcpMs, metrics.tasks, metrics.resources, metrics.observedUntilMs)
-      : sumBlockingTime(metrics.tasks);
+    metrics.tbtMs = sumBlockingTime(metrics.tasks);
     metrics.transferBytes = transferEvents > 0 ? transferBytes : null;
-    const completed = transferEvents > 0 && hasAllMetrics(metrics, mobile);
-    const score = completed
-      ? (mobile ? scoreLighthouseMobilePerformance(metrics)?.score : scoreScanPerformance(metrics)?.score) ?? null
-      : null;
+    const completed = transferEvents > 0 && hasAllMetrics(metrics);
+    const score = completed ? scoreScanPerformance(metrics)?.score ?? null : null;
     if (!completed || score === null) {
       const requiredMetrics: Array<keyof Pick<CollectedMetrics,
-        "fcpMs" | "lcpMs" | "cls" | "tbtMs" | "ttfbMs" | "speedIndexMs">> = [
+        "fcpMs" | "lcpMs" | "cls" | "tbtMs" | "ttfbMs">> = [
           "fcpMs", "lcpMs", "cls", "tbtMs", "ttfbMs",
         ];
-      if (mobile) requiredMetrics.push("speedIndexMs");
       const missingMetrics: PerformanceDiagnosticField[] = requiredMetrics.filter((key) => {
         const value = metrics[key];
         return typeof value !== "number" || !Number.isFinite(value) || value < 0;
@@ -246,7 +203,7 @@ async function collectProfile(
       if (transferEvents === 0) missingMetrics.push("transferBytes");
       if (score === null) missingMetrics.push("score");
       const incompleteDiagnostic = { code: "required_measurement_missing" as const, missingMetrics };
-      return unknownEvidence(profile, incompleteDiagnostic, metrics);
+      return unknownEvidence("desktop", incompleteDiagnostic, metrics);
     }
     const profileMetrics: Omit<CollectedMetrics, "tasks" | "resources" | "observedUntilMs"> = {
       fcpMs: metrics.fcpMs,
@@ -258,14 +215,14 @@ async function collectProfile(
       transferBytes: metrics.transferBytes,
     };
     return {
-      profile,
+      profile: "desktop",
       status: completed && score !== null ? "complete" : "unknown",
       ...profileMetrics,
       transferBytes: transferEvents > 0 ? transferBytes : null,
       score: completed ? score : null,
     };
   } catch (error) {
-    return unknownEvidence(profile, {
+    return unknownEvidence("desktop", {
       code: error instanceof Error && error.name === "TimeoutError" ? "browser_timeout" : "browser_observation_error",
     });
   } finally {
@@ -365,9 +322,8 @@ function boundedTimeout(value: number): number | null {
   return Number.isFinite(value) && value > 0 ? Math.max(1, Math.floor(value)) : null;
 }
 
-function hasAllMetrics(metrics: CollectedMetrics, mobile: boolean): boolean {
-  return [metrics.fcpMs, metrics.lcpMs, metrics.cls, metrics.tbtMs, metrics.ttfbMs,
-    ...(mobile ? [metrics.speedIndexMs] : []),].every(
+function hasAllMetrics(metrics: CollectedMetrics): boolean {
+  return [metrics.fcpMs, metrics.lcpMs, metrics.cls, metrics.tbtMs, metrics.ttfbMs].every(
     (value) => typeof value === "number" && Number.isFinite(value) && value >= 0,
   );
 }
