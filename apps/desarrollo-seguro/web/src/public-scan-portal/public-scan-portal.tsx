@@ -96,7 +96,7 @@ const REPORT_CATEGORIES = [
   { id: "ethics", label: "Ética", description: "Compara lo que el sitio cuenta sobre los servicios externos que usa con lo que se observó. Si falta información importante, el informe lo dice.", criteria: ["third-party-data-use", "external-service-transparency", "backend-processor-transparency", "tracking"], controls: ["DS-PRIV-06"] },
   { id: "privacy", label: "Privacidad", description: "Comprueba qué datos guarda la página al abrirse, si se conecta con otros servicios y si muestra opciones para rechazarlos.", criteria: ["initial-cookie-risk"], controls: ["DS-PRIV-05"] },
   { id: "security", label: "Seguridad", description: "Comprueba si el sitio se encuentra, si la conexión protege la información y si el navegador recibe barreras frente a algunos ataques.", criteria: ["dns-integrity", "transport-security", "http-availability", "security-headers"], controls: ["DS-DNS-01", "DS-TLS-01", "DS-TLS-02", "DS-HTTP-01", "DS-HDR-01"] },
-  { id: "performance", label: "Rendimiento", description: "Mide cuánto tarda en responder esta página en móvil y escritorio. Es una medición propia, no una puntuación oficial de Lighthouse.", criteria: ["performance"], controls: ["DS-QUAL-02"] },
+  { id: "performance", label: "Rendimiento", description: "Mide esta página con Lighthouse en móvil simulado y con una prueba propia en escritorio.", criteria: ["performance"], controls: ["DS-QUAL-02"] },
 ] as const;
 const BETA_EVALUATION_LEVELS = [
   { id: "observed", label: "Observado", statuses: ["pass"] },
@@ -114,7 +114,7 @@ const CRITERION_EXPLANATIONS: Record<string, string> = {
   "backend-processor-transparency": "Comparamos los servicios que el titular declara con su lista interna de sistemas activos. No podemos comprobar aquí si cada proveedor cumple lo declarado.",
   "initial-cookie-risk": "Revisamos los datos que la página guarda en el navegador al abrirla. Esta comprobación no cubre lo que ocurre después.",
   tracking: "Buscamos en el contenido inicial referencias a herramientas de seguimiento conocidas. Esto no confirma que se conecten o se ejecuten.",
-  performance: "Medimos cuánto tarda en responder la página en móvil y escritorio. La puntuación es propia, no oficial de Lighthouse.",
+  performance: "Medimos esta página con Lighthouse en móvil simulado y con una prueba propia en escritorio.",
 };
 const CRITERION_FAIL_MEANINGS: Record<string, string> = {
   "dns-integrity": "No pudimos encontrar la dirección pública del sitio.",
@@ -2125,7 +2125,7 @@ function CategoryDetailsModal({
                     ? "Medimos cuánto tarda y cuánto ocupa la primera respuesta. No representa toda la experiencia de uso."
                     : CRITERION_EXPLANATIONS[criterion.id]}</p>
                   <p><b>Qué implica:</b> {criterion.id === "performance" && profileVersion === "domain-v5"
-                    ? "La puntuación móvil usa los pesos y curvas de Lighthouse 13.6.0. El Speed Index y TBT se miden en Chromium; TTFB y bytes se muestran como datos diagnósticos. Escritorio conserva la rúbrica anterior."
+                    ? "Móvil usa Lighthouse 13.6.0 en modo simulado. TTFB y bytes son datos diagnósticos; escritorio conserva la rúbrica propia."
                     : getCriterionOutcome(criterion.id, criterion.status)}</p>
                   <p className="ds-portal__criterion-evidence"><b>Dato observado:</b> {getCriterionEvidenceSummary(criterion.id, checks, publicPolicyAssessment, profileVersion)}</p>
                 </div>
@@ -2877,7 +2877,7 @@ function getCriterionPriority(status: CheckStatus): number {
 function getPerformanceCategorySummary(score: number | null): string {
   return score === null
     ? "Medición incompleta: falta algún dato requerido de móvil o escritorio."
-    : "Nota media de las pruebas móviles y de escritorio. Móvil sigue los pesos y curvas de Lighthouse 13.6.0; escritorio mantiene la rúbrica anterior.";
+    : "Nota media de Lighthouse 13.6.0 en móvil simulado y de la rúbrica propia en escritorio.";
 }
 
 function getReportTakeaway(report: PublicReport, state: string): string {
@@ -3052,7 +3052,7 @@ function getCriterionEvidenceSummary(
         const desktopScore = number("desktopScore");
         return score === null
           ? `Medición incompleta: móvil ${mobileScore === null ? "sin puntuación" : `${mobileScore}/100`}; escritorio ${desktopScore === null ? "sin puntuación" : `${desktopScore}/100`}. No se calcula la media si falta un dato requerido.`
-          : `Móvil ${mobileScore}/100 y escritorio ${desktopScore}/100; nota media ${score}/100. Métricas propias estándar.`;
+          : `Móvil ${mobileScore}/100 con Lighthouse 13.6.0 y escritorio ${desktopScore}/100; nota media ${score}/100.`;
       }
       const responseTime = number("responseTimeMs");
       const responseBytes = number("responseBytes");

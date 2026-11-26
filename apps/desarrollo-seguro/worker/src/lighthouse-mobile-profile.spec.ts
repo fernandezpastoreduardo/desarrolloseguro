@@ -1,0 +1,115 @@
+import { describe, expect, it, vi } from "vitest";
+import { PrivacyBrowserRequestGate } from "./privacy-browser-request-gate.js";
+import { observeLighthouseMobileProfile } from "./lighthouse-mobile-profile.js";
+
+describe("observeLighthouseMobileProfile", () => {
+  it("runs Lighthouse simulate through the safe proxy and retains only numeric evidence", async () => {
+    let requestHandler: ((request: never) => void) | undefined;
+    const abort = vi.fn(async () => undefined);
+    const proceed = vi.fn(async () => undefined);
+    const cdp = { send: vi.fn(async () => undefined), detach: vi.fn(async () => undefined) };
+    const page = {
+      setBypassServiceWorker: vi.fn(async () => undefined),
+      setRequestInterception: vi.fn(async () => undefined),
+      on: vi.fn((event: string, handler: (request: never) => void) => {
+        if (event === "request") requestHandler = handler;
+      }),
+      target: () => ({ createCDPSession: async () => cdp }),
+    };
+    const browser = { newPage: vi.fn(async () => page), close: vi.fn(async () => undefined) };
+    const launchBrowser = vi.fn(async () => browser);
+    const runLighthouse = vi.fn(async () => ({
+      lhr: {
+        categories: { performance: { score: 0.97 } },
+        audits: {
+          "first-contentful-paint": { numericValue: 1_372.2 },
+          "speed-index": { numericValue: 1_372.2 },
+          "largest-contentful-paint": { numericValue: 2_422.3 },
+          "cumulative-layout-shift": { numericValue: 0.001448 },
+          "total-blocking-time": { numericValue: 0 },
+          "total-byte-weight": { numericValue: 349_416 },
+          metrics: { details: { items: [{ timeToFirstByte: 622 }] } },
+        },
+      },
+    }));
+    const requestGate = new PrivacyBrowserRequestGate({
+      requestedHostname: "example.com",
+      isThirdPartyHost: (requested, observed) => requested !== observed,
+      maxRequests: 1_000,
+    });
+    const options = {
+      targetUrl: "https://example.com/careers?source=lab",
+      proxyUrl: "http://privacy-egress:3128",
+      requestGate,
+      signal: new AbortController().signal,
+      launchBrowser: launchBrowser as never,
+      runLighthouse: runLighthouse as never,
+    };
+
+    const result = await observeLighthouseMobileProfile(options);
+    expect(result).toMatchObject({
+      profile: "mobile",
+      status: "complete",
+      fcpMs: 1_372,
+      speedIndexMs: 1_372,
+      lcpMs: 2_422,
+      cls: 0.001448,
+      tbtMs: 0,
+      ttfbMs: 622,
+      transferBytes: 349_416,
+      score: 97,
+    });
+    expect(JSON.stringify(result)).not.toContain("example.com");
+    expect(launchBrowser).toHaveBeenCalledWith(expect.objectContaining({
+      args: expect.arrayContaining([
+        "--proxy-server=http://privacy-egress:3128",
+        "--proxy-bypass-list=<-loopback>",
+      ]),
+    }));
+    expect(runLighthouse).toHaveBeenCalledWith(options.targetUrl, expect.objectContaining({
+      formFactor: "mobile",
+      throttlingMethod: "simulate",
+      onlyCategories: ["performance"],
+      logLevel: "silent",
+    }), undefined, page);
+
+    const continueRequest = { url: () => "https://example.com/app.js", method: () => "GET", resourceType: () => "script", abort, continue: proceed };
+    const postRequest = { url: () => "https://example.com/submit", method: () => "POST", resourceType: () => "fetch", abort, continue: proceed };
+    requestHandler?.(continueRequest as never);
+    requestHandler?.(postRequest as never);
+    await Promise.resolve();
+    expect(proceed).toHaveBeenCalledOnce();
+    expect(abort).toHaveBeenCalledOnce();
+    expect(cdp.send).toHaveBeenCalledWith("Network.setBlockedURLs", { urls: ["ws://*", "wss://*"] });
+    expect(cdp.detach).toHaveBeenCalledOnce();
+    expect(browser.close).toHaveBeenCalledOnce();
+  });
+
+  it("keeps the profile unknown when a required Lighthouse metric is absent", async () => {
+    const browser = { newPage: vi.fn(async () => fakePage()), close: vi.fn(async () => undefined) };
+    const runLighthouse = vi.fn(async () => ({
+      lhr: { categories: { performance: { score: 0.9 } }, audits: { "first-contentful-paint": { numericValue: 900 } } },
+    }));
+    const result = await observeLighthouseMobileProfile({
+      targetUrl: "https://example.com/",
+      proxyUrl: "http://privacy-egress:3128",
+      requestGate: new PrivacyBrowserRequestGate({
+        requestedHostname: "example.com", isThirdPartyHost: () => false, maxRequests: 1_000,
+      }),
+      signal: new AbortController().signal,
+      launchBrowser: vi.fn(async () => browser as never) as never,
+      runLighthouse: runLighthouse as never,
+    });
+    expect(result).toMatchObject({ profile: "mobile", status: "unknown", score: null });
+    expect(result.diagnostic?.missingMetrics).toContain("tbtMs");
+  });
+});
+
+function fakePage() {
+  return {
+    setBypassServiceWorker: vi.fn(async () => undefined),
+    setRequestInterception: vi.fn(async () => undefined),
+    on: vi.fn(),
+    target: () => ({ createCDPSession: async () => ({ send: vi.fn(async () => undefined), detach: vi.fn(async () => undefined) }) }),
+  };
+}

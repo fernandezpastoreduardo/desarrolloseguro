@@ -177,7 +177,7 @@ describe("PublicScanPortal", () => {
     expect(performanceButton).not.toBeNull();
     fireEvent.click(performanceButton!);
     expect(screen.getByRole("dialog", { name: "Rendimiento" })).toBeVisible();
-    expect(screen.getByText(/Móvil 84\/100 y escritorio 92\/100; nota media 88\/100/u)).toBeVisible();
+    expect(screen.getByText(/Móvil 84\/100 con Lighthouse 13\.6\.0 y escritorio 92\/100; nota media 88\/100/u)).toBeVisible();
     fireEvent.click(screen.getByText("Ver evidencias técnicas (1 comprobación)"));
     expect(screen.getByText("Móvil · FCP")).toBeVisible();
     expect(screen.getByText("1820 ms")).toBeVisible();

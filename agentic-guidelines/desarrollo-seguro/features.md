@@ -65,20 +65,25 @@ separado hasta que esté disponible el resultado final. Al acabar o fallar el
 job, se borra este estado temporal.
 
 La URL completa se propaga por admisión, job temporal, transporte/worker,
-perfil y validación del informe. Rendimiento se mide en Chromium con contextos
-nuevos. Móvil usa viewport 375×812, ralentización CPU 4× y red con RTT 150 ms,
-bajada 1,6 Mbps y subida 750 Kbps. Escritorio usa viewport 1365×768 sin
-throttling. La puntuación móvil sigue el modelo predeterminado de Lighthouse
-13.6.0: FCP (10 %), Speed Index (10 %), LCP (25 %), TBT (30 %) y CLS (25 %),
-con sus curvas lognormales y umbrales móviles. TBT se calcula solo desde FCP
-hasta TTI; no se suman tareas largas anteriores a FCP ni posteriores a TTI.
-La puntuación de escritorio conserva la rúbrica existente hasta definir una
-revisión específica para escritorio. TTFB y bytes transferidos permanecen como
-datos diagnósticos y no alteran la puntuación móvil. Cada métrica que interviene
-en la puntuación debe tener evidencia numérica; si falta una, el perfil queda
-sin puntuación y se informa como incompleto, nunca como cero. El informe
-identifica la versión del modelo y expone las métricas que contribuyen a la
-nota.
+perfil y validación del informe. La medición móvil debe seguir el perfil
+predeterminado de Lighthouse en modo `simulate`, no emular directamente el
+tráfico con `Network.emulateNetworkConditions` y CPU throttling de DevTools.
+Debe ejecutarse en el navegador aislado del auditor, sobre la URL exacta y con
+el proxy de salida seguro. Solo se permiten solicitudes GET/HEAD; se bloquean
+WebSockets y no se ejecutan acciones de escritura. El motor recibe únicamente
+la categoría Performance. Solo se conservan las métricas numéricas aprobadas y
+la puntuación, nunca el informe Lighthouse completo, el contenido ni recursos
+capturados.
+
+El perfil móvil usa las métricas FCP (10 %), Speed Index (10 %), LCP (25 %),
+TBT (30 %) y CLS (25 %) y la puntuación del modo `simulate` de una versión
+fijada de Lighthouse. No se sustituye la puntuación ni las métricas de ese
+perfil con aproximaciones propias. TTFB y bytes transferidos son diagnósticos.
+El perfil de escritorio conserva Chromium y la rúbrica existente: viewport
+1365×768, sin throttling. La extracción valida los cinco valores móviles y la
+puntuación; si falta cualquiera, el perfil queda sin nota y se informa como
+incompleto, nunca como cero. La versión del motor queda identificada en la
+evidencia.
 
 El perfil `domain-v5` mantiene también las comprobaciones públicas de
 transparencia documental y comparación de servicios externos del perfil

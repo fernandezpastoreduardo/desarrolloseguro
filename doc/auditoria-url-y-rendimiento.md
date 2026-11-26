@@ -24,30 +24,17 @@ el cambio no genera análisis por sí solo. Una nueva solicitud puede producir
 un informe con el código desplegado, sujeta a los límites de cola, solicitudes
 y ejecución concurrente.
 
-Rendimiento se mide en Chromium, en contextos nuevos para móvil y escritorio.
-Móvil usa 375×812, CPU 4× y red de 150 ms RTT, 1,6 Mbps de bajada y 750 Kbps
-de subida. Escritorio usa 1365×768 sin throttling. En móvil se registran FCP,
-Speed Index, LCP, CLS y TBT para la nota; TTFB y bytes transferidos son datos
-diagnósticos. La nota móvil aplica los pesos y curvas lognormales del modelo
-predeterminado de Lighthouse 13.6.0. Speed Index se estima capturando cada
-fotograma hasta un máximo de 100, decodificados en una página aislada en memoria. Para TBT se busca desde FCP el primer
-período de cinco segundos sin tareas largas y con un máximo de dos solicitudes
-activas. Si la observación acotada termina antes de encontrar ese período, se
-calcula TBT sobre las tareas observadas desde FCP hasta el final de la
-observación. Es una puntuación compatible con el modelo de Lighthouse,
-no un resultado de su CLI ni un Core Web Vital de usuarios reales. Escritorio
-conserva la rúbrica anterior mientras se define su ajuste.
+Rendimiento móvil lo calcula Lighthouse 13.6.0 en modo `simulate`, solo con la
+categoría Performance, sobre la URL exacta. Así se usa su simulación de red,
+CPU, métricas y puntuación oficial en lugar de emular condiciones de red y
+recalcular la nota por separado. Se guardan FCP, Speed Index, LCP, CLS, TBT,
+TTFB, bytes y la puntuación; TTFB y bytes son datos diagnósticos. El navegador
+se ejecuta detrás del proxy seguro del auditor, con solicitudes GET/HEAD y
+WebSockets bloqueados. No se persiste el informe Lighthouse, capturas ni
+contenido de la página.
 
-| Métrica móvil | Peso | p10 | Mediana |
-| --- | ---: | ---: | ---: |
-| FCP | 10 % | 1,8 s | 3 s |
-| Speed Index | 10 % | 3,387 s | 5,8 s |
-| LCP | 25 % | 2,5 s | 4 s |
-| TBT | 30 % | 200 ms | 600 ms |
-| CLS | 25 % | 0,1 | 0,25 |
-
-Cada subnota aplica la curva lognormal de Lighthouse usando los puntos p10 y
-mediana. En escritorio se conserva la rúbrica lineal anterior:
+Escritorio se mide en Chromium a 1365×768 sin throttling y conserva la rúbrica
+lineal anterior:
 
 | Métrica escritorio | Peso | Umbral bueno (100) | Umbral malo (0) |
 | --- | ---: | ---: | ---: |
