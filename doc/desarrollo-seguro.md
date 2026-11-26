@@ -2,7 +2,7 @@
 
 Desarrollo Seguro publica páginas de presentación, metodología, privacidad y alcance, información sobre el sello verificable y un portal para consultar informes. El portal permite pegar una dirección web con o sin esquema —si falta, añade HTTPS— o abrirla desde un enlace directo; la consulta lee el estado guardado y no inicia un análisis. La ruta y la query se conservan y el fragmento se elimina. Para solicitar un análisis, la persona debe confirmar que tiene autorización. La disponibilidad de nuevos resultados depende del servicio desplegado.
 
-La portada ofrece enlaces a los informes públicos actuales de `grumphya.com` y `desarrolloseguro.org`. Cada informe conserva sus datos, puntuaciones, categorías, estados y clasificaciones; el portal permite consultar su evidencia y alcance. La ficha estática de prototipo se retiró porque sus cifras eran históricas y no representaban un informe vigente.
+La portada muestra `grumphya.com` y `desarrolloseguro.org` como sitios certificados y enlaza con el resultado vigente de cada uno. El buscador permite consultar cualquier URL válida. Cada informe conserva sus datos, puntuaciones, categorías, estados y clasificaciones; el portal permite consultar su evidencia y alcance. La ficha estática de prototipo se retiró porque sus cifras eran históricas y no representaban un informe vigente.
 
 El sello verificable enlaza con el informe actual y permite comprobar su estado. Solo acredita el vínculo y vigencia mostrados por la comprobación; el informe describe su alcance concreto y no sustituye una auditoría integral.
 

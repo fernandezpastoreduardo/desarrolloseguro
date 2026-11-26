@@ -46,10 +46,11 @@ evidencia del informe; la UI no cambia cómo se calcula ni almacena nada.
 
 ## Alcance de la portada
 
-La portada incluye un bloque de logotipos de sitios con informe público actual.
-La primera versión muestra únicamente `grumphya.com` y
-`desarrolloseguro.org`, con sus recursos de marca locales aprobados y un enlace
-accesible para consultar el informe real.
+La portada incluye un bloque de certificaciones públicas, no una lista completa
+de destinos consultables. La primera versión muestra únicamente los sitios
+certificados `grumphya.com` y `desarrolloseguro.org`, con sus recursos de marca
+locales aprobados y un enlace accesible al informe vigente de cada uno. El copy
+aclara que el buscador permite consultar cualquier URL válida.
 
 El logotipo de Grumphya se toma del lockup que el usuario ha proporcionado y
 que coincide con la marca visible en producción: el wordmark «Grumphya» junto
@@ -151,9 +152,11 @@ la búsqueda convencional siguen siendo vías disponibles.
 1. Las superficies incluidas comparten identidad visual y vocabulario; el
    recorrido no contiene instrucciones, enlaces o afirmaciones de
    funcionalidades retiradas o inexistentes.
-2. La portada presenta los dos logotipos aprobados y permite llegar con teclado
-   y lector de pantalla a cada informe real vigente. Los enlaces no dependen de
-   UUID fijos, no hacen `POST` ni activan un análisis.
+2. La portada identifica esos dos sitios como certificados y no sugiere que sean
+   los únicos destinos que se pueden consultar. Presenta los dos logotipos
+   aprobados y permite llegar con teclado y lector de pantalla al informe real
+   vigente de cada uno. Los enlaces no dependen de UUID fijos, no hacen `POST`
+   ni activan un análisis.
 3. El portal admite la URL profunda solo si es válida según el parser actual,
    carga el estado por el endpoint público existente y muestra estados reales
    (incluido sin informe o no disponible). Sin `url`, la búsqueda normal
