@@ -43,7 +43,7 @@ test("renders the public portal and allows changing its theme", async ({
     page.getByRole("textbox", { name: "URL HTTPS que quieres auditar" }),
   ).toBeVisible();
   await expect(
-    page.getByText("Consultar no inicia el análisis."),
+    page.getByText("Consultar solo muestra el informe guardado."),
   ).toBeVisible();
 
   const portal = page.locator("main.ds-portal");
