@@ -32,6 +32,7 @@ export type TransportV1BrokerRequest = {
   requestId: string;
   hostname: string;
   operation: TransportV1ProbeOperation;
+  targetPath: string;
 };
 
 export type TransportV1BrokerResponse = {
@@ -53,6 +54,7 @@ export function createTransportV1EgressBroker(
   jobHostnameInput: unknown,
   source: TransportV1ObservationSource,
   profileVersion = "transport-v1",
+  targetPath = "/",
 ): TransportV1EgressBroker {
   const jobHostname = normalizeHostname(jobHostnameInput);
   const budget = getTransportBudget(profileVersion);
@@ -66,6 +68,7 @@ export function createTransportV1EgressBroker(
   return async (input, signal) => {
     const request = parseBrokerRequest(input, jobHostname);
     if (
+      request.targetPath !== targetPath ||
       startedOperations.size >= MAX_BROKER_OPERATIONS ||
       startedOperations.has(request.operation) ||
       usedRequestIds.has(request.requestId) ||
@@ -79,7 +82,13 @@ export function createTransportV1EgressBroker(
     usedRequestIds.add(request.requestId);
     activeOperations += 1;
     try {
-      const result = await observeOperation(source, request.operation, jobHostname, signal);
+      const result = await observeOperation(
+        source,
+        request.operation,
+        jobHostname,
+        signal,
+        request.targetPath === "/" && profileVersion !== "domain-v5" ? undefined : request.targetPath,
+      );
       if (signal.aborted) {
         return createBrokerResponse(request.requestId, emptyProbeResult());
       }
@@ -120,7 +129,7 @@ function parseBrokerRequest(
 
   const candidate = input as Record<string, unknown>;
   if (
-    Reflect.ownKeys(candidate).length !== 4 ||
+    Reflect.ownKeys(candidate).length !== (Object.hasOwn(candidate, "targetPath") ? 5 : 4) ||
     !Object.hasOwn(candidate, "protocolVersion") ||
     !Object.hasOwn(candidate, "requestId") ||
     !Object.hasOwn(candidate, "hostname") ||
@@ -129,7 +138,8 @@ function parseBrokerRequest(
     typeof candidate.requestId !== "string" ||
     !/^[0-9a-f-]{36}$/iu.test(candidate.requestId) ||
     typeof candidate.operation !== "string" ||
-    !isProbeOperation(candidate.operation)
+    !isProbeOperation(candidate.operation) ||
+    (Object.hasOwn(candidate, "targetPath") && !isSafeTargetPath(candidate.targetPath))
   ) {
     throw createBrokerRequestError();
   }
@@ -149,6 +159,7 @@ function parseBrokerRequest(
     requestId: candidate.requestId,
     hostname,
     operation: candidate.operation,
+    targetPath: typeof candidate.targetPath === "string" ? candidate.targetPath : "/",
   };
 }
 
@@ -157,19 +168,32 @@ async function observeOperation(
   operation: TransportV1ProbeOperation,
   hostname: string,
   signal: AbortSignal,
+  targetPath?: string,
 ): Promise<TransportV1ProbeResult> {
   switch (operation) {
     case "dns":
-      return source.observeDns(hostname, signal);
+      return targetPath === undefined ? source.observeDns(hostname, signal) : source.observeDns(hostname, signal, targetPath);
     case "tls":
-      return source.observeTls(hostname, signal);
+      return targetPath === undefined ? source.observeTls(hostname, signal) : source.observeTls(hostname, signal, targetPath);
     case "http-head":
-      return source.observeHttp(hostname, "HEAD", signal);
+      return targetPath === undefined ? source.observeHttp(hostname, "HEAD", signal) : source.observeHttp(hostname, "HEAD", signal, targetPath);
     case "http-get":
-      return source.observeHttp(hostname, "GET", signal);
+      return targetPath === undefined ? source.observeHttp(hostname, "GET", signal) : source.observeHttp(hostname, "GET", signal, targetPath);
     case "headers":
-      return source.observeHeaders(hostname, signal);
+      return targetPath === undefined ? source.observeHeaders(hostname, signal) : source.observeHeaders(hostname, signal, targetPath);
   }
+}
+
+function isSafeTargetPath(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0 && value.length <= 2_048 &&
+    value.startsWith("/") && !value.startsWith("//") && !hasUnsafeTargetPathCharacters(value);
+}
+
+function hasUnsafeTargetPathCharacters(value: string): boolean {
+  return [...value].some((character) => {
+    const code = character.codePointAt(0) ?? 0;
+    return character === "#" || character === "\\" || code < 0x20 || code === 0x7f;
+  });
 }
 
 function validateProbeResult(

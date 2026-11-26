@@ -239,7 +239,7 @@ describe("requestPinnedHttps", () => {
     await expect(requestPinnedHttps(
         {
           hostname: FIXTURE_HOSTNAME,
-          path: FIXTURE_ROOT_PATH,
+            path: FIXTURE_ROOT_PATH,
           method: "GET",
           allowedPaths: FIXTURE_REQUEST_PATHS,
           signal: new AbortController().signal,
@@ -273,7 +273,7 @@ describe("requestPinnedHttps", () => {
       requestPinnedHttps(
         {
           hostname: FIXTURE_HOSTNAME,
-          path: FIXTURE_ROOT_PATH,
+            path: FIXTURE_ROOT_PATH,
           method: "GET",
           allowedPaths: FIXTURE_REQUEST_PATHS,
           signal: new AbortController().signal,
@@ -312,7 +312,7 @@ describe("requestPinnedHttps", () => {
         requestPinnedHttps(
           {
             hostname: FIXTURE_HOSTNAME,
-            path: FIXTURE_ROOT_PATH,
+                path: FIXTURE_ROOT_PATH,
             method: "GET",
             allowedPaths: FIXTURE_REQUEST_PATHS,
             signal: new AbortController().signal,
@@ -339,7 +339,7 @@ describe("requestPinnedHttps", () => {
       requestPinnedHttps(
         {
           hostname: FIXTURE_HOSTNAME,
-          path: "/admin",
+            path: "/admin",
           method: "GET",
           allowedPaths: FIXTURE_REQUEST_PATHS,
           signal: new AbortController().signal,
@@ -364,7 +364,7 @@ describe("requestPinnedHttps", () => {
       requestPinnedHttps(
         {
           hostname: "outside.example.net",
-          path: "/admin",
+            path: "/admin",
           method: "GET",
           allowedPaths: ["/admin"],
           signal: new AbortController().signal,
@@ -391,7 +391,7 @@ describe("requestPinnedHttps", () => {
       requestPinnedHttps(
         {
           hostname: FIXTURE_HOSTNAME,
-          path: FIXTURE_ROOT_PATH,
+            path: FIXTURE_ROOT_PATH,
           method: "GET",
           allowedPaths: FIXTURE_REQUEST_PATHS,
           signal: new AbortController().signal,
@@ -448,7 +448,7 @@ describe("requestPinnedHttps", () => {
       const request = requestPinnedHttps(
         {
           hostname: FIXTURE_HOSTNAME,
-          path: FIXTURE_ROOT_PATH,
+            path: FIXTURE_ROOT_PATH,
           method: "GET",
           allowedPaths: FIXTURE_REQUEST_PATHS,
           signal: new AbortController().signal,
@@ -481,7 +481,7 @@ describe("requestPinnedHttps", () => {
       requestPinnedHttps(
         {
           hostname: FIXTURE_HOSTNAME,
-          path: FIXTURE_ROOT_PATH,
+            path: FIXTURE_ROOT_PATH,
           method: "GET",
           allowedPaths: FIXTURE_REQUEST_PATHS,
           signal: new AbortController().signal,
@@ -545,6 +545,7 @@ describe("pinned HTTPS transport through the worker processor", () => {
     const job: ClaimedScanJob = {
       id: "d1d1d1d1-d1d1-41d1-81d1-d1d1d1d1d1d1",
       hostname: FIXTURE_HOSTNAME,
+      targetUrl: null,
       profileVersion: "controls-v1",
       trigger: "requested",
       attempts: 1,
@@ -568,7 +569,7 @@ describe("pinned HTTPS transport through the worker processor", () => {
         const response = await requestPinnedHttps(
           {
             hostname: claimedJob.hostname,
-            path: FIXTURE_ROOT_PATH,
+                path: FIXTURE_ROOT_PATH,
             method: "HEAD",
             allowedPaths: getCanonicalScanPaths(claimedJob.hostname),
             signal,

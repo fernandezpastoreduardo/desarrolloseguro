@@ -180,8 +180,10 @@ describePostgres.sequential(
         api_can_insert_domains: boolean;
         api_can_execute_scan_admission: boolean;
         api_can_execute_on_demand_request: boolean;
+        api_can_execute_target_url_request: boolean;
         worker_can_execute_scan_admission: boolean;
         worker_can_execute_on_demand_request: boolean;
+        worker_can_execute_target_url_request: boolean;
         public_can_execute_scan_admission: boolean;
         public_can_execute_on_demand_request: boolean;
         api_can_write_reports: boolean;
@@ -223,6 +225,7 @@ describePostgres.sequential(
          has_column_privilege('ds_api', 'public.ds_scan_jobs', 'lease_token', 'SELECT') AS api_can_select_lease_token,
          has_column_privilege('ds_api', 'public.ds_scan_jobs', 'public_error_code', 'SELECT') AS api_can_select_failure_code,
          has_column_privilege('ds_api', 'public.ds_scan_jobs', 'failure_diagnostic', 'SELECT') AS api_can_select_failure_diagnostic,
+         has_column_privilege('ds_api', 'public.ds_scan_jobs', 'target_url', 'SELECT') AS api_can_select_target_url,
          has_table_privilege('ds_api', 'public.ds_report_badges', 'INSERT') AS api_can_issue_badges,
          has_column_privilege('ds_api', 'public.ds_report_badges', 'revoked_at', 'UPDATE') AS api_can_revoke_badges,
          has_table_privilege('ds_api', 'public.ds_scan_metrics', 'SELECT') AS api_can_select_metrics,
@@ -230,8 +233,10 @@ describePostgres.sequential(
          has_table_privilege('ds_api', 'ds_domains', 'INSERT') AS api_can_insert_domains,
          has_function_privilege('ds_api', 'public.ds_ensure_fresh_scan(text,text,text)', 'EXECUTE') AS api_can_execute_scan_admission,
          has_function_privilege('ds_api', 'public.ds_request_on_demand_scan(text)', 'EXECUTE') AS api_can_execute_on_demand_request,
+         has_function_privilege('ds_api', 'public.ds_request_on_demand_target_scan(text,text)', 'EXECUTE') AS api_can_execute_target_url_request,
          has_function_privilege('ds_worker', 'public.ds_ensure_fresh_scan(text,text,text)', 'EXECUTE') AS worker_can_execute_scan_admission,
          has_function_privilege('ds_worker', 'public.ds_request_on_demand_scan(text)', 'EXECUTE') AS worker_can_execute_on_demand_request,
+         has_function_privilege('ds_worker', 'public.ds_request_on_demand_target_scan(text,text)', 'EXECUTE') AS worker_can_execute_target_url_request,
          EXISTS (
            SELECT 1 FROM pg_proc AS routine
            CROSS JOIN LATERAL aclexplode(coalesce(routine.proacl, acldefault('f', routine.proowner))) AS privilege
@@ -289,6 +294,7 @@ describePostgres.sequential(
         api_can_select_lease_token: false,
         api_can_select_failure_code: true,
         api_can_select_failure_diagnostic: true,
+        api_can_select_target_url: true,
         api_can_issue_badges: true,
         api_can_revoke_badges: true,
         api_can_select_metrics: false,
@@ -296,8 +302,10 @@ describePostgres.sequential(
         api_can_insert_domains: false,
         api_can_execute_scan_admission: true,
         api_can_execute_on_demand_request: true,
+        api_can_execute_target_url_request: true,
         worker_can_execute_scan_admission: false,
         worker_can_execute_on_demand_request: false,
+        worker_can_execute_target_url_request: false,
         public_can_execute_scan_admission: false,
         public_can_execute_on_demand_request: false,
         api_can_write_reports: false,

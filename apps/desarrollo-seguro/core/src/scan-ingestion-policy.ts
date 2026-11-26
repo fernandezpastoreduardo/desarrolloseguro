@@ -9,6 +9,7 @@ const PROFILE_VERSION_DOMAIN_V1 = "domain-v1";
 const PROFILE_VERSION_DOMAIN_V2 = "domain-v2";
 const PROFILE_VERSION_DOMAIN_V3 = "domain-v3";
 const PROFILE_VERSION_DOMAIN_V4 = "domain-v4";
+const PROFILE_VERSION_DOMAIN_V5 = "domain-v5";
 type ProfileVersion =
   | typeof PROFILE_VERSION_V1
   | typeof PROFILE_VERSION_V2
@@ -17,8 +18,10 @@ type ProfileVersion =
   | typeof PROFILE_VERSION_DOMAIN_V1
   | typeof PROFILE_VERSION_DOMAIN_V2
   | typeof PROFILE_VERSION_DOMAIN_V3
-  | typeof PROFILE_VERSION_DOMAIN_V4;
+  | typeof PROFILE_VERSION_DOMAIN_V4
+  | typeof PROFILE_VERSION_DOMAIN_V5;
 const MAX_SCOPE_PATHS = 3;
+const MAX_DOMAIN_V5_TARGET_PATH_LENGTH = 2_048;
 const MAX_CHECKS = 32;
 const MAX_EVIDENCE_COUNT = 100_000;
 const ALLOWED_SCOPE_PATHS = ["/", "/precios", "/informe"] as const;
@@ -53,7 +56,7 @@ export function getCanonicalScanPaths(hostname: unknown): readonly string[] {
 type ControlContract = {
   methodsByPath: Readonly<Record<string, readonly string[]>>;
   evidence: Readonly<
-    Record<string, "boolean" | "count" | "http_status" | "hostname" | readonly string[]>
+    Record<string, "boolean" | "count" | "http_status" | "hostname" | "performance_ms" | "performance_bytes" | "performance_cls_milli" | "performance_score" | readonly string[]>
   >;
 };
 
@@ -70,6 +73,7 @@ const DOMAIN_V1_CONTROLS = [...TRANSPORT_V1_CONTROLS, "DS-PRIV-05"] as const;
 const DOMAIN_V2_CONTROLS = [...DOMAIN_V1_CONTROLS, "DS-PRIV-06", "DS-QUAL-02"] as const;
 const DOMAIN_V3_CONTROLS = [...DOMAIN_V2_CONTROLS, "DS-TLS-02"] as const;
 const DOMAIN_V4_CONTROLS = [...DOMAIN_V3_CONTROLS, "DS-PRIV-04"] as const;
+const DOMAIN_V5_CONTROLS = DOMAIN_V4_CONTROLS;
 const CONTROLS: Readonly<Record<string, ControlContract>> = {
   "DS-DNS-01": {
     methodsByPath: { "/": ["DNS"] },
@@ -203,6 +207,20 @@ const CONTROLS: Readonly<Record<string, ControlContract>> = {
       responseTimeMs: "count",
       responseBytes: "count",
       probeErrorCode: TLS_PROBE_ERROR_CODES,
+      mobileFcpMs: "performance_ms",
+      mobileLcpMs: "performance_ms",
+      mobileClsMilli: "performance_cls_milli",
+      mobileTbtMs: "performance_ms",
+      mobileTtfbMs: "performance_ms",
+      mobileTransferBytes: "performance_bytes",
+      mobileScore: "performance_score",
+      desktopFcpMs: "performance_ms",
+      desktopLcpMs: "performance_ms",
+      desktopClsMilli: "performance_cls_milli",
+      desktopTbtMs: "performance_ms",
+      desktopTtfbMs: "performance_ms",
+      desktopTransferBytes: "performance_bytes",
+      desktopScore: "performance_score",
     },
   },
   "DS-QUAL-01": {
@@ -225,6 +243,7 @@ const PROFILE_CONTROLS: Readonly<Record<ProfileVersion, readonly string[]>> = {
   [PROFILE_VERSION_DOMAIN_V2]: DOMAIN_V2_CONTROLS,
   [PROFILE_VERSION_DOMAIN_V3]: DOMAIN_V3_CONTROLS,
   [PROFILE_VERSION_DOMAIN_V4]: DOMAIN_V4_CONTROLS,
+  [PROFILE_VERSION_DOMAIN_V5]: DOMAIN_V5_CONTROLS,
 };
 
 export function sanitizeScanObservations(
@@ -244,10 +263,13 @@ export function sanitizeScanObservations(
     profileVersion === PROFILE_VERSION_DOMAIN_V1 ||
     profileVersion === PROFILE_VERSION_DOMAIN_V2 ||
     profileVersion === PROFILE_VERSION_DOMAIN_V3 ||
-    profileVersion === PROFILE_VERSION_DOMAIN_V4
+    profileVersion === PROFILE_VERSION_DOMAIN_V4 ||
+    profileVersion === PROFILE_VERSION_DOMAIN_V5
       ? ["/"]
       : allowedPaths;
-  const safeScope = sanitizeScope(scope, profilePaths);
+  const safeScope = profileVersion === PROFILE_VERSION_DOMAIN_V5
+    ? sanitizeDomainV5Scope(scope)
+    : sanitizeScope(scope, profilePaths);
   if (
     !Array.isArray(checks) ||
     checks.length === 0 ||
@@ -275,9 +297,10 @@ export function sanitizeScanObservations(
     profileVersion === PROFILE_VERSION_DOMAIN_V1 ||
     profileVersion === PROFILE_VERSION_DOMAIN_V2 ||
     profileVersion === PROFILE_VERSION_DOMAIN_V3 ||
-    profileVersion === PROFILE_VERSION_DOMAIN_V4
+    profileVersion === PROFILE_VERSION_DOMAIN_V4 ||
+    profileVersion === PROFILE_VERSION_DOMAIN_V5
   ) {
-    assertCompleteCoverage(safeScope, safeChecks, allowedControlIds);
+    assertCompleteCoverage(safeScope, safeChecks, allowedControlIds, profileVersion);
   }
 
   return { scope: safeScope, checks: safeChecks };
@@ -292,7 +315,8 @@ function isProfileVersion(value: unknown): value is ProfileVersion {
     value === PROFILE_VERSION_DOMAIN_V1 ||
     value === PROFILE_VERSION_DOMAIN_V2 ||
       value === PROFILE_VERSION_DOMAIN_V3 ||
-      value === PROFILE_VERSION_DOMAIN_V4
+      value === PROFILE_VERSION_DOMAIN_V4 ||
+      value === PROFILE_VERSION_DOMAIN_V5
   );
 }
 
@@ -300,13 +324,16 @@ function assertCompleteCoverage(
   scope: readonly string[],
   checks: readonly SanitizedScanCheck[],
   allowedControlIds: readonly string[],
+  profileVersion: ProfileVersion,
 ): void {
   const expectedCoverage = new Set<string>();
   for (const controlId of allowedControlIds) {
     const contract = CONTROLS[controlId];
     if (!contract) throw new Error("scan_profile_not_allowlisted");
     for (const targetPath of scope) {
-      const methods = contract.methodsByPath[targetPath] ?? [];
+      const methods = contract.methodsByPath[
+        profileVersion === PROFILE_VERSION_DOMAIN_V5 ? "/" : targetPath
+      ] ?? [];
       for (const method of methods) {
         expectedCoverage.add(coverageKey(controlId, targetPath, method));
       }
@@ -324,6 +351,34 @@ function assertCompleteCoverage(
   ) {
     throw new Error("scan_check_coverage_incomplete");
   }
+}
+
+function sanitizeDomainV5Scope(scope: unknown): readonly string[] {
+  if (
+    !Array.isArray(scope) ||
+    scope.length !== 1 ||
+    typeof scope[0] !== "string" ||
+    !isSafeDomainV5TargetPath(scope[0])
+  ) {
+    throw new Error("scan_scope_not_allowlisted");
+  }
+  return [scope[0]];
+}
+
+function isSafeDomainV5TargetPath(value: string): boolean {
+  return value.length <= MAX_DOMAIN_V5_TARGET_PATH_LENGTH &&
+    value.startsWith("/") &&
+    !value.startsWith("//") &&
+    !value.includes("#") &&
+    !value.includes("\\") &&
+    !hasAsciiControlCharacter(value);
+}
+
+function hasAsciiControlCharacter(value: string): boolean {
+  return Array.from(value).some((character) => {
+    const codePoint = character.codePointAt(0) ?? 0;
+    return codePoint <= 0x1f || codePoint === 0x7f;
+  });
 }
 
 function coverageKey(controlId: string, targetPath: string, method: string) {
@@ -368,11 +423,15 @@ function sanitizeCheck(
   const contract = CONTROLS[controlId];
   const targetPath = check.targetPath;
   const method = check.method;
+  if (typeof targetPath !== "string" || typeof method !== "string") {
+    throw new Error("scan_check_scope_not_allowlisted");
+  }
+  const contractPath = profileVersion === PROFILE_VERSION_DOMAIN_V5 ? "/" : targetPath;
   if (
-    typeof targetPath !== "string" ||
-    typeof method !== "string" ||
-    !contract.methodsByPath[targetPath]?.includes(method) ||
-    (method !== "DNS" && method !== "TLS" && !scope.includes(targetPath))
+    !contract.methodsByPath[contractPath]?.includes(method) ||
+    (profileVersion === PROFILE_VERSION_DOMAIN_V5
+      ? !scope.includes(targetPath)
+      : method !== "DNS" && method !== "TLS" && !scope.includes(targetPath))
   ) {
     throw new Error("scan_check_scope_not_allowlisted");
   }
@@ -523,6 +582,13 @@ function deriveSafeStatus(
   evidence: Record<string, SafeEvidenceValue>,
 ): SanitizedScanCheck["status"] {
   if (
+    profileVersion === PROFILE_VERSION_DOMAIN_V5 &&
+    controlId === "DS-QUAL-02" &&
+    !getRequiredEvidence(profileVersion, controlId)?.every((key) => key in evidence)
+  ) {
+    return "unknown";
+  }
+  if (
     (profileVersion === PROFILE_VERSION_V2 ||
       profileVersion === PROFILE_VERSION_V3 ||
       profileVersion === PROFILE_VERSION_TRANSPORT_V1 ||
@@ -553,6 +619,10 @@ function deriveSafeStatus(
   if (submittedStatus === "not_applicable") return "unknown";
   if (submittedStatus !== "pass") {
     return submittedStatus as SanitizedScanCheck["status"];
+  }
+
+  if (profileVersion === PROFILE_VERSION_DOMAIN_V5 && controlId === "DS-QUAL-02") {
+    return "pass";
   }
 
   if (
@@ -631,6 +701,9 @@ function getRequiredEvidence(
   profileVersion: ProfileVersion,
   controlId: string,
 ): readonly string[] | undefined {
+  if (profileVersion === PROFILE_VERSION_DOMAIN_V5 && controlId === "DS-QUAL-02") {
+    return DOMAIN_V5_PERFORMANCE_EVIDENCE;
+  }
   const controlEvidence = REQUIRED_EVIDENCE[controlId];
   if (
     (profileVersion === PROFILE_VERSION_V3 ||
@@ -652,6 +725,12 @@ function getRequiredEvidence(
   }
   return controlEvidence;
 }
+
+const DOMAIN_V5_PERFORMANCE_EVIDENCE = [
+  "mobileFcpMs", "mobileLcpMs", "mobileClsMilli", "mobileTbtMs", "mobileTtfbMs",
+  "mobileTransferBytes", "mobileScore", "desktopFcpMs", "desktopLcpMs", "desktopClsMilli",
+  "desktopTbtMs", "desktopTtfbMs", "desktopTransferBytes", "desktopScore",
+] as const;
 
 type EvidencePredicate = (
   evidence: Record<string, SafeEvidenceValue>,
@@ -780,6 +859,22 @@ function sanitizeEvidence(
       sanitized[key] = value;
       continue;
     }
+    if (rule === "performance_ms" && isSafeIntegerAtLeastZero(value)) {
+      sanitized[key] = value;
+      continue;
+    }
+    if (rule === "performance_bytes" && isSafeIntegerAtLeastZero(value) && value <= 64 * 1024 * 1024) {
+      sanitized[key] = value;
+      continue;
+    }
+    if (rule === "performance_cls_milli" && isSafeIntegerAtLeastZero(value) && value <= 100_000) {
+      sanitized[key] = value;
+      continue;
+    }
+    if (rule === "performance_score" && isSafeIntegerAtLeastZero(value) && value <= 100) {
+      sanitized[key] = value;
+      continue;
+    }
     if (rule === "http_status" && isHttpStatus(value)) {
       sanitized[key] = value;
       continue;
@@ -800,6 +895,10 @@ function sanitizeEvidence(
   }
   if (controlId === "DS-HTTP-01") validateGrumphyaRedirectEvidence(sanitized);
   return sanitized;
+}
+
+function isSafeIntegerAtLeastZero(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 }
 
 function isAuthorizedGrumphyaHostname(value: unknown): value is string {

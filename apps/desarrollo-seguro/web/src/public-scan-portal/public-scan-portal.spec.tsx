@@ -4,9 +4,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { parsePublicServiceComparison } from "@desarrolloseguro/core";
 import { PublicScanPortal } from "../index.js";
 
-const DOMAIN_INPUT_NAME = "Dominio que quieres consultar";
+const DOMAIN_INPUT_NAME = "URL HTTPS que quieres auditar";
 const SEARCH_BUTTON_NAME = "Consultar informe";
-const STATUS_ENDPOINT = "/api/desarrollo-seguro/v1/domains/example.com/status";
+const STATUS_ENDPOINT = "/api/desarrollo-seguro/v1/domains/example.com/status?targetUrl=https%3A%2F%2Fexample.com%2F";
 const ANALYSIS_REQUEST_ENDPOINT =
   "/api/desarrollo-seguro/v1/domains/example.com/analysis-requests";
 const REPORT_SUMMARY = "La cabecera de seguridad está presente.";
@@ -122,6 +122,124 @@ describe("PublicScanPortal", () => {
     vi.useRealTimers();
   });
 
+  it("shows the two-profile performance score and evidence for domain-v5", async () => {
+    const performanceEvidence = {
+      inspected: true,
+      mobileFcpMs: 1_820,
+      mobileLcpMs: 2_700,
+      mobileClsMilli: 120,
+      mobileTbtMs: 220,
+      mobileTtfbMs: 900,
+      mobileTransferBytes: 2_000_000,
+      mobileScore: 84,
+      desktopFcpMs: 1_100,
+      desktopLcpMs: 1_700,
+      desktopClsMilli: 40,
+      desktopTbtMs: 80,
+      desktopTtfbMs: 300,
+      desktopTransferBytes: 800_000,
+      desktopScore: 92,
+    };
+    const targetPath = "/servicio?plan=pro";
+    const report = {
+      ...SCORED_PUBLIC_REPORT,
+      profileVersion: "domain-v5",
+      scannerVersion: "domain-v5-network-adapter-1",
+      scope: [targetPath],
+      checks: [
+        { ...SCORED_PUBLIC_REPORT.checks[0], targetPath },
+        {
+          controlId: "DS-QUAL-02",
+          status: "pass",
+          required: true,
+          severity: "medium",
+          observedAt: "2026-11-03T07:01:00.000Z",
+          targetPath,
+          method: "GET",
+          summary: "Carga medida en móvil y escritorio.",
+          limitation: "Medición propia tipo Lighthouse.",
+          evidence: performanceEvidence,
+        },
+      ],
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(report)));
+    window.history.replaceState({}, "", `/app/?report=${REPORT_ID}`);
+
+    render(<PublicScanPortal />);
+
+    expect(await screen.findByRole("img", {
+      name: "Rendimiento: 88 de 100 puntos; 1 de 1 aspectos evaluados",
+    })).toBeVisible();
+    expect(screen.getByText("88/100 · media de móvil y escritorio")).toBeVisible();
+    const performanceButton = document.querySelector('[data-category-id="performance"]');
+    expect(performanceButton).not.toBeNull();
+    fireEvent.click(performanceButton!);
+    expect(screen.getByRole("dialog", { name: "Rendimiento" })).toBeVisible();
+    expect(screen.getByText(/Móvil 84\/100 y escritorio 92\/100; nota media 88\/100/u)).toBeVisible();
+    fireEvent.click(screen.getByText("Ver evidencias técnicas (1 comprobación)"));
+    expect(screen.getByText("Móvil · FCP")).toBeVisible();
+    expect(screen.getByText("1820 ms")).toBeVisible();
+    expect(screen.getByText("Móvil · CLS")).toBeVisible();
+    expect(screen.getByText("0,120")).toBeVisible();
+    expect(screen.getByText("Escritorio · puntuación")).toBeVisible();
+    expect(screen.getByText(/2\.000\.000 bytes/u)).toBeVisible();
+  });
+
+  it("does not invent an aggregate performance score when a required profile metric is missing", async () => {
+    const targetPath = "/servicio?plan=pro";
+    const incompleteEvidence = {
+      inspected: true,
+      mobileFcpMs: 1_820,
+      mobileClsMilli: 120,
+      mobileTbtMs: 220,
+      mobileTtfbMs: 900,
+      mobileTransferBytes: 2_000_000,
+      mobileScore: 84,
+      desktopFcpMs: 1_100,
+      desktopLcpMs: 1_700,
+      desktopClsMilli: 40,
+      desktopTbtMs: 80,
+      desktopTtfbMs: 300,
+      desktopTransferBytes: 800_000,
+      desktopScore: 92,
+    };
+    const report = {
+      ...SCORED_PUBLIC_REPORT,
+      profileVersion: "domain-v5",
+      scannerVersion: "domain-v5-network-adapter-1",
+      scope: [targetPath],
+      checks: [
+        { ...SCORED_PUBLIC_REPORT.checks[0], targetPath },
+        {
+          controlId: "DS-QUAL-02",
+          status: "unknown",
+          required: true,
+          severity: "medium",
+          observedAt: "2026-11-03T07:01:00.000Z",
+          targetPath,
+          method: "GET",
+          summary: "Medición incompleta.",
+          limitation: "Falta una métrica móvil.",
+          evidence: incompleteEvidence,
+        },
+      ],
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(report)));
+    window.history.replaceState({}, "", `/app/?report=${REPORT_ID}`);
+
+    render(<PublicScanPortal />);
+
+    expect(await screen.findByRole("img", {
+      name: "Rendimiento: sin puntuación; 0 de 1 aspectos evaluados",
+    })).toBeVisible();
+    expect(screen.getByText("Sin datos suficientes")).toBeVisible();
+    expect(screen.getByText(/Medición incompleta: falta algún dato requerido de móvil o escritorio/u)).toBeVisible();
+    const performanceButton = document.querySelector('[data-category-id="performance"]');
+    expect(performanceButton).not.toBeNull();
+    fireEvent.click(performanceButton!);
+    expect(screen.getByText(/Medición incompleta: móvil 84\/100; escritorio 92\/100/u)).toBeVisible();
+  });
+
   it("lets an authorized user request a bounded analysis for an unscanned domain", async () => {
     const fetchMock = vi
       .fn()
@@ -146,7 +264,7 @@ describe("PublicScanPortal", () => {
     expect(screen.queryByText(/Comprobación técnica acotada desde el mismo VPS/i)).not.toBeInTheDocument();
     await user.type(
       screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }),
-      "example.com",
+      "https://example.com/",
     );
     await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
 
@@ -175,13 +293,50 @@ describe("PublicScanPortal", () => {
       headers: { Accept: "application/json", "Content-Type": "application/json" },
       credentials: "omit",
       cache: "no-store",
-      body: JSON.stringify({ authorized: true }),
+      body: JSON.stringify({ authorized: true, targetUrl: "https://example.com/" }),
     });
     expect(await screen.findByRole("progressbar", { name: "Progreso del análisis" }))
       .toHaveAttribute("data-phase", "queued");
     expect(
       screen.getByRole("progressbar", { name: "Progreso del análisis" }),
     ).toHaveAttribute("data-phase", "queued");
+  });
+
+  it.each([
+    ["grumphya.com", true],
+    ["desarrolloseguro.org", true],
+    ["talentoypersonas.com", false],
+  ] as const)("shows the beta certification status for %s only when it is a client", async (hostname, visible) => {
+    const report = {
+      ...PUBLIC_REPORT,
+      hostname,
+      certification: {
+        policyVersion: "beta-0.1",
+        state: "pending",
+        latestAssessmentStatus: "pending",
+        score: null,
+        lastCheckedAt: "2026-11-03T07:01:00.000Z",
+        certifiedReportId: null,
+      },
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({
+      hostname,
+      enrollment: "on_demand",
+      state: "fresh",
+      failureCode: null,
+      activeJobId: null,
+      lastReport: report,
+      checkedAt: "2026-11-03T07:01:00.000Z",
+    })));
+    const user = userEvent.setup();
+
+    render(<PublicScanPortal />);
+    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), `https://${hostname}/`);
+    await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
+
+    expect(await screen.findByRole("heading", { name: "Qué significa esta valoración" })).toBeVisible();
+    expect(document.querySelector(".ds-portal__certification") !== null).toBe(visible);
+    expect(screen.queryByText("Certificación beta · beta-0.1") !== null).toBe(visible);
   });
 
   it("shows the permanent redirect evidence separately from the canonical report", async () => {
@@ -206,7 +361,7 @@ describe("PublicScanPortal", () => {
     })));
     const user = userEvent.setup();
     render(<PublicScanPortal />);
-    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "www.grumphya.com");
+    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "https://www.grumphya.com/");
     await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
     expect(await screen.findByText(/redirección permanente HTTP 301 a grumphya\.com/i)).toBeVisible();
     expect(screen.getByText(/respuesta final fue HTTP 200/i)).toBeVisible();
@@ -240,7 +395,7 @@ describe("PublicScanPortal", () => {
     })));
     const user = userEvent.setup();
     render(<PublicScanPortal />);
-    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "grumphya.com");
+    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "https://grumphya.com/");
     await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
 
     expect(await screen.findByRole("heading", { name: "Lo que ocurre dentro de Grumphya" })).toBeVisible();
@@ -281,7 +436,7 @@ describe("PublicScanPortal", () => {
     })));
     const user = userEvent.setup();
     render(<PublicScanPortal />);
-    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "grumphya.com");
+    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "https://grumphya.com/");
     await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
 
     const auditSection = await screen.findByRole("region", { name: "Lo que ocurre dentro de Grumphya" });
@@ -345,7 +500,7 @@ describe("PublicScanPortal", () => {
     const user = userEvent.setup();
 
     render(<PublicScanPortal />);
-    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "grumphya.com");
+    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "https://grumphya.com/");
     await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
 
     expect(await screen.findByRole("heading", { name: "Información adicional compartida por Grumphya" })).toBeVisible();
@@ -411,7 +566,7 @@ describe("PublicScanPortal", () => {
     })));
     const user = userEvent.setup();
     render(<PublicScanPortal />);
-    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "desarrolloseguro.org");
+    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "https://desarrolloseguro.org/");
     await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
 
     expect(await screen.findByRole("heading", { name: "Información adicional compartida por Desarrollo Seguro" })).toBeVisible();
@@ -469,7 +624,7 @@ describe("PublicScanPortal", () => {
     const user = userEvent.setup();
 
     render(<PublicScanPortal />);
-    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "example.com");
+    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "https://example.com/");
     await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
 
     expect(await screen.findByRole("heading", { name: "Qué significa esta valoración" })).toBeVisible();
@@ -519,7 +674,7 @@ describe("PublicScanPortal", () => {
     const user = userEvent.setup();
 
     render(<PublicScanPortal />);
-    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "example.com");
+    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "https://example.com/");
     await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
 
     expect(await screen.findByRole("heading", { name: "Servicios externos detectados" })).toBeVisible();
@@ -564,7 +719,7 @@ describe("PublicScanPortal", () => {
     })));
     const user = userEvent.setup();
     render(<PublicScanPortal />);
-    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "example.com");
+    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "https://example.com/");
     await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
 
     expect(await screen.findByText("Google Analytics")).toBeVisible();
@@ -594,7 +749,7 @@ describe("PublicScanPortal", () => {
     })));
     const user = userEvent.setup();
     render(<PublicScanPortal />);
-    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "example.com");
+    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "https://example.com/");
     await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
 
     expect(await screen.findByRole("heading", { name: "Acceso a información legal" })).toBeVisible();
@@ -636,7 +791,7 @@ describe("PublicScanPortal", () => {
     })));
     const user = userEvent.setup();
     render(<PublicScanPortal />);
-    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "example.com");
+    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "https://example.com/");
     await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
 
     expect(await screen.findByRole("heading", { name: "Acceso a información legal" })).toBeVisible();
@@ -672,7 +827,7 @@ describe("PublicScanPortal", () => {
     render(<PublicScanPortal />);
     await user.type(
       screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }),
-      "example.com",
+      "https://example.com/",
     );
     await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
     await user.click(
@@ -725,7 +880,7 @@ describe("PublicScanPortal", () => {
     render(<PublicScanPortal />);
     await user.type(
       screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }),
-      "example.com",
+      "https://example.com/",
     );
     await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
 
@@ -976,7 +1131,7 @@ describe("PublicScanPortal", () => {
     const user = userEvent.setup();
 
     render(<PublicScanPortal />);
-    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "example.com");
+    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "https://example.com/");
     await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
 
     expect(await screen.findByRole("heading", { name: "Qué significa esta valoración" })).toBeVisible();
@@ -1027,7 +1182,7 @@ describe("PublicScanPortal", () => {
     })));
     const user = userEvent.setup();
     render(<PublicScanPortal />);
-    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "example.com");
+    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "https://example.com/");
     await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
 
     expect(await screen.findByText("La revisión sigue en curso.")).toBeVisible();
@@ -1109,7 +1264,7 @@ describe("PublicScanPortal", () => {
     render(<PublicScanPortal />);
     await user.type(
       screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }),
-      "example.com",
+      "https://example.com/",
     );
     await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
 
@@ -1126,7 +1281,7 @@ describe("PublicScanPortal", () => {
       headers: { Accept: "application/json", "Content-Type": "application/json" },
       credentials: "omit",
       cache: "no-store",
-      body: JSON.stringify({ authorized: true }),
+      body: JSON.stringify({ authorized: true, targetUrl: "https://example.com/" }),
     });
     expect(await screen.findByRole("progressbar", { name: "Progreso del análisis" }))
       .toHaveAttribute("data-phase", "queued");
@@ -1158,7 +1313,7 @@ describe("PublicScanPortal", () => {
     render(<PublicScanPortal />);
     await user.type(
       screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }),
-      "example.com",
+      "https://example.com/",
     );
     await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
 
@@ -1193,7 +1348,7 @@ describe("PublicScanPortal", () => {
     render(<PublicScanPortal />);
     await user.type(
       screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }),
-      "example.com",
+      "https://example.com/",
     );
     await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
 
@@ -1427,7 +1582,7 @@ describe("PublicScanPortal", () => {
     render(<PublicScanPortal />);
     await user.type(
       screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }),
-      "example.com",
+      "https://example.com/",
     );
     await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
 
@@ -1451,7 +1606,7 @@ describe("PublicScanPortal", () => {
     render(<PublicScanPortal />);
     await user.type(
       screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }),
-      "example.com",
+      "https://example.com/",
     );
     await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
 
@@ -1480,7 +1635,7 @@ describe("PublicScanPortal", () => {
     render(<PublicScanPortal />);
     await user.type(
       screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }),
-      "example.com",
+      "https://example.com/",
     );
     await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
 
@@ -1509,7 +1664,7 @@ describe("PublicScanPortal", () => {
     const user = userEvent.setup();
 
     render(<PublicScanPortal />);
-    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "example.com");
+    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "https://example.com/");
     await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
@@ -1530,7 +1685,7 @@ describe("PublicScanPortal", () => {
     render(<PublicScanPortal />);
     await user.type(
       screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }),
-      "example.com",
+      "https://example.com/",
     );
     await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
 
@@ -1552,7 +1707,7 @@ describe("PublicScanPortal", () => {
     render(<PublicScanPortal />);
     await user.type(
       screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }),
-      "example.com",
+      "https://example.com/",
     );
     await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
 
@@ -1562,7 +1717,7 @@ describe("PublicScanPortal", () => {
     expect(screen.queryByText("rate_limited")).not.toBeInTheDocument();
   });
 
-  it("rejects a URL instead of sending a request to an arbitrary path", async () => {
+  it("rejects HTTP URLs instead of auditing an insecure URL", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
@@ -1570,13 +1725,13 @@ describe("PublicScanPortal", () => {
     render(<PublicScanPortal />);
     await user.type(
       screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }),
-      "https://example.com/path",
+      "http://example.com/path",
     );
     await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
 
     expect(fetchMock).not.toHaveBeenCalled();
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Escribe un dominio válido",
+      "Escribe una URL HTTPS pública completa",
     );
   });
 
@@ -1587,7 +1742,7 @@ describe("PublicScanPortal", () => {
 
     render(<PublicScanPortal />);
     const input = screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME });
-    await user.type(input, "https://example.com/ruta");
+    await user.type(input, "https://127.0.0.1/ruta");
     await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
 
     expect(input).toHaveAttribute("aria-invalid", "true");
@@ -1595,7 +1750,7 @@ describe("PublicScanPortal", () => {
       "aria-errormessage",
       "ds-portal-domain-error",
     );
-    expect(screen.getByText("Escribe un dominio válido, por ejemplo ejemplo.es.")).toHaveAttribute(
+    expect(screen.getByText("Escribe una URL HTTPS pública completa, por ejemplo https://ejemplo.es/servicio.")).toHaveAttribute(
       "id",
       "ds-portal-domain-error",
     );
@@ -1632,7 +1787,7 @@ describe("PublicScanPortal", () => {
     const form = input.closest("form");
     if (!form) throw new Error("search_form_missing");
     await act(async () => {
-      fireEvent.change(input, { target: { value: "example.com" } });
+      fireEvent.change(input, { target: { value: "https://example.com/" } });
       fireEvent.submit(form);
       await Promise.resolve();
     });
@@ -1679,7 +1834,7 @@ describe("PublicScanPortal", () => {
       .mockReturnValueOnce(pendingRequest));
     const user = userEvent.setup();
     render(<PublicScanPortal />);
-    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "example.com");
+    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "https://example.com/");
     await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
     await user.click(screen.getByRole("checkbox", { name: /tengo autorización/i }));
     await user.click(screen.getByRole("button", { name: "Solicitar análisis" }));

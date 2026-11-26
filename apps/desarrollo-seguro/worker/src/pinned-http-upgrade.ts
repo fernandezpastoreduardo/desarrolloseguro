@@ -1,10 +1,7 @@
 import { request as defaultHttpRequest } from "node:http";
 import type { ClientRequest, IncomingMessage, RequestOptions } from "node:http";
 import type { LookupFunction } from "node:net";
-import {
-  getCanonicalScanPaths,
-  normalizeHostname,
-} from "@desarrolloseguro/core";
+import { getCanonicalScanPaths, normalizeHostname } from "@desarrolloseguro/core";
 import {
   createEgressAuthorizedLookup,
   createEgressDestinationAuthorizer,
@@ -29,6 +26,7 @@ export type PinnedHttpUpgradeRequest = {
   path: string;
   method: "GET" | "HEAD";
   allowedPaths: readonly string[];
+  allowCustomPaths?: boolean;
   signal: AbortSignal;
 };
 
@@ -69,9 +67,10 @@ export async function requestPinnedHttpUpgrade(
 ): Promise<PinnedHttpUpgradeResult> {
   const hostname = normalizeHostname(input.hostname);
   validateMethod(input.method);
-  const allowedPaths = getCanonicalScanPaths(hostname).filter((path) =>
-    input.allowedPaths.includes(path),
-  );
+  validateAllowedPaths(input.allowedPaths, input.allowCustomPaths === true);
+  const allowedPaths = input.allowCustomPaths === true
+    ? [...input.allowedPaths]
+    : input.allowedPaths.filter((path) => getCanonicalScanPaths(hostname).includes(path));
   validatePath(input.path, allowedPaths);
   if (input.signal.aborted) throw new Error("request_aborted");
 
@@ -138,6 +137,7 @@ export async function requestPinnedHttpUpgrade(
           path: upgradedTarget.path,
           method: input.method,
           allowedPaths,
+        allowCustomPaths: input.allowCustomPaths,
           signal: scopedSignal.signal,
         },
         {
@@ -350,7 +350,30 @@ function isWwwAliasPair(fromHostname: string, toHostname: string): boolean {
 }
 
 function validatePath(path: string, allowedPaths: readonly string[]): void {
-  if (!allowedPaths.includes(path)) throw new Error("request_path_not_allowlisted");
+  if (path.length > 2_048 || !path.startsWith("/") || path.startsWith("//") ||
+      hasUnsafePathCharacters(path) || !allowedPaths.includes(path)) {
+    throw new Error("request_path_not_allowlisted");
+  }
+}
+
+function validateAllowedPaths(allowedPaths: readonly string[], allowCustomPaths: boolean): void {
+  if (
+    !Array.isArray(allowedPaths) ||
+    allowedPaths.length === 0 ||
+    allowedPaths.length > 3 ||
+    (allowCustomPaths && allowedPaths.length !== 1) ||
+    allowedPaths.some((path) => typeof path !== "string" || path.length > 2_048 ||
+      !path.startsWith("/") || path.startsWith("//") || hasUnsafePathCharacters(path))
+  ) {
+    throw new Error("invalid_scan_scope");
+  }
+}
+
+function hasUnsafePathCharacters(path: string): boolean {
+  return path.includes("#") || [...path].some((character) => {
+    const code = character.codePointAt(0) ?? 0;
+    return code < 0x20 || code === 0x7f || character === "\\";
+  });
 }
 
 function validateMethod(method: string): void {

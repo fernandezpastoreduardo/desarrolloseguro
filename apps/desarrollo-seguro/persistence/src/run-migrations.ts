@@ -167,6 +167,7 @@ const MIGRATIONS = [
   { version: "060_service_comparison_provider_documentation", file: "060_service_comparison_provider_documentation.sql" },
   { version: "061_legal_cookie_blocked_request_evidence", file: "061_legal_cookie_blocked_request_evidence.sql" },
   { version: "062_public_browser_evidence_contract", file: "062_public_browser_evidence_contract.sql" },
+  { version: "063_exact_target_url_jobs", file: "063_exact_target_url_jobs.sql" },
 ] as const;
 
 export const DEVELOPMENT_SECURITY_MIGRATION_COUNT = MIGRATIONS.length;

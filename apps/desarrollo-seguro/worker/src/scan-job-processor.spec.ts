@@ -16,6 +16,7 @@ const LEASE_TOKEN = "fixture-lease-token";
 const JOB: ClaimedScanJob = {
   id: "d1d1d1d1-d1d1-41d1-81d1-d1d1d1d1d1d1",
   hostname: "sample.example.net",
+  targetUrl: null,
   profileVersion: "controls-v1",
   trigger: "requested",
   attempts: 1,

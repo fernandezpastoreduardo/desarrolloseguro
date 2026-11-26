@@ -1,5 +1,6 @@
 import { chromium, type Browser, type BrowserContext, type Page, type Request } from "playwright";
-import { normalizeHostname, isThirdPartyPrivacyHost, PRIVACY_BROWSER_BUDGET, type FirstEntryPolicyLinkVisit } from "@desarrolloseguro/core";
+import { normalizeHostname, parseScanTargetUrl, isThirdPartyPrivacyHost, PRIVACY_BROWSER_BUDGET, type FirstEntryPolicyLinkVisit } from "@desarrolloseguro/core";
+import type { PerformanceBrowserEvidence } from "./performance-browser-observer.js";
 import { PrivacyBrowserRequestGate } from "./privacy-browser-request-gate.js";
 import {
   PrivacyRequestTimeline,
@@ -38,6 +39,7 @@ export type PrivacyBrowserInput = {
   protocolVersion: 1;
   requestId: string;
   hostname: string;
+  targetUrl?: string;
 };
 
 export type PrivacyBrowserFlowObservation = {
@@ -113,6 +115,7 @@ export type PrivacyBrowserObservation = {
   requestBudgetExceeded: boolean;
   thirdPartyRequestHosts: string[];
   receivedBytes: number | null;
+  performance?: PerformanceBrowserEvidence;
 };
 
 export type PrivacyVendorControlCheck = {
@@ -204,6 +207,12 @@ export async function observePrivacyBehavior(
   },
 ): Promise<PrivacyBrowserObservation> {
   const hostname = normalizeHostname(input.hostname);
+  let targetUrl = `https://${hostname}/`;
+  if (input.targetUrl !== undefined) {
+    const target = parseScanTargetUrl(input.targetUrl);
+    if (target.hostname !== hostname) throw new Error("privacy_browser_request_invalid");
+    targetUrl = target.targetUrl;
+  }
   if (input.protocolVersion !== 1 || !/^[0-9a-f-]{36}$/iu.test(input.requestId)) throw new Error("privacy_browser_request_invalid");
   if (typeof options.proxyUrl !== "string" || !options.proxyUrl.startsWith("http://")) throw new Error("privacy_browser_proxy_invalid");
   const gate = new PrivacyBrowserRequestGate({
@@ -229,17 +238,17 @@ export async function observePrivacyBehavior(
       proxy: { server: options.proxyUrl, bypass: "<-loopback>" },
       args: ["--disable-background-networking", "--disable-component-update", "--disable-sync", "--no-first-run", "--disable-dev-shm-usage"],
     });
-    const initialBase = await runFlow(browser, hostname, "initial", gate, ledger, signal, options.inspectPolicyLinks);
+    const initialBase = await runFlow(browser, targetUrl, "initial", gate, ledger, signal, options.inspectPolicyLinks);
     const policyLinkVisit = await runPolicyLinkVisit(browser, initialBase, gate, ledger, signal);
     const initial = applyPolicyLinkDocumentAccess(initialBase, policyLinkVisit);
-    const accept = await runFlow(browser, hostname, "accept", gate, ledger, signal);
-    const reject = await runFlow(browser, hostname, "reject", gate, ledger, signal);
-    const discovery = await discoverVendorControls(browser, hostname, initial, gate, ledger, signal);
+    const accept = await runFlow(browser, targetUrl, "accept", gate, ledger, signal);
+    const reject = await runFlow(browser, targetUrl, "reject", gate, ledger, signal);
+    const discovery = await discoverVendorControls(browser, targetUrl, initial, gate, ledger, signal);
     const vendorControls: PrivacyVendorControlCheck[] = [];
     if (discovery.status !== "not_applicable") {
       for (const candidate of discovery.candidates.slice(0, MAX_PROVIDER_CONTEXTS)) {
         if (signal.aborted || gate.hasExceededBudget()) break;
-        vendorControls.push(await runVendorControlCheck(browser, hostname, candidate, gate, ledger, signal));
+        vendorControls.push(await runVendorControlCheck(browser, targetUrl, candidate, gate, ledger, signal));
       }
     }
     const vendorControlCoverage = resolveVendorControlCoverage(discovery, vendorControls);
@@ -403,7 +412,7 @@ function applyPolicyLinkDocumentAccess(
 
 async function runFlow(
   browser: Browser,
-  hostname: string,
+  targetUrl: string,
   action: "initial" | "accept" | "reject",
   gate: PrivacyBrowserRequestGate,
   ledger: RequestLedger,
@@ -434,7 +443,7 @@ async function runFlow(
       if (requestHostname) completedHosts.add(requestHostname);
     });
     try {
-      await page.goto(`https://${hostname}/`, { waitUntil: "domcontentloaded" });
+      await page.goto(targetUrl, { waitUntil: "domcontentloaded" });
       pageLoaded = true;
     } catch {
       const captured = await captureFlow(context, page, { ...UNKNOWN_FLOW, pageLoaded }, timeline, ledger, flowHosts, completedHosts);
@@ -634,7 +643,7 @@ async function capturePersistedChoiceState(
 
 async function discoverVendorControls(
   browser: Browser,
-  hostname: string,
+  targetUrl: string,
   initial: PrivacyBrowserFlowObservation,
   gate: PrivacyBrowserRequestGate,
   ledger: RequestLedger,
@@ -659,7 +668,7 @@ async function discoverVendorControls(
     page.setDefaultTimeout(ACTION_TIMEOUT_MS);
     page.setDefaultNavigationTimeout(NAVIGATION_TIMEOUT_MS);
     try {
-      await page.goto(`https://${hostname}/`, { waitUntil: "domcontentloaded" });
+      await page.goto(targetUrl, { waitUntil: "domcontentloaded" });
       await page.waitForTimeout(CONSENT_SETTLE_MS);
       let controls = await inspectConsentControls(page);
       const manage = findConsentControl(controls, "manage");
@@ -688,7 +697,7 @@ async function discoverVendorControls(
 
 async function runVendorControlCheck(
   browser: Browser,
-  hostname: string,
+  targetUrl: string,
   candidate: VendorToggle,
   gate: PrivacyBrowserRequestGate,
   ledger: RequestLedger,
@@ -727,7 +736,7 @@ async function runVendorControlCheck(
       if (requestHostname) completedHosts.add(requestHostname);
     });
     try {
-      await page.goto(`https://${hostname}/`, { waitUntil: "domcontentloaded" });
+      await page.goto(targetUrl, { waitUntil: "domcontentloaded" });
       await page.waitForTimeout(CONSENT_SETTLE_MS);
       let controls = await inspectConsentControls(page);
       const accept = findConsentControl(controls, "accept");

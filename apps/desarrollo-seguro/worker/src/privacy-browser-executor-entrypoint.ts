@@ -1,4 +1,6 @@
 import { observePrivacyBehavior, type PrivacyBrowserInput, type PrivacyBrowserObservation } from "./privacy-browser-observer.js";
+import { observePagePerformance, type PerformanceBrowserEvidence } from "./performance-browser-observer.js";
+import { parseScanTargetUrl } from "@desarrolloseguro/core";
 import { PRIVACY_BROWSER_MAX_RESPONSE_BYTES } from "./privacy-browser-contract.js";
 
 const MAX_INPUT_BYTES = 4 * 1024;
@@ -16,8 +18,9 @@ async function main(): Promise<void> {
   }
 
   let result: PrivacyBrowserObservation;
+  const browserSignal = AbortSignal.timeout(120_000);
   try {
-    result = await observePrivacyBehavior(input, { proxyUrl: PROXY_URL });
+    result = await observePrivacyBehavior(input, { proxyUrl: PROXY_URL, signal: browserSignal });
   } catch {
     result = {
       protocolVersion: 1,
@@ -38,6 +41,20 @@ async function main(): Promise<void> {
       thirdPartyRequestHosts: [],
       receivedBytes: null,
     };
+  }
+  if (input.targetUrl) {
+    let performance: PerformanceBrowserEvidence;
+    try {
+      performance = await observePagePerformance({
+        targetUrl: input.targetUrl,
+        hostname: input.hostname,
+        proxyUrl: PROXY_URL,
+        signal: browserSignal,
+      });
+    } catch {
+      performance = unknownPerformanceEvidence();
+    }
+    result = { ...result, performance };
   }
   const serialized = `${JSON.stringify(result)}\n`;
   if (Buffer.byteLength(serialized, "utf8") > PRIVACY_BROWSER_MAX_RESPONSE_BYTES) {
@@ -61,12 +78,32 @@ async function readInput(): Promise<string> {
 
 function parseInput(input: string): PrivacyBrowserInput {
   const value: unknown = JSON.parse(input);
-  if (!isRecord(value) || Object.keys(value).length !== 3 || value.protocolVersion !== 1 ||
+  if (!isRecord(value) || Object.keys(value).length !== (Object.hasOwn(value, "targetUrl") ? 4 : 3) || value.protocolVersion !== 1 ||
       typeof value.requestId !== "string" || !/^[0-9a-f-]{36}$/iu.test(value.requestId) ||
       typeof value.hostname !== "string" || value.hostname.length > 253) {
     throw new Error("privacy_browser_request_invalid");
   }
+  if (value.targetUrl !== undefined) {
+    const target = parseScanTargetUrl(value.targetUrl);
+    if (target.hostname !== value.hostname.toLowerCase()) throw new Error("privacy_browser_request_invalid");
+    return { protocolVersion: 1, requestId: value.requestId, hostname: value.hostname, targetUrl: target.targetUrl };
+  }
   return { protocolVersion: 1, requestId: value.requestId, hostname: value.hostname };
+}
+
+function unknownPerformanceEvidence(): PerformanceBrowserEvidence {
+  const unknown = (profile: "mobile" | "desktop") => ({
+    profile,
+    status: "unknown" as const,
+    fcpMs: null,
+    lcpMs: null,
+    cls: null,
+    tbtMs: null,
+    ttfbMs: null,
+    transferBytes: null,
+    score: null,
+  });
+  return { profiles: [unknown("mobile"), unknown("desktop")] };
 }
 
 function unknownFlow(): PrivacyBrowserObservation["initial"] {

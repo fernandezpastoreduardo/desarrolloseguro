@@ -13,6 +13,7 @@ Esta carpeta reúne documentación técnica del proyecto independiente Desarroll
 - [Producción](production.md): topología Docker aislada y preparación manual.
 - [Verificación](verification.md): alcance y límites de las comprobaciones actuales.
 - [Historial público](public-report-history.md): contrato del historial acotado y comparabilidad de informes.
+- [Auditoría de URL y rendimiento](auditoria-url-y-rendimiento.md): selección de URL exacta, límites de admisión y métricas móviles/escritorio.
 - [Revisión técnica pública de Grumphya](public-internal-audit-summary.md): estados, vigencia y límites de los 14 criterios privados que aparecen en la ficha.
 - [Cierre de Beta](beta-closure.md): estado por etapa, puertas ejecutadas y dependencias operativas.
 - [Evaluación de C](beta-stage-c-assessment.md): niveles de validación, criterios satisfechos y bloqueantes.

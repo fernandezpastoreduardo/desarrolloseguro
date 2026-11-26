@@ -11,6 +11,7 @@ import {
 const JOB: ClaimedScanJob = {
   id: "d1d1d1d1-d1d1-41d1-81d1-d1d1d1d1d1d1",
   hostname: "sample.example.net",
+  targetUrl: null,
   profileVersion: "transport-v1",
   trigger: "requested",
   attempts: 1,

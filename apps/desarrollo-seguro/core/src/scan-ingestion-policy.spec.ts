@@ -28,6 +28,79 @@ const SAFE_DNS_CHECK = {
 };
 
 describe("sanitizeScanObservations", () => {
+  it("accepts domain-v5 coverage for one exact query-bearing target path", () => {
+    const targetPath = "/trabajo/oferta?utm_source=auditor&x=a%2Fb";
+    const checks = makeDomainV4Checks().map((check) => ({ ...check, targetPath }));
+    const result = sanitizeScanObservations(
+      MONITORED_HOSTNAME,
+      "domain-v5",
+      [targetPath],
+      checks,
+    );
+
+    expect(result.scope).toEqual([targetPath]);
+    expect(result.checks).toHaveLength(makeDomainV4Checks().length);
+    expect(result.checks.every((check) => check.targetPath === targetPath)).toBe(true);
+  });
+
+  it("accepts numeric mobile and desktop browser performance evidence for domain-v5", () => {
+    const targetPath = "/trabajo/oferta?source=lab";
+    const evidence = makeDomainV5PerformanceEvidence();
+    const checks = makeDomainV4Checks().map((check) => check.controlId === "DS-QUAL-02"
+      ? { ...check, targetPath, status: "pass", evidence }
+      : { ...check, targetPath });
+    const result = sanitizeScanObservations(MONITORED_HOSTNAME, "domain-v5", [targetPath], checks);
+    const performance = result.checks.find(({ controlId }) => controlId === "DS-QUAL-02");
+
+    expect(performance?.status).toBe("pass");
+    expect(performance?.evidence).toEqual(evidence);
+  });
+
+  it("keeps domain-v5 performance unknown when any required metric is absent", () => {
+    const targetPath = "/trabajo/oferta?source=lab";
+    const evidence = makeDomainV5PerformanceEvidence();
+    delete evidence.mobileLcpMs;
+    const checks = makeDomainV4Checks().map((check) => check.controlId === "DS-QUAL-02"
+      ? { ...check, targetPath, status: "pass", evidence }
+      : { ...check, targetPath });
+    const result = sanitizeScanObservations(MONITORED_HOSTNAME, "domain-v5", [targetPath], checks);
+
+    expect(result.checks.find(({ controlId }) => controlId === "DS-QUAL-02")?.status).toBe("unknown");
+  });
+
+  it.each([
+    ["negative time", "mobileFcpMs", -1],
+    ["fractional time", "desktopTbtMs", 1.5],
+    ["CLS above range", "mobileClsMilli", 100_001],
+    ["transfer over 64 MiB", "desktopTransferBytes", 64 * 1024 * 1024 + 1],
+    ["score above 100", "mobileScore", 101],
+  ])("rejects domain-v5 performance evidence with %s", (_label, key, value) => {
+    const targetPath = "/trabajo/oferta?source=lab";
+    const evidence = { ...makeDomainV5PerformanceEvidence(), [key]: value };
+    const checks = makeDomainV4Checks().map((check) => check.controlId === "DS-QUAL-02"
+      ? { ...check, targetPath, status: "pass", evidence }
+      : { ...check, targetPath });
+
+    expect(() => sanitizeScanObservations(MONITORED_HOSTNAME, "domain-v5", [targetPath], checks))
+      .toThrow("scan_evidence_invalid");
+  });
+
+  it.each([
+    ["absolute URL", "https://example.com/oferta?x=1"],
+    ["authority reference", "//other.example/oferta"],
+    ["literal fragment", "/oferta?x=1#detalle"],
+    ["oversized path", `/${"a".repeat(2_048)}`],
+  ])("rejects domain-v5 scope with %s", (_description, targetPath) => {
+    expect(() =>
+      sanitizeScanObservations(
+        MONITORED_HOSTNAME,
+        "domain-v5",
+        [targetPath],
+        makeDomainV4Checks().map((check) => ({ ...check, targetPath })),
+      ),
+    ).toThrow("scan_scope_not_allowlisted");
+  });
+
   it("retains browser cookie and tracking evidence while separating blocked attempts from responses", () => {
     const checks = makeDomainV4Checks().map((check) => {
       if (check.controlId === "DS-PRIV-05") {
@@ -1272,6 +1345,25 @@ function makeDomainV4Checks() {
       evidence: policyEvidence,
     },
   ];
+}
+
+function makeDomainV5PerformanceEvidence(): Record<string, number> {
+  return {
+    mobileFcpMs: 1_100,
+    mobileLcpMs: 1_800,
+    mobileClsMilli: 40,
+    mobileTbtMs: 100,
+    mobileTtfbMs: 350,
+    mobileTransferBytes: 120_000,
+    mobileScore: 85,
+    desktopFcpMs: 500,
+    desktopLcpMs: 900,
+    desktopClsMilli: 10,
+    desktopTbtMs: 25,
+    desktopTtfbMs: 180,
+    desktopTransferBytes: 120_000,
+    desktopScore: 98,
+  };
 }
 
 function makeTransportV1Checks() {

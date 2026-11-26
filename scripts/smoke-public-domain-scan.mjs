@@ -29,8 +29,8 @@ export function validateCompletedReport(status, previousReportId, hostname = VAL
     throw new Error("public_scan_report_not_refreshed");
   }
   if (
-    report.profileVersion !== "domain-v4" ||
-    report.scannerVersion !== "domain-v4-network-adapter-7" ||
+    report.profileVersion !== "domain-v5" ||
+    report.scannerVersion !== "domain-v5-network-adapter-1" ||
 
     !Array.isArray(report.checks) ||
     report.checks.length !== 10
@@ -51,6 +51,16 @@ export function validateCompletedReport(status, previousReportId, hostname = VAL
   );
   if (inconclusiveWithoutReason) {
     throw new Error("public_scan_inconclusive_without_diagnostic");
+  }
+  const performanceEvidence = report.checks.find(({ controlId }) => controlId === "DS-QUAL-02")?.evidence;
+  const requiredPerformanceMetrics = [
+    "mobileFcpMs", "mobileLcpMs", "mobileClsMilli", "mobileTbtMs", "mobileTtfbMs", "mobileTransferBytes", "mobileScore",
+    "desktopFcpMs", "desktopLcpMs", "desktopClsMilli", "desktopTbtMs", "desktopTtfbMs", "desktopTransferBytes", "desktopScore",
+  ];
+  if (!performanceEvidence || !requiredPerformanceMetrics.every((key) =>
+    Number.isSafeInteger(performanceEvidence[key]) && performanceEvidence[key] >= 0
+  )) {
+    throw new Error("public_scan_performance_metrics_incomplete");
   }
 
   const assessment = report.ethicsAssessment;
@@ -289,20 +299,22 @@ async function fetchJson(path, init = {}) {
 }
 
 async function runSmoke() {
+  const targetUrl = `https://${VALIDATION_HOSTNAME}/`;
+  const statusPath = `domains/${VALIDATION_HOSTNAME}/status?${new URLSearchParams({ targetUrl })}`;
   const wwwResponse = await fetch("https://www.desarrolloseguro.org/", {
     redirect: "manual",
     signal: AbortSignal.timeout(15_000),
   });
   validateWwwRedirect(wwwResponse.status, wwwResponse.headers.get("location"));
 
-  const initialStatus = await fetchJson(`domains/${VALIDATION_HOSTNAME}/status`);
+  const initialStatus = await fetchJson(statusPath);
   const previousReportId = initialStatus?.lastReport?.id ?? null;
   const admission = await fetchJson(
     `domains/${VALIDATION_HOSTNAME}/analysis-requests`,
-    { method: "POST", body: JSON.stringify({ authorized: true }) },
+    { method: "POST", body: JSON.stringify({ authorized: true, targetUrl }) },
   );
   if (["cached", "rate_limited"].includes(admission.state)) {
-    const status = await fetchJson(`domains/${VALIDATION_HOSTNAME}/status`);
+    const status = await fetchJson(statusPath);
     const report = validateReusableAdmission(admission, status);
     writeNonBlockingDiagnostics(report);
     process.stdout.write(
@@ -318,7 +330,7 @@ async function runSmoke() {
   }
   const report = await waitForPublicScanReport({
     previousReportId,
-    getStatus: () => fetchJson(`domains/${VALIDATION_HOSTNAME}/status`),
+    getStatus: () => fetchJson(statusPath),
     onProgress: (message) => process.stdout.write(`${message}\n`),
   });
   writeNonBlockingDiagnostics(report);

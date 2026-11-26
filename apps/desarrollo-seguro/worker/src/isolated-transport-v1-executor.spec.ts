@@ -15,6 +15,7 @@ describe("IsolatedTransportV1Executor", () => {
       const claimedJob = {
         id: "d1d1d1d1-d1d1-41d1-81d1-d1d1d1d1d1d1",
         hostname: " SAMPLE.EXAMPLE.NET. ",
+        targetUrl: null,
         profileVersion: "transport-v1",
         trigger: "requested",
         attempts: 1,
@@ -52,7 +53,7 @@ describe("IsolatedTransportV1Executor", () => {
     const request = executor.execute(
       {
         hostname: "sample.example.net",
-        profileVersion: "transport-v1",
+        targetUrl: null, profileVersion: "transport-v1",
       },
       controller.signal,
     );

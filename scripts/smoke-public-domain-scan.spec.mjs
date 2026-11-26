@@ -23,7 +23,10 @@ function completedStatus() {
     { controlId: "DS-PRIV-04", status: "pass", summary: "Política pública revisada", evidence: { inspected: true, privacyPolicyLinksFound: 1, policyLinksFound: 1, sitePrivacyPolicyFetched: true, policyPagesFetched: 1, policyPagesMissing: 0, policyPagesDenied: 0, policyRecipientsMentioned: true, policyPurposesMentioned: true, policyTextBlocked: false, policyProbeFailed: false, policyLanguageCatalogVersion: "public-policy-language-eea-v1" } },
     { controlId: "DS-PRIV-05", status: "pass", summary: "Sin cookies conocidas" },
     { controlId: "DS-PRIV-06", status: "pass", summary: "No hay referencias a rastreadores conocidos" },
-    { controlId: "DS-QUAL-02", status: "pass", summary: "Respuesta inicial inferior a 2,5 segundos" },
+    { controlId: "DS-QUAL-02", status: "pass", summary: "Métricas completas en móvil y escritorio", evidence: {
+      mobileFcpMs: 900, mobileLcpMs: 1_200, mobileClsMilli: 10, mobileTbtMs: 50, mobileTtfbMs: 300, mobileTransferBytes: 400_000, mobileScore: 100,
+      desktopFcpMs: 500, desktopLcpMs: 800, desktopClsMilli: 10, desktopTbtMs: 10, desktopTtfbMs: 200, desktopTransferBytes: 400_000, desktopScore: 100,
+    } },
   ];
   const criteria = [
     { id: "dns-integrity", status: "pass" },
@@ -39,8 +42,8 @@ function completedStatus() {
     hostname: "grumphya.com",
     lastReport: {
       id: "f7490d2d-2976-4a89-a9a7-001690e873ef",
-      profileVersion: "domain-v4",
-      scannerVersion: "domain-v4-network-adapter-7",
+      profileVersion: "domain-v5",
+      scannerVersion: "domain-v5-network-adapter-1",
       completedAt: "2026-11-11T20:00:00.000Z",
       checks,
       ethicsAssessment: {
@@ -85,6 +88,16 @@ test("accepts a refreshed report with all eight v6 ethics criteria and service e
   assert.equal(report.processorTransparencyAssessment.status, "pass");
   assert.equal(report.publicPolicyTransparencyAssessment.status, "pass");
   assert.equal(report.checks.length, 10);
+});
+
+test("blocks deployment when the live report lacks a mobile or desktop performance metric", () => {
+  const status = completedStatus();
+  const performanceCheck = status.lastReport.checks.find(({ controlId }) => controlId === "DS-QUAL-02");
+  delete performanceCheck.evidence.mobileLcpMs;
+  assert.throws(
+    () => validateCompletedReport(status, "previous-report-id"),
+    /public_scan_performance_metrics_incomplete/u,
+  );
 });
 
 test("requires 100/100 and source-registry evidence for the self-domain report", () => {

@@ -33,7 +33,6 @@ import {
 import { createPublicPolicyHttpsFetcher } from "./public-policy-https-fetcher.js";
 import { classifyPublicPolicyHtml } from "./public-policy-classifier.js";
 
-const ROOT_PATHS = ["/"] as const;
 const TLS_VERSION_PROBES = [
   { tlsVersion: "TLSv1", evidenceKey: "tls10Accepted", errorKey: "tls10ProbeError" },
   { tlsVersion: "TLSv1.1", evidenceKey: "tls11Accepted", errorKey: "tls11ProbeError" },
@@ -50,6 +49,7 @@ export type TransportV1NetworkObserverDependencies = {
   inspectPage?: boolean;
   inspectPublicPolicies?: boolean;
   probeTlsVersions?: boolean;
+  allowCustomTargetPath?: boolean;
   publicPolicyFetchDocument?: PublicPolicyFetchDocument;
 };
 
@@ -88,15 +88,16 @@ export function createTransportV1NetworkObserver(
         }),
       );
     },
-    async observeTls(hostname, signal) {
+    async observeTls(hostname, signal, targetPath = "/") {
       const negotiated = await collectProbe(
         () =>
           requestPinnedHttps(
             {
               hostname,
-              path: "/",
+              path: targetPath,
               method: "HEAD",
-              allowedPaths: ROOT_PATHS,
+              allowedPaths: [targetPath],
+              allowCustomPaths: dependencies.allowCustomTargetPath,
               signal,
             },
             {
@@ -120,9 +121,10 @@ export function createTransportV1NetworkObserver(
           () => requestPinnedHttps(
             {
               hostname,
-              path: "/",
+              path: targetPath,
               method: "HEAD",
-              allowedPaths: ROOT_PATHS,
+              allowedPaths: [targetPath],
+              allowCustomPaths: dependencies.allowCustomTargetPath,
               signal,
               tlsVersion: probe.tlsVersion,
               allowUntrustedCertificate: true,
@@ -165,15 +167,16 @@ export function createTransportV1NetworkObserver(
       };
 
     },
-    async observeHttp(hostname, method, signal) {
+    async observeHttp(hostname, method, signal, targetPath = "/") {
       return collectProbe(
         () =>
           requestPinnedHttpUpgrade(
             {
               hostname,
-              path: "/",
+              path: targetPath,
               method,
-              allowedPaths: ROOT_PATHS,
+              allowedPaths: [targetPath],
+              allowCustomPaths: dependencies.allowCustomTargetPath,
               signal,
             },
             {
@@ -210,7 +213,7 @@ export function createTransportV1NetworkObserver(
         }),
       );
     },
-    async observeHeaders(hostname, signal) {
+    async observeHeaders(hostname, signal, targetPath = "/") {
       return collectProbe(
         async () => {
           const observationStartedAt = Date.now();
@@ -218,9 +221,10 @@ export function createTransportV1NetworkObserver(
             {
               hostname,
               allowCanonicalWwwRedirects: true,
-              path: "/",
+              path: targetPath,
               method: "GET",
-              allowedPaths: ROOT_PATHS,
+              allowedPaths: [targetPath],
+              allowCustomPaths: dependencies.allowCustomTargetPath,
               signal,
               inspectPage: dependencies.inspectPage === true,
               capturePublicPolicyLinks: dependencies.inspectPublicPolicies === true,

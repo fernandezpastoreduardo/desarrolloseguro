@@ -7,6 +7,7 @@ import {
   HttpStatus,
   Param,
   Post,
+  Query,
   UseGuards,
 } from "@nestjs/common";
 import {
@@ -29,8 +30,9 @@ export class PublicScanController {
   @Header("Cache-Control", CACHE_CONTROL_NO_STORE)
   getDomainStatus(
     @Param("hostname") hostname: string,
+    @Query("targetUrl") targetUrl?: string,
   ): Promise<PublicDomainStatus> {
-    return this.scans.getDomainStatus(hostname);
+    return this.scans.getDomainStatus(hostname, targetUrl);
   }
 
   @Post("domains/:hostname/analysis-requests")

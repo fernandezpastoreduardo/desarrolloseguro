@@ -1,4 +1,4 @@
-import { normalizeHostname, SCAN_FAILURE_CODES, parseFirstEntryPolicyAccess, parseLegalCookieFindings, parsePrivacyAssessment, parsePublicPolicyTransparencyAssessment, parsePublicServiceComparison, parsePublicServiceDeclarations, parseScanFailureDiagnostic, type ScanFailureCode, type ScanFailureDiagnostic } from "@desarrolloseguro/core";
+import { normalizeHostname, parseScanTargetUrl, SCAN_FAILURE_CODES, parseFirstEntryPolicyAccess, parseLegalCookieFindings, parsePrivacyAssessment, parsePublicPolicyTransparencyAssessment, parsePublicServiceComparison, parsePublicServiceDeclarations, parseScanFailureDiagnostic, type ScanFailureCode, type ScanFailureDiagnostic } from "@desarrolloseguro/core";
 import type { ScanCheck, ScanRunInput } from "@desarrolloseguro/persistence";
 import { isNetworkProbeFailureList, type NetworkProbeFailure, type ScanProfileVersion } from "./transport-v1-executor.js";
 import { getTransportBudget } from "./transport-budget.js";
@@ -15,6 +15,7 @@ export type TransportV1ExecutorRequest = {
   requestId: string;
   hostname: string;
   profileVersion: ScanProfileVersion;
+  targetUrl?: string;
 };
 
 export type TransportV1ExecutorDiagnostic = {
@@ -41,7 +42,7 @@ export function parseTransportV1ExecutorRequest(
 ): TransportV1ExecutorRequest {
   if (
     !isRecord(value) ||
-    Reflect.ownKeys(value).length !== 4 ||
+    Reflect.ownKeys(value).length !== (value.profileVersion === "domain-v5" ? 5 : 4) ||
     !Object.hasOwn(value, "protocolVersion") ||
     !Object.hasOwn(value, "requestId") ||
     !Object.hasOwn(value, "hostname") ||
@@ -53,7 +54,8 @@ export function parseTransportV1ExecutorRequest(
   if (
     typeof value.requestId !== "string" ||
     !/^[0-9a-f-]{36}$/iu.test(value.requestId) ||
-    !isScanProfileVersion(value.profileVersion)
+    !isScanProfileVersion(value.profileVersion) ||
+    (value.profileVersion === "domain-v5" ? typeof value.targetUrl !== "string" : Object.hasOwn(value, "targetUrl"))
   ) {
     throw new Error("executor_request_invalid");
   }
@@ -63,18 +65,29 @@ export function parseTransportV1ExecutorRequest(
   } catch {
     throw new Error("executor_request_invalid");
   }
-  return {
+  const request: TransportV1ExecutorRequest = {
     protocolVersion: 1,
     requestId: value.requestId,
     hostname,
     profileVersion: value.profileVersion,
   };
+  if (value.profileVersion === "domain-v5") {
+    try {
+      const target = parseScanTargetUrl(value.targetUrl);
+      if (target.hostname !== hostname) throw new Error("target_host_mismatch");
+      return { ...request, targetUrl: target.targetUrl };
+    } catch {
+      throw new Error("executor_request_invalid");
+    }
+  }
+  return request;
 }
 
 export function parseTransportV1ExecutorResponse(
   value: unknown,
   expectedRequestId: string,
   profileVersion: ScanProfileVersion = "transport-v1",
+  expectedTargetPath = "/",
 ): TransportV1ExecutorResponse {
   if (
     !isRecord(value) ||
@@ -107,7 +120,7 @@ export function parseTransportV1ExecutorResponse(
   return {
     protocolVersion: 1,
     requestId: expectedRequestId,
-    result: parseExecutorResult(value.result, profileVersion),
+    result: parseExecutorResult(value.result, profileVersion, expectedTargetPath),
   };
 }
 
@@ -125,6 +138,7 @@ function isScanFailureCode(value: unknown): value is ScanFailureCode {
 function parseExecutorResult(
   value: unknown,
   profileVersion: ScanProfileVersion,
+  expectedTargetPath: string,
 ): ScanExecutorResult {
   if (!isRecord(value)) throw new Error("executor_result_invalid");
   const startedAt = parseDate(value.startedAt);
@@ -135,7 +149,7 @@ function parseExecutorResult(
     !isVerdict(value.verdict) ||
     !Array.isArray(value.scope) ||
     value.scope.length !== 1 ||
-    value.scope[0] !== "/" ||
+    value.scope[0] !== expectedTargetPath ||
     !Array.isArray(value.checks) ||
     value.checks.length !== getExpectedCheckCount(profileVersion) ||
     !isRecord(value.metrics)
@@ -165,7 +179,7 @@ function parseExecutorResult(
     result.privacyAssessment = privacyAssessment;
   }
   if (value.publicPolicyTransparencyAssessment !== undefined) {
-    if (profileVersion !== "domain-v4" || value.scannerVersion !== "domain-v4-network-adapter-7") {
+    if (!isPublicPolicyProfileScanner(profileVersion, value.scannerVersion)) {
       throw new Error("executor_result_invalid");
     }
     const assessment = parsePublicPolicyTransparencyAssessment(value.publicPolicyTransparencyAssessment);
@@ -173,7 +187,7 @@ function parseExecutorResult(
     result.publicPolicyTransparencyAssessment = assessment;
   }
   if (value.publicServiceDeclarations !== undefined) {
-    if (profileVersion !== "domain-v4" || value.scannerVersion !== "domain-v4-network-adapter-7") {
+    if (!isPublicPolicyProfileScanner(profileVersion, value.scannerVersion)) {
       throw new Error("executor_result_invalid");
     }
     const declarations = parsePublicServiceDeclarations(value.publicServiceDeclarations);
@@ -181,7 +195,7 @@ function parseExecutorResult(
     result.publicServiceDeclarations = declarations;
   }
   if (value.publicPolicyDiscoveredDocuments !== undefined) {
-    if (profileVersion !== "domain-v4" || value.scannerVersion !== "domain-v4-network-adapter-7") {
+    if (!isPublicPolicyProfileScanner(profileVersion, value.scannerVersion)) {
       throw new Error("executor_result_invalid");
     }
     const documents = parsePublicPolicyDiscoveredDocuments(value.publicPolicyDiscoveredDocuments);
@@ -193,7 +207,7 @@ function parseExecutorResult(
     value.legalCookieFindings !== undefined ||
     value.firstEntryPolicyAccess !== undefined
   ) {
-    if (profileVersion !== "domain-v4" || value.scannerVersion !== "domain-v4-network-adapter-7") {
+    if (!isPublicPolicyProfileScanner(profileVersion, value.scannerVersion)) {
       throw new Error("executor_result_invalid");
     }
   }
@@ -220,10 +234,11 @@ function parseExecutorResult(
 }
 
 function isScanProfileVersion(value: unknown): value is ScanProfileVersion {
-  return value === "transport-v1" || value === "domain-v1" || value === "domain-v2" || value === "domain-v3" || value === "domain-v4";
+  return value === "transport-v1" || value === "domain-v1" || value === "domain-v2" || value === "domain-v3" || value === "domain-v4" || value === "domain-v5";
 }
 
 function getScannerVersion(profileVersion: ScanProfileVersion): string {
+  if (profileVersion === "domain-v5") return "domain-v5-network-adapter-1";
   if (profileVersion === "domain-v3") return "domain-v3-network-adapter-1";
   if (profileVersion === "domain-v4") return "domain-v4-network-adapter-1";
   if (profileVersion === "domain-v2") return "domain-v2-network-adapter-1";
@@ -233,14 +248,21 @@ function getScannerVersion(profileVersion: ScanProfileVersion): string {
 }
 
 function getExpectedScannerVersion(profileVersion: ScanProfileVersion, hasPublicPolicyAssessment: boolean): string {
+  if (profileVersion === "domain-v5") return "domain-v5-network-adapter-1";
   return profileVersion === "domain-v4" && hasPublicPolicyAssessment
     ? "domain-v4-network-adapter-7"
     : getScannerVersion(profileVersion);
 }
 
+function isPublicPolicyProfileScanner(profileVersion: ScanProfileVersion, scannerVersion: unknown): boolean {
+  return (profileVersion === "domain-v4" && scannerVersion === "domain-v4-network-adapter-7") ||
+    (profileVersion === "domain-v5" && scannerVersion === "domain-v5-network-adapter-1");
+}
+
 function getExpectedCheckCount(profileVersion: ScanProfileVersion): number {
   if (profileVersion === "domain-v3") return 9;
   if (profileVersion === "domain-v4") return 10;
+  if (profileVersion === "domain-v5") return 10;
   if (profileVersion === "domain-v2") return 8;
   return profileVersion === "domain-v1" ? 6 : 5;
 }

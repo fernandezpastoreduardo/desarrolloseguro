@@ -40,6 +40,59 @@ const VALID_REPORT: ScanRunInput = {
 };
 
 describe("PostgresScanStore unit behavior", () => {
+  it("admits only a matching HTTPS target without credentials, fragments, or non-default ports", async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [{ outcome: "queued", entity_id: "job-id" }] });
+    const store = new PostgresScanStore(makePool({ query }));
+
+    await expect(store.requestOnDemandScan("example.com", "https://example.com/jobs?q=a%2Fb"))
+      .resolves.toEqual({ kind: "queued", jobId: "job-id" });
+    expect(query).toHaveBeenCalledWith(
+      "SELECT outcome, entity_id FROM ds_request_on_demand_target_scan($1, $2)",
+      ["example.com", "https://example.com/jobs?q=a%2Fb"],
+    );
+    await store.requestOnDemandScan("example.com", "https://example.com/jobs?q=one#section");
+    expect(query).toHaveBeenLastCalledWith(
+      "SELECT outcome, entity_id FROM ds_request_on_demand_target_scan($1, $2)",
+      ["example.com", "https://example.com/jobs?q=one"],
+    );
+
+    for (const targetUrl of [
+      "http://example.com/",
+      "https://other.example/jobs",
+      "https://user@example.com/jobs",
+      "https://example.com:8443/jobs",
+      `https://example.com/${"a".repeat(2048)}`,
+    ]) {
+      await expect(store.requestOnDemandTargetScan("example.com", targetUrl))
+        .rejects.toThrow("invalid_scan_target_url");
+    }
+    expect(query).toHaveBeenCalledTimes(2);
+  });
+
+  it("loads the exact domain-v5 scope when a target URL is provided", async () => {
+    const query = vi.fn().mockResolvedValue({
+      rows: [makePublicReportRow({
+        report_id: null,
+        hostname: "example.com",
+        enrollment: "on_demand",
+        profile_version: "domain-v5",
+        opted_out_at: null,
+        active_job_id: "job-id",
+      })],
+    });
+    const store = new PostgresScanStore(makePool({ query }));
+
+    await expect(store.readPublicDomainSnapshot(
+      "example.com",
+      "https://example.com/jobs?role=designer#description",
+    )).resolves.toMatchObject({ profileVersion: "domain-v5", activeJobId: "job-id" });
+    expect(query).toHaveBeenCalledWith(expect.stringContaining("scope_json @> jsonb_build_array($2::text)"), [
+      "example.com",
+      "/jobs?role=designer",
+      "https://example.com/jobs?role=designer",
+    ]);
+  });
+
   it("reports storage health as false when the database query fails", async () => {
     const pool = makePool({
       query: vi.fn().mockRejectedValue(new Error("db")),

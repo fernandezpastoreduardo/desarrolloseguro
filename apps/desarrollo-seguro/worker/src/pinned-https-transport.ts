@@ -40,6 +40,7 @@ export type PinnedHttpsRequest = {
   path: string;
   method: "GET" | "HEAD";
   allowedPaths: readonly string[];
+  allowCustomPaths?: boolean;
   signal: AbortSignal;
   inspectPage?: boolean;
   capturePublicPolicyLinks?: boolean;
@@ -93,11 +94,10 @@ export async function requestPinnedHttps(
     !isWwwAliasPair(requestedHostname, hostname)
   )) throw new Error("invalid_scan_redirect_context");
   validateRequestMethod(input.method);
-  validateAllowedPaths(input.allowedPaths);
-  const canonicalPaths = getCanonicalScanPaths(hostname);
-  const allowedPaths = input.allowedPaths.filter((path) =>
-    canonicalPaths.includes(path),
-  );
+  validateAllowedPaths(input.allowedPaths, input.allowCustomPaths === true);
+  const allowedPaths = input.allowCustomPaths === true
+    ? [...input.allowedPaths]
+    : input.allowedPaths.filter((path) => getCanonicalScanPaths(hostname).includes(path));
   validatePath(input.path, allowedPaths, "request_path_not_allowlisted");
   if (input.signal.aborted) {
     throw new Error("request_aborted");
@@ -525,9 +525,11 @@ function validatePath(
 ): void {
   if (
     typeof path !== "string" ||
+    path.length > 2_048 ||
+    !path.startsWith("/") ||
+    path.startsWith("//") ||
     hasUnsafePathCharacters(path) ||
     path.includes("#") ||
-    path.includes("?") ||
     !allowedPaths.includes(path)
   ) {
     throw new Error(errorCode);
@@ -542,11 +544,14 @@ function hasUnsafePathCharacters(path: string): boolean {
   });
 }
 
-function validateAllowedPaths(allowedPaths: readonly string[]): void {
+function validateAllowedPaths(allowedPaths: readonly string[], allowCustomPaths: boolean): void {
   if (
     !Array.isArray(allowedPaths) ||
     allowedPaths.length === 0 ||
-    allowedPaths.some((path) => typeof path !== "string")
+    allowedPaths.length > 3 ||
+    (allowCustomPaths && allowedPaths.length !== 1) ||
+    allowedPaths.some((path) => typeof path !== "string" || path.length > 2_048 ||
+      !path.startsWith("/") || path.startsWith("//") || hasUnsafePathCharacters(path))
   ) {
     throw new Error("invalid_scan_scope");
   }

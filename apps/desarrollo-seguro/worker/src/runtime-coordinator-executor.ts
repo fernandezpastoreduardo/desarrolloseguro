@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { lstat, stat } from "node:fs/promises";
 import { createConnection } from "node:net";
 import { dirname } from "node:path";
-import { normalizeHostname } from "@desarrolloseguro/core";
+import { normalizeHostname, parseScanTargetUrl } from "@desarrolloseguro/core";
 import type { ScanRunInput } from "@desarrolloseguro/persistence";
 import {
   MAX_EXECUTOR_REQUEST_BYTES,
@@ -58,6 +58,7 @@ export class RuntimeCoordinatorExecutor implements ScanExecutor {
         requestId: randomUUID(),
         hostname: normalizeHostname(job.hostname),
         profileVersion: job.profileVersion,
+        ...(job.profileVersion === "domain-v5" && job.targetUrl !== null ? { targetUrl: job.targetUrl } : {}),
       });
     } catch {
       throw new Error("executor_request_invalid");
@@ -143,6 +144,7 @@ export class RuntimeCoordinatorExecutor implements ScanExecutor {
             JSON.parse(responseText) as unknown,
             request.requestId,
             request.profileVersion,
+            request.targetUrl ? parseScanTargetUrl(request.targetUrl).targetPath : "/",
           );
           if ("errorCode" in response) {
             finishWithError(

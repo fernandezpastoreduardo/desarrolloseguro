@@ -44,14 +44,15 @@ export async function listenTransportV1EgressBroker(
   jobHostnameInput: unknown,
   source: TransportV1ObservationSource,
   profileVersion: ScanProfileVersion = "transport-v1",
+  targetPath = "/",
 ): Promise<{ close: () => Promise<void> }> {
   if (process.platform === "win32" || socketPath.length === 0) {
     throw new Error("egress_broker_socket_invalid");
   }
   await assertPrivateSocketDirectory(socketPath);
   const jobHostname = normalizeHostname(jobHostnameInput);
-  const broker = createTransportV1EgressBroker(jobHostname, source, profileVersion);
-  const timeoutMs = profileVersion === "domain-v4"
+  const broker = createTransportV1EgressBroker(jobHostname, source, profileVersion, targetPath);
+  const timeoutMs = profileVersion === "domain-v4" || profileVersion === "domain-v5"
     ? getTransportBudget(profileVersion).maxDurationMs
     : IPC_TIMEOUT_MS;
   let activeConnections = 0;
@@ -79,17 +80,18 @@ export async function listenTransportV1EgressBroker(
 export function createUnixSocketObservationSource(
   socketPath: string,
   profileVersion: ScanProfileVersion = "transport-v1",
+  targetPath = "/",
 ): TransportV1ObservationSource {
   if (process.platform === "win32" || socketPath.length === 0) {
     throw new Error("egress_broker_socket_invalid");
   }
   return {
     sourceKind: "network",
-    observeDns: (hostname, signal) => requestOperation(socketPath, hostname, "dns", signal, profileVersion),
-    observeTls: (hostname, signal) => requestOperation(socketPath, hostname, "tls", signal, profileVersion),
-    observeHttp: (hostname, method, signal) =>
-      requestOperation(socketPath, hostname, method === "HEAD" ? "http-head" : "http-get", signal, profileVersion),
-    observeHeaders: (hostname, signal) => requestOperation(socketPath, hostname, "headers", signal, profileVersion),
+    observeDns: (hostname, signal, requestedPath = targetPath) => requestOperation(socketPath, hostname, "dns", signal, profileVersion, requestedPath),
+    observeTls: (hostname, signal, requestedPath = targetPath) => requestOperation(socketPath, hostname, "tls", signal, profileVersion, requestedPath),
+    observeHttp: (hostname, method, signal, requestedPath = targetPath) =>
+      requestOperation(socketPath, hostname, method === "HEAD" ? "http-head" : "http-get", signal, profileVersion, requestedPath),
+    observeHeaders: (hostname, signal, requestedPath = targetPath) => requestOperation(socketPath, hostname, "headers", signal, profileVersion, requestedPath),
   };
 }
 
@@ -182,6 +184,7 @@ async function requestOperation(
   operation: TransportV1ProbeOperation,
   signal: AbortSignal,
   profileVersion: ScanProfileVersion,
+  targetPath = "/",
 ): Promise<TransportV1ProbeResult> {
   const budget = getTransportBudget(profileVersion);
   const hostname = normalizeHostname(hostnameInput);
@@ -190,12 +193,15 @@ async function requestOperation(
     requestId: randomUUID(),
     hostname,
     operation,
+    targetPath,
   };
   const response = await exchange(
     socketPath,
     request,
     signal,
-    profileVersion === "domain-v4" ? getTransportBudget(profileVersion).maxDurationMs : IPC_TIMEOUT_MS,
+    profileVersion === "domain-v4" || profileVersion === "domain-v5"
+      ? getTransportBudget(profileVersion).maxDurationMs
+      : IPC_TIMEOUT_MS,
   );
   if (
     isRecord(response) &&
