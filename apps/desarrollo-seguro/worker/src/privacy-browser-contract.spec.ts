@@ -23,6 +23,20 @@ describe("privacy browser response contract", () => {
     expect(() => parsePrivacyBrowserObservation({ ...makeObservation(), reject: {} }, EXPECTED))
       .toThrow("executor_response_invalid");
   });
+
+  it("accepts only allowlisted internal Lighthouse failure metadata", () => {
+    const profile = {
+      profile: "mobile", status: "unknown", fcpMs: null, speedIndexMs: null, lcpMs: null, cls: null,
+      tbtMs: null, ttfbMs: null, transferBytes: null, score: null,
+      diagnostic: { code: "browser_observation_error", runtimeFailure: { stage: "run_lighthouse", errorClass: "target_closed" } },
+    };
+    const observation = { ...makeObservation(), performance: { profiles: [profile, { ...profile, profile: "desktop" }] } };
+    expect(parsePrivacyBrowserObservation(observation, EXPECTED).performance).toEqual(observation.performance);
+    expect(() => parsePrivacyBrowserObservation({
+      ...makeObservation(),
+      performance: { profiles: [{ ...profile, diagnostic: { ...profile.diagnostic, message: "private page data" } }, { ...profile, profile: "desktop" }] },
+    }, EXPECTED)).toThrow("executor_response_invalid");
+  });
 });
 
 function makeObservation() {
