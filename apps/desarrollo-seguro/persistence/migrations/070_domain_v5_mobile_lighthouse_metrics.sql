@@ -30,13 +30,20 @@ BEGIN
 
   SELECT pg_get_viewdef('public.ds_public_check_results'::regclass, true)
   INTO view_definition;
-  updated_view_definition := replace(
+  updated_view_definition := regexp_replace(
     view_definition,
-    $old$'mobileFcpMs', 'mobileLcpMs'$old$,
-    $new$'mobileFcpMs', 'mobileSpeedIndexMs', 'mobileLcpMs'$new$
+    $pattern$WHEN 'DS-QUAL-02'(::text)? THEN ARRAY\[[^]]*\]$pattern$,
+    $replacement$WHEN 'DS-QUAL-02' THEN ARRAY[
+        'inspected', 'responseTimeMs', 'responseBytes', 'probeErrorCode',
+        'mobileFcpMs', 'mobileSpeedIndexMs', 'mobileLcpMs', 'mobileClsMilli', 'mobileTbtMs', 'mobileTtfbMs',
+        'mobileTransferBytes', 'mobileScore', 'desktopFcpMs', 'desktopLcpMs',
+        'desktopClsMilli', 'desktopTbtMs', 'desktopTtfbMs', 'desktopTransferBytes', 'desktopScore'
+      ]$replacement$,
+    'g'
   );
   IF updated_view_definition = view_definition
-    OR position('mobileSpeedIndexMs' IN updated_view_definition) = 0 THEN
+    OR position('mobileSpeedIndexMs' IN updated_view_definition) = 0
+    OR position('desktopScore' IN updated_view_definition) = 0 THEN
     RAISE EXCEPTION 'domain_v5_mobile_speed_index_projection_update_failed';
   END IF;
   EXECUTE 'CREATE OR REPLACE VIEW public.ds_public_check_results AS ' || updated_view_definition;
