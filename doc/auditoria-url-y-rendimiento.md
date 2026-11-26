@@ -49,6 +49,12 @@ requiere el conjunto móvil y escritorio completo. La cola conserva la URL
 solicitada hasta terminar el trabajo, pero el informe almacena la ruta y query
 como scope y no conserva el fragmento.
 
+La persistencia también valida los resúmenes públicos de observación Chromium
+para cookies y rastreadores en `domain-v5`. El contrato SQL debe coincidir con
+los textos generados por el saneador; una discrepancia rechaza el informe aunque
+la medición haya terminado correctamente. La integración PostgreSQL cubre
+informes v5 con observaciones completas en ambos controles.
+
 La prueba incluye recursos HTTPS de terceros que la página cargue mediante
 GET/HEAD. El proxy valida los destinos, fija DNS a IPv4 pública y limita
 solicitudes, bytes y duración. No envía formularios ni realiza acciones de
