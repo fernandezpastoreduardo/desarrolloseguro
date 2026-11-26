@@ -4,7 +4,7 @@ Desarrollo Seguro publica páginas de presentación, metodología, privacidad y 
 
 La portada muestra `grumphya.com` y `desarrolloseguro.org` como sitios certificados y enlaza con el resultado vigente de cada uno. El buscador permite consultar cualquier URL válida. Cada informe conserva sus datos, puntuaciones, categorías, estados y clasificaciones; las modales de categoría presentan estados y evidencias técnicas con contraste legible en tema claro y oscuro. La ficha estática de prototipo se retiró porque sus cifras eran históricas y no representaban un informe vigente.
 
-La puntuación de rendimiento es una media de seis métricas propias estándar tomadas en móvil y escritorio; no es una puntuación oficial de Lighthouse.
+La nota de Rendimiento promedia móvil y escritorio. La puntuación móvil sigue los pesos y curvas de Lighthouse 13.6.0 sobre métricas medidas por nuestro Chromium; Speed Index se estima con fotogramas acotados y TBT con la ventana de interactividad. Escritorio conserva la rúbrica anterior. No es un resultado oficial de Lighthouse.
 
 El portal admite los informes vigentes `domain-v5` del adaptador `domain-v5-network-adapter-2`, incluidos sus bloques de transparencia de políticas, comparación de servicios externos y evaluación ética v6.
 

@@ -65,17 +65,20 @@ separado hasta que esté disponible el resultado final. Al acabar o fallar el
 job, se borra este estado temporal.
 
 La URL completa se propaga por admisión, job temporal, transporte/worker,
-perfil y validación del informe. Rendimiento usa mediciones propias tipo
-Lighthouse para móvil y escritorio, sin librerías externas ni atribución de
-puntuación oficial de Lighthouse. Móvil usa viewport 375×812, ralentización CPU 4× y red con RTT
-150 ms, bajada 1,6 Mbps y subida 750 Kbps. Escritorio usa viewport 1365×768
-sin throttling. La puntuación combina FCP (15 %), LCP (25 %), CLS (20 %), TBT
-(20 %), TTFB (15 %) y bytes transferidos (5 %). Cada métrica recibe 100 en el
-umbral bueno y 0 en el malo, con interpolación lineal entre ambos: FCP 1,8/3 s;
-LCP 2,5/4 s; CLS 0,1/0,25; TBT 200/600 ms; TTFB 0,8/1,8 s; transferencia
-1,6/4 MB. Si falta una métrica requerida, el perfil queda sin puntuación y se
-indica la comprobación incompleta; la ausencia de medición no se convierte en
-un valor cero.
+perfil y validación del informe. Rendimiento se mide en Chromium con contextos
+nuevos. Móvil usa viewport 375×812, ralentización CPU 4× y red con RTT 150 ms,
+bajada 1,6 Mbps y subida 750 Kbps. Escritorio usa viewport 1365×768 sin
+throttling. La puntuación móvil sigue el modelo predeterminado de Lighthouse
+13.6.0: FCP (10 %), Speed Index (10 %), LCP (25 %), TBT (30 %) y CLS (25 %),
+con sus curvas lognormales y umbrales móviles. TBT se calcula solo desde FCP
+hasta TTI; no se suman tareas largas anteriores a FCP ni posteriores a TTI.
+La puntuación de escritorio conserva la rúbrica existente hasta definir una
+revisión específica para escritorio. TTFB y bytes transferidos permanecen como
+datos diagnósticos y no alteran la puntuación móvil. Cada métrica que interviene
+en la puntuación debe tener evidencia numérica; si falta una, el perfil queda
+sin puntuación y se informa como incompleto, nunca como cero. El informe
+identifica la versión del modelo y expone las métricas que contribuyen a la
+nota.
 
 El perfil `domain-v5` mantiene también las comprobaciones públicas de
 transparencia documental y comparación de servicios externos del perfil
@@ -123,7 +126,7 @@ timeout del contenedor y el del coordinador cubren ambas ventanas más el
 escaneo base, el inicio y la limpieza del runtime; un perfil no debe quedar
 incompleto solo porque la observación anterior usó su propio presupuesto.
 El estado final de `DS-QUAL-02` se calcula después de combinar la evidencia
-HTTP inicial con las catorce métricas de Chromium. El estado provisional
+HTTP inicial con las métricas de Chromium requeridas. El estado provisional
 `unknown` por ausencia temporal de métricas no puede sobrevivir si ambos
 perfiles se completaron; una respuesta lenta sigue siendo `fail`, y la falta
 de cualquier dato requerido sigue siendo `unknown`.
@@ -140,13 +143,13 @@ El límite exterior permite terminar las dos observaciones secuenciales y su
 limpieza. Una prueba de regresión debe demostrar que agotar el plazo de
 privacidad no presenta a rendimiento una señal ya abortada.
 Una regresión adicional debe empezar con `DS-QUAL-02` provisionalmente
-`unknown`, aportar después respuesta HTTP válida y las catorce métricas, y
+`unknown`, aportar después respuesta HTTP válida y las métricas completas, y
 comprobar que la nueva sanitización produce `pass`; el umbral de respuesta
 superior a 2.500 ms conserva `fail`.
 
 **Disponible:** API `GET` de estado e informe y `POST` para solicitar una revisión nueva; límites antiabuso por minuto, capacidad compartida PostgreSQL y proyección que excluye evidencia interna. La consulta GET no encola trabajos cuando ya existe un informe; cuando no hay informe, la acción del buscador solicita una auditoría. La revisión nueva de una URL ya auditada requiere confirmar autorización. El portal consulta el estado cada cinco segundos, hasta 15 minutos mientras haya trabajo activo, y presenta el informe nuevo cuando queda guardado. Si falla la admisión o no aparece un trabajo activo ni un informe nuevo, detiene el sondeo y permite reintentar. El estado temporal incluye progreso real y monotónico por aspecto, persistido en el job y expuesto mientras siga activo. El runtime real está desplegado; el 20 de noviembre de 2026 se verificó una renovación periódica que produjo un informe nuevo y actualizó la certificación.
 
-**Corrección de persistencia `domain-v5`:** el validador SQL de resultados debe admitir el perfil `domain-v5` en los mismos puntos de allowlist que `domain-v4`, conservando la validación acotada de controles, métodos, rutas y evidencia. El control `DS-QUAL-02` debe admitir y validar las 14 métricas móvil/escritorio que requiere el perfil, con los mismos límites enteros seguros del parser TypeScript; un resultado `pass` requiere el conjunto completo. La migración debe extender de forma robusta definiciones históricas que puedan contener entradas duplicadas; su comprobación no puede limitarse a encontrar `domain-v5` en cualquier parte de la función. La regresión PostgreSQL debe ejecutar la persistencia real de un informe solicitado `domain-v5` con métricas completas y volver a leerlas. El job no se considera completado si se generó una observación pero el informe fue rechazado al guardarse.
+**Corrección de persistencia `domain-v5`:** el validador SQL de resultados debe admitir el perfil `domain-v5` en los mismos puntos de allowlist que `domain-v4`, conservando la validación acotada de controles, métodos, rutas y evidencia. El control `DS-QUAL-02` admite y valida las métricas móvil/escritorio del perfil, con los mismos límites enteros seguros del parser TypeScript; un resultado `pass` requiere el conjunto completo. La migración debe extender de forma robusta definiciones históricas que puedan contener entradas duplicadas; su comprobación no puede limitarse a encontrar `domain-v5` en cualquier parte de la función. La regresión PostgreSQL debe ejecutar la persistencia real de un informe solicitado `domain-v5` con métricas completas y volver a leerlas. El job no se considera completado si se generó una observación pero el informe fue rechazado al guardarse.
 
 **Criterios:** errores y ausencia de informe no muestran un resultado inventado ni reutilizan silenciosamente un informe anterior; respuestas llevan `Cache-Control: no-store`; el estado `not_scanned` indica que no existe observación.
 

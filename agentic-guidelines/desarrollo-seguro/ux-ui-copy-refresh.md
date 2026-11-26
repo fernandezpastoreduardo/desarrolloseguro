@@ -106,9 +106,10 @@ la búsqueda convencional siguen siendo vías disponibles.
   texto y datos legibles sobre su fondo oscuro, tanto con el portal en tema
   claro como oscuro. Los estados se presentan como etiquetas rellenas con
   contraste suficiente; se conservan sus nombres y diferencias semánticas.
-- El resumen y la evidencia del rendimiento describen la puntuación como una
-  media de seis métricas propias estándar. No la presentan como equivalente a
-  Lighthouse.
+- El resumen de Rendimiento indica que móvil sigue los pesos y curvas de
+  Lighthouse 13.6.0, mientras escritorio conserva la rúbrica anterior. Debe
+  aclarar que las métricas las mide Chromium propio y que la nota no es un
+  resultado oficial de Lighthouse.
 - Las hojas de estilo se escriben exclusivamente en SCSS. No se añaden
   dependencias ni recursos remotos.
 

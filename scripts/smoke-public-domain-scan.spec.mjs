@@ -25,7 +25,7 @@ function completedStatus() {
     { controlId: "DS-PRIV-05", status: "pass", summary: "Sin cookies conocidas" },
     { controlId: "DS-PRIV-06", status: "pass", summary: "No hay referencias a rastreadores conocidos" },
     { controlId: "DS-QUAL-02", status: "pass", summary: "Métricas completas en móvil y escritorio", evidence: {
-      mobileFcpMs: 900, mobileLcpMs: 1_200, mobileClsMilli: 10, mobileTbtMs: 50, mobileTtfbMs: 300, mobileTransferBytes: 400_000, mobileScore: 100,
+      mobileFcpMs: 900, mobileSpeedIndexMs: 1_000, mobileScoreModelVersion: "lighthouse-13.6.0", mobileLcpMs: 1_200, mobileClsMilli: 10, mobileTbtMs: 50, mobileTtfbMs: 300, mobileTransferBytes: 400_000, mobileScore: 100,
       desktopFcpMs: 500, desktopLcpMs: 800, desktopClsMilli: 10, desktopTbtMs: 10, desktopTtfbMs: 200, desktopTransferBytes: 400_000, desktopScore: 100,
     } },
   ];

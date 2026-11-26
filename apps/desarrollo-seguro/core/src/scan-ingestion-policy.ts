@@ -208,6 +208,8 @@ const CONTROLS: Readonly<Record<string, ControlContract>> = {
       responseBytes: "count",
       probeErrorCode: TLS_PROBE_ERROR_CODES,
       mobileFcpMs: "performance_ms",
+      mobileSpeedIndexMs: "performance_ms",
+      mobileScoreModelVersion: ["lighthouse-13.6.0"],
       mobileLcpMs: "performance_ms",
       mobileClsMilli: "performance_cls_milli",
       mobileTbtMs: "performance_ms",
@@ -730,7 +732,7 @@ function getRequiredEvidence(
 }
 
 const DOMAIN_V5_PERFORMANCE_EVIDENCE = [
-  "mobileFcpMs", "mobileLcpMs", "mobileClsMilli", "mobileTbtMs", "mobileTtfbMs",
+  "mobileFcpMs", "mobileSpeedIndexMs", "mobileScoreModelVersion", "mobileLcpMs", "mobileClsMilli", "mobileTbtMs", "mobileTtfbMs",
   "mobileTransferBytes", "mobileScore", "desktopFcpMs", "desktopLcpMs", "desktopClsMilli",
   "desktopTbtMs", "desktopTtfbMs", "desktopTransferBytes", "desktopScore",
 ] as const;

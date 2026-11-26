@@ -51,12 +51,16 @@ export function mergePrivacyBrowserChecks(
         if (profile.status !== "complete") return [];
         const prefix = profile.profile;
         return [
-          [`${prefix}FcpMs`, profile.fcpMs], [`${prefix}LcpMs`, profile.lcpMs],
+          [`${prefix}FcpMs`, profile.fcpMs], ...(prefix === "mobile" ? [["mobileSpeedIndexMs", profile.speedIndexMs] as const] : []),
+          [`${prefix}LcpMs`, profile.lcpMs],
           [`${prefix}ClsMilli`, profile.cls === null ? null : Math.round(profile.cls * 1_000)],
           [`${prefix}TbtMs`, profile.tbtMs], [`${prefix}TtfbMs`, profile.ttfbMs],
           [`${prefix}TransferBytes`, profile.transferBytes], [`${prefix}Score`, profile.score],
-        ].filter(([, value]) => typeof value === "number") as Array<[string, number]>;
+        ].filter(([, value]) => typeof value === "number") as Array<[string, number | string]>;
       }));
+      if (observation.performance.profiles[0]?.status === "complete") {
+        profileEvidence.mobileScoreModelVersion = "lighthouse-13.6.0";
+      }
       const complete = observation.performance.profiles.every(({ status }) => status === "complete");
       const responseTimeMs = check.evidence.responseTimeMs;
       const responseBytes = check.evidence.responseBytes;

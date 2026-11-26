@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { scoreScanPerformance, type ScanPerformanceMetrics } from "./scan-performance-score.js";
+import { scoreLighthouseMobilePerformance, scoreScanPerformance, type ScanPerformanceMetrics } from "./scan-performance-score.js";
 
 const GOOD_METRICS: ScanPerformanceMetrics = {
   fcpMs: 1_800,
@@ -62,5 +62,37 @@ describe("scoreScanPerformance", () => {
     ["negative", { ...GOOD_METRICS, tbtMs: -1 }],
   ])("returns null for %s metrics", (_description, metrics) => {
     expect(scoreScanPerformance(metrics)).toBeNull();
+  });
+});
+
+describe("scoreLighthouseMobilePerformance", () => {
+  it("uses Lighthouse 13.6.0 mobile weights and log-normal p10 and median control points", () => {
+    const p10 = scoreLighthouseMobilePerformance({
+      fcpMs: 1_800,
+      speedIndexMs: 3_387,
+      lcpMs: 2_500,
+      tbtMs: 200,
+      cls: 0.1,
+    });
+    const median = scoreLighthouseMobilePerformance({
+      fcpMs: 3_000,
+      speedIndexMs: 5_800,
+      lcpMs: 4_000,
+      tbtMs: 600,
+      cls: 0.25,
+    });
+
+    expect(p10?.score).toBe(90);
+    expect(median?.score).toBe(50);
+    expect(p10?.metrics.map(({ weight }) => weight)).toEqual([10, 10, 25, 30, 25]);
+  });
+
+  it("requires all five non-negative mobile metrics", () => {
+    expect(scoreLighthouseMobilePerformance({
+      fcpMs: 1_800, speedIndexMs: null, lcpMs: 2_500, tbtMs: 200, cls: 0.1,
+    })).toBeNull();
+    expect(scoreLighthouseMobilePerformance({
+      fcpMs: 1_800, speedIndexMs: 3_000, lcpMs: 2_500, tbtMs: -1, cls: 0.1,
+    })).toBeNull();
   });
 });

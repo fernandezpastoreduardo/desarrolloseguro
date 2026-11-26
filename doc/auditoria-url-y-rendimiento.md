@@ -26,13 +26,28 @@ y ejecución concurrente.
 
 Rendimiento se mide en Chromium, en contextos nuevos para móvil y escritorio.
 Móvil usa 375×812, CPU 4× y red de 150 ms RTT, 1,6 Mbps de bajada y 750 Kbps
-de subida. Escritorio usa 1365×768 sin throttling. Las métricas son FCP, LCP,
-CLS, TBT, TTFB y bytes transferidos. El informe muestra una nota propia de
-0–100 basada en umbrales buenos y malos e interpolación lineal; no es una
-puntuación oficial de Lighthouse ni un Core Web Vital de usuarios reales. La
-nota de la tarjeta es la media aritmética de las dos notas de perfil.
+de subida. Escritorio usa 1365×768 sin throttling. En móvil se registran FCP,
+Speed Index, LCP, CLS y TBT para la nota; TTFB y bytes transferidos son datos
+diagnósticos. La nota móvil aplica los pesos y curvas lognormales del modelo
+predeterminado de Lighthouse 13.6.0. Speed Index se estima desde un muestreo
+acotado de fotogramas del navegador; TBT se limita desde FCP hasta el primer
+período observado de cinco segundos sin tareas largas y con un máximo de dos
+solicitudes activas. Es una puntuación compatible con el modelo de Lighthouse,
+no un resultado de su CLI ni un Core Web Vital de usuarios reales. Escritorio
+conserva la rúbrica anterior mientras se define su ajuste.
 
-| Métrica | Peso | Umbral bueno (100) | Umbral malo (0) |
+| Métrica móvil | Peso | p10 | Mediana |
+| --- | ---: | ---: | ---: |
+| FCP | 10 % | 1,8 s | 3 s |
+| Speed Index | 10 % | 3,387 s | 5,8 s |
+| LCP | 25 % | 2,5 s | 4 s |
+| TBT | 30 % | 200 ms | 600 ms |
+| CLS | 25 % | 0,1 | 0,25 |
+
+Cada subnota aplica la curva lognormal de Lighthouse usando los puntos p10 y
+mediana. En escritorio se conserva la rúbrica lineal anterior:
+
+| Métrica escritorio | Peso | Umbral bueno (100) | Umbral malo (0) |
 | --- | ---: | ---: | ---: |
 | FCP | 15 % | 1,8 s | 3 s |
 | LCP | 25 % | 2,5 s | 4 s |
@@ -41,9 +56,10 @@ nota de la tarjeta es la media aritmética de las dos notas de perfil.
 | TTFB | 15 % | 800 ms | 1,8 s |
 | Datos transferidos | 5 % | 1,6 MB | 4 MB |
 
-Cada subnota se interpola linealmente entre ambos umbrales y se limita a
-0–100. Si falta cualquier métrica del perfil, ese perfil queda sin nota y la
-tarjeta no promedia resultados parciales.
+La nota global sigue siendo la media aritmética de móvil y escritorio.
+
+Si falta cualquier métrica requerida, el perfil queda sin nota y la tarjeta no
+promedia resultados parciales.
 
 La observación de privacidad y los perfiles de rendimiento disponen cada uno
 de hasta 120 segundos. Son plazos independientes: el tiempo empleado por los
@@ -54,11 +70,11 @@ además del escaneo base y la limpieza.
 El estado de Rendimiento se resuelve al final, cuando se combinan la respuesta
 HTTP inicial y los dos perfiles de Chromium. Un `unknown` provisional por datos
 de Chromium aún no disponibles se convierte en `pass` solo si están presentes
-la evidencia HTTP y las catorce métricas; una respuesta superior a 2.500 ms
+la evidencia HTTP y las métricas completas de ambos perfiles; una respuesta superior a 2.500 ms
 mantiene `fail`. Si falta cualquier dato requerido, permanece `unknown`.
 
-El informe público conserva las catorce métricas del perfil en la evidencia
-de Rendimiento. PostgreSQL valida los mismos campos y límites numéricos que el
+El informe público conserva las métricas de ambos perfiles, incluido Speed
+Index móvil, en la evidencia de Rendimiento. PostgreSQL valida los mismos campos y límites numéricos que el
 saneador de la aplicación; un resultado de rendimiento marcado como `pass`
 requiere el conjunto móvil y escritorio completo. La cola conserva la URL
 solicitada hasta terminar el trabajo, pero el informe almacena la ruta y query

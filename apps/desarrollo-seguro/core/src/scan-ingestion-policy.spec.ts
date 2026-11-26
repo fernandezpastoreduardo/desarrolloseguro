@@ -1350,9 +1350,11 @@ function makeDomainV4Checks() {
   ];
 }
 
-function makeDomainV5PerformanceEvidence(): Record<string, number> {
+function makeDomainV5PerformanceEvidence(): Record<string, number | string> {
   return {
     mobileFcpMs: 1_100,
+    mobileSpeedIndexMs: 1_250,
+    mobileScoreModelVersion: "lighthouse-13.6.0",
     mobileLcpMs: 1_800,
     mobileClsMilli: 40,
     mobileTbtMs: 100,

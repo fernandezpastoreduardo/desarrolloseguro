@@ -174,6 +174,8 @@ const MIGRATIONS = [
   { version: "067_domain_v5_browser_summary_contract", file: "067_domain_v5_browser_summary_contract.sql" },
   { version: "068_public_audit_progress", file: "068_public_audit_progress.sql" },
   { version: "069_domain_v5_host_check_scope", file: "069_domain_v5_host_check_scope.sql" },
+  { version: "070_domain_v5_mobile_lighthouse_metrics", file: "070_domain_v5_mobile_lighthouse_metrics.sql" },
+  { version: "071_domain_v5_mobile_score_version", file: "071_domain_v5_mobile_score_version.sql" },
   { version: "070_temporary_fresh_report_refresh", file: "070_temporary_fresh_report_refresh.sql" },
 ] as const;
 

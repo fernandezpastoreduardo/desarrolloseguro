@@ -2,7 +2,7 @@
 
 ## Estado y ejecución
 
-La suite cubre reglas del core, persistencia, API de estado/informe, políticas de ingesta, Compose y configuración TLS. CI ejecuta lint, typecheck, tests, build, integración PostgreSQL efímera, políticas estáticas y un smoke aislado de la imagen. El job de despliegue verifica que `.com` redirige a `.org` sin exponer `:8080` y solicita un informe `domain-v5` real nuevo de `grumphya.com` sobre `https://grumphya.com/`; exige diez controles, al menos cinco comprobaciones concluyentes, medición de todas las versiones TLS y las catorce métricas numéricas completas de rendimiento móvil/escritorio. La sonda manual `audit:egress:probe` clasifica DNS, TCP, TLS y HTTP sin guardar cuerpos ni credenciales.
+La suite cubre reglas del core, persistencia, API de estado/informe, políticas de ingesta, Compose y configuración TLS. CI ejecuta lint, typecheck, tests, build, integración PostgreSQL efímera, políticas estáticas y un smoke aislado de la imagen. El job de despliegue verifica que `.com` redirige a `.org` sin exponer `:8080` y solicita un informe `domain-v5` real nuevo de `grumphya.com` sobre `https://grumphya.com/`; exige diez controles, al menos cinco comprobaciones concluyentes, medición de todas las versiones TLS y métricas completas de rendimiento móvil/escritorio, incluido Speed Index móvil. La sonda manual `audit:egress:probe` clasifica DNS, TCP, TLS y HTTP sin guardar cuerpos ni credenciales.
 
 Una prueba de implementación o de CI no demuestra por sí sola operación en
 producción ni aceptación de una etapa. Para aceptar C se necesita, además,

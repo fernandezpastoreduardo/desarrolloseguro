@@ -81,6 +81,7 @@ function unknownPerformanceEvidence(): PerformanceBrowserEvidence {
     profile,
     status: "unknown" as const,
     fcpMs: null,
+    speedIndexMs: null,
     lcpMs: null,
     cls: null,
     tbtMs: null,

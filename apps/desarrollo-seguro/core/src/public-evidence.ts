@@ -11,7 +11,7 @@ const PUBLIC_EVIDENCE_FIELDS: Readonly<Record<string, readonly string[]>> = {
   "DS-PRIV-06": ["inspected", "thirdPartyResourceReferences", "knownTrackingResourceReferences", "browserObservationComplete", "browserThirdPartyRequestCount", "browserKnownTrackingRequestCount", "browserBlockedTrackingRequestCount", "browserTrackingResponseCount", "probeErrorCode"],
   "DS-QUAL-02": [
     "inspected", "responseTimeMs", "responseBytes",
-    "mobileFcpMs", "mobileLcpMs", "mobileClsMilli", "mobileTbtMs", "mobileTtfbMs",
+    "mobileFcpMs", "mobileSpeedIndexMs", "mobileScoreModelVersion", "mobileLcpMs", "mobileClsMilli", "mobileTbtMs", "mobileTtfbMs",
     "mobileTransferBytes", "mobileScore", "desktopFcpMs", "desktopLcpMs",
     "desktopClsMilli", "desktopTbtMs", "desktopTtfbMs", "desktopTransferBytes",
     "desktopScore", "probeErrorCode",
@@ -30,6 +30,7 @@ const PUBLIC_EVIDENCE_ENUMS: Readonly<Record<string, readonly string[]>> = {
   protocol: ["TLSv1.2", "TLSv1.3"],
   finalScheme: ["http", "https"],
   policyLanguageCatalogVersion: ["public-policy-language-eea-v1"],
+  mobileScoreModelVersion: ["lighthouse-13.6.0"],
   requestedHostname: ["grumphya.com", "www.grumphya.com"],
   finalHostname: ["grumphya.com", "www.grumphya.com"],
   canonicalHostname: ["grumphya.com", "www.grumphya.com"],
