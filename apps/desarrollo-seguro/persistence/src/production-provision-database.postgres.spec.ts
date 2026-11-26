@@ -210,6 +210,8 @@ describePostgres.sequential(
         api_cannot_read_lease_token: boolean;
         api_cannot_select_all_metrics: boolean;
         api_can_read_public_audit_progress: boolean;
+        api_cannot_read_refresh_mode: boolean;
+        api_cannot_update_refresh_mode: boolean;
         api_cannot_insert_jobs: boolean;
         api_cannot_insert_domains: boolean;
         api_can_issue_badges: boolean;
@@ -240,6 +242,8 @@ describePostgres.sequential(
          NOT has_table_privilege('ds_worker', 'public.ds_scan_public_policy_transparency', 'SELECT') AS worker_cannot_read_public_policy_assessment,
          NOT has_column_privilege('ds_api', 'public.ds_scan_jobs', 'lease_token', 'SELECT') AS api_cannot_read_lease_token,
          has_column_privilege('ds_api', 'public.ds_scan_jobs', 'progress_json', 'SELECT') AS api_can_read_public_audit_progress,
+         NOT has_column_privilege('ds_api', 'public.ds_scan_admission_epoch', 'allow_fresh_report_refresh', 'SELECT') AS api_cannot_read_refresh_mode,
+         NOT has_column_privilege('ds_api', 'public.ds_scan_admission_epoch', 'allow_fresh_report_refresh', 'UPDATE') AS api_cannot_update_refresh_mode,
          has_column_privilege('ds_api', 'public.ds_scan_jobs', 'target_url', 'SELECT') AS api_can_read_active_target_url,
          NOT has_table_privilege('ds_api', 'public.ds_scan_metrics', 'SELECT') AS api_cannot_select_all_metrics,
          NOT has_column_privilege('ds_api', 'public.ds_scan_jobs', 'hostname', 'INSERT') AS api_cannot_insert_jobs,
@@ -286,6 +290,8 @@ describePostgres.sequential(
         worker_cannot_read_public_policy_assessment: true,
         api_cannot_read_lease_token: true,
         api_can_read_public_audit_progress: true,
+        api_cannot_read_refresh_mode: true,
+        api_cannot_update_refresh_mode: true,
         api_can_read_active_target_url: true,
         api_cannot_select_all_metrics: true,
         api_cannot_insert_jobs: true,
@@ -305,6 +311,10 @@ describePostgres.sequential(
         api_cannot_create_objects: true,
         api_is_not_table_owner: true,
       });
+      const refreshMode = await targetAdminPool?.query<{ enabled: boolean }>(
+        "SELECT allow_fresh_report_refresh AS enabled FROM public.ds_scan_admission_epoch WHERE singleton IS TRUE",
+      );
+      expect(refreshMode?.rows[0]?.enabled).toBe(false);
     });
 
     it("grants the worker only its bounded lease, progress, and report functions", async () => {
