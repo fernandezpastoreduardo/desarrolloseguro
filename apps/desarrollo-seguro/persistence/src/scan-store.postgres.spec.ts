@@ -1462,6 +1462,99 @@ describePostgres.sequential("PostgresScanStore", () => {
     expect(JSON.stringify(report)).not.toContain("token=private");
   });
 
+  it("persists exact domain-v5 reports with all mobile and desktop performance metrics", async () => {
+    const targetUrl = "https://sample.example.net/careers?campaign=summer";
+    const targetPath = "/careers?campaign=summer";
+    const admission = await store.requestOnDemandScan(TEST_HOSTNAME, targetUrl);
+    expect(admission.kind).toBe("queued");
+    const job = await store.claimNextScan(new Date(), TEST_LEASE_MS);
+    if (!job) throw new Error("expected_claimed_domain_v5_scan");
+
+    const performanceEvidence = {
+      inspected: true,
+      responseTimeMs: 800,
+      responseBytes: 40_000,
+      mobileFcpMs: 800,
+      mobileLcpMs: 1_200,
+      mobileClsMilli: 40,
+      mobileTbtMs: 45,
+      mobileTtfbMs: 100,
+      mobileTransferBytes: 12_000,
+      mobileScore: 94,
+      desktopFcpMs: 500,
+      desktopLcpMs: 900,
+      desktopClsMilli: 10,
+      desktopTbtMs: 20,
+      desktopTtfbMs: 70,
+      desktopTransferBytes: 20_000,
+      desktopScore: 98,
+    };
+    const limitation = "Resultado limitado a las rutas públicas declaradas del perfil domain-v5.";
+    const checks: ScanCheck[] = [
+      ...makeEligibleDomainV3Checks().map((check) => ({
+        ...check,
+        targetPath,
+        limitation,
+        ...(check.controlId === "DS-QUAL-02" ? { evidence: performanceEvidence } : {}),
+        ...(check.controlId === "DS-HDR-01"
+          ? { evidence: { ...check.evidence, finalScheme: "https" } }
+          : {}),
+      })),
+      {
+        ...CHECK,
+        controlId: "DS-PRIV-04",
+        targetPath,
+        method: "GET",
+        status: "pass",
+        summary: "Comprobación DS-PRIV-04: pass.",
+        limitation,
+        evidence: {
+          inspected: true,
+          privacyPolicyLinksFound: 1,
+          policyLinksFound: 2,
+          sitePrivacyPolicyFetched: true,
+          policyPagesFetched: 2,
+          policyPagesMissing: 0,
+          policyPagesDenied: 0,
+          policyRecipientsMentioned: true,
+          policyPurposesMentioned: true,
+          policyTextBlocked: false,
+          policyProbeFailed: false,
+          policyLanguageCatalogVersion: "public-policy-language-eea-v1",
+        },
+      },
+    ];
+
+    const reportId = await store.completeScan({
+      jobId: job.id,
+      leaseToken: job.leaseToken,
+      hostname: TEST_HOSTNAME,
+      profileVersion: "domain-v5",
+      scannerVersion: TEST_SCANNER,
+      startedAt: new Date(Date.now() - 1_000),
+      completedAt: new Date(),
+      verdict: "pass",
+      scope: [targetPath],
+      checks,
+      metrics: { requestsCount: 0, bytesCount: 0, durationMs: 1, pagesCount: 1 },
+    });
+    const report = await store.readPublicReport(reportId);
+    const completedJob = await pool.query<{ target_url: string | null }>(
+      "SELECT target_url FROM ds_scan_jobs WHERE id = $1",
+      [job.id],
+    );
+
+    expect(report).toMatchObject({
+      id: reportId,
+      profileVersion: "domain-v5",
+      scope: [targetPath],
+      verdict: "pass",
+    });
+    expect(report?.checks.find(({ controlId }) => controlId === "DS-QUAL-02")?.evidence)
+      .toMatchObject(performanceEvidence);
+    expect(completedJob.rows[0]?.target_url).toBeNull();
+  });
+
   it("persists and publicly projects browser cookie and request evidence for domain-v4", async () => {
     const job = await queueAndClaim("domain-v4");
     const checks = makeEligibleDomainV3Checks().map((check) => {

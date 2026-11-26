@@ -642,6 +642,9 @@ describe("sanitizeScanObservations", () => {
     { profileVersion: "domain-v4", finalScheme: "https", expectedStatus: "pass" },
     { profileVersion: "domain-v4", finalScheme: "http", expectedStatus: "unknown" },
     { profileVersion: "domain-v4", finalScheme: undefined, expectedStatus: "unknown" },
+    { profileVersion: "domain-v5", finalScheme: "https", expectedStatus: "pass" },
+    { profileVersion: "domain-v5", finalScheme: "http", expectedStatus: "unknown" },
+    { profileVersion: "domain-v5", finalScheme: undefined, expectedStatus: "unknown" },
   ] as const)(
     "only accepts a $profileVersion header pass for HTTPS responses ($finalScheme)",
     ({ profileVersion, finalScheme, expectedStatus }) => {

@@ -9,7 +9,13 @@ const PUBLIC_EVIDENCE_FIELDS: Readonly<Record<string, readonly string[]>> = {
   "DS-HDR-01": ["finalScheme", "hsts", "nosniff", "frameProtection", "referrerPolicy", "csp", "probeErrorCode"],
   "DS-PRIV-05": ["inspected", "cookieCount", "insecureCookieCount", "catalogMatchCount", "consentPromptDetected", "browserObservationComplete", "browserCookieCount", "browserInsecureCookieCount", "browserCatalogMatchCount", "probeErrorCode"],
   "DS-PRIV-06": ["inspected", "thirdPartyResourceReferences", "knownTrackingResourceReferences", "browserObservationComplete", "browserThirdPartyRequestCount", "browserKnownTrackingRequestCount", "browserBlockedTrackingRequestCount", "browserTrackingResponseCount", "probeErrorCode"],
-  "DS-QUAL-02": ["inspected", "responseTimeMs", "responseBytes", "probeErrorCode"],
+  "DS-QUAL-02": [
+    "inspected", "responseTimeMs", "responseBytes",
+    "mobileFcpMs", "mobileLcpMs", "mobileClsMilli", "mobileTbtMs", "mobileTtfbMs",
+    "mobileTransferBytes", "mobileScore", "desktopFcpMs", "desktopLcpMs",
+    "desktopClsMilli", "desktopTbtMs", "desktopTtfbMs", "desktopTransferBytes",
+    "desktopScore", "probeErrorCode",
+  ],
 };
 
 export const TLS_PROBE_ERROR_CODES = [

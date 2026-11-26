@@ -42,6 +42,13 @@ Cada subnota se interpola linealmente entre ambos umbrales y se limita a
 0–100. Si falta cualquier métrica del perfil, ese perfil queda sin nota y la
 tarjeta no promedia resultados parciales.
 
+El informe público conserva las catorce métricas del perfil en la evidencia
+de Rendimiento. PostgreSQL valida los mismos campos y límites numéricos que el
+saneador de la aplicación; un resultado de rendimiento marcado como `pass`
+requiere el conjunto móvil y escritorio completo. La cola conserva la URL
+solicitada hasta terminar el trabajo, pero el informe almacena la ruta y query
+como scope y no conserva el fragmento.
+
 La prueba incluye recursos HTTPS de terceros que la página cargue mediante
 GET/HEAD. El proxy valida los destinos, fija DNS a IPv4 pública y limita
 solicitudes, bytes y duración. No envía formularios ni realiza acciones de
