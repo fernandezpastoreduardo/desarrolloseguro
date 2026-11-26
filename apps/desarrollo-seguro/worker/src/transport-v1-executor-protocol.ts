@@ -238,7 +238,7 @@ function isScanProfileVersion(value: unknown): value is ScanProfileVersion {
 }
 
 function getScannerVersion(profileVersion: ScanProfileVersion): string {
-  if (profileVersion === "domain-v5") return "domain-v5-network-adapter-1";
+  if (profileVersion === "domain-v5") return "domain-v5-network-adapter-2";
   if (profileVersion === "domain-v3") return "domain-v3-network-adapter-1";
   if (profileVersion === "domain-v4") return "domain-v4-network-adapter-1";
   if (profileVersion === "domain-v2") return "domain-v2-network-adapter-1";
@@ -248,7 +248,7 @@ function getScannerVersion(profileVersion: ScanProfileVersion): string {
 }
 
 function getExpectedScannerVersion(profileVersion: ScanProfileVersion, hasPublicPolicyAssessment: boolean): string {
-  if (profileVersion === "domain-v5") return "domain-v5-network-adapter-1";
+  if (profileVersion === "domain-v5") return "domain-v5-network-adapter-2";
   return profileVersion === "domain-v4" && hasPublicPolicyAssessment
     ? "domain-v4-network-adapter-7"
     : getScannerVersion(profileVersion);
@@ -256,7 +256,7 @@ function getExpectedScannerVersion(profileVersion: ScanProfileVersion, hasPublic
 
 function isPublicPolicyProfileScanner(profileVersion: ScanProfileVersion, scannerVersion: unknown): boolean {
   return (profileVersion === "domain-v4" && scannerVersion === "domain-v4-network-adapter-7") ||
-    (profileVersion === "domain-v5" && scannerVersion === "domain-v5-network-adapter-1");
+    (profileVersion === "domain-v5" && scannerVersion === "domain-v5-network-adapter-2");
 }
 
 function getExpectedCheckCount(profileVersion: ScanProfileVersion): number {

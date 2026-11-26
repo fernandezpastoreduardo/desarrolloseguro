@@ -44,6 +44,24 @@ LCP 2,5/4 s; CLS 0,1/0,25; TBT 200/600 ms; TTFB 0,8/1,8 s; transferencia
 indica la comprobación incompleta; la ausencia de medición no se convierte en
 un valor cero.
 
+El perfil `domain-v5` mantiene también las comprobaciones públicas de
+transparencia documental y comparación de servicios externos del perfil
+`domain-v4`, aplicadas a la URL exacta solicitada. Debe producir en cada
+informe una evaluación `public-policy-v1`, la comparación pública
+`public-service-comparison-v1` y la evaluación ética `domain-ethics-v6` con
+ocho criterios. La respuesta conserva los documentos descubiertos y las
+declaraciones necesarias para comparar servicios observados con la política y
+el catálogo oficial. Un fallo técnico real del auditor conserva `unknown` y
+su diagnóstico; estos bloques no se omiten por usar una ruta exacta en vez de
+las rutas históricas del dominio.
+
+**Criterios:** el smoke de despliegue obtiene un informe `domain-v5` con
+evaluación pública de políticas y comparación de servicios presentes, ocho
+criterios éticos evaluados y métricas completas de rendimiento móvil y
+escritorio. Los tests cubren la propagación de esos bloques desde el executor
+hasta el informe público, tanto con resultados conclusivos como con un error
+verificable del auditor.
+
 Las cargas del navegador incluyen los recursos de terceros que la página
 solicite con GET/HEAD. Salen por el proxy por análisis, con DNS fijado a IPv4
 pública, solo puertos 80/443 y los límites de tiempo, solicitudes y bytes ya

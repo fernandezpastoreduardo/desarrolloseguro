@@ -33,7 +33,7 @@ const DOMAIN_V2_SCANNER_VERSION = "domain-v2-network-adapter-1";
 const DOMAIN_V3_SCANNER_VERSION = "domain-v3-network-adapter-1";
 const DOMAIN_V4_SCANNER_VERSION = "domain-v4-network-adapter-1";
 const DOMAIN_V4_PUBLIC_POLICY_SCANNER_VERSION = "domain-v4-network-adapter-7";
-const DOMAIN_V5_SCANNER_VERSION = "domain-v5-network-adapter-1";
+const DOMAIN_V5_SCANNER_VERSION = "domain-v5-network-adapter-2";
 const MAX_CONCURRENT_NETWORK_PROBES = 2;
 const CHECKS = [
   { controlId: "DS-DNS-01", method: "DNS", severity: "high" },
@@ -373,7 +373,7 @@ function buildPublicPolicyAssessment(
   profileVersion: ScanProfileVersion,
   headersProbe: TransportV1ProbeResult | undefined,
 ): ReturnType<typeof assessPublicPolicyTransparency> | undefined {
-  if (profileVersion !== DOMAIN_PROFILE_VERSION_V4) return undefined;
+  if (profileVersion !== DOMAIN_PROFILE_VERSION_V4 && profileVersion !== "domain-v5") return undefined;
   const evidence = headersProbe?.evidence ?? {};
   const numericKeys = [
     "publicPolicyLinksFound",

@@ -31,7 +31,7 @@ export function validateCompletedReport(status, previousReportId, hostname = VAL
   }
   if (
     report.profileVersion !== "domain-v5" ||
-    report.scannerVersion !== "domain-v5-network-adapter-1" ||
+    report.scannerVersion !== "domain-v5-network-adapter-2" ||
 
     !Array.isArray(report.checks) ||
     report.checks.length !== 10

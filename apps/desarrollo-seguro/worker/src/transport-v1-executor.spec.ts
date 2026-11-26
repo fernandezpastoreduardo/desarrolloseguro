@@ -187,10 +187,27 @@ describe("TransportV1 executors", () => {
     };
 
     const result = await new TransportV1NetworkExecutor(source).execute(
-      { ...JOB, profileVersion: "domain-v4" },
+      { ...JOB, profileVersion: "domain-v5", targetUrl: "https://sample.example.net/path?mode=public" },
       new AbortController().signal,
     );
 
+    expect(result.scannerVersion).toBe("domain-v5-network-adapter-2");
+    expect(result.scope).toEqual(["/path?mode=public"]);
+    expect(result.publicPolicyTransparencyAssessment).toMatchObject({
+      policyVersion: "public-policy-v1",
+      status: "pass",
+    });
+    expect(parseTransportV1ExecutorResponse({
+      protocolVersion: 1,
+      requestId: JOB.id,
+      result: JSON.parse(JSON.stringify(result)) as unknown,
+    }, JOB.id, "domain-v5", "/path?mode=public")).toMatchObject({
+      result: {
+        scannerVersion: "domain-v5-network-adapter-2",
+        publicPolicyTransparencyAssessment: { policyVersion: "public-policy-v1", status: "pass" },
+        publicPolicyDiscoveredDocuments: [{ href: "https://vendor.example.net/dpa" }],
+      },
+    });
     expect(result.publicServiceDeclarations).toEqual([
       {
         providerId: "google-analytics",
@@ -526,7 +543,7 @@ describe("TransportV1 executors", () => {
     };
 
     const result = await new TransportV1NetworkExecutor(source).execute(
-      { ...JOB, profileVersion: "domain-v4" },
+      { ...JOB, profileVersion: "domain-v5", targetUrl: "https://sample.example.net/path?mode=public" },
       new AbortController().signal,
     );
 

@@ -349,8 +349,9 @@ function toPublicReport(
   const processorTransparencyAssessment = report.processorTransparencyAssessment ?? null;
   const publicPolicyTransparencyAssessment = report.publicPolicyTransparencyAssessment ?? null;
   const publicServiceComparison = report.publicServiceComparison ?? null;
-  const ethicsAssessment = report.profileVersion === "domain-v4" &&
-    ["domain-v4-network-adapter-5", "domain-v4-network-adapter-6", "domain-v4-network-adapter-7"].includes(report.scannerVersion)
+  const ethicsAssessment = (report.profileVersion === "domain-v4" &&
+    ["domain-v4-network-adapter-5", "domain-v4-network-adapter-6", "domain-v4-network-adapter-7"].includes(report.scannerVersion)) ||
+    (report.profileVersion === "domain-v5" && report.scannerVersion === "domain-v5-network-adapter-2")
     ? assessDomainEthicsV6(report.checks, publicServiceComparison)
     : report.profileVersion === "domain-v4" &&
     report.scannerVersion === "domain-v4-network-adapter-2" && publicPolicyTransparencyAssessment

@@ -53,6 +53,12 @@ pie de la ficha enlaza a la explicación del servicio
 sin la frase «Comprobación técnica acotada desde el mismo VPS. No es una
 certificación independiente.».
 
+El perfil `domain-v5-network-adapter-2` aplica estas mismas comprobaciones
+públicas de políticas y servicios externos a la URL exacta solicitada, junto
+con la medición de rendimiento de esa página. La versión anterior del scanner
+no producía esos bloques; los informes históricos conservan el contenido y
+la valoración que tenían al generarse.
+
 La navegación al enlace visible de política se comprueba en un contexto nuevo y
 su estado posterior se muestra separado de la instantánea inicial. El informe
 conserva tiempo monotónico, nombres, dominios y atributos de cookies y los

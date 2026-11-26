@@ -16,6 +16,12 @@ Los informes nuevos usan `domain-v5`. Conservan la ruta y query dentro de `scope
 
 `domain-v5` ejecuta las comprobaciones de la URL seleccionada e incluye mediciones de Chromium en móvil y escritorio: FCP, LCP, CLS, TBT, TTFB y bytes transferidos. La nota usa la rúbrica propia documentada en [`auditoria-url-y-rendimiento.md`](../../doc/auditoria-url-y-rendimiento.md); no es la puntuación oficial de Lighthouse. Si falta una métrica requerida, la categoría queda sin puntuación.
 
+`domain-v5-network-adapter-2` conserva además la evaluación pública de
+políticas y la comparación de servicios externos sobre esa misma URL. La API
+deriva `domain-ethics-v6` con ocho criterios cuando recibe esta versión; un
+fallo técnico del lector permanece `unknown` con su diagnóstico. Los informes
+`domain-v5` de versiones anteriores mantienen su interpretación histórica.
+
 ## Estado del dominio
 
 ```ts
