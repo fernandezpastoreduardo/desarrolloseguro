@@ -125,6 +125,12 @@ function makeBrowserFixture(options: {
         detach: vi.fn(async () => undefined),
       };
       const page = {
+        context: vi.fn(() => ({
+          newPage: vi.fn(async () => ({
+            evaluate: vi.fn(async () => 2_200),
+            close: vi.fn(async () => undefined),
+          })),
+        })),
         addInitScript: vi.fn(async () => undefined),
         goto: vi.fn(async () => {
           finishedHandler?.({ encodedDataLength: 12_345 });
