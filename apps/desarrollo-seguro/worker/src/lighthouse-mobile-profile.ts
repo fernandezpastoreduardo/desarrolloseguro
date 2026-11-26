@@ -37,6 +37,7 @@ export async function observeLighthouseMobileProfile(
   let page: PuppeteerPage | undefined;
   let cdp: Awaited<ReturnType<ReturnType<PuppeteerPage["target"]>["createCDPSession"]>> | undefined;
   let timedOut = false;
+  let stage: "launch_browser" | "configure_page" | "run_lighthouse" | "read_result" = "launch_browser";
   const closeBrowser = () => {
     timedOut = true;
     void browser?.close().catch(() => undefined);
@@ -55,6 +56,7 @@ export async function observeLighthouseMobileProfile(
     });
     if (options.signal.aborted) return incompleteProfile({ code: "observation_budget_exhausted" });
 
+    stage = "configure_page";
     page = await browser.newPage();
     await page.setBypassServiceWorker(true);
     await page.setRequestInterception(true);
@@ -71,6 +73,7 @@ export async function observeLighthouseMobileProfile(
     await cdp.send("Network.setBlockedURLs", { urls: ["ws://*", "wss://*"] });
 
     options.signal.addEventListener("abort", closeBrowser, { once: true });
+    stage = "run_lighthouse";
     const result = await runLighthouse(options.targetUrl, {
       logLevel: "silent",
       output: "json",
@@ -90,8 +93,14 @@ export async function observeLighthouseMobileProfile(
       });
     }
     if (!result?.lhr) return incompleteProfile({ code: "required_measurement_missing" });
+    stage = "read_result";
     return extractMobileProfile(result.lhr as unknown as LighthouseResultShape);
   } catch (error) {
+    process.stderr.write(`${JSON.stringify({
+      type: "lighthouse_mobile_runtime_error",
+      stage,
+      errorClass: classifyError(error),
+    })}\n`);
     return incompleteProfile({
       code: options.signal.aborted || timedOut || error instanceof Error && error.name === "TimeoutError"
         ? "browser_timeout"
@@ -102,6 +111,15 @@ export async function observeLighthouseMobileProfile(
     await cdp?.detach().catch(() => undefined);
     await browser?.close().catch(() => undefined);
   }
+}
+
+function classifyError(error: unknown): "timeout" | "target_closed" | "protocol" | "type" | "other" {
+  if (!(error instanceof Error)) return "other";
+  if (error.name === "TimeoutError") return "timeout";
+  if (error.name === "TargetCloseError") return "target_closed";
+  if (error.name === "ProtocolError") return "protocol";
+  if (error instanceof TypeError) return "type";
+  return "other";
 }
 
 function extractMobileProfile(result: LighthouseResultShape): PerformanceProfileEvidence {

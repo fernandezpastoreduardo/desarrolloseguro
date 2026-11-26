@@ -671,7 +671,7 @@ function restrictedContainerArguments(network: string): string[] {
 
 function restrictedPrivacyBrowserArguments(network: string): string[] {
   return ["--network", network, "--read-only", "--user", "1000:1000", "--cap-drop", "ALL",
-    "--security-opt", "no-new-privileges", "--pids-limit", "128", "--memory", "512m", "--cpus", "0.5",
+    "--security-opt", "no-new-privileges", "--pids-limit", "128", "--memory", "1024m", "--cpus", "1",
     "--shm-size", "128m", "--tmpfs", "/tmp:rw,noexec,nosuid,size=64m,uid=1000,gid=1000"];
 }
 

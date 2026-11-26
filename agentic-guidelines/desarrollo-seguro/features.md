@@ -73,7 +73,9 @@ el proxy de salida seguro. Solo se permiten solicitudes GET/HEAD; se bloquean
 WebSockets y no se ejecutan acciones de escritura. El motor recibe únicamente
 la categoría Performance. Solo se conservan las métricas numéricas aprobadas y
 la puntuación, nunca el informe Lighthouse completo, el contenido ni recursos
-capturados.
+capturados. El contenedor de navegador dispone de hasta 1 GiB de memoria y 1 CPU.
+Ante errores se registra internamente solo la fase y clase normalizada, sin
+mensaje, URL ni datos de la página.
 
 El perfil móvil usa las métricas FCP (10 %), Speed Index (10 %), LCP (25 %),
 TBT (30 %) y CLS (25 %) y la puntuación del modo `simulate` de una versión

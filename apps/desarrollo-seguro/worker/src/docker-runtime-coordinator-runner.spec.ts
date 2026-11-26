@@ -179,6 +179,8 @@ describe("createDockerRuntimeCoordinatorRunner", () => {
     expect(browserRun).not.toContain("development-security-egress");
     expect(browserRun).toContain("--cap-drop");
     expect(browserRun).toContain("ALL");
+    expect(browserRun?.[browserRun.indexOf("--memory") + 1]).toBe("1024m");
+    expect(browserRun?.[browserRun.indexOf("--cpus") + 1]).toBe("1");
     expect(dockerCalls.some((args) => args[0] === "network" && args[1] === "connect" && args.includes("--alias"))).toBe(true);
   });
 
