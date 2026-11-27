@@ -79,12 +79,14 @@ describe("observeLighthouseMobileProfile", () => {
 
     const continueRequest = { url: () => "https://example.com/app.js", method: () => "GET", resourceType: () => "script", abort, continue: proceed };
     const postRequest = { url: () => "https://example.com/submit", method: () => "POST", resourceType: () => "fetch", abort, continue: proceed };
+    const websocketRequest = { url: () => "ws://example.com/socket", method: () => "GET", resourceType: () => "websocket", abort, continue: proceed };
     requestHandler?.(continueRequest as never);
     requestHandler?.(postRequest as never);
+    requestHandler?.(websocketRequest as never);
     await Promise.resolve();
     expect(proceed).toHaveBeenCalledOnce();
-    expect(abort).toHaveBeenCalledOnce();
-    expect(cdp.send).toHaveBeenCalledWith("Network.setBlockedURLs", { urls: ["ws://*", "wss://*"] });
+    expect(abort).toHaveBeenCalledTimes(2);
+    expect(cdp.send).toHaveBeenCalledWith("Network.setBlockedURLs", { urls: ["wss://*"] });
     expect(cdp.detach).toHaveBeenCalledOnce();
     expect(browser.close).toHaveBeenCalledOnce();
   });

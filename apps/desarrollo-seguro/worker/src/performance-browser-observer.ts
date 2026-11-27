@@ -342,7 +342,7 @@ function sumBlockingTime(tasks: readonly LongTaskTiming[]): number {
 
 function unknownEvidence(
   profile: PerformanceProfile,
-  diagnostic: NonNullable<PerformanceProfileEvidence["diagnostic"]> = { code: "browser_observation_error" },
+  diagnostic?: NonNullable<PerformanceProfileEvidence["diagnostic"]>,
   metrics?: Pick<CollectedMetrics, "fcpMs" | "speedIndexMs" | "lcpMs" | "cls" | "tbtMs" | "ttfbMs" | "transferBytes">,
 ): PerformanceProfileEvidence {
   return {
@@ -356,6 +356,6 @@ function unknownEvidence(
     ttfbMs: metrics?.ttfbMs ?? null,
     transferBytes: metrics?.transferBytes ?? null,
     score: null,
-    diagnostic,
+    diagnostic: diagnostic ?? { code: "browser_observation_error" },
   };
 }

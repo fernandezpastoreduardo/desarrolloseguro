@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { parsePublicServiceComparison } from "@desarrolloseguro/core";
 import { PublicScanPortal } from "../index.js";
 
@@ -115,6 +115,10 @@ const SCORED_PUBLIC_REPORT = {
 };
 
 describe("PublicScanPortal", () => {
+  beforeEach(() => {
+    window.localStorage.setItem("ds-first-entry-notice-dismissed", "1");
+  });
+
   afterEach(() => {
     cleanup();
     window.history.replaceState({}, "", "/");
@@ -653,7 +657,7 @@ describe("PublicScanPortal", () => {
           deploymentDigest: `sha256:${"a".repeat(64)}`,
           inventoryStatus: "complete",
           privacyPolicy: {
-            url: "https://desarrolloseguro.org/desarrollo-seguro/privacidad.html",
+            url: "https://desarrolloseguro.org/desarrollo-seguro/politica-de-privacidad.html",
             revision: "v2",
           },
           processors: [{
@@ -662,7 +666,7 @@ describe("PublicScanPortal", () => {
             product: "VPS",
             disclosureStatus: "published",
             purpose: "Alojamiento de la web pública, la API y la base de datos de Desarrollo Seguro.",
-            policyUrl: "https://desarrolloseguro.org/desarrollo-seguro/privacidad.html#ionos-hosting",
+            policyUrl: "https://desarrolloseguro.org/desarrollo-seguro/politica-de-privacidad.html#ionos-hosting",
             declaredStatements: [
               "Desarrollo Seguro está alojado en un VPS de IONOS que ejecuta la web pública, la API y la base de datos.",
             ],
@@ -690,7 +694,7 @@ describe("PublicScanPortal", () => {
     expect(ionosDisclosure).toHaveAttribute("open");
     expect(screen.getByText(/Alojamiento de la web pública/)).toBeVisible();
     expect(screen.getByRole("link", { name: "Ver política de privacidad de Desarrollo Seguro" }))
-      .toHaveAttribute("href", "https://desarrolloseguro.org/desarrollo-seguro/privacidad.html#ionos-hosting");
+      .toHaveAttribute("href", "https://desarrolloseguro.org/desarrollo-seguro/politica-de-privacidad.html#ionos-hosting");
   });
 
   it("shows the v5 public service transparency criterion in Ethics with its evidence", async () => {

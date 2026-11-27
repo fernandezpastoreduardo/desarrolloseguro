@@ -11,15 +11,16 @@ const pages = [
   "desarrollo-seguro/index.html",
   "desarrollo-seguro/metodologia.html",
   "desarrollo-seguro/privacidad.html",
+  "desarrollo-seguro/politica-de-privacidad.html",
   "desarrollo-seguro/sello.html",
   "desarrollo-seguro/verificar.html",
 ];
 const pageContents = await Promise.all(pages.map((path) => readFile(path, "utf8")));
-const [home, methodology, privacy, seal] = pageContents;
-const verifier = pageContents[4];
+const [home, methodology, privacy, privacyPolicy, seal, verifier] = pageContents;
 const styleSources = [
   "desarrollo-seguro/styles.scss",
   "apps/desarrollo-seguro/web/src/public-scan-portal/public-scan-portal.scss",
+  "apps/desarrollo-seguro/web/src/first-entry-notice/first-entry-notice.scss",
 ];
 const styles = await Promise.all(styleSources.map((path) => readFile(path, "utf8")));
 const badgeWidgetStyles = await readFile("desarrollo-seguro/badge-widget.scss", "utf8");
@@ -34,6 +35,8 @@ for (const [index, html] of pageContents.entries()) {
   assert.doesNotMatch(html, /href="\/desarrollo-seguro\/styles\.css"/u);
   assert.doesNotMatch(html, /href="#(?!contenido\b)[^"]+"/u, `${pages[index]} has no section-navigation anchors`);
   assert.match(html, /href="\/desarrollo-seguro\/(?:metodologia|privacidad|sello)\.html"/u, `${pages[index]} has page navigation`);
+  assert.match(html, /href="\/desarrollo-seguro\/politica-de-privacidad\.html"/u, `${pages[index]} links to the legal privacy policy`);
+  assert.match(html, /src="\/desarrollo-seguro\/first-entry-notice\.js" defer/u, `${pages[index]} loads the first-entry notice`);
   assert.doesNotMatch(html, /(?:href|src)="(?:index|metodologia|privacidad|sello|verificar|informe-grumphya-prototipo)\.html|(?:href|src)="assets\//u, `${pages[index]} uses deployable public routes`);
   assert.doesNotMatch(html, /no realiza análisis|no genera resultados|aún no consulta sitios|no ofrece\s+informes operativos|no está activo/u, `${pages[index]} does not claim the scanner is non-operational`);
 }
@@ -50,6 +53,17 @@ assert.match(home, /href="\/app\/\?url=https%3A%2F%2Fgrumphya\.com%2F"/u);
 assert.match(home, /href="\/app\/\?url=https%3A%2F%2Fdesarrolloseguro\.org%2F"/u);
 assert.match(methodology, /Metodología|metodología/u);
 assert.match(privacy, /Privacidad|privacidad/u);
+assert.match(privacyPolicy, /Eduardo Fernández Pastor/u);
+assert.match(privacyPolicy, /Avenida de América 46, 4\.º A, 50007 Zaragoza/u);
+assert.match(privacyPolicy, /contacto@desarrolloseguro\.org/u);
+assert.match(privacyPolicy, /ds-first-entry-notice-dismissed/u);
+assert.match(privacyPolicy, /60 minutos/u);
+assert.match(privacyPolicy, /90 días/u);
+assert.match(privacyPolicy, /no hay rotación ni plazo de borrado automático/u);
+assert.match(privacyPolicy, /artículo 6\.1\.f del RGPD/u);
+assert.match(privacyPolicy, /Según la configuración actual del servicio, confirmada por el responsable, los datos de usuarios alojados no se transfieren fuera del Espacio Económico Europeo/u);
+assert.match(privacyPolicy, /contrato de tratamiento, disponible para VPS/u);
+assert.doesNotMatch(privacyPolicy, /tratamiento en Hosting/u, "VPS disclosures do not cite IONOS's hosting-only statement");
 assert.match(seal, /sello|distintivo/iu);
 assert.match(seal, /href="\/desarrollo-seguro\/verificar\.html"/u, "seal page links to the public verifier");
 assert.match(verifier, /noindex, nofollow/u, "verification tokens are excluded from indexing");
@@ -74,6 +88,7 @@ assert.match(verifier, /no-referrer/u, "verification links do not leak tokens th
 assert.match(styles[0], /\$navy:\s*#/u, "the public site uses Sass design tokens");
 assert.match(styles[1], /\$ds-teal:\s*#/u, "the app uses Sass design tokens");
 assert.match(styles[0], /\.verification-panel\[data-state="valid"\]/u, "verification result has a distinct visual approval state");
+assert.match(styles[2], /\.ds-first-entry-notice__dismiss/u, "the public notice uses shared Sass styles");
 assert.match(badgeWidgetStyles, /\.ds-verified-badge__logo/u, "the embedded approval seal styles its logo");
 for (const obsoleteCss of [
   "desarrollo-seguro/styles.css",
@@ -322,6 +337,7 @@ try {
   const stylesheetPath = generatedHome.match(/href="(\/app\/assets\/site-[a-f0-9]{16}\.css)"/u)?.[1];
   assert.ok(stylesheetPath, "generated pages reference a fingerprinted stylesheet");
   const stylesheet = await readFile(join(buildDirectory, stylesheetPath.replace(/^\/app\//u, "")), "utf8");
+  assert.match(stylesheet, /\.ds-first-entry-notice__dismiss/u, "the generated stylesheet contains the first-entry dialog styles");
   const stylesheetHash = createHash("sha256").update(stylesheet).digest("hex").slice(0, 16);
   assert.equal(stylesheetPath, `/app/assets/site-${stylesheetHash}.css`);
   assert.equal(await readFile(join(buildDirectory, "site.css"), "utf8"), stylesheet);
@@ -348,6 +364,8 @@ try {
   assert.ok(generatedCsp.includes(`'sha256-${verifierHash}'`) && generatedCsp.includes("'strict-dynamic'"));
   assert.doesNotMatch(generatedCsp, /script-src[^;]*'self'/u, "the generated script policy does not authorize by host");
   await access(join(buildDirectory, "desarrollo-seguro/badge-widget.js"));
+  await access(join(buildDirectory, "desarrollo-seguro/first-entry-notice.js"));
+  await access(join(buildDirectory, "desarrollo-seguro/politica-de-privacidad.html"));
   await access(join(buildDirectory, "desarrollo-seguro/verificar.js"));
   await access(join(buildDirectory, "desarrollo-seguro/assets/desarrollo-seguro-logo-v1.svg"));
   const builtWidget = await readFile(join(buildDirectory, "desarrollo-seguro/badge-widget.js"), "utf8");
