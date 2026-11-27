@@ -68,6 +68,42 @@ describe("sanitizeScanObservations", () => {
     expect(result.checks.find(({ controlId }) => controlId === "DS-QUAL-02")?.status).toBe("unknown");
   });
 
+  it("round-trips partial profile metrics and the diagnostic for domain-v5", () => {
+    const targetPath = "/trabajo/oferta?source=lab";
+    const completeEvidence = Object.fromEntries(
+      Object.entries(makeDomainV5PerformanceEvidence()).filter(([key]) => key !== "mobileLcpMs"),
+    );
+    const evidence = {
+      ...completeEvidence,
+      mobileDiagnosticCode: "required_measurement_missing",
+      mobileMissingMetricsMask: (1 << 2) | (1 << 7),
+      desktopDiagnosticCode: "browser_observation_error",
+      desktopMissingMetricsMask: 0,
+    };
+    const checks = makeDomainV4Checks().map((check) => check.controlId === "DS-QUAL-02"
+      ? { ...check, targetPath, status: "unknown", evidence }
+      : { ...check, targetPath });
+
+    const result = sanitizeScanObservations(MONITORED_HOSTNAME, "domain-v5", [targetPath], checks);
+    const performance = result.checks.find(({ controlId }) => controlId === "DS-QUAL-02");
+
+    expect(performance).toMatchObject({
+      status: "unknown",
+      summary: "Medición incompleta: Móvil: faltan LCP, puntuación; Escritorio: falló la observación del navegador.",
+      evidence: {
+        mobileFcpMs: 1_100,
+        mobileSpeedIndexMs: 1_250,
+        mobileDiagnosticCode: "required_measurement_missing",
+        mobileMissingMetricsMask: 132,
+        desktopFcpMs: 500,
+        desktopScore: 98,
+        desktopDiagnosticCode: "browser_observation_error",
+        desktopMissingMetricsMask: 0,
+      },
+    });
+    expect(performance?.evidence).not.toHaveProperty("mobileLcpMs");
+  });
+
   it.each([
     ["negative time", "mobileFcpMs", -1],
     ["fractional time", "desktopTbtMs", 1.5],

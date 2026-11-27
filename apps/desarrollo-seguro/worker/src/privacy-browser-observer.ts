@@ -238,26 +238,48 @@ export async function observePrivacyBehavior(
       proxy: { server: options.proxyUrl, bypass: "<-loopback>" },
       args: ["--disable-background-networking", "--disable-component-update", "--disable-sync", "--no-first-run", "--disable-dev-shm-usage"],
     });
-    const initialBase = await runFlow(browser, targetUrl, "initial", gate, ledger, signal, options.inspectPolicyLinks);
-    const policyLinkVisit = await runPolicyLinkVisit(browser, initialBase, gate, ledger, signal);
+    const initialBase = await isolateObservationPhase(
+      () => runFlow(browser!, targetUrl, "initial", gate, ledger, signal, options.inspectPolicyLinks),
+      UNKNOWN_FLOW,
+    );
+    const policyLink = selectFirstEntryPolicyLink(initialBase.firstEntryPolicyLinks);
+    const policyLinkVisit = await isolateObservationPhase(
+      () => runPolicyLinkVisit(browser!, initialBase, gate, ledger, signal),
+      { ...UNKNOWN_POLICY_LINK_VISIT, link: policyLink },
+    );
     const initial = applyPolicyLinkDocumentAccess(initialBase, policyLinkVisit);
-    const accept = await runFlow(browser, targetUrl, "accept", gate, ledger, signal);
-    const reject = await runFlow(browser, targetUrl, "reject", gate, ledger, signal);
-    const discovery = await discoverVendorControls(browser, targetUrl, initial, gate, ledger, signal);
+    const accept = await isolateObservationPhase(
+      () => runFlow(browser!, targetUrl, "accept", gate, ledger, signal),
+      UNKNOWN_FLOW,
+    );
+    const reject = await isolateObservationPhase(
+      () => runFlow(browser!, targetUrl, "reject", gate, ledger, signal),
+      UNKNOWN_FLOW,
+    );
+    const discovery = await isolateObservationPhase(
+      () => discoverVendorControls(browser!, targetUrl, initial, gate, ledger, signal),
+      { status: "unknown", visibleCount: 0, candidates: [] },
+    );
     const vendorControls: PrivacyVendorControlCheck[] = [];
     if (discovery.status !== "not_applicable") {
       for (const candidate of discovery.candidates.slice(0, MAX_PROVIDER_CONTEXTS)) {
         if (signal.aborted || gate.hasExceededBudget()) break;
-        vendorControls.push(await runVendorControlCheck(browser, targetUrl, candidate, gate, ledger, signal));
+        vendorControls.push(await isolateObservationPhase(
+          () => runVendorControlCheck(browser!, targetUrl, candidate, gate, ledger, signal),
+          unknownVendorControlCheck(candidate),
+        ));
       }
     }
     const vendorControlCoverage = resolveVendorControlCoverage(discovery, vendorControls);
+    const policyLinkVisitComplete = policyLinkVisit.link === null ||
+      policyLinkVisit.status === "evaluated" || policyLinkVisit.status === "not_applicable";
     const status = resolvePrivacyObservationStatus({
       flows: [initial, accept, reject],
       requestCount: ledger.requestCount,
       budgetExceeded: gate.hasExceededBudget(),
       overflow: ledger.overflow,
       vendorControlsComplete: vendorControlCoverage === "complete" || vendorControlCoverage === "not_applicable",
+      policyLinkVisitComplete,
     });
     return {
       protocolVersion: 1,
@@ -309,13 +331,43 @@ export function resolvePrivacyObservationStatus(input: {
   budgetExceeded: boolean;
   overflow: boolean;
   vendorControlsComplete?: boolean;
+  policyLinkVisitComplete?: boolean;
 }): PrivacyBrowserObservation["status"] {
   if (!Number.isSafeInteger(input.requestCount) || input.requestCount < 0) return "unknown";
   const flowsComplete = input.flows.length === 3 && input.flows.every(({ status }) =>
     status === "evaluated" || status === "not_applicable",
   );
-  if (flowsComplete && !input.budgetExceeded && !input.overflow && input.vendorControlsComplete !== false) return "complete";
+  if (
+    flowsComplete && !input.budgetExceeded && !input.overflow &&
+    input.vendorControlsComplete !== false && input.policyLinkVisitComplete !== false
+  ) return "complete";
   return input.requestCount > 0 ? "partial" : "unknown";
+}
+
+async function isolateObservationPhase<T>(
+  operation: () => Promise<T>,
+  fallback: T,
+): Promise<T> {
+  try {
+    return await operation();
+  } catch {
+    return fallback;
+  }
+}
+
+function unknownVendorControlCheck(candidate: VendorToggle): PrivacyVendorControlCheck {
+  return {
+    provider: candidate.provider,
+    status: "unknown",
+    declaredLegitimateInterest: candidate.declaredLegitimateInterest,
+    toggleCount: candidate.count,
+    actionsToDisable: null,
+    disabled: null,
+    persistedDisabled: null,
+    signalHostsAfterDisable: [],
+    completedHostsAfterDisable: [],
+    cookiesAfterDisable: [],
+  };
 }
 
 async function runPolicyLinkVisit(
@@ -736,9 +788,10 @@ async function runVendorControlCheck(
     timezoneId: "Europe/Madrid",
     viewport: { width: 1365, height: 768 },
   });
-  const flowHosts = await installRequestGate(context, gate, ledger);
+  let flowHosts: Set<string>;
   const completedHosts = new Set<string>();
   try {
+    flowHosts = await installRequestGate(context, gate, ledger);
     const page = await context.newPage();
     page.setDefaultTimeout(ACTION_TIMEOUT_MS);
     page.setDefaultNavigationTimeout(NAVIGATION_TIMEOUT_MS);

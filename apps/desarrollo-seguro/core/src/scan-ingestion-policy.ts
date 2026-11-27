@@ -515,6 +515,16 @@ function getSafeCheckSummary(
     }
     return "No se pudieron determinar todas las versiones de TLS; faltan resultados de una o más pruebas.";
   }
+  if (controlId === "DS-QUAL-02") {
+    const diagnostics = getPerformanceDiagnosticSummaries(evidence);
+    if (diagnostics.length > 0) {
+      const diagnosticSummary = `Medición incompleta: ${diagnostics.join("; ")}.`;
+      const httpSummary = status === "fail" && typeof evidence.responseTimeMs === "number"
+        ? `Respuesta inicial: ${evidence.responseTimeMs} ms; supera el umbral de 2.500 ms.`
+        : undefined;
+      return httpSummary ? `${httpSummary} ${diagnosticSummary}` : diagnosticSummary;
+    }
+  }
   if (controlId !== "DS-PRIV-05") {
     if (controlId === "DS-PRIV-06" && evidence.browserObservationComplete === true) {
       const thirdPartyRequests = Number(evidence.browserThirdPartyRequestCount);
@@ -541,6 +551,44 @@ function getSafeCheckSummary(
     return "No se pudo inspeccionar la respuesta inicial para detectar cookies conocidas; criterio no evaluado.";
   }
   return `Cookies en respuesta inicial: ${evidence.cookieCount}; coincidencias con la tabla local Analytics/Marketing: ${evidence.catalogMatchCount}; sin atributo Secure: ${evidence.insecureCookieCount}. No se interactuó con el banner de consentimiento.`;
+}
+
+const PERFORMANCE_DIAGNOSTIC_FIELDS = [
+  ["fcpMs", "FCP"],
+  ["speedIndexMs", "Speed Index"],
+  ["lcpMs", "LCP"],
+  ["cls", "CLS"],
+  ["tbtMs", "TBT"],
+  ["ttfbMs", "TTFB"],
+  ["transferBytes", "bytes transferidos"],
+  ["score", "puntuación"],
+] as const;
+
+const PERFORMANCE_DIAGNOSTIC_LABELS: Readonly<Record<string, string>> = {
+  observation_budget_exhausted: "se agotó el presupuesto de observación",
+  observation_stopped_early: "la observación se detuvo antes de completar el perfil",
+  request_budget_exceeded: "se superó el presupuesto de solicitudes",
+  required_measurement_missing: "faltan mediciones requeridas",
+  browser_timeout: "se agotó el tiempo de espera del navegador",
+  browser_observation_error: "falló la observación del navegador",
+};
+
+function getPerformanceDiagnosticSummaries(
+  evidence: Record<string, SafeEvidenceValue>,
+): string[] {
+  return (["mobile", "desktop"] as const).flatMap((profile) => {
+    const code = evidence[`${profile}DiagnosticCode`];
+    if (typeof code !== "string") return [];
+
+    const label = profile === "mobile" ? "Móvil" : "Escritorio";
+    const mask = Number(evidence[`${profile}MissingMetricsMask`] ?? 0);
+    const missingMetrics = PERFORMANCE_DIAGNOSTIC_FIELDS.flatMap(([, metric], index) =>
+      (mask & (1 << index)) !== 0 ? [metric] : []);
+    const detail = code === "required_measurement_missing" && missingMetrics.length > 0
+      ? `faltan ${missingMetrics.join(", ")}`
+      : PERFORMANCE_DIAGNOSTIC_LABELS[code] ?? "la medición no pudo completarse";
+    return [`${label}: ${detail}`];
+  });
 }
 
 function getSafeCheckLimitation(

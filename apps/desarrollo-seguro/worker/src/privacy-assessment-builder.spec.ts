@@ -211,6 +211,45 @@ describe("assessPrivacyObservation", () => {
     expect(slow[0]).toMatchObject({ status: "fail", evidence: { responseTimeMs: 2_501 } });
   });
 
+  it("retains measured metrics from an incomplete mobile profile alongside complete desktop metrics", () => {
+    const result = mergePrivacyBrowserChecks([{
+      controlId: "DS-QUAL-02", status: "unknown", required: true, severity: "medium", observedAt: new Date(),
+      targetPath: "/careers?source=lab", method: "GET", summary: "", limitation: "",
+      evidence: { inspected: true, responseTimeMs: 700, responseBytes: 45_000 },
+    }], observation({ performance: {
+      profiles: [
+        {
+          profile: "mobile", status: "unknown", fcpMs: 900, speedIndexMs: 1_100, lcpMs: null,
+          cls: 0.03, tbtMs: 70, ttfbMs: 150, transferBytes: 14_000, score: null,
+          diagnostic: { code: "required_measurement_missing", missingMetrics: ["lcpMs", "score"] },
+        },
+        {
+          profile: "desktop", status: "complete", fcpMs: 450, speedIndexMs: null, lcpMs: 800,
+          cls: 0.01, tbtMs: 25, ttfbMs: 80, transferBytes: 10_000, score: 99,
+        },
+      ],
+    } }));
+
+    expect(result[0]).toMatchObject({
+      status: "unknown",
+      evidence: {
+        mobileFcpMs: 900,
+        mobileSpeedIndexMs: 1_100,
+        mobileClsMilli: 30,
+        mobileTbtMs: 70,
+        mobileTtfbMs: 150,
+        mobileTransferBytes: 14_000,
+        mobileDiagnosticCode: "required_measurement_missing",
+        mobileMissingMetricsMask: 132,
+        desktopFcpMs: 450,
+        desktopLcpMs: 800,
+        desktopScore: 99,
+      },
+    });
+    expect(result[0]?.evidence).not.toHaveProperty("mobileLcpMs");
+    expect(result[0]?.evidence).not.toHaveProperty("mobileScore");
+  });
+
   it("retains confirmed services and completed third-party destinations without assigning unknown companies", () => {
     const result = getObservedPublicServices(observation({
       initial: flow({

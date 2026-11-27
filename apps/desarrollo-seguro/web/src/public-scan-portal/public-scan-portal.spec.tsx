@@ -1036,7 +1036,10 @@ describe("PublicScanPortal", () => {
       .mockResolvedValueOnce(
         Response.json({ hostname: "example.com", state: "queued" }, { status: 202 }),
       )
-      .mockResolvedValueOnce(Response.json(status));
+      .mockResolvedValueOnce(Response.json(status))
+      .mockResolvedValueOnce(
+        Response.json({ hostname: "example.com", state: "queued" }, { status: 202 }),
+      );
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
 
@@ -1056,6 +1059,18 @@ describe("PublicScanPortal", () => {
     expect(screen.getByRole("button", { name: "Volver a solicitar análisis" })).toBeVisible();
     expect(screen.queryByRole("progressbar", { name: "Progreso del análisis" })).toBeNull();
     expect(fetchMock).toHaveBeenCalledTimes(3);
+
+    await user.click(screen.getByRole("button", { name: "Volver a solicitar análisis" }));
+    expect(await screen.findByRole("progressbar", { name: "Progreso del análisis" }))
+      .toHaveAttribute("data-phase", "queued");
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(fetchMock).toHaveBeenLastCalledWith(ANALYSIS_REQUEST_ENDPOINT, {
+      method: "POST",
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      credentials: "omit",
+      cache: "no-store",
+      body: JSON.stringify({ authorized: true, targetUrl: "https://example.com/" }),
+    });
   }, 10_000);
 
   it("shows the stored checks and makes a stale report visibly historical", async () => {

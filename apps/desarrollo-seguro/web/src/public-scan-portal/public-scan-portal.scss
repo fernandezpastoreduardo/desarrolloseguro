@@ -110,6 +110,7 @@ $ds-space-block: 40px;
 .ds-portal__history,
 .ds-portal__history-list li,
 .ds-portal__analysis-request button,
+.ds-portal__analysis-retry,
 .ds-portal__failure,
 .ds-portal__scan-progress-track {
   border-radius: var(--ds-radius);
@@ -455,7 +456,8 @@ $ds-space-block: 40px;
 }
 
 .ds-portal__search button,
-.ds-portal__analysis-request button {
+.ds-portal__analysis-request button,
+.ds-portal__analysis-retry {
   display: inline-flex;
   min-height: 48px;
   align-items: center;
@@ -476,20 +478,23 @@ $ds-space-block: 40px;
 }
 
 .ds-portal__search button:hover,
-.ds-portal__analysis-request button:not(:disabled):hover {
+.ds-portal__analysis-request button:not(:disabled):hover,
+.ds-portal__analysis-retry:not(:disabled):hover {
   border-color: var(--ds-accent-strong);
   background: var(--ds-accent-strong);
 }
 
 .ds-portal[data-theme="dark"] .ds-portal__search button,
-.ds-portal[data-theme="dark"] .ds-portal__analysis-request button {
+.ds-portal[data-theme="dark"] .ds-portal__analysis-request button,
+.ds-portal[data-theme="dark"] .ds-portal__analysis-retry {
   border-color: var(--ds-accent-soft);
   color: #141414;
   background: var(--ds-accent-soft);
 }
 
 .ds-portal[data-theme="dark"] .ds-portal__search button:hover,
-.ds-portal[data-theme="dark"] .ds-portal__analysis-request button:not(:disabled):hover {
+.ds-portal[data-theme="dark"] .ds-portal__analysis-request button:not(:disabled):hover,
+.ds-portal[data-theme="dark"] .ds-portal__analysis-retry:not(:disabled):hover {
   border-color: var(--ds-accent);
   color: var(--ds-paper);
   background: var(--ds-accent);

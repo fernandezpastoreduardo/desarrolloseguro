@@ -4,6 +4,8 @@ Lee primero [`../AGENTS.md`](../AGENTS.md): contiene el proceso obligatorio, los
 
 ## Fuente de verdad
 
+- El plan de estabilización del 27-11-2026 está en [`desarrollo-seguro/stabilization-and-modularization-plan.md`](desarrollo-seguro/stabilization-and-modularization-plan.md). P0 y P1 están aprobadas; consulta allí el estado y los límites de cada paquete antes de trabajar.
+
 - La filosofía transversal vigente para infracciones legales acreditadas y sus consecuencias económicas está en [`legal-evidence-and-sanctions.md`](legal-evidence-and-sanctions.md). Prevalece sobre la terminología y los límites de las especificaciones técnicas históricas cuando el producto nuevo defina sus hallazgos legales.
 - Las features nuevas se definen aquí antes de implementar cualquier código.
 - Cada definición debe precisar propósito, alcance, exclusiones, comportamiento, privacidad, seguridad y criterios de aceptación; pregunta al usuario por lo que no esté definido.

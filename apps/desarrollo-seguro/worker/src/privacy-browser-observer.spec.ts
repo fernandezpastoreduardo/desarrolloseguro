@@ -32,6 +32,13 @@ describe("privacy browser observation status", () => {
       budgetExceeded: false,
       overflow: true,
     })).toBe("partial");
+    expect(resolvePrivacyObservationStatus({
+      flows: [{ status: "evaluated" }, { status: "not_applicable" }, { status: "not_applicable" }],
+      requestCount: 8,
+      budgetExceeded: false,
+      overflow: false,
+      policyLinkVisitComplete: false,
+    })).toBe("partial");
   });
 
   it("does not claim coverage when no request yielded usable observations", () => {
@@ -71,6 +78,66 @@ describe("observePrivacyBehavior", () => {
     expect(result.reject.status).toBe("not_applicable");
     expect(result.policyLinkVisit.status).toBe("unknown");
     expect(browser.newContext).toHaveBeenCalledTimes(3);
+    expect(browser.close).toHaveBeenCalledOnce();
+  });
+
+  it("keeps the initial cookie inventory when a later policy-link phase fails", async () => {
+    const initialCookie = {
+      name: "initial_session",
+      domain: ".grumphya.com",
+      secure: true,
+      httpOnly: true,
+      value: "must-not-be-retained",
+    };
+    const initialContext = makeContext([initialCookie]);
+    const acceptContext = makeContext();
+    const rejectContext = makeContext();
+    let contextRequest = 0;
+    const browser = {
+      newContext: vi.fn(async () => {
+        contextRequest += 1;
+        if (contextRequest === 2) throw new Error("policy-link context failed");
+        return contextRequest === 1 ? initialContext : contextRequest === 3 ? acceptContext : rejectContext;
+      }),
+      close: vi.fn(async () => undefined),
+    };
+    const inspectPolicyLinks = vi.fn(async () => ({
+      status: "evaluated" as const,
+      consentComponentDetected: false,
+      consentComponentLink: null,
+      consentComponentDocumentAccess: "not_checked" as const,
+      informationNoticeLink: privacyLink,
+      informationNoticeDocumentAccess: "not_checked" as const,
+      footerLink: null,
+      footerLinkDocumentAccess: "not_checked" as const,
+    }));
+
+    const result = await observePrivacyBehavior({
+      protocolVersion: 1,
+      requestId: "947dd0c9-564c-4a30-8ce3-efb4ecae9136",
+      hostname: "grumphya.com",
+    }, {
+      proxyUrl: "http://privacy-egress:3128",
+      launchBrowser: vi.fn(async () => browser as never) as never,
+      inspectPolicyLinks: inspectPolicyLinks as never,
+    });
+
+    expect(result.status).toBe("partial");
+    expect(result.initial.status).toBe("evaluated");
+    expect(result.initial.phaseEvidence.beforeChoice?.cookies).toEqual([{
+      name: "initial_session",
+      domain: "grumphya.com",
+      secure: true,
+      httpOnly: true,
+    }]);
+    expect(result.policyLinkVisit).toMatchObject({
+      status: "unknown",
+      link: privacyLink,
+      documentAccess: "unknown",
+    });
+    expect(result.accept.status).toBe("not_applicable");
+    expect(result.reject.status).toBe("not_applicable");
+    expect(JSON.stringify(result)).not.toContain("must-not-be-retained");
     expect(browser.close).toHaveBeenCalledOnce();
   });
 

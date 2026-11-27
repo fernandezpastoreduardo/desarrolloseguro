@@ -54,13 +54,13 @@ export function mergePrivacyBrowserChecks(
     if (check.controlId === "DS-QUAL-02" && observation.performance) {
       const profileEvidence = Object.fromEntries(observation.performance.profiles.flatMap((profile) => {
         const prefix = profile.profile;
-        const metricEvidence = profile.status === "complete" ? [
+        const metricEvidence = [
           [`${prefix}FcpMs`, profile.fcpMs], ...(prefix === "mobile" ? [["mobileSpeedIndexMs", profile.speedIndexMs] as const] : []),
           [`${prefix}LcpMs`, profile.lcpMs],
           [`${prefix}ClsMilli`, profile.cls === null ? null : Math.round(profile.cls * 1_000)],
           [`${prefix}TbtMs`, profile.tbtMs], [`${prefix}TtfbMs`, profile.ttfbMs],
           [`${prefix}TransferBytes`, profile.transferBytes], [`${prefix}Score`, profile.score],
-        ].filter(([, value]) => typeof value === "number") as Array<[string, number | string]> : [];
+        ].filter(([, value]) => typeof value === "number") as Array<[string, number | string]>;
         if (!profile.diagnostic) return metricEvidence;
         const missingMask = (profile.diagnostic.missingMetrics ?? []).reduce((mask, field) => {
           const index = PERFORMANCE_DIAGNOSTIC_FIELDS.indexOf(field);
@@ -72,7 +72,7 @@ export function mergePrivacyBrowserChecks(
           [`${prefix}MissingMetricsMask`, missingMask],
         ];
       }));
-      if (observation.performance.profiles[0]?.status === "complete") {
+      if (typeof observation.performance.profiles[0]?.score === "number") {
         profileEvidence.mobileScoreModelVersion = "lighthouse-13.6.0";
       }
       const complete = observation.performance.profiles.every(({ status }) => status === "complete");

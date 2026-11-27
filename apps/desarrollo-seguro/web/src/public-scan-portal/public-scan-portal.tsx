@@ -416,6 +416,7 @@ export function PublicScanPortal() {
   const analysisStatusPollCount = useRef(0);
   const reportBeforeAnalysisId = useRef<string | null>(null);
   const analysisRequestInFlight = useRef(false);
+  const retryAuthorization = useRef<{ hostname: string; targetUrl: string } | null>(null);
   const domainInputRef = useRef<HTMLInputElement>(null);
   const scanAnnouncement = useRef<"queued" | "running" | "complete" | "failed" | null>(null);
   const [scanAnnouncementText, setScanAnnouncementText] = useState("");
@@ -609,6 +610,7 @@ export function PublicScanPortal() {
     setAuditTargetUrl(targetUrl);
     setDomainInputInvalid(false);
     setAuthorizationConfirmed(false);
+    retryAuthorization.current = null;
     setAnalysisRequestState(null);
     setState("loading");
     setMessage("");
@@ -697,6 +699,12 @@ export function PublicScanPortal() {
       (state === "loading" && !automaticallyAuthorized) ||
       analysisRequestInFlight.current
     ) return;
+    if (automaticallyAuthorized) {
+      retryAuthorization.current = {
+        hostname: requestStatus.hostname,
+        targetUrl: requestTargetUrl,
+      };
+    }
     analysisStatusPollCount.current = 0;
     setScanAnnouncementText("");
     scanAnnouncement.current = null;
@@ -740,6 +748,14 @@ export function PublicScanPortal() {
     } finally {
       analysisRequestInFlight.current = false;
     }
+  }
+
+  function retryAnalysis(): void {
+    const previousRetryAuthorization = retryAuthorization.current;
+    const retryAuthorizationMatchesTarget =
+      previousRetryAuthorization?.hostname === status?.hostname &&
+      previousRetryAuthorization?.targetUrl === auditTargetUrl;
+    void requestAnalysis({ automaticallyAuthorized: retryAuthorizationMatchesTarget });
   }
 
   return (
@@ -832,7 +848,7 @@ export function PublicScanPortal() {
           authorizationConfirmed={authorizationConfirmed}
           onAuthorizationChange={setAuthorizationConfirmed}
           analysisRequestState={analysisRequestState}
-          onRequestAnalysis={() => void requestAnalysis()}
+          onRequestAnalysis={retryAnalysis}
         />
       )}
       {state === "ready" && !status && report && (
@@ -872,7 +888,7 @@ export function PublicScanPortal() {
               authorizationConfirmed={authorizationConfirmed}
               onAuthorizationChange={setAuthorizationConfirmed}
               requestState={analysisRequestState}
-              onRequest={() => void requestAnalysis()}
+              onRequest={retryAnalysis}
             />
           )}
         </section>
@@ -1003,7 +1019,7 @@ function AnalysisRequestPanel({
           <p className="ds-portal__failure" role="alert">
             {getAnalysisRequestMessage(requestState)}
           </p>
-          <button type="button" onClick={onRequest}>
+          <button className="ds-portal__analysis-retry" type="button" onClick={onRequest}>
             Volver a solicitar análisis
           </button>
         </div>

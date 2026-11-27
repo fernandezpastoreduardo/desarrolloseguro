@@ -489,3 +489,68 @@ test("stops polling and reports an admission mismatch when no scan job appears",
   await expect(page.getByRole("heading", { name: "Aún no hay un informe" })).toBeVisible();
   expect(statusReads).toBe(2);
 });
+
+test("retry submits another analysis request without reloading", async ({ page }) => {
+  let analysisRequests = 0;
+  let statusReads = 0;
+  await page.route("**/domains/retry.example.org/status*", async (route) => {
+    statusReads += 1;
+    const isRetryAdmitted = statusReads >= 3;
+    return route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        hostname: "retry.example.org",
+        enrollment: "on_demand",
+        state: isRetryAdmitted ? "updating" : "not_scanned",
+        failureCode: null,
+        activeJobId: isRetryAdmitted ? "123e4567-e89b-42d3-a456-426614174000" : null,
+        ...(isRetryAdmitted ? {
+          auditProgress: {
+            policyVersion: "public-audit-progress-v1",
+            aspects: { ethics: "running", privacy: "pending", security: "pending", performance: "pending" },
+          },
+        } : {}),
+        lastReport: null,
+        checkedAt: "2026-11-27T00:00:00.000Z",
+      }),
+    });
+  });
+  await page.route("**/analysis-requests", async (route) => {
+    analysisRequests += 1;
+    expect(route.request().postDataJSON()).toEqual({
+      authorized: true,
+      targetUrl: "https://retry.example.org/",
+    });
+    await route.fulfill({
+      status: 202,
+      contentType: "application/json",
+      body: JSON.stringify({
+        hostname: "retry.example.org",
+        targetUrl: "https://retry.example.org/",
+        state: "queued",
+      }),
+    });
+  });
+
+  await page.goto("/");
+  await page.getByRole("textbox", { name: "URL HTTPS que quieres auditar" }).fill(
+    "https://retry.example.org/",
+  );
+  await page.getByRole("button", { name: "Consultar informe" }).click();
+  const retry = page.getByRole("button", { name: "Volver a solicitar análisis" });
+  await expect(retry).toBeVisible({ timeout: 15_000 });
+  await expect(retry).toHaveCSS("background-color", "rgb(20, 20, 20)");
+  await expect(retry).toHaveCSS("border-radius", "20px");
+  expect(analysisRequests).toBe(1);
+  const pageUrlBeforeRetry = page.url();
+
+  await retry.click();
+  await expect.poll(() => analysisRequests).toBe(2);
+  await expect(page.getByRole("progressbar", { name: "Progreso del análisis" }))
+    .toHaveAttribute("data-phase", "queued");
+  await expect(page.getByRole("list", { name: "Progreso de las comprobaciones" }))
+    .toContainText("Ética: en curso", { timeout: 10_000 });
+  await expect(retry).toHaveCount(0);
+  expect(page.url()).toBe(pageUrlBeforeRetry);
+  expect(statusReads).toBeGreaterThanOrEqual(3);
+});
