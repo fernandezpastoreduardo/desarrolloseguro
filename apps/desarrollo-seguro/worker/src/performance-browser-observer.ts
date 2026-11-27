@@ -340,9 +340,13 @@ function sumBlockingTime(tasks: readonly LongTaskTiming[]): number {
   return tasks.reduce((total, task) => total + Math.max(0, Math.round(task.duration - 50)), 0);
 }
 
+const DEFAULT_BROWSER_OBSERVATION_DIAGNOSTIC: NonNullable<PerformanceProfileEvidence["diagnostic"]> = {
+  code: "browser_observation_error",
+};
+
 function unknownEvidence(
   profile: PerformanceProfile,
-  diagnostic: NonNullable<PerformanceProfileEvidence["diagnostic"]> = { code: "browser_observation_error" },
+  diagnostic: NonNullable<PerformanceProfileEvidence["diagnostic"]> = DEFAULT_BROWSER_OBSERVATION_DIAGNOSTIC,
   metrics?: Pick<CollectedMetrics, "fcpMs" | "speedIndexMs" | "lcpMs" | "cls" | "tbtMs" | "ttfbMs" | "transferBytes">,
 ): PerformanceProfileEvidence {
   return {

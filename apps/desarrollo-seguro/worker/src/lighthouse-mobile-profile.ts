@@ -73,7 +73,6 @@ export async function observeLighthouseMobileProfile(
     });
     cdp = await page.target().createCDPSession();
     await cdp.send("Network.enable");
-    await cdp.send("Network.setBlockedURLs", { urls: ["ws://*", "wss://*"] });
 
     options.signal.addEventListener("abort", closeBrowser, { once: true });
     stage = "run_lighthouse";

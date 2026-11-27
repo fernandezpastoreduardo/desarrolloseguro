@@ -140,9 +140,10 @@ la búsqueda convencional siguen siendo vías disponibles.
 
 ## Límites
 
-- La sección independiente de Actualidad, sus fuentes automáticas, la
-  moderación por correo y el análisis de propiedad intelectual quedan
-  aplazados y registrados en `wanna-bes.md`.
+- La sección independiente de Actualidad y sus artículos se especifican en
+  [`public-navigation-and-actualidad.md`](public-navigation-and-actualidad.md).
+  Las fuentes automáticas, la moderación por correo y el análisis de propiedad
+  intelectual permanecen aplazados.
 - No se implementa contacto, cuentas, panel de administración, ingestión de
   noticias, comentarios, ni otros productos o servicios.
 - No cambian criterios, ponderaciones, resultado, perfiles, nombres de estado,
@@ -199,8 +200,10 @@ la búsqueda convencional siguen siendo vías disponibles.
     acuerdo con [`lighthouse-laboratory.md`](lighthouse-laboratory.md).
 12. Tras implementar y verificar, `doc/` describe para personas las páginas,
     el acceso a informes y sus límites; la ficha estática se elimina del
-    build. `wanna-bes.md` conserva la idea de Actualidad porque sigue
-    aplazada.
+    build. La sección editorial y sus artículos se rigen por
+    [`public-navigation-and-actualidad.md`](public-navigation-and-actualidad.md);
+    `wanna-bes.md` conserva solo la automatización y gestión editorial aún
+    aplazadas.
 
 ## Orden de trabajo
 

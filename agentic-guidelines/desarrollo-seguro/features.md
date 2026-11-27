@@ -364,3 +364,14 @@ La migración 007 registra un perfil nuevo e inmutable, con alcance solo `/` y c
 ## Límite actual
 
 El entrypoint worker (`pnpm --filter @desarrolloseguro/worker start`) compone el store PostgreSQL con rol `ds_worker`, procesador por lease, cliente del supervisor Unix y telemetría allowlisted. Usa polling serial, backoff limitado y parada por SIGINT/SIGTERM; requiere un secreto DB en fichero y propietario/grupo esperados para el socket. El supervisor tiene un entrypoint (`start:coordinator`) que enlaza servidor Unix y runner Docker, valida configuración y fija un socket Docker local explícito. Compose define ambos procesos de análisis; el coordinador es el único que monta el socket Docker y no tiene red propia. El worker solo comparte el socket Unix con él y pertenece al backend interno. Los schedulers separados ejecutan diariamente el purgado de informes de más de 90 días y la limpieza de informes públicos `on_demand` inactivos durante 30 días, además de encolar cada hora auditorías vencidas de certificaciones activas usando `ds_retention`; las funciones conservan informes certificados y dominios monitorizados. El observador fija DNS/IP validado, aplica TLS, HTTP→HTTPS y deriva evidencia de cabeceras; el executor limita sondas, intentos y bytes y reduce errores TLS a categorías seguras. El smoke post-deploy debe comprobar el firewall de egress, detectar una generación real de informe y rechazar resultados incompletos antes de declarar operativo el escáner. Ver [scanner-safety.md](scanner-safety.md) y [test-plan.md](test-plan.md).
+
+## F7. Navegación pública y Actualidad
+
+La navegación principal comparte enlaces y orden entre las vistas públicas y
+`/app/`. La sección editorial tiene un índice en
+`/desarrollo-seguro/actualidad.html` con varias tarjetas resumidas visibles a
+la vez y una página completa por noticia. Se integran los seis artículos
+aportados por el desarrollador tras verificar afirmaciones y atribuir las
+fuentes primarias. La publicación es estática y no agrega dependencias,
+seguimiento ni peticiones externas durante la carga. Alcance y criterios:
+[`public-navigation-and-actualidad.md`](public-navigation-and-actualidad.md).

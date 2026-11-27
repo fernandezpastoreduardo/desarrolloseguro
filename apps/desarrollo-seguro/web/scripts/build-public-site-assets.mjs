@@ -10,6 +10,13 @@ const sourcePath = resolve(repositoryRoot, "desarrollo-seguro/styles.scss");
 const defaultOutputDirectory = resolve(scriptDirectory, "../dist");
 const htmlPages = [
   "index.html",
+  "actualidad.html",
+  "actualidad/brechas-2026.html",
+  "actualidad/riesgos-tras-una-brecha.html",
+  "actualidad/rastreo-en-internet.html",
+  "actualidad/vias-legales-brecha.html",
+  "actualidad/cookies-y-rastreo.html",
+  "actualidad/aviso-cookies-proveedores.html",
   "metodologia.html",
   "privacidad.html",
   "sello.html",
@@ -46,7 +53,9 @@ export async function buildPublicSiteAssets(outputDirectory = defaultOutputDirec
     const source = await readFile(join(repositoryRoot, "desarrollo-seguro", page), "utf8");
     let generated = source.replaceAll("/app/site.css", `/app/assets/${stylesheetName}`);
     if (generated === source) throw new Error("public_site_stylesheet_reference_missing");
-    await writeFile(join(publicSiteDirectory, page), generated);
+    const target = join(publicSiteDirectory, page);
+    await mkdir(dirname(target), { recursive: true });
+    await writeFile(target, generated);
   }));
   const appIndexPath = join(outputDirectory, "index.html");
   let appIndex = null;

@@ -154,11 +154,9 @@ piloto.
 - Ningún uso de fixtures como evidencia de producción.
 - Sin cookies de terceros ni datos de usuarios en el canal de certificación.
 
-## Página independiente de Actualidad
+## Edición y actualización de Actualidad
 
-Se propone una página con enlaces a noticias y artículos educativos sobre
-privacidad, malas prácticas y brechas reconocidas por las propias empresas.
-La selección de medios, la automatización, los derechos de uso y el flujo de
-moderación requieren investigación y definición antes de incorporarla al MVP.
-Se aparca hasta retomarlo expresamente; las fuentes con permisos dudosos no se
-utilizarán.
+La página actual es estática y sus artículos se añaden manualmente. La
+ingestión automática de noticias, un panel editorial y la moderación continúan
+aplazados; requieren definir fuentes, derechos de uso y responsabilidades de
+revisión.

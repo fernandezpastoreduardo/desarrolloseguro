@@ -140,9 +140,8 @@ $ds-space-block: 40px;
   align-items: center;
   justify-content: space-between;
   gap: $ds-space;
-  border-top: 4px solid var(--ds-accent);
-  border-bottom: 1px solid var(--ds-line);
-  padding-inline: max($ds-space-block, calc((100% - 1320px) / 2));
+  border-bottom: 1px solid #cfc5b6;
+  padding-inline: max(36px, calc((100% - 1340px) / 2));
   background: #fffaf0e8;
 }
 
@@ -178,28 +177,20 @@ $ds-space-block: 40px;
   text-transform: uppercase;
 }
 
-.ds-portal[data-theme="dark"] .ds-portal__brand {
-  color: var(--ds-paper);
-}
-
-.ds-portal[data-theme="dark"] .ds-portal__topbar {
-  background: #111f33e8;
-}
-
 .ds-portal__nav {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: clamp(16px, 2vw, 30px);
+  gap: clamp(18px, 2.7vw, 40px);
   margin-left: auto;
 }
 
 .ds-portal__nav a {
   position: relative;
   padding-block: 10px;
-  color: var(--ds-ink-soft);
-  font-size: 0.7rem;
-  font-weight: 700;
+  color: #41516a;
+  font-size: 0.78rem;
+  font-weight: 650;
   text-decoration: none;
   white-space: nowrap;
   transition: color 180ms ease;
@@ -220,6 +211,15 @@ $ds-space-block: 40px;
 
 .ds-portal__nav a:hover {
   color: var(--ds-accent-strong);
+}
+
+.ds-portal__nav a[aria-current="page"] {
+  color: var(--ds-navy);
+}
+
+.ds-portal__nav a[aria-current="page"]::after {
+  transform: scaleX(1);
+  transform-origin: left;
 }
 
 .ds-portal__nav a:hover::after,
@@ -2178,7 +2178,7 @@ $ds-space-block: 40px;
   text-transform: uppercase;
 }
 
-@media (max-width: 800px) {
+@media (max-width: 1060px) {
   .ds-portal__topbar {
     flex-wrap: wrap;
     padding-block: $ds-space-small;
@@ -2188,7 +2188,7 @@ $ds-space-block: 40px;
     order: 3;
     width: 100%;
     justify-content: flex-start;
-    gap: 22px;
+    gap: 23px;
   }
 
   .ds-portal__hero {
@@ -2204,7 +2204,7 @@ $ds-space-block: 40px;
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 760px) {
   .ds-portal__hero {
     padding-inline: 10px;
   }
@@ -2285,17 +2285,12 @@ $ds-space-block: 40px;
     gap: $ds-space-small;
   }
 
-  .ds-portal__brand-logo {
-    width: 150px;
-    height: 58px;
-  }
-
   .ds-portal__nav {
-    gap: $ds-space;
+    gap: 20px;
   }
 
   .ds-portal__nav a {
-    font-size: 0.64rem;
+    font-size: 0.72rem;
   }
 
   .ds-portal__brand-note {
@@ -2387,6 +2382,21 @@ $ds-space-block: 40px;
 
   .ds-portal__footer a {
     align-self: flex-start;
+  }
+}
+
+@media (max-width: 430px) {
+  .ds-portal__brand-logo {
+    width: 142px;
+    height: 58px;
+  }
+
+  .ds-portal__nav {
+    gap: 16px;
+  }
+
+  .ds-portal__nav a {
+    font-size: 0.72rem;
   }
 }
 
