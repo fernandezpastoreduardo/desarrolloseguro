@@ -59,7 +59,6 @@ test("renders the public portal and allows changing its theme", async ({
     "Actualidad",
     "Metodología",
     "Privacidad y alcance",
-    "Política de privacidad",
     "Sello e informes",
   ]);
   await expect(publicNavigation.getByRole("link", { name: "Inicio" })).toHaveAttribute(
@@ -74,7 +73,7 @@ test("renders the public portal and allows changing its theme", async ({
     "href",
     "/desarrollo-seguro/privacidad.html",
   );
-  await expect(publicNavigation.getByRole("link", { name: "Política de privacidad" })).toHaveAttribute(
+  await expect(page.locator(".ds-portal__footer").getByRole("link", { name: "Política de privacidad" })).toHaveAttribute(
     "href",
     "/desarrollo-seguro/politica-de-privacidad.html",
   );

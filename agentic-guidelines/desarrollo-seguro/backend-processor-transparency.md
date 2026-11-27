@@ -90,6 +90,43 @@ solicitudes, cookies y proveedores observados desde el navegador en el alcance
 medido. Un cero de esa observación no se convierte en un inventario backend
 vacío, y una llamada backend no se representa como una solicitud del navegador.
 
+## Presentación agrupada por proveedor
+
+En el bloque «Servicios externos utilizados por …», el inventario de
+procesadores y la comparación pública se agrupan en un solo acordeón por
+proveedor cuando sus identificadores se pueden normalizar al mismo proveedor
+conocido en el catálogo. Debe consolidarse, por ejemplo, `openai` con
+`openai-api` y cualquier identificador de producto de IONOS cuyo nombre de
+proveedor se resuelva como `ionos`. El producto se conserva como contexto del
+proveedor, no como una segunda fila.
+
+Dentro del acordeón único se conserva todo el contenido de ambas fuentes:
+productos, propósitos, declaraciones del titular, políticas enlazadas,
+observaciones de servicios y dominios, estados de comparación, contradicciones
+documentales, fuentes y evidencia legal. Si hay varias declaraciones del mismo
+proveedor, se muestran todas sin reemplazarlas entre sí. El bloque mantiene un
+solo control de expansión por proveedor; la evidencia incluida no se oculta en
+un segundo acordeón dentro de ese proveedor.
+
+No se agrupan proveedores desconocidos por semejanza parcial de texto, producto
+o dominio. Si no hay una identidad conocida compartida, se conservan en filas
+separadas para evitar atribuciones falsas. El acordeón general «Cómo se revisa
+la información» permanece separado porque explica el método de la sección, no
+un proveedor.
+
+### Criterios de aceptación de presentación
+
+1. Cuando inventario y comparación identifican al mismo proveedor conocido,
+   el informe muestra una sola fila y un solo acordeón para ese proveedor.
+2. La etiqueta conserva el nombre del proveedor y todos los productos
+   distintos sin repetir proveedores en filas separadas.
+3. Al expandir la fila se ve todo el contenido backend y de comparación,
+   incluidas las fuentes que antes estuvieran en disclosures anidados.
+4. No se pierde, sobrescribe ni cambia el estado o la evidencia de ninguna
+   declaración o observación.
+5. Los proveedores no atribuibles o sin identidad canónica no se fusionan por
+   coincidencias débiles.
+
 ## Proyección pública y persistencia
 
 La API solo proyecta la lista segura y la atestación verificada que son

@@ -54,6 +54,12 @@ identifican como información adicional aportada desde su aplicación. Se
 enumeran en un bloque independiente, porque no están disponibles para todos
 los dominios y no forman parte de la comparación pública común.
 
+Cuando el inventario de procesadores y la comparación pública identifican al
+mismo proveedor, el informe los reúne en un único acordeón. La pestaña conserva
+los productos, declaraciones, observaciones, estados, documentos y enlaces de
+ambas fuentes. Los proveedores cuya identidad no se pueda relacionar con
+seguridad permanecen separados.
+
 Un informe terminado con comprobaciones incompletas las muestra como
 incompletas, no como si siguieran ejecutándose. Los servicios observados se
 conservan aunque la política no se haya podido leer; en ese caso se informa

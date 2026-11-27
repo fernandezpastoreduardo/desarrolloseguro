@@ -12,6 +12,10 @@ resumida y páginas de lectura completa.
   verificación, Actualidad, páginas de noticia y portal `/app/`.
 - La secuencia de enlaces es: Inicio, Actualidad, Metodología, Privacidad y
   alcance, Sello e informes. La página actual se indica semánticamente.
+- La política legal de privacidad no es una sección de la navegación
+  principal. Se conserva en el footer y en el aviso de primera entrada. Cuando
+  existan el formulario de contacto y el login, añadir allí enlaces pertinentes
+  a la política antes de recopilar datos de esas funciones.
 - La marca enlaza a la portada. En `/app/` se conserva además el selector de
   tema; en las páginas públicas se conserva el acceso al buscador.
 - Ruta del índice: `/desarrollo-seguro/actualidad.html`.
