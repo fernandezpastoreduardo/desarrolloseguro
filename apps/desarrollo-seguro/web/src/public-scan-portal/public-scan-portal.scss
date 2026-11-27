@@ -182,7 +182,6 @@ $ds-space-block: 40px;
   align-items: center;
   justify-content: center;
   gap: clamp(18px, 2.7vw, 40px);
-  margin-left: auto;
 }
 
 .ds-portal__nav a {
@@ -231,15 +230,17 @@ $ds-space-block: 40px;
 .ds-portal__theme {
   position: relative;
   display: inline-flex;
+  flex: 0 0 auto;
   min-height: 40px;
   align-items: center;
   border: 1px solid var(--ds-line);
-  padding: $ds-space-tight $ds-space $ds-space-tight $ds-space-block;
+  padding: $ds-space-tight $ds-space $ds-space-tight 52px;
   color: var(--ds-muted);
   background: transparent;
   cursor: pointer;
   font-size: 0.7rem;
   font-weight: 750;
+  white-space: nowrap;
 }
 
 .ds-portal__theme::before {
@@ -2303,7 +2304,7 @@ $ds-space-block: 40px;
 
   .ds-portal__theme {
     min-height: 36px;
-    padding: $ds-space-tight $ds-space-small $ds-space-tight $ds-space-block;
+    padding: $ds-space-tight $ds-space-small $ds-space-tight 48px;
     font-size: 0.64rem;
   }
 
