@@ -1363,6 +1363,7 @@ $ds-space-block: 40px;
   border-left: 3px solid var(--ds-danger, #b83b32);
   padding: 0.6rem 0.75rem;
   background: color-mix(in srgb, var(--ds-danger, #b83b32) 8%, var(--ds-canvas));
+  color: #7a1712;
 }
 
 .ds-portal__category-legal-findings ul {
@@ -1378,6 +1379,12 @@ $ds-space-block: 40px;
   padding-top: 8px;
   font-size: .78rem;
   line-height: 1.45;
+}
+
+.ds-portal__performance-summary {
+  grid-column: 1 / -1;
+  color: var(--ds-muted);
+  overflow-wrap: anywhere;
 }
 
 .ds-portal__category-evidence strong {
@@ -1772,7 +1779,7 @@ $ds-space-block: 40px;
 
 .ds-portal__beta-charts {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: $ds-space;
 }
 

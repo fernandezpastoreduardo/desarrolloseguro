@@ -104,7 +104,6 @@ const BETA_EVALUATION_LEVELS = [
   { id: "passed", label: "Superadas", statuses: ["pass"] },
   { id: "findings", label: "Incumplimientos detectados", statuses: ["fail"] },
   { id: "unknown", label: "Sin resultado", statuses: ["unknown"] },
-  { id: "not-applicable", label: "No aplica", statuses: ["not_applicable"] },
 ] as const;
 const CRITERION_EXPLANATIONS: Record<string, string> = {
   "dns-integrity": "Comprobamos si el sitio tiene una dirección pública en Internet. Esto no confirma quién es su titular.",
@@ -115,6 +114,11 @@ const CRITERION_EXPLANATIONS: Record<string, string> = {
   "external-service-transparency": "Comparamos los servicios externos que se observaron con los que el sitio identifica y la finalidad que declara para cada uno.",
   "backend-processor-transparency": "Comparamos los servicios que el titular declara con su lista interna de sistemas activos. No podemos comprobar aquí si cada proveedor cumple lo declarado.",
   "initial-cookie-risk": "Revisamos los datos que la página guarda en el navegador al abrirla. Esta comprobación no cubre lo que ocurre después.",
+  "preference-before-tracking": "Comparamos las cookies y solicitudes observadas durante la primera visita, antes de elegir una opción.",
+  "contextual-excess": "Comparamos las cookies y el almacenamiento observados después de aceptar con el catálogo de servicios y finalidades.",
+  "choice-parity": "Comprobamos si las opciones para aceptar y rechazar se presentan con una visibilidad y un esfuerzo equivalentes.",
+  "rejection-persistence": "Comprobamos qué cookies y solicitudes permanecen después de rechazar y recargar la página.",
+  "vendor-controls": "Comprobamos si los controles individuales de proveedores detienen su actividad después de desactivarlos.",
   tracking: "Buscamos en el contenido inicial referencias a herramientas de seguimiento conocidas. Esto no confirma que se conecten o se ejecuten.",
   performance: "Medimos esta página con Lighthouse en móvil simulado y con una prueba propia en escritorio.",
 };
@@ -126,6 +130,11 @@ const CRITERION_FAIL_MEANINGS: Record<string, string> = {
   "third-party-data-use": "Falta información pública necesaria sobre los servicios externos o el acceso a esa información fue denegado.",
   "external-service-transparency": "Se observó un servicio externo que no aparece explicado junto con su finalidad en la información pública.",
   "initial-cookie-risk": "El navegador encontró cookies cuyos nombres coinciden con reglas del catálogo local y una solicitud del mismo flujo.",
+  "preference-before-tracking": "El navegador observó actividad no esencial catalogada antes de que se eligiera una opción.",
+  "contextual-excess": "La comparación encontró cookies o almacenamiento catalogados que superan los límites de exceso definidos.",
+  "choice-parity": "Las opciones para aceptar y rechazar no tuvieron visibilidad o esfuerzo equivalentes.",
+  "rejection-persistence": "El navegador observó actividad catalogada después de rechazar o detectó que el rechazo no persistió tras recargar.",
+  "vendor-controls": "Se observó actividad catalogada después de desactivar un control de proveedor.",
   tracking: "El navegador inició solicitudes a servicios de seguimiento conocidos; las solicitudes bloqueadas no acreditan transmisión de datos.",
   performance: "La primera respuesta tardó más de lo esperado en esta medición puntual.",
 };
@@ -1201,6 +1210,9 @@ function ReportSummary({
                           {score === null ? "Sin puntuación" : `${score}/100`}
                           {aspectProgress && aspectProgress !== "complete" && <><span className="ds-portal__spinner" aria-hidden="true" /> {aspectProgress === "running" ? "En curso" : "Pendiente"}</>}
                         </span>
+                        <small className="ds-portal__performance-summary">
+                          {getPerformanceProfileEvidenceSummary(report.checks, label === "Móvil" ? "mobile" : "desktop")}
+                        </small>
                       </li>
                     ))}
                   </ul>
@@ -1208,10 +1220,14 @@ function ReportSummary({
                 {!performanceScoreApplies && criteria.length > 0 && (
                   <ul className="ds-portal__category-evidence" aria-label={`Resultados destacados de ${category.label}`}>
                     {visibleCriteria.map((criterion) => (
-                      <li key={criterion.id} data-status={criterion.status} aria-busy={aspectProgress && aspectProgress !== "complete" ? "true" : undefined}>
+                      <li key={criterion.id} data-status={category.id === "privacy" && report.privacyAssessment
+                        ? getPrivacyCriterionVisualStatus(criterion.status, report.privacyAssessment)
+                        : criterion.status} aria-busy={aspectProgress && aspectProgress !== "complete" ? "true" : undefined}>
                         <strong>{aspectProgress && aspectProgress !== "complete"
                           ? <><span className="ds-portal__spinner" aria-hidden="true" />{aspectProgress === "running" ? "En curso" : "Pendiente"}</>
-                          : getCheckStatusLabel(criterion.status)}</strong>
+                          : category.id === "privacy" && report.privacyAssessment
+                            ? getPrivacyCriterionStatusLabel(criterion.status, report.privacyAssessment)
+                            : getCheckStatusLabel(criterion.status)}</strong>
                         <span>{getCriterionDisplayLabel(criterion.id, criterion.label, criterion.status)}</span>
                       </li>
                       ))}
@@ -1260,6 +1276,7 @@ function ReportSummary({
               category={activeCategory}
               criteria={activeCriteria}
               checks={activeChecks}
+              privacyAssessment={activeCategory.id === "privacy" ? report.privacyAssessment ?? null : null}
               profileVersion={report.profileVersion}
               publicPolicyAssessment={report.publicPolicyTransparencyAssessment}
               detailsId={`report-category-details-${activeCategory.id}`}
@@ -2177,7 +2194,6 @@ function BetaEvaluationCharts({ criteria }: { criteria: PublicEthicsCriterion[] 
     pass: criteria.filter(({ status }) => status === "pass").length,
     fail: criteria.filter(({ status }) => status === "fail").length,
     unknown: criteria.filter(({ status }) => status === "unknown").length,
-    notApplicable: criteria.filter(({ status }) => status === "not_applicable").length,
   };
   return (
     <section className="ds-portal__beta-evaluation" aria-labelledby="beta-evaluation-heading">
@@ -2187,7 +2203,7 @@ function BetaEvaluationCharts({ criteria }: { criteria: PublicEthicsCriterion[] 
           <h3 id="beta-evaluation-heading">Niveles de evaluación</h3>
         </div>
         <p>
-          {counts.pass} superadas · {counts.fail} incumplimientos detectados · {counts.unknown} sin resultado · {counts.notApplicable} no aplican.
+          {counts.pass} superadas · {counts.fail} incumplimientos detectados · {counts.unknown} sin resultado.
           {" "}Un incumplimiento detectado significa que la comprobación se ejecutó y falló; sin resultado significa que no pudo completarse.
         </p>
       </div>
@@ -2336,6 +2352,7 @@ function CategoryDetailsModal({
   category,
   criteria,
   checks,
+  privacyAssessment,
   profileVersion,
   publicPolicyAssessment,
   detailsId,
@@ -2344,6 +2361,7 @@ function CategoryDetailsModal({
   category: ReportCategory;
   criteria: PublicEthicsCriterion[];
   checks: PublicReport["checks"];
+  privacyAssessment: PublicReport["privacyAssessment"];
   profileVersion: ProfileVersion;
   publicPolicyAssessment: PublicPolicyTransparencyAssessment | null;
   detailsId: string;
@@ -2404,20 +2422,31 @@ function CategoryDetailsModal({
           <p>{category.id === "performance" && profileVersion !== "domain-v5"
             ? "Mide cuánto tarda y cuánto ocupa la respuesta inicial. Es una medición puntual: otras páginas, dispositivos y conexiones pueden dar resultados distintos."
             : category.description}</p>
+          {category.id === "privacy" && privacyAssessment?.evidence.cookieAudit && (
+            <PrivacyCookieAuditSection audit={privacyAssessment.evidence.cookieAudit} />
+          )}
           <ul className="ds-portal__ethics-criteria">
             {criteria.map((criterion) => (
-              <li key={criterion.id} data-status={criterion.status}>
+              <li key={criterion.id} data-status={category.id === "privacy" && privacyAssessment
+                ? getPrivacyCriterionVisualStatus(criterion.status, privacyAssessment)
+                : criterion.status}>
                 <div>
                   <strong>{getCriterionDisplayLabel(criterion.id, criterion.label)}</strong>
-                  <p><b>Comprobación:</b> {criterion.id === "performance" && profileVersion !== "domain-v5"
-                    ? "Medimos cuánto tarda y cuánto ocupa la primera respuesta. No representa toda la experiencia de uso."
-                    : CRITERION_EXPLANATIONS[criterion.id]}</p>
-                  <p><b>Qué implica:</b> {criterion.id === "performance" && profileVersion === "domain-v5"
-                    ? "Móvil usa Lighthouse 13.6.0 en modo simulado. TTFB y bytes son datos diagnósticos; escritorio conserva la rúbrica propia."
-                    : getCriterionOutcome(criterion.id, criterion.status)}</p>
-                  <p className="ds-portal__criterion-evidence"><b>Dato observado:</b> {getCriterionEvidenceSummary(criterion.id, checks, publicPolicyAssessment, profileVersion)}</p>
+                  <p><b>Comprobación:</b> {category.id === "privacy" && privacyAssessment && criterion.status === "not_applicable" && isConsentNotRequired(privacyAssessment)
+                    ? "El inventario inicial completo no encontró cookies ni almacenamiento no técnicos."
+                    : criterion.id === "performance" && profileVersion !== "domain-v5"
+                      ? "Medimos cuánto tarda y cuánto ocupa la primera respuesta. No representa toda la experiencia de uso."
+                      : CRITERION_EXPLANATIONS[criterion.id]}</p>
+                  <p><b>Qué implica:</b> {category.id === "privacy" && privacyAssessment && criterion.status === "not_applicable" && isConsentNotRequired(privacyAssessment)
+                    ? "No se requiere consentimiento para cookies: la visita inicial no observó cookies no técnicas."
+                    : criterion.id === "performance" && profileVersion === "domain-v5"
+                      ? "Móvil usa Lighthouse 13.6.0 en modo simulado. TTFB y bytes son datos diagnósticos; escritorio conserva la rúbrica propia."
+                      : getCriterionOutcome(criterion.id, criterion.status)}</p>
+                  <p className="ds-portal__criterion-evidence"><b>Dato observado:</b> {getCriterionEvidenceSummary(criterion.id, checks, publicPolicyAssessment, profileVersion, privacyAssessment)}</p>
                 </div>
-                <span>{getCheckStatusLabel(criterion.status)}</span>
+                <span>{category.id === "privacy" && privacyAssessment
+                  ? getPrivacyCriterionStatusLabel(criterion.status, privacyAssessment)
+                  : getCheckStatusLabel(criterion.status)}</span>
               </li>
             ))}
           </ul>
@@ -3111,9 +3140,37 @@ function getCategoryScoreLabel(criteria: Array<{ status: string; weight: number 
   return `${categoryScore.score}/100 · ${coverage}`;
 }
 
+function isConsentNotRequired(assessment: PrivacyAssessment): boolean {
+  if (assessment.policyVersion === "privacy-v1") return false;
+  const audit = assessment.evidence.cookieAudit;
+  const initialCriterion = assessment.criteria.find(({ id }) => id === "preference-before-tracking");
+  return audit?.initial?.complete === true && audit.initial.cookieCount === 0 &&
+    audit.accept.status === "not_applicable" && audit.reject.status === "not_applicable" &&
+    initialCriterion?.status === "evaluated" && initialCriterion.confirmedFindings === 0 && initialCriterion.unknownFindings === 0;
+}
+
+function getPrivacyCriterionStatusLabel(status: string, assessment: PrivacyAssessment): string {
+  if (status === "not_applicable") {
+    if (assessment.policyVersion === "privacy-v1") return getCheckStatusLabel(status);
+    return isConsentNotRequired(assessment)
+      ? "Seguro · sin cookies no técnicas"
+      : "Sin flujo de consentimiento";
+  }
+  return getCheckStatusLabel(status);
+}
+
+function getPrivacyCriterionVisualStatus(status: string, assessment: PrivacyAssessment): string {
+  return status === "not_applicable" && isConsentNotRequired(assessment) ? "pass" : status;
+}
+
 function getPrivacyAssessmentScoreLabel(assessment: PrivacyAssessment): string {
   const coverage = `${assessment.assessedCriteria} de ${assessment.totalCriteria} criterios evaluados`;
-  const pending = `${assessment.unknownCriteria} sin resultado · ${assessment.notApplicableCriteria} no aplican`;
+  const consentCoverage = assessment.policyVersion === "privacy-v1"
+    ? `${assessment.notApplicableCriteria} no aplican`
+    : isConsentNotRequired(assessment)
+    ? "no se requiere consentimiento · sin cookies no técnicas"
+    : `${assessment.notApplicableCriteria} sin flujo de consentimiento`;
+  const pending = `${assessment.unknownCriteria} sin resultado · ${consentCoverage}`;
   if (assessment.score === null) return `Sin puntuación · ${coverage} · ${pending}`;
   const provisional = assessment.policyVersion === "privacy-v1" && assessment.unknownCriteria > 0;
   return `${assessment.score}/100${provisional ? " provisional" : ""} · ${coverage} · ${pending}`;
@@ -3150,6 +3207,50 @@ function getPerformanceProfileScore(
 ): number | null {
   const score = checks.find(({ controlId }) => controlId === "DS-QUAL-02")?.evidence?.[`${profile}Score`];
   return typeof score === "number" && Number.isFinite(score) ? score : null;
+}
+
+function getPerformanceProfileEvidenceSummary(
+  checks: PublicCheck[],
+  profile: "mobile" | "desktop",
+): string {
+  const evidence = checks.find(({ controlId }) => controlId === "DS-QUAL-02")?.evidence;
+  const profileLabel = profile === "mobile" ? "Móvil" : "Escritorio";
+  if (!evidence) return `${profileLabel}: sin métricas publicadas`;
+  const suffixes = profile === "mobile"
+    ? ["FcpMs", "SpeedIndexMs", "LcpMs", "ClsMilli", "TbtMs", "TtfbMs", "TransferBytes", "Score"]
+    : ["FcpMs", "LcpMs", "ClsMilli", "TbtMs", "TtfbMs", "TransferBytes", "Score"];
+  const metrics = suffixes.flatMap((suffix) => {
+    const key = `${profile}${suffix}`;
+    const value = evidence[key];
+    if (typeof value !== "number" || !Number.isFinite(value)) return [];
+    const label = suffix === "FcpMs" ? "FCP"
+      : suffix === "SpeedIndexMs" ? "Speed Index"
+        : suffix === "LcpMs" ? "LCP"
+          : suffix === "ClsMilli" ? "CLS"
+            : suffix === "TbtMs" ? "TBT"
+              : suffix === "TtfbMs" ? "TTFB"
+                : suffix === "TransferBytes" ? "Datos" : "Puntuación";
+    return [`${label}: ${formatEvidenceValue(value, key)}`];
+  });
+  const diagnosticCode = evidence[`${profile}DiagnosticCode`];
+  const missingMask = evidence[`${profile}MissingMetricsMask`];
+  const diagnosticLabels: Record<string, string> = {
+    observation_budget_exhausted: "presupuesto de observación agotado",
+    observation_stopped_early: "observación detenida antes de tiempo",
+    request_budget_exceeded: "límite de solicitudes alcanzado",
+    required_measurement_missing: "faltan mediciones obligatorias",
+    browser_timeout: "tiempo de espera de Chromium agotado",
+    browser_observation_error: "error de observación de Chromium",
+  };
+  const metricLabels = ["FCP", "Speed Index", "LCP", "CLS", "TBT", "TTFB", "datos transferidos", "puntuación"];
+  const missing = typeof missingMask === "number"
+    ? metricLabels.filter((_, index) => (missingMask & (1 << index)) !== 0)
+    : [];
+  const diagnosis = typeof diagnosticCode === "string"
+    ? `${diagnosticLabels[diagnosticCode] ?? "falló la observación"}${missing.length ? `; faltan ${missing.join(", ")}` : ""}`
+    : null;
+  if (metrics.length === 0) return `${profileLabel}: ${diagnosis ?? "sin métricas publicadas"}`;
+  return `${profileLabel}: ${metrics.join(" · ")}${diagnosis ? ` · Diagnóstico: ${diagnosis}` : ""}`;
 }
 
 function getPerformanceScoreLabel(score: number | null): string {
@@ -3215,6 +3316,11 @@ function getCriterionOutcome(criterionId: string, status: string): string {
     "third-party-data-use": "No se ha podido confirmar el uso que terceros hacen de los datos.",
     "external-service-transparency": "Comparamos las conexiones observadas con la información que publica el sitio sobre sus proveedores y para qué los utiliza.",
     "initial-cookie-risk": "No se encontraron cookies coincidentes con el catálogo local en la observación del navegador.",
+    "preference-before-tracking": "No se encontraron indicios catalogados de actividad no esencial antes de elegir.",
+    "contextual-excess": "No se encontraron indicios catalogados de exceso en las cookies observadas después de aceptar.",
+    "choice-parity": "Las opciones de aceptar y rechazar presentaron visibilidad y esfuerzo equivalentes.",
+    "rejection-persistence": "No se observó persistencia de actividad catalogada después de rechazar y recargar.",
+    "vendor-controls": "No se observó actividad catalogada tras desactivar los controles de proveedores comprobados.",
     tracking: "No se observaron solicitudes iniciadas a rastreadores conocidos durante la visita inicial.",
     performance: "La respuesta inicial quedó dentro del umbral orientativo de esta comprobación; no representa la experiencia completa.",
   };
@@ -3226,7 +3332,12 @@ function getCriterionEvidenceSummary(
   checks: PublicCheck[],
   publicPolicyAssessment: PublicPolicyTransparencyAssessment | null = null,
   profileVersion?: ProfileVersion,
+  privacyAssessment: PublicReport["privacyAssessment"] = null,
 ): string {
+  const privacyEvidenceSummary = privacyAssessment
+    ? getPrivacyCriterionEvidenceSummary(criterionId, privacyAssessment)
+    : null;
+  if (privacyEvidenceSummary) return privacyEvidenceSummary;
   if (criterionId === "external-service-transparency" && publicPolicyAssessment) {
     return publicPolicyAssessment.status === "pass"
       ? "La información pública del sitio explica servicios externos y para qué se usan."
@@ -3335,25 +3446,9 @@ function getCriterionEvidenceSummary(
         const score = getPerformanceScore(checks);
         const mobileScore = number("mobileScore");
         const desktopScore = number("desktopScore");
-        const diagnostic = (profile: "mobile" | "desktop") => {
-          const code = text(`${profile}DiagnosticCode`);
-          const mask = number(`${profile}MissingMetricsMask`);
-          if (!code) return `${profile === "mobile" ? "Móvil" : "Escritorio"}: sin diagnóstico publicado`;
-          const codeLabels: Record<string, string> = {
-            observation_budget_exhausted: "se agotó el presupuesto de observación",
-            observation_stopped_early: "la observación terminó antes de tiempo",
-            request_budget_exceeded: "se alcanzó el límite de solicitudes",
-            required_measurement_missing: "faltan mediciones obligatorias",
-            browser_timeout: "Chromium agotó el tiempo de espera",
-            browser_observation_error: "falló la observación en Chromium",
-          };
-          const metricLabels = ["FCP", "Speed Index", "LCP", "CLS", "TBT", "TTFB", "datos transferidos", "puntuación"];
-          const missing = metricLabels.filter((_, index) => mask !== null && (mask & (1 << index)) !== 0);
-          return `${profile === "mobile" ? "Móvil" : "Escritorio"}: ${codeLabels[code] ?? "falló la observación"}${missing.length ? `; faltan ${missing.join(", ")}` : ""}`;
-        };
         return score === null
-          ? `Medición incompleta: móvil ${mobileScore === null ? "sin puntuación" : `${mobileScore}/100`}; escritorio ${desktopScore === null ? "sin puntuación" : `${desktopScore}/100`}. ${diagnostic("mobile")}. ${diagnostic("desktop")}. No se calcula la media si falta un dato requerido.`
-          : `Móvil ${mobileScore}/100 con Lighthouse 13.6.0 y escritorio ${desktopScore}/100; nota media ${score}/100.`;
+          ? `Medición incompleta: móvil ${mobileScore === null ? "sin puntuación" : `${mobileScore}/100`}; escritorio ${desktopScore === null ? "sin puntuación" : `${desktopScore}/100`}. ${getPerformanceProfileEvidenceSummary(checks, "mobile")}. ${getPerformanceProfileEvidenceSummary(checks, "desktop")}. No se calcula la media si falta un dato requerido.`
+          : `Móvil ${mobileScore}/100 con Lighthouse 13.6.0 y escritorio ${desktopScore}/100; nota media ${score}/100. ${getPerformanceProfileEvidenceSummary(checks, "mobile")}. ${getPerformanceProfileEvidenceSummary(checks, "desktop")}.`;
       }
       const responseTime = number("responseTimeMs");
       const responseBytes = number("responseBytes");
@@ -3364,6 +3459,68 @@ function getCriterionEvidenceSummary(
       break;
   }
   return "El análisis no obtuvo un dato verificable para este aspecto.";
+}
+
+function getPrivacyCriterionEvidenceSummary(
+  criterionId: string,
+  assessment: NonNullable<PublicReport["privacyAssessment"]>,
+): string | null {
+  const audit = assessment.evidence.cookieAudit;
+  const criterion = assessment.criteria.find((item) => item.id === criterionId);
+  if (criterionId === "preference-before-tracking") {
+    return audit?.initial
+      ? describeCookieSnapshot("Primera visita, antes de elegir", audit.initial)
+      : "No se capturó un inventario verificable de la primera visita.";
+  }
+  if (criterionId === "contextual-excess") {
+    if (isConsentNotRequired(assessment)) {
+      return "Inventario inicial completo: 0 cookies observadas y sin indicios catalogados de almacenamiento no técnico. No se requiere consentimiento.";
+    }
+    return audit
+      ? describeCookieFlow("Aceptación", audit.accept)
+      : "El informe no contiene capturas de cookies después de aceptar.";
+  }
+  if (["choice-parity", "rejection-persistence", "vendor-controls"].includes(criterionId) &&
+      criterion?.status === "not_applicable" && isConsentNotRequired(assessment)) {
+    return "No se necesitan controles de aceptación o rechazo: el inventario inicial completo no encontró cookies no técnicas.";
+  }
+  if (criterionId === "rejection-persistence") {
+    return audit
+      ? describeCookieFlow("Rechazo", audit.reject)
+      : "El informe no contiene capturas de cookies después de rechazar.";
+  }
+  if (criterionId === "choice-parity" && criterion) {
+    return criterion.status === "unknown"
+      ? "No se publicó evidencia suficiente para comparar la visibilidad y las acciones de aceptar y rechazar."
+      : `Criterio evaluado: ${criterion.confirmedFindings} hallazgos confirmados y ${criterion.unknownFindings} observaciones sin confirmar sobre las opciones de consentimiento.`;
+  }
+  if (criterionId === "vendor-controls" && criterion) {
+    const providers = assessment.evidence.providers;
+    return criterion.status === "unknown"
+      ? `No se publicó evidencia suficiente sobre controles individuales de proveedores${providers.length ? `; proveedores identificados en la visita: ${providers.join(", ")}` : ""}.`
+      : `Controles de proveedores evaluados: ${criterion.confirmedFindings} hallazgos confirmados y ${criterion.unknownFindings} observaciones sin confirmar.`;
+  }
+  return null;
+}
+
+function describeCookieFlow(
+  label: string,
+  flow: NonNullable<NonNullable<PublicReport["privacyAssessment"]>["evidence"]["cookieAudit"]>["accept"],
+): string {
+  const statusLabel = flow.status === "evaluated" ? "capturas completadas"
+    : flow.status === "not_applicable" ? "no aplica" : "sin resultado";
+  return `${label}: ${statusLabel}. ${describeCookieSnapshot("antes de elegir", flow.beforeChoice)} ${describeCookieSnapshot("después de elegir", flow.afterChoice)} ${describeCookieSnapshot("después de recargar", flow.afterReload)}`;
+}
+
+function describeCookieSnapshot(
+  label: string,
+  snapshot: NonNullable<NonNullable<PublicReport["privacyAssessment"]>["evidence"]["cookieAudit"]>["initial"],
+): string {
+  if (!snapshot) return `${label}: sin captura.`;
+  if (!snapshot.complete || snapshot.cookieCount === null) return `${label}: inventario incompleto.`;
+  const examples = snapshot.cookies.map(({ name, domain }) => `${name} (${domain})`);
+  const exampleText = examples.length > 0 ? ` Muestras: ${examples.join(", ")}.` : " No se encontraron cookies catalogadas.";
+  return `${label}: ${snapshot.cookieCount} cookies observadas; ${snapshot.matchedCookieCount} coincidencias de catálogo.${exampleText}`;
 }
 
 function getCriterionControlIds(criterionId: string): readonly string[] {

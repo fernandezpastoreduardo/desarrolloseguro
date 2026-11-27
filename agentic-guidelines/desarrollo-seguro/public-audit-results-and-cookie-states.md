@@ -22,7 +22,7 @@ Hacer que una persona sin conocimientos técnicos entienda qué comprobaciones s
 
 ## Reglas de evaluación y presentación
 
-1. Los contadores de cobertura se calculan desde los criterios que pertenecen al perfil de informe. Deben cuadrar exactamente: superados + incumplimientos detectados + sin resultado + no aplica = total.
+1. Los contadores de cobertura se calculan desde los criterios que pertenecen al perfil de informe. En la evaluación general de ocho criterios, superados + incumplimientos detectados + sin resultado = total.
 2. El titular de resumen emplea etiquetas comprensibles: «X superadas · Y incumplimientos detectados · Z sin resultado». Puede conservar «de N comprobaciones» como contexto, pero no denominar `fail` «no observado».
 3. La nota de una dimensión no oculta cobertura parcial. Si no se alcanzó la cobertura definida por esa política, la nota es «Sin puntuación» y se muestran criterios evaluados y pendientes. Nunca se eleva a 100 por excluir silenciosamente criterios desconocidos.
 4. Un `legalCookieFinding` acreditado aparece en Legalidad aunque un agregado técnico esté desconocido. La presentación no duplica el mismo hecho como varias cookies si solo cambia su repetición temporal; presenta el recuento por estado y vincula las evidencias al hallazgo.
@@ -62,6 +62,11 @@ Los fallos reproducibles del auditor o de persistencia se muestran como errores 
 9. Si móvil o escritorio queda incompleto, el informe identifica el perfil, la causa admitida y las métricas ausentes; nunca atribuye a la web los fallos del auditor.
 10. Los valores de cookies, credenciales y cuerpos de solicitudes no se persisten ni aparecen en la salida pública.
 11. La evidencia, contrato de datos y documentación pública se mantienen compatibles con perfiles históricos; no se reinterpretan informes ya persistidos. `privacy-v1` sigue parseándose y presentándose con su contrato histórico; informes nuevos usan la versión nueva.
+12. El encabezado y el texto de cada incumplimiento legal acreditado usan rojo oscuro con contraste legible sobre el fondo de la tarjeta.
+13. El detalle de la tarjeta Privacidad presenta las capturas de cookies y sus coincidencias de catálogo dentro del propio modal, con explicación para cada criterio. Si hay evidencia de navegador disponible, no muestra como dato observado que no se obtuvo información.
+14. La tarjeta Rendimiento presenta las métricas disponibles para móvil y escritorio aunque falte una puntuación. Si un perfil no tiene métricas, muestra el diagnóstico y las métricas ausentes publicados para ese perfil.
+15. Cuando la evaluación completa de la primera visita no detecta cookies ni almacenamiento no técnicos y no hay flujo de consentimiento, Privacidad comunica «Seguro · sin cookies no técnicas» y explica que no se requiere consentimiento; no lo presenta como «No evaluado» o «No aplica».
+16. La gráfica de ocho criterios de Ética no muestra una categoría «No aplica» que su evaluador no puede producir; los estados de consentimiento no requerido se explican en Privacidad con su evidencia.
 
 ## Secuencia de implementación
 

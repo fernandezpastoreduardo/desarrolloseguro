@@ -233,7 +233,7 @@ describe("PublicScanPortal", () => {
     expect(screen.getByText("Móvil · CLS")).toBeVisible();
     expect(screen.getByText("0,120")).toBeVisible();
     expect(screen.getByText("Escritorio · puntuación")).toBeVisible();
-    expect(screen.getByText(/2\.000\.000 bytes/u)).toBeVisible();
+    expect(screen.getAllByText(/2\.000\.000 bytes/u).length).toBeGreaterThan(1);
   });
 
   it("does not invent an aggregate performance score when a required profile metric is missing", async () => {
