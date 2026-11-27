@@ -116,7 +116,17 @@ const SCORED_PUBLIC_REPORT = {
 
 describe("PublicScanPortal", () => {
   beforeEach(() => {
-    window.localStorage.setItem("ds-first-entry-notice-dismissed", "1");
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: () => "1",
+        setItem: vi.fn(),
+        removeItem: vi.fn(),
+        clear: vi.fn(),
+        key: vi.fn(),
+        length: 1,
+      },
+    });
   });
 
   afterEach(() => {
