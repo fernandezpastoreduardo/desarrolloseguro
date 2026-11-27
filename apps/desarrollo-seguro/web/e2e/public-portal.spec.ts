@@ -322,7 +322,7 @@ test(
     page.getByRole("heading", { name: "Qué significa esta valoración" }),
   ).toBeVisible();
   await expect(page.getByRole("img", { name: "Puntuación global: en revisión" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Ética" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Legalidad" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Privacidad" })).toHaveCount(2);
   await expect(page.getByRole("heading", { name: "Seguridad" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Rendimiento" })).toBeVisible();
@@ -341,7 +341,7 @@ test(
   await expect(
     securityDialog.locator('.ds-portal__ethics-criteria li[data-status="unknown"] > span').first(),
   ).toHaveText("Sin datos");
-  await expect(page.getByText("La conexión protege los datos")).toBeVisible();
+  await expect(securityDialog.getByText("La web protege los datos que envía el usuario")).toBeVisible();
   await expect(page.locator(".ds-portal__score-ring")).toHaveAttribute("data-score-band", "unknown");
   await expect(page.locator('.ds-portal__category-score-ring[data-score-band="low"]')).toHaveCount(1);
   await expect(page.locator('.ds-portal__category-score-ring[data-score-band="excellent"]')).toHaveCount(2);

@@ -50,6 +50,55 @@ comprobaciones estén pendientes o en curso. El estado de cada aspecto procede d
 persistido por el trabajo; no se simula progreso a partir del tiempo
 transcurrido.
 
+En las cuatro tarjetas oscuras se omite el párrafo de resumen redundante. La
+tarjeta de Ética se titula «Legalidad» sin cambiar el identificador ni la
+categoría interna del informe. Durante una actualización, cada fila de
+criterio visible muestra su propio spinner y estado pendiente/en curso; la
+tarjeta de Rendimiento indica por separado los perfiles móvil y escritorio.
+Los resultados anteriores permanecen visibles fuera de las filas que señalan
+actividad.
+
+En las filas de evidencia del informe, los criterios de cookies y rastreadores
+aprobados usan respectivamente «Sin cookies no esenciales instaladas antes de
+que el usuario las consienta o las rechace.» y «Sin rastreadores conocidos en
+la página». Si el criterio no se aprueba, se conserva una etiqueta descriptiva
+que no afirme la ausencia de esos elementos.
+
+La tarjeta de Seguridad presenta los cuatro criterios directamente y en este
+orden: «El dominio tiene una dirección pública en Internet», «La web protege
+los datos que envía el usuario», «La web devuelve el contenido de forma
+segura» y «La web cuenta con protección ante ataques desde el navegador».
+Este resumen completo aparece sin abrir el diálogo. La transparencia de
+servicios externos se titula «Transparencia con los servicios externos usados
+por la página».
+
+La tarjeta de Rendimiento muestra debajo de su media las puntuaciones
+individuales de «Móvil» y «Ordenador», ambas sobre 100. Durante una
+actualización conserva las notas del informe anterior si existen y añade por
+perfil su spinner y estado; si no hay nota disponible, lo indica sin inventar
+un valor.
+
+El bloque de inventario y transparencia backend se titula «Servicios externos
+utilizados por Grumphya» para su informe y «Servicios externos utilizados por
+Desarrollo Seguro» para el informe propio. Se elimina el párrafo de resumen
+inmediatamente posterior al título; la lista de proveedores, sus declaraciones
+y la explicación comparativa detallada se conservan.
+
+Cada proveedor se muestra inicialmente como una fila nativa `<details>` cerrada:
+el nombre y producto permanecen visibles en el resumen y un icono indica que se
+puede expandir. Propósito, declaraciones y política quedan dentro del panel
+expandible. La explicación general de alcance también queda cerrada inicialmente
+en un disclosure independiente, para que la tarjeta no vuelva a ocupar la
+altura de todos sus detalles al cargar.
+
+Cuando hay inventario backend y comparación pública, ambas fuentes se agrupan
+por `providerId` dentro de la misma fila expandible. Los servicios que aparecen
+solo en la comparación se añaden como filas propias para no perder evidencia.
+El bloque independiente «Servicios externos detectados» se omite en ese caso;
+el resumen general, la versión del catálogo y los destinos no clasificados
+quedan dentro del disclosure general de alcance. Los informes sin inventario
+backend conservan el bloque de comparación independiente.
+
 El contrato temporal `public-audit-progress-v1` contiene para cada aspecto
 `pending`, `running` o `complete`, sin porcentajes ni datos del sitio. Se
 almacena en `ds_scan_jobs` mientras el job está activo y la API lo expone solo

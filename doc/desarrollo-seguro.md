@@ -6,6 +6,18 @@ La portada muestra `grumphya.com` y `desarrolloseguro.org` como sitios certifica
 
 La nota de Rendimiento promedia móvil y escritorio. La puntuación móvil sigue los pesos y curvas de Lighthouse 13.6.0 sobre métricas medidas por nuestro Chromium; Speed Index se estima con fotogramas acotados y TBT con la ventana de interactividad. Escritorio conserva la rúbrica anterior. No es un resultado oficial de Lighthouse.
 
+La tarjeta de Rendimiento muestra también cada nota por separado: Móvil y Ordenador, ambas sobre 100. Mientras se actualizan, mantiene visibles las notas anteriores y añade el estado de carga correspondiente a cada perfil; si una puntuación no está disponible, no la sustituye por cero.
+
+El bloque de inventario backend se titula «Servicios externos utilizados por Grumphya» o «Servicios externos utilizados por Desarrollo Seguro», según el informe. Se omite el resumen que aparecía inmediatamente bajo el título; el inventario, las declaraciones y el detalle comparativo siguen disponibles.
+
+Cada proveedor aparece contraído con su nombre y producto visibles. Cuando hay una comparación pública, sus observaciones, finalidades y fuentes oficiales se integran en el desplegable del proveedor correspondiente. Los servicios que solo aparecen en la comparación también tienen su propio desplegable. El resumen general, la versión del catálogo y los dominios externos sin atribución quedan en «Cómo se revisa la información».
+
+En el informe, la tarjeta de Ética aparece titulada «Legalidad». Las cuatro tarjetas muestran sus criterios sin un párrafo de resumen redundante. Durante una actualización, cada criterio visible indica si está pendiente o en curso; Rendimiento muestra ese estado por separado para móvil y escritorio.
+
+Cuando esos criterios se aprueban, las filas de evidencia muestran «Sin cookies no esenciales instaladas antes de que el usuario las consienta o las rechace.» y «Sin rastreadores conocidos en la página». Si no se aprueban, el informe mantiene etiquetas que no afirman que estén ausentes.
+
+La tarjeta de Seguridad muestra los cuatro criterios, en orden: «El dominio tiene una dirección pública en Internet», «La web protege los datos que envía el usuario», «La web devuelve el contenido de forma segura» y «La web cuenta con protección ante ataques desde el navegador». La fila de transparencia usa el título «Transparencia con los servicios externos usados por la página».
+
 El portal admite los informes vigentes `domain-v5` del adaptador `domain-v5-network-adapter-2`, incluidos sus bloques de transparencia de políticas, comparación de servicios externos y evaluación ética v6.
 
 El sello verificable enlaza con el informe actual y permite comprobar su estado. Solo acredita el vínculo y vigencia mostrados por la comprobación; el informe describe su alcance concreto y no sustituye una auditoría integral. El footer de las páginas públicas incluye el sello de `desarrolloseguro.org`, que solo se muestra tras verificar el token y una certificación activa con informe vigente; la página de verificación no repite el sello.

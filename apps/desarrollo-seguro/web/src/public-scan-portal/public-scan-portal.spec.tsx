@@ -173,6 +173,11 @@ describe("PublicScanPortal", () => {
       name: "Rendimiento: 88 de 100 puntos; 1 de 1 aspectos evaluados",
     })).toBeVisible();
     expect(screen.getByText("88/100 · media de móvil y escritorio")).toBeVisible();
+    const profileScores = screen.getByRole("list", { name: "Perfiles de rendimiento" });
+    expect(within(profileScores).getByText("Móvil")).toBeVisible();
+    expect(within(profileScores).getByText("84/100")).toBeVisible();
+    expect(within(profileScores).getByText("Ordenador")).toBeVisible();
+    expect(within(profileScores).getByText("92/100")).toBeVisible();
     const performanceButton = document.querySelector('[data-category-id="performance"]');
     expect(performanceButton).not.toBeNull();
     fireEvent.click(performanceButton!);
@@ -237,7 +242,6 @@ describe("PublicScanPortal", () => {
       name: "Rendimiento: sin puntuación; 0 de 1 aspectos evaluados",
     })).toBeVisible();
     expect(screen.getByText("Sin datos suficientes")).toBeVisible();
-    expect(screen.getByText(/Medición incompleta: falta algún dato requerido de móvil o escritorio/u)).toBeVisible();
     const performanceButton = document.querySelector('[data-category-id="performance"]');
     expect(performanceButton).not.toBeNull();
     fireEvent.click(performanceButton!);
@@ -535,9 +539,11 @@ describe("PublicScanPortal", () => {
     const report = {
       ...PUBLIC_REPORT,
       hostname: "grumphya.com",
+      profileVersion: "domain-v4",
+      scannerVersion: "domain-v4-network-adapter-7",
       ethicsAssessment: {
         ...PUBLIC_REPORT.ethicsAssessment,
-        policyVersion: "domain-ethics-v4",
+        policyVersion: "domain-ethics-v6",
         assessedCriteria: 2,
         criteria: PUBLIC_REPORT.ethicsAssessment.criteria.map((criterion) => criterion.id === "third-party-data-use"
           ? { id: "backend-processor-transparency", label: "Transparencia de procesadores backend", status: "pass", weight: 10 }
@@ -572,6 +578,16 @@ describe("PublicScanPortal", () => {
           attestation: { verified: true, keyId: "grumphya-release-2026" },
         },
       },
+      providerCatalogVersion: "c".repeat(64),
+      publicServiceComparison: {
+        policyVersion: "public-service-comparison-v1",
+        status: "fail",
+        reasonCode: "observed_service_undisclosed",
+        items: [
+          { providerId: "openai-api", observation: "observed_and_declared", observedDomains: ["api.openai.com"], declaredPurposes: ["ai_processing"] },
+          { providerId: "google-analytics", observation: "observed", observedDomains: ["www.google-analytics.com"], declaredPurposes: [] },
+        ],
+      },
     };
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({
       hostname: "grumphya.com",
@@ -588,12 +604,24 @@ describe("PublicScanPortal", () => {
     await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "https://grumphya.com/");
     await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
 
-    expect(await screen.findByRole("heading", { name: "Información adicional compartida por Grumphya" })).toBeVisible();
-    expect(screen.getByRole("heading", { name: /OpenAI.*API/ })).toBeVisible();
+    expect(await screen.findByRole("heading", { name: "Servicios externos utilizados por Grumphya" })).toBeVisible();
+    expect(screen.queryByText("Grumphya declara que la lista de servicios externos está completa y los servicios incluidos aparecen en su política de privacidad.")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Servicios externos detectados" })).not.toBeInTheDocument();
+    const openAiDisclosure = screen.getByText("OpenAI").closest("details");
+    expect(openAiDisclosure).not.toHaveAttribute("open");
+    expect(within(openAiDisclosure!).getByText("OpenAI")).toBeVisible();
+    await user.click(within(openAiDisclosure!).getByText("OpenAI"));
+    expect(openAiDisclosure).toHaveAttribute("open");
     expect(screen.getByText("Declaraciones de Grumphya:")).toBeVisible();
     expect(screen.getByText("No se usa para entrenar modelos.")).toBeVisible();
     expect(screen.getByRole("link", { name: "Ver política de privacidad de Grumphya" }))
       .toHaveAttribute("href", "https://grumphya.com/politica-de-privacidad#openai-api");
+    const generalEvidenceDisclosure = document.querySelector(".ds-portal__processor-evidence-disclosure");
+    expect(generalEvidenceDisclosure).not.toHaveAttribute("open");
+    const comparisonOnlyDisclosure = screen.getByText("Google Analytics").closest("details");
+    expect(comparisonOnlyDisclosure).not.toHaveAttribute("open");
+    await user.click(within(comparisonOnlyDisclosure!).getByText("Google Analytics"));
+    expect(comparisonOnlyDisclosure).toHaveTextContent("www.google-analytics.com");
   });
 
   it("accepts and shows the self-domain IONOS hosting inventory", async () => {
@@ -654,8 +682,12 @@ describe("PublicScanPortal", () => {
     await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "https://desarrolloseguro.org/");
     await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
 
-    expect(await screen.findByRole("heading", { name: "Información adicional compartida por Desarrollo Seguro" })).toBeVisible();
-    expect(screen.getByRole("heading", { name: /IONOS.*VPS/ })).toBeVisible();
+    expect(await screen.findByRole("heading", { name: "Servicios externos utilizados por Desarrollo Seguro" })).toBeVisible();
+    const ionosDisclosure = screen.getByText("IONOS").closest("details");
+    expect(ionosDisclosure).not.toHaveAttribute("open");
+    expect(screen.queryByText(/Alojamiento de la web pública/)).not.toBeVisible();
+    await user.click(within(ionosDisclosure!).getByText("IONOS"));
+    expect(ionosDisclosure).toHaveAttribute("open");
     expect(screen.getByText(/Alojamiento de la web pública/)).toBeVisible();
     expect(screen.getByRole("link", { name: "Ver política de privacidad de Desarrollo Seguro" }))
       .toHaveAttribute("href", "https://desarrolloseguro.org/desarrollo-seguro/privacidad.html#ionos-hosting");
@@ -714,7 +746,7 @@ describe("PublicScanPortal", () => {
 
     expect(await screen.findByRole("heading", { name: "Qué significa esta valoración" })).toBeVisible();
     await user.click(screen.getAllByRole("button", { name: "Ver detalle" })[0]);
-    expect(screen.getAllByText("Información pública sobre servicios externos").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Transparencia con los servicios externos usados por la página").length).toBeGreaterThan(0);
     expect(screen.getByText(/la información pública del sitio explica servicios externos y para qué se usan/i)).toBeVisible();
   });
 
@@ -1019,10 +1051,8 @@ describe("PublicScanPortal", () => {
     await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
 
     expect(await screen.findByText("Histórico")).toBeVisible();
-    const terminalCategorySummaries = [...document.querySelectorAll(".ds-portal__category-summary")]
-      .map((element) => element.textContent ?? "");
-    expect(terminalCategorySummaries).toHaveLength(4);
-    expect(terminalCategorySummaries.join(" ")).not.toMatch(/aún se está comprobando|todavía no ha terminado|sigue en comprobación/i);
+    expect(document.querySelectorAll(".ds-portal__category-summary")).toHaveLength(0);
+    expect(screen.getByRole("heading", { name: "Legalidad" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Historial de observaciones" })).toBeVisible();
     expect(screen.getByText("1 informe")).toBeVisible();
     expect(screen.getByRole("heading", { name: "Qué significa esta valoración" })).toBeVisible();
@@ -1046,7 +1076,7 @@ describe("PublicScanPortal", () => {
     expect(screen.getAllByText("Sin datos suficientes").length).toBeGreaterThan(0);
     expect(screen.getByText(/origen indicado en el registro/i)).toBeVisible();
     expect(screen.getByRole("heading", { name: "Privacidad" })).toBeVisible();
-    expect(screen.getByRole("heading", { name: "Ética" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Legalidad" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Rendimiento" })).toBeVisible();
     expect(screen.getByRole("region", { name: "Niveles de evaluación" })).toBeVisible();
     expect(screen.getByRole("img", { name: "Puntuación global: no disponible en este informe" })).toBeVisible();
@@ -1146,7 +1176,6 @@ describe("PublicScanPortal", () => {
 
     expect(await screen.findByRole("img", { name: "Puntuación global: en revisión" })).toBeVisible();
     expect(screen.getByText("El informe terminó con comprobaciones sin completar.")).toBeVisible();
-    expect(screen.getAllByText("No se pudo completar esta comprobación.").length).toBeGreaterThan(0);
     expect(screen.queryByText(/aún se está comprobando/i)).toBeNull();
     expect(screen.getAllByText("Ética", { exact: true }).length).toBeGreaterThan(0);
     expect(screen.queryByText(/50\s*%/)).toBeNull();
@@ -1311,6 +1340,7 @@ describe("PublicScanPortal", () => {
       state: "updating",
       failureCode: null,
       activeJobId: "123e4567-e89b-42d3-a456-426614174001",
+      auditProgress: { policyVersion: "public-audit-progress-v1", aspects: { ethics: "running", privacy: "pending", security: "pending", performance: "pending" } },
       lastReport: reviewReport,
       checkedAt: "2026-11-03T10:01:00.000Z",
     })));
@@ -1320,7 +1350,7 @@ describe("PublicScanPortal", () => {
     await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
 
     expect(await screen.findByText("La revisión sigue en curso.")).toBeVisible();
-    expect(screen.getAllByText("Esta comprobación está en curso.").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("En curso").length).toBeGreaterThan(0);
   });
 
   it("shows an accredited legal cookie finding and fixes the global score at zero", async () => {
@@ -1494,6 +1524,32 @@ describe("PublicScanPortal", () => {
     expect(progress).toHaveTextContent("Rendimiento: pendiente");
   });
 
+  it("shows loading indicators on each visible criterion and performance profile", async () => {
+    const loadingReport = { ...SCORED_PUBLIC_REPORT, profileVersion: "domain-v5" };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({
+      hostname: "example.com",
+      enrollment: "on_demand",
+      state: "updating",
+      failureCode: null,
+      activeJobId: "123e4567-e89b-42d3-a456-426614174123",
+      auditProgress: { policyVersion: "public-audit-progress-v1", aspects: { ethics: "running", privacy: "pending", security: "running", performance: "running" } },
+      lastReport: loadingReport,
+      checkedAt: "2026-11-03T08:10:00.000Z",
+    })));
+    const user = userEvent.setup();
+
+    render(<PublicScanPortal />);
+    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "https://example.com/");
+    await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
+
+    const legalityCard = screen.getByRole("heading", { name: "Legalidad" }).closest(".ds-portal__report-category");
+    expect(legalityCard?.querySelectorAll(".ds-portal__spinner").length).toBeGreaterThan(0);
+    expect(legalityCard).toHaveTextContent("En curso");
+    expect(screen.getByRole("list", { name: "Perfiles de rendimiento" })).toHaveTextContent("Móvil");
+    expect(screen.getByRole("list", { name: "Perfiles de rendimiento" })).toHaveTextContent("Ordenador");
+    expect(screen.getAllByRole("list", { name: /Resultados destacados de/u }).length).toBeGreaterThan(0);
+  });
+
   it("accepts and labels a transport-v1 report", async () => {
     const transportReport = {
           ...SCORED_PUBLIC_REPORT,
@@ -1622,6 +1678,16 @@ describe("PublicScanPortal", () => {
     render(<PublicScanPortal />);
 
     expect(await screen.findByText("domain-v2")).toBeVisible();
+    expect(screen.getByText("Sin cookies no esenciales instaladas antes de que el usuario las consienta o las rechace.")).toBeVisible();
+    expect(screen.getByText("Rastreadores conocidos en la página")).toBeVisible();
+    const securityRows = within(screen.getByRole("list", { name: "Resultados destacados de Seguridad" })).getAllByRole("listitem");
+    expect(securityRows).toHaveLength(4);
+    expect(securityRows.map((row) => row.querySelector("span:last-child")?.textContent)).toEqual([
+      "El dominio tiene una dirección pública en Internet",
+      "La web protege los datos que envía el usuario",
+      "La web devuelve el contenido de forma segura",
+      "La web cuenta con protección ante ataques desde el navegador",
+    ]);
     const user = userEvent.setup();
     await user.click(screen.getAllByRole("button", { name: "Ver detalle" })[0]);
     expect(screen.getAllByText("Referencias a rastreadores conocidos").length).toBeGreaterThan(0);
@@ -1631,6 +1697,30 @@ describe("PublicScanPortal", () => {
     expect(screen.getByText("40.000 bytes")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Cerrar detalle" }));
     expect(screen.getByText("No confirma conexiones ni scripts dinámicos; el rendimiento mide una respuesta inicial.")).toBeVisible();
+  });
+
+  it("shows the no-known-trackers label when the criterion passes", async () => {
+    const report = {
+      ...SCORED_PUBLIC_REPORT,
+      ethicsAssessment: {
+        ...SCORED_PUBLIC_REPORT.ethicsAssessment,
+        score: 100,
+        assessedCriteria: SCORED_PUBLIC_REPORT.ethicsAssessment.totalCriteria,
+        criteria: SCORED_PUBLIC_REPORT.ethicsAssessment.criteria.map((criterion) => ({
+          ...criterion,
+          status: "pass",
+        })),
+      },
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(report)));
+    window.history.replaceState({}, "", `/?report=${REPORT_ID}`);
+
+    render(<PublicScanPortal />);
+
+    await screen.findByRole("heading", { name: "Qué significa esta valoración" });
+    await userEvent.setup().click(screen.getAllByRole("button", { name: "Ver detalle" })[0]);
+    expect(await screen.findByText("Sin cookies no esenciales instaladas antes de que el usuario las consienta o las rechace.")).toBeVisible();
+    expect(screen.getByText("Sin rastreadores conocidos en la página")).toBeVisible();
   });
 
   it("renders untrusted report strings as text rather than HTML", async () => {

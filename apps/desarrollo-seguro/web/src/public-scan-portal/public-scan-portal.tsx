@@ -93,7 +93,7 @@ const PUBLIC_SCOPE_PATHS = ["/", "/precios", "/informe"] as const;
 const MAX_REPORT_CHECKS = 32;
 
 const REPORT_CATEGORIES = [
-  { id: "ethics", label: "Ética", description: "Compara lo que el sitio cuenta sobre los servicios externos que usa con lo que se observó. Si falta información importante, el informe lo dice.", criteria: ["third-party-data-use", "external-service-transparency", "backend-processor-transparency", "tracking"], controls: ["DS-PRIV-06"] },
+  { id: "ethics", label: "Ética", cardTitle: "Legalidad", description: "Compara lo que el sitio cuenta sobre los servicios externos que usa con lo que se observó. Si falta información importante, el informe lo dice.", criteria: ["third-party-data-use", "external-service-transparency", "backend-processor-transparency", "tracking"], controls: ["DS-PRIV-06"] },
   { id: "privacy", label: "Privacidad", description: "Comprueba qué datos guarda la página al abrirse, si se conecta con otros servicios y si muestra opciones para rechazarlos.", criteria: ["initial-cookie-risk"], controls: ["DS-PRIV-05"] },
   { id: "security", label: "Seguridad", description: "Comprueba si el sitio se encuentra, si la conexión protege la información y si el navegador recibe barreras frente a algunos ataques.", criteria: ["dns-integrity", "transport-security", "http-availability", "security-headers"], controls: ["DS-DNS-01", "DS-TLS-01", "DS-TLS-02", "DS-HTTP-01", "DS-HDR-01"] },
   { id: "performance", label: "Rendimiento", description: "Mide esta página con Lighthouse en móvil simulado y con una prueba propia en escritorio.", criteria: ["performance"], controls: ["DS-QUAL-02"] },
@@ -255,6 +255,16 @@ type PublicServiceComparison = {
       };
     }>;
   }>;
+};
+type PublicServiceItem = PublicServiceComparison["items"][number];
+type PublicServiceProviderDocumentation = NonNullable<PublicServiceComparison["providerDocumentation"]>[number];
+type ProcessorServiceEntry = {
+  providerId: string;
+  displayName: string;
+  product?: string;
+  processor?: PublicProcessorDisclosure;
+  comparisonItem?: PublicServiceItem;
+  providerDocumentation: PublicServiceProviderDocumentation[];
 };
 type InternalAuditCriterionId =
   | "infrastructure.tls" | "infrastructure.headers" | "infrastructure.network"
@@ -1142,10 +1152,21 @@ function ReportSummary({
             const criteria = report.ethicsAssessment.criteria.filter((criterion) =>
               (category.criteria as readonly string[]).includes(criterion.id),
             );
+            const visibleCriteria = category.id === "security"
+              ? (category.criteria as readonly string[])
+                .map((criterionId) => criteria.find((criterion) => criterion.id === criterionId))
+                .filter((criterion): criterion is (typeof criteria)[number] => criterion !== undefined)
+              : [...criteria].sort((left, right) => getCriterionPriority(left.status) - getCriterionPriority(right.status)).slice(0, 2);
             const performanceScore = category.id === "performance" && report.profileVersion === "domain-v5"
               ? getPerformanceScore(report.checks)
               : null;
             const performanceScoreApplies = category.id === "performance" && report.profileVersion === "domain-v5";
+            const performanceProfileScores = performanceScoreApplies
+              ? [
+                { label: "Móvil", score: getPerformanceProfileScore(report.checks, "mobile") },
+                { label: "Ordenador", score: getPerformanceProfileScore(report.checks, "desktop") },
+              ]
+              : [];
             const isExpanded = activeCategoryId === category.id;
             return (
               <section
@@ -1156,7 +1177,7 @@ function ReportSummary({
               >
                 <div className="ds-portal__category-heading">
                   <div>
-                    <h4>{category.label}</h4>
+                    <h4>{"cardTitle" in category ? category.cardTitle : category.label}</h4>
                     <strong>{performanceScoreApplies
                       ? getPerformanceScoreLabel(performanceScore)
                       : getCategoryScoreLabel(criteria)}</strong>
@@ -1167,20 +1188,28 @@ function ReportSummary({
                     scoreOverride={performanceScoreApplies ? performanceScore : undefined}
                   />
                 </div>
-                <p className="ds-portal__category-summary">{performanceScoreApplies
-                  ? getPerformanceCategorySummary(performanceScore)
-                  : getCategorySummary(criteria, state)}</p>
-                {aspectProgress && aspectProgress !== "complete" && <p className="ds-portal__aspect-progress" role="status" aria-busy="true"><span className="ds-portal__spinner" aria-hidden="true" />{category.label}: {aspectProgress === "running" ? "comprobación en curso" : "pendiente"}</p>}
+                {performanceScoreApplies && (
+                  <ul className="ds-portal__category-evidence" aria-label="Perfiles de rendimiento">
+                    {performanceProfileScores.map(({ label, score }) => (
+                      <li key={label} aria-busy={aspectProgress && aspectProgress !== "complete" ? "true" : undefined}>
+                        <strong>{label}</strong>
+                        <span>
+                          {score === null ? "Sin puntuación" : `${score}/100`}
+                          {aspectProgress && aspectProgress !== "complete" && <><span className="ds-portal__spinner" aria-hidden="true" /> {aspectProgress === "running" ? "En curso" : "Pendiente"}</>}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 {!performanceScoreApplies && criteria.length > 0 && (
                   <ul className="ds-portal__category-evidence" aria-label={`Resultados destacados de ${category.label}`}>
-                    {[...criteria]
-                      .sort((left, right) => getCriterionPriority(left.status) - getCriterionPriority(right.status))
-                      .slice(0, 2)
-                      .map((criterion) => (
-                        <li key={criterion.id} data-status={criterion.status}>
-                          <strong>{getCheckStatusLabel(criterion.status)}</strong>
-                          <span>{getCriterionDisplayLabel(criterion.id, criterion.label)}</span>
-                        </li>
+                    {visibleCriteria.map((criterion) => (
+                      <li key={criterion.id} data-status={criterion.status} aria-busy={aspectProgress && aspectProgress !== "complete" ? "true" : undefined}>
+                        <strong>{aspectProgress && aspectProgress !== "complete"
+                          ? <><span className="ds-portal__spinner" aria-hidden="true" />{aspectProgress === "running" ? "En curso" : "Pendiente"}</>
+                          : getCheckStatusLabel(criterion.status)}</strong>
+                        <span>{getCriterionDisplayLabel(criterion.id, criterion.label, criterion.status)}</span>
+                      </li>
                       ))}
                   </ul>
                 )}
@@ -1230,63 +1259,14 @@ function ReportSummary({
           </ul>
         )}
         {report.processorTransparencyAssessment && (
-          <section className="ds-portal__processors" aria-labelledby="processor-transparency-heading">
-            <h3 id="processor-transparency-heading">
-                Información adicional compartida por {(report.processorTransparencyAssessment.inventory?.hostname ?? report.hostname) === "desarrolloseguro.org" ? "Desarrollo Seguro" : "Grumphya"}
-            </h3>
-            <p>
-              {getProcessorTransparencySummary(report.processorTransparencyAssessment)}
-            </p>
-            {report.processorTransparencyAssessment.inventory && (
-              <>
-                {report.processorTransparencyAssessment.inventory.processors.length > 0 ? (
-                  <ul className="ds-portal__processor-list">
-                    {report.processorTransparencyAssessment.inventory.processors.map((processor) => (
-                      <li key={processor.providerId}>
-                        <h4>{processor.displayName} <span>({processor.product})</span></h4>
-                        {processor.disclosureStatus === "published" ? (
-                          <>
-                            <p><strong>Propósito declarado:</strong> {processor.purpose}</p>
-                            {processor.declaredStatements && processor.declaredStatements.length > 0 && (
-                              <>
-                                  <p className="ds-portal__declared-label">
-                                    {report.hostname === "desarrolloseguro.org"
-                                      ? "Declaraciones de Desarrollo Seguro:"
-                                      : "Declaraciones de Grumphya:"}
-                                  </p>
-                                <ul>
-                                  {processor.declaredStatements.map((statement, index) => (
-                                    <li key={`${processor.providerId}-${index}`}>{statement}</li>
-                                  ))}
-                                </ul>
-                              </>
-                            )}
-                            {processor.policyUrl && (
-                              <a href={processor.policyUrl} target="_blank" rel="noopener noreferrer">
-                                Ver política de privacidad de {report.hostname === "desarrolloseguro.org" ? "Desarrollo Seguro" : "Grumphya"}
-                              </a>
-                            )}
-                          </>
-                        ) : (
-                          <p>Proveedor activo sin propósito ni condiciones declarados en la política.</p>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p>El inventario completo no encontró procesadores backend externos activos en el registro cubierto.</p>
-                )}
-                <div className="ds-portal__processor-evidence-note">
-                  <h4>Lo que declara el sitio</h4>
-                  <p>Esta lista procede de la información publicada por {report.processorTransparencyAssessment.inventory.hostname === "desarrolloseguro.org" ? "Desarrollo Seguro" : "Grumphya"}. El análisis comprueba que incluya los servicios identificados; no confirma que cada proveedor cumpla lo declarado.</p>
-                  <h4>Lo que observamos desde fuera</h4>
-                  <p>Las conexiones y páginas descritas en el informe muestran señales visibles durante la revisión. No permiten conocer todo lo que cada proveedor hace con la información recibida.</p>
-                </div>
-              </>
-            )}
-          </section>
+          <ProcessorTransparencySection
+            assessment={report.processorTransparencyAssessment}
+            comparison={report.publicServiceComparison ?? null}
+            observedDomains={report.privacyAssessment?.evidence.domains ?? []}
+            catalogVersion={report.providerCatalogVersion}
+          />
         )}
-        {report.publicServiceComparison && (
+        {report.publicServiceComparison && !report.processorTransparencyAssessment?.inventory && (
           <PublicServiceComparisonSection comparison={report.publicServiceComparison} observedDomains={report.privacyAssessment?.evidence.domains ?? []} catalogVersion={report.providerCatalogVersion} />
         )}
         {report.legalCookieFindings && report.legalCookieFindings.length > 0 && (
@@ -1376,23 +1356,194 @@ function ReportSummary({
   );
 }
 
-function PublicServiceComparisonSection({ comparison, observedDomains, catalogVersion }: { comparison: PublicServiceComparison; observedDomains: string[]; catalogVersion?: string | null }) {
+function ProcessorTransparencySection({
+  assessment,
+  comparison,
+  observedDomains,
+  catalogVersion,
+}: {
+  assessment: PublicProcessorTransparencyAssessment;
+  comparison: PublicServiceComparison | null;
+  observedDomains: string[];
+  catalogVersion?: string | null;
+}) {
+  const inventory = assessment.inventory;
+  const entries = getProcessorServiceEntries(inventory?.processors ?? [], comparison);
+  const classifiedDomains = new Set(comparison?.items.flatMap(({ observedDomains: domains }) => domains) ?? []);
+  const otherObservedDomains = comparison
+    ? observedDomains.filter((domain) => !classifiedDomains.has(domain))
+    : [];
+  const owner = (inventory?.hostname ?? "grumphya.com") === "desarrolloseguro.org"
+    ? "Desarrollo Seguro"
+    : "Grumphya";
+
+  return (
+    <section className="ds-portal__processors" aria-labelledby="processor-transparency-heading">
+      <h3 id="processor-transparency-heading">Servicios externos utilizados por {owner}</h3>
+      {inventory && (
+        <>
+          {inventory.processors.length === 0 && (
+            <p>El inventario completo no encontró procesadores backend externos activos en el registro cubierto.</p>
+          )}
+          {entries.length > 0 && (
+            <ul className="ds-portal__processor-list">
+              {entries.map((entry) => {
+                const entryComparison = comparison && (entry.comparisonItem || entry.providerDocumentation.length > 0)
+                  ? {
+                    ...comparison,
+                    items: entry.comparisonItem ? [entry.comparisonItem] : [],
+                    providerDocumentation: entry.providerDocumentation,
+                  }
+                  : null;
+                return (
+                  <li key={entry.providerId}>
+                    <details>
+                      <summary>
+                        <strong>{entry.displayName}</strong>
+                        {entry.product && <span>({entry.product})</span>}
+                      </summary>
+                      <div className="ds-portal__processor-details">
+                        {entry.processor && (
+                          entry.processor.disclosureStatus === "published" ? (
+                            <>
+                              <p><strong>Propósito declarado:</strong> {entry.processor.purpose}</p>
+                              {entry.processor.declaredStatements && entry.processor.declaredStatements.length > 0 && (
+                                <>
+                                  <p className="ds-portal__declared-label">
+                                    Declaraciones de {owner}:
+                                  </p>
+                                  <ul>
+                                    {entry.processor.declaredStatements.map((statement, index) => (
+                                      <li key={`${entry.providerId}-${index}`}>{statement}</li>
+                                    ))}
+                                  </ul>
+                                </>
+                              )}
+                              {entry.processor.policyUrl && (
+                                <a href={entry.processor.policyUrl} target="_blank" rel="noopener noreferrer">
+                                  Ver política de privacidad de {owner}
+                                </a>
+                              )}
+                            </>
+                          ) : (
+                            <p>Proveedor activo sin propósito ni condiciones declarados en la política.</p>
+                          )
+                        )}
+                        {entryComparison && (
+                          <PublicServiceComparisonSection
+                            comparison={entryComparison}
+                            observedDomains={[]}
+                            embedded
+                          />
+                        )}
+                      </div>
+                    </details>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          <details className="ds-portal__processor-evidence-disclosure">
+            <summary>Cómo se revisa la información</summary>
+            <div className="ds-portal__processor-evidence-note">
+              <h4>Lo que declara el sitio</h4>
+              <p>Esta lista procede de la información publicada por {owner}. El análisis comprueba que incluya los servicios identificados; no confirma que cada proveedor cumpla lo declarado.</p>
+              <h4>Lo que observamos desde fuera</h4>
+              <p>Las conexiones y páginas descritas en el informe muestran señales visibles durante la revisión. No permiten conocer todo lo que cada proveedor hace con la información recibida.</p>
+              {comparison && (
+                <>
+                  <h4>Resultado general de la comparación</h4>
+                  <p>{getPublicServiceComparisonSummary(comparison)}</p>
+                  {catalogVersion && <p>Versión del catálogo oficial aplicado: <code>{catalogVersion}</code></p>}
+                </>
+              )}
+              {otherObservedDomains.length > 0 && (
+                <>
+                  <h4>Otros dominios externos observados</h4>
+                  <p>No se atribuyen a una empresa ni a un tratamiento sin evidencia que los vincule.</p>
+                  <ul>{otherObservedDomains.map((domain) => <li key={domain}>{domain}</li>)}</ul>
+                </>
+              )}
+            </div>
+          </details>
+        </>
+      )}
+    </section>
+  );
+}
+
+function getProcessorServiceEntries(
+  processors: PublicProcessorDisclosure[],
+  comparison: PublicServiceComparison | null,
+): ProcessorServiceEntry[] {
+  const entries = new Map<string, ProcessorServiceEntry>();
+  const ensureEntry = (providerId: string): ProcessorServiceEntry => {
+    const existing = entries.get(providerId);
+    if (existing) return existing;
+    const entry: ProcessorServiceEntry = {
+      providerId,
+      displayName: PUBLIC_SERVICE_PROVIDER_INFO[providerId]?.displayName ??
+        (providerId.startsWith("dst_") ? "Destino externo sin proveedor atribuido" : providerId),
+      providerDocumentation: [],
+    };
+    entries.set(providerId, entry);
+    return entry;
+  };
+
+  processors.forEach((processor) => {
+    const entry = ensureEntry(processor.providerId);
+    entry.displayName = processor.displayName;
+    entry.product = processor.product;
+    entry.processor = processor;
+  });
+  comparison?.items.forEach((item) => {
+    ensureEntry(item.providerId).comparisonItem = item;
+  });
+  comparison?.providerDocumentation?.forEach((finding) => {
+    ensureEntry(finding.providerId).providerDocumentation.push(finding);
+  });
+  return [...entries.values()];
+}
+
+function getPublicServiceComparisonSummary(comparison: PublicServiceComparison): string {
+  if (comparison.reasonCode === "auditor_error") {
+    return "La comparación de servicios sigue en revisión porque falló una comprobación técnica.";
+  }
+  if (comparison.reasonCode === "public_policy_missing") {
+    return "No se encontró información pública suficiente para conocer y contrastar los servicios externos del sitio.";
+  }
+  if (comparison.reasonCode === "observed_service_undisclosed") {
+    return "Incumplimiento observado: se detectó un servicio externo sin información pública del sitio que identifique su finalidad.";
+  }
+  if (comparison.reasonCode === "provider_documentation_contradiction") {
+    return "Se confirmó una contradicción entre lo que declara el sitio y la documentación oficial de un proveedor.";
+  }
+  return "Los servicios externos observados aparecen explicados por el sitio. Los servicios declarados que no se vieron durante esta revisión se muestran aparte y no se consideran actividad confirmada.";
+}
+
+function PublicServiceComparisonSection({
+  comparison,
+  observedDomains,
+  catalogVersion,
+  embedded = false,
+}: {
+  comparison: PublicServiceComparison;
+  observedDomains: string[];
+  catalogVersion?: string | null;
+  embedded?: boolean;
+}) {
   const classifiedDomains = new Set(comparison.items.flatMap(({ observedDomains: domains }) => domains));
   const otherObservedDomains = observedDomains.filter((domain) => !classifiedDomains.has(domain));
-  const summary = comparison.reasonCode === "auditor_error"
-    ? "La comparación de servicios sigue en revisión porque falló una comprobación técnica."
-    : comparison.reasonCode === "public_policy_missing"
-      ? "No se encontró información pública suficiente para conocer y contrastar los servicios externos del sitio."
-      : comparison.reasonCode === "observed_service_undisclosed"
-        ? "Incumplimiento observado: se detectó un servicio externo sin información pública del sitio que identifique su finalidad."
-        : comparison.reasonCode === "provider_documentation_contradiction"
-          ? "Se confirmó una contradicción entre lo que declara el sitio y la documentación oficial de un proveedor."
-        : "Los servicios externos observados aparecen explicados por el sitio. Los servicios declarados que no se vieron durante esta revisión se muestran aparte y no se consideran actividad confirmada.";
+  const Wrapper = embedded ? "div" : "section";
   return (
-    <section className="ds-portal__public-services" aria-labelledby="public-services-heading">
-      <h3 id="public-services-heading">Servicios externos detectados</h3>
-      <p>{summary}</p>
-      {catalogVersion && <p>Versión del catálogo oficial aplicado: <code>{catalogVersion}</code></p>}
+    <Wrapper
+      className="ds-portal__public-services"
+      aria-labelledby={embedded ? undefined : "public-services-heading"}
+      data-embedded={embedded ? "true" : undefined}
+    >
+      {!embedded && <h3 id="public-services-heading">Servicios externos detectados</h3>}
+      {!embedded && <p>{getPublicServiceComparisonSummary(comparison)}</p>}
+      {!embedded && catalogVersion && <p>Versión del catálogo oficial aplicado: <code>{catalogVersion}</code></p>}
       {comparison.items.length > 0 && (
         <ul className="ds-portal__public-service-list">
           {comparison.items.map((item) => {
@@ -1410,7 +1561,7 @@ function PublicServiceComparisonSection({ comparison, observedDomains, catalogVe
             return (
               <li key={item.providerId} data-observation={item.observation}>
                 <div className="ds-portal__public-service-heading">
-                  <h4>{label}</h4>
+                  {!embedded && <h4>{label}</h4>}
                   <strong>{stateLabel}</strong>
                 </div>
                 {item.declaredPurposes.length > 0 && (
@@ -1514,7 +1665,7 @@ function PublicServiceComparisonSection({ comparison, observedDomains, catalogVe
           <ul>{otherObservedDomains.map((domain) => <li key={domain}>{domain}</li>)}</ul>
         </div>
       )}
-    </section>
+    </Wrapper>
   );
 }
 
@@ -2839,32 +2990,18 @@ function getPerformanceScore(checks: PublicCheck[]): number | null {
   return Math.round((mobile + desktop) / 2);
 }
 
+function getPerformanceProfileScore(
+  checks: PublicCheck[],
+  profile: "mobile" | "desktop",
+): number | null {
+  const score = checks.find(({ controlId }) => controlId === "DS-QUAL-02")?.evidence?.[`${profile}Score`];
+  return typeof score === "number" && Number.isFinite(score) ? score : null;
+}
+
 function getPerformanceScoreLabel(score: number | null): string {
   return score === null
     ? "Sin datos suficientes"
     : `${score}/100 · media de móvil y escritorio`;
-}
-
-function getCategorySummary(criteria: Array<{ status: string }>, state: string): string {
-  const assessed = criteria.filter((criterion) => criterion.status !== "unknown");
-  const problems = assessed.filter((criterion) => criterion.status === "fail").length;
-  const unknown = criteria.length - assessed.length;
-  if (assessed.length === 0) {
-    return state === "updating"
-      ? "Esta comprobación está en curso."
-      : "No se pudo completar esta comprobación.";
-  }
-  if (problems > 0) {
-    return unknown > 0
-      ? `${problems} criterio${problems === 1 ? "" : "s"} que no se cumple${problems === 1 ? "" : "n"}; ${unknown} no se pudo${unknown === 1 ? "" : "n"} comprobar.`
-      : `${problems} criterio${problems === 1 ? "" : "s"} que no se cumple${problems === 1 ? "" : "n"}.`;
-  }
-  if (unknown > 0) {
-    return state === "updating"
-      ? "Esta parte sigue en comprobación."
-      : `${unknown} comprobación${unknown === 1 ? "" : "es"} no se pudo${unknown === 1 ? "" : "n"} completar.`;
-  }
-  return "No se detectaron incumplimientos en los criterios comprobados.";
 }
 
 function getCriterionPriority(status: CheckStatus): number {
@@ -2872,12 +3009,6 @@ function getCriterionPriority(status: CheckStatus): number {
   if (status === "unknown") return 1;
   if (status === "pass") return 2;
   return 3;
-}
-
-function getPerformanceCategorySummary(score: number | null): string {
-  return score === null
-    ? "Medición incompleta: falta algún dato requerido de móvil o escritorio."
-    : "Nota media de Lighthouse 13.6.0 en móvil simulado y de la rúbrica propia en escritorio.";
 }
 
 function getReportTakeaway(report: PublicReport, state: string): string {
@@ -3081,31 +3212,6 @@ function getCriterionControlIds(criterionId: string): readonly string[] {
   return controlIds[criterionId] ?? [];
 }
 
-function getProcessorTransparencySummary(
-  assessment: PublicProcessorTransparencyAssessment,
-): string {
-  if (assessment.reasonCode === "auditor_error") {
-    return "No pudimos completar esta comprobación por un error técnico de nuestro sistema. Queda en revisión y no cuenta como un incumplimiento del dominio.";
-  }
-  if (assessment.reasonCode === "endpoint_missing") {
-    return "No está disponible la información pública necesaria para comprobar qué servicios externos participan y para qué. Esto se considera una falta de transparencia.";
-  }
-  if (assessment.reasonCode === "inventory_incomplete") {
-    return "Grumphya declara que su lista no incluye todos los servicios externos que utiliza.";
-  }
-  if (assessment.reasonCode === "processor_not_disclosed") {
-    return "Hay servicios externos activos que no aparecen en la información publicada.";
-  }
-  if (assessment.reasonCode === "inventory_complete_empty") {
-    return assessment.inventory?.hostname === "desarrolloseguro.org"
-      ? "Desarrollo Seguro declara que no hay proveedores externos activos en el inventario de producción publicado."
-      : "La revisión interna no encontró servicios externos activos en los sistemas de producción cubiertos.";
-  }
-  return assessment.inventory?.hostname === "desarrolloseguro.org"
-    ? "Desarrollo Seguro declara que su inventario de producción está completo; los proveedores incluidos aparecen en su política de privacidad."
-    : "Grumphya declara que la lista de servicios externos está completa y los servicios incluidos aparecen en su política de privacidad.";
-}
-
 function getPublicPolicyTransparencySummary(
   assessment: PublicPolicyTransparencyAssessment,
 ): string {
@@ -3134,14 +3240,20 @@ function formatByteCount(value: number): string {
   return `${(value / 1_000).toFixed(1)} kB`;
 }
 
-function getCriterionDisplayLabel(criterionId: string, fallback: string): string {
+function getCriterionDisplayLabel(criterionId: string, fallback: string, status?: string): string {
+  if (status === "pass" && criterionId === "initial-cookie-risk") {
+    return "Sin cookies no esenciales instaladas antes de que el usuario las consienta o las rechace.";
+  }
+  if (status === "pass" && criterionId === "tracking") {
+    return "Sin rastreadores conocidos en la página";
+  }
   const labels: Record<string, string> = {
-    "dns-integrity": "El dominio apunta a una dirección pública",
-    "transport-security": "La conexión protege los datos",
-    "http-availability": "La página responde de forma segura",
-    "security-headers": "El navegador recibe protecciones",
+    "dns-integrity": "El dominio tiene una dirección pública en Internet",
+    "transport-security": "La web protege los datos que envía el usuario",
+    "http-availability": "La web devuelve el contenido de forma segura",
+    "security-headers": "La web cuenta con protección ante ataques desde el navegador",
     "third-party-data-use": "Uso de datos por servicios externos",
-    "external-service-transparency": "Información pública sobre servicios externos",
+    "external-service-transparency": "Transparencia con los servicios externos usados por la página",
     "backend-processor-transparency": "Servicios externos declarados por el titular",
     "initial-cookie-risk": "Cookies potencialmente no esenciales",
     tracking: "Rastreadores conocidos en la página",
