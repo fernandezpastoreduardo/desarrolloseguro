@@ -1,7 +1,7 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { parseFirstEntryPolicyAccess, type FirstEntryPolicyAccess } from "@desarrolloseguro/core/first-entry-policy-access";
 import { parseLegalCookieFindings, type LegalCookieFinding } from "@desarrolloseguro/core/legal-cookie-findings";
-import { parsePublicServiceComparison } from "@desarrolloseguro/core/public-service-comparison";
+import { normalizePublicServiceProviderId, parsePublicServiceComparison } from "@desarrolloseguro/core/public-service-comparison";
 import { parseScanTargetUrl } from "@desarrolloseguro/core/scan-target-url";
 import { parsePrivacyAssessment, type PrivacyAssessment } from "@desarrolloseguro/core/privacy-score";
 import { parsePublicAuditProgress, type PublicAuditAspect, type PublicAuditProgress } from "@desarrolloseguro/core/public-audit-progress";
@@ -265,9 +265,9 @@ type PublicServiceProviderDocumentation = NonNullable<PublicServiceComparison["p
 type ProcessorServiceEntry = {
   providerId: string;
   displayName: string;
-  product?: string;
-  processor?: PublicProcessorDisclosure;
-  comparisonItem?: PublicServiceItem;
+  products: string[];
+  processors: PublicProcessorDisclosure[];
+  comparisonItems: PublicServiceItem[];
   providerDocumentation: PublicServiceProviderDocumentation[];
 };
 type InternalAuditCriterionId =
@@ -756,7 +756,6 @@ export function PublicScanPortal() {
           <a href="/desarrollo-seguro/actualidad.html">Actualidad</a>
           <a href="/desarrollo-seguro/metodologia.html">Metodología</a>
 <a href="/desarrollo-seguro/privacidad.html">Privacidad y alcance</a>
-          <a href="/desarrollo-seguro/politica-de-privacidad.html">Política de privacidad</a>
           <a href="/desarrollo-seguro/sello.html">Sello e informes</a>
         </nav>
         <button
@@ -1404,10 +1403,10 @@ function ProcessorTransparencySection({
           {entries.length > 0 && (
             <ul className="ds-portal__processor-list">
               {entries.map((entry) => {
-                const entryComparison = comparison && (entry.comparisonItem || entry.providerDocumentation.length > 0)
+                const entryComparison = comparison && (entry.comparisonItems.length > 0 || entry.providerDocumentation.length > 0)
                   ? {
                     ...comparison,
-                    items: entry.comparisonItem ? [entry.comparisonItem] : [],
+                    items: entry.comparisonItems,
                     providerDocumentation: entry.providerDocumentation,
                   }
                   : null;
@@ -1416,35 +1415,39 @@ function ProcessorTransparencySection({
                     <details>
                       <summary>
                         <strong>{entry.displayName}</strong>
-                        {entry.product && <span>({entry.product})</span>}
+                        {entry.products.length > 0 && <span>({entry.products.join(", ")})</span>}
                       </summary>
                       <div className="ds-portal__processor-details">
-                        {entry.processor && (
-                          entry.processor.disclosureStatus === "published" ? (
-                            <>
-                              <p><strong>Propósito declarado:</strong> {entry.processor.purpose}</p>
-                              {entry.processor.declaredStatements && entry.processor.declaredStatements.length > 0 && (
-                                <>
-                                  <p className="ds-portal__declared-label">
-                                    Declaraciones de {owner}:
-                                  </p>
-                                  <ul>
-                                    {entry.processor.declaredStatements.map((statement, index) => (
-                                      <li key={`${entry.providerId}-${index}`}>{statement}</li>
-                                    ))}
-                                  </ul>
-                                </>
-                              )}
-                              {entry.processor.policyUrl && (
-                                <a href={entry.processor.policyUrl} target="_blank" rel="noopener noreferrer">
-                                  Ver política de privacidad de {owner}
-                                </a>
-                              )}
-                            </>
-                          ) : (
-                            <p>Proveedor activo sin propósito ni condiciones declarados en la política.</p>
-                          )
-                        )}
+                        {entry.processors.map((processor) => (
+                          <div key={processor.providerId}>
+                            {entry.processors.length > 1 && <p><strong>Producto:</strong> {processor.product}</p>}
+                            {processor.disclosureStatus === "published" ? (
+                              <>
+                                {processor.purpose && <p><strong>Propósito declarado:</strong> {processor.purpose}</p>}
+                                {processor.declaredStatements && processor.declaredStatements.length > 0 && (
+                                  <>
+                                    <p className="ds-portal__declared-label">
+                                      Declaraciones de {owner}:
+                                    </p>
+                                    <ul>
+                                      {processor.declaredStatements.map((statement, index) => (
+                                        <li key={`${processor.providerId}-${index}`}>{statement}</li>
+                                      ))}
+                                    </ul>
+                                  </>
+                                )}
+                                {processor.policyUrl && (
+                                  <a href={processor.policyUrl} target="_blank" rel="noopener noreferrer">
+                                    Ver política de privacidad de {owner}
+                                    {entry.processors.length > 1 ? ` (${processor.product})` : ""}
+                                  </a>
+                                )}
+                              </>
+                            ) : (
+                              <p>Proveedor activo sin propósito ni condiciones declarados en la política.</p>
+                            )}
+                          </div>
+                        ))}
                         {entryComparison && (
                           <PublicServiceComparisonSection
                             comparison={entryComparison}
@@ -1493,30 +1496,39 @@ function getProcessorServiceEntries(
   comparison: PublicServiceComparison | null,
 ): ProcessorServiceEntry[] {
   const entries = new Map<string, ProcessorServiceEntry>();
-  const ensureEntry = (providerId: string): ProcessorServiceEntry => {
-    const existing = entries.get(providerId);
+  const ensureEntry = (providerId: string, displayName?: string): ProcessorServiceEntry => {
+    const canonicalProviderId = normalizePublicServiceProviderId(providerId) ??
+      (displayName ? normalizePublicServiceProviderId(displayName) : null) ??
+      providerId;
+    const existing = entries.get(canonicalProviderId);
     if (existing) return existing;
     const entry: ProcessorServiceEntry = {
-      providerId,
-      displayName: PUBLIC_SERVICE_PROVIDER_INFO[providerId]?.displayName ??
+      providerId: canonicalProviderId,
+      displayName: PUBLIC_SERVICE_PROVIDER_INFO[canonicalProviderId]?.displayName ?? displayName ??
         (providerId.startsWith("dst_") ? "Destino externo sin proveedor atribuido" : providerId),
+      products: [],
+      processors: [],
+      comparisonItems: [],
       providerDocumentation: [],
     };
-    entries.set(providerId, entry);
+    entries.set(canonicalProviderId, entry);
     return entry;
   };
 
   processors.forEach((processor) => {
-    const entry = ensureEntry(processor.providerId);
-    entry.displayName = processor.displayName;
-    entry.product = processor.product;
-    entry.processor = processor;
+    const entry = ensureEntry(processor.providerId, processor.displayName);
+    if (entry.processors.length === 0) entry.displayName = processor.displayName;
+    entry.processors.push(processor);
+    if (!entry.products.some((product) => product.toLowerCase() === processor.product.toLowerCase())) {
+      entry.products.push(processor.product);
+    }
   });
   comparison?.items.forEach((item) => {
-    ensureEntry(item.providerId).comparisonItem = item;
+    ensureEntry(item.providerId, PUBLIC_SERVICE_PROVIDER_INFO[item.providerId]?.displayName).comparisonItems.push(item);
   });
   comparison?.providerDocumentation?.forEach((finding) => {
-    ensureEntry(finding.providerId).providerDocumentation.push(finding);
+    ensureEntry(finding.providerId, PUBLIC_SERVICE_PROVIDER_INFO[finding.providerId]?.displayName)
+      .providerDocumentation.push(finding);
   });
   return [...entries.values()];
 }
@@ -1535,6 +1547,42 @@ function getPublicServiceComparisonSummary(comparison: PublicServiceComparison):
     return "Se confirmó una contradicción entre lo que declara el sitio y la documentación oficial de un proveedor.";
   }
   return "Los servicios externos observados aparecen explicados por el sitio. Los servicios declarados que no se vieron durante esta revisión se muestran aparte y no se consideran actividad confirmada.";
+}
+
+function LegalSupportingSources({
+  sources,
+  collapsible,
+}: {
+  sources: Record<string, Array<{ sourceId: string; title: string; url: string; excerpt: string }>>;
+  collapsible: boolean;
+}) {
+  const sourceList = (
+    <ul>
+      {Object.entries(sources).flatMap(([element, items]) =>
+        items.map((source) => (
+          <li key={`${element}-${source.sourceId}`}>
+            <b>{getLegalEvidenceElementLabel(element)}:</b>{" "}
+            <a href={source.url} target="_blank" rel="noopener noreferrer">{source.title}</a>
+            {source.excerpt ? <blockquote>{source.excerpt}</blockquote> : null}
+          </li>
+        )),
+      )}
+    </ul>
+  );
+  if (!collapsible) {
+    return (
+      <div>
+        <p><strong>Fuentes de los elementos legales</strong></p>
+        {sourceList}
+      </div>
+    );
+  }
+  return (
+    <details>
+      <summary>Fuentes de los elementos legales</summary>
+      {sourceList}
+    </details>
+  );
 }
 
 function PublicServiceComparisonSection({
@@ -1636,20 +1684,10 @@ function PublicServiceComparisonSection({
                     scale.type === "fixed_amount" ? `${scale.amount?.toLocaleString("es-ES")} ${scale.currency}` : `${scale.percentage} % del volumen de negocio mundial anual`,
                   ).join(" o ")} (la cuantía concreta la determina el organismo competente).</p>
                   {item.legalFinding.supportingSources && (
-                    <details>
-                      <summary>Fuentes de los elementos legales</summary>
-                      <ul>
-                        {Object.entries(item.legalFinding.supportingSources).flatMap(([element, sources]) =>
-                          sources.map((source) => (
-                            <li key={`${element}-${source.sourceId}`}>
-                              <b>{getLegalEvidenceElementLabel(element)}:</b>{" "}
-                              <a href={source.url} target="_blank" rel="noopener noreferrer">{source.title}</a>
-                              {source.excerpt ? <blockquote>{source.excerpt}</blockquote> : null}
-                            </li>
-                          )),
-                        )}
-                      </ul>
-                    </details>
+                    <LegalSupportingSources
+                      sources={item.legalFinding.supportingSources}
+                      collapsible={!embedded}
+                    />
                   )}
                 </div>
               )}

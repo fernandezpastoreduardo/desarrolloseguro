@@ -160,3 +160,67 @@ La página actual es estática y sus artículos se añaden manualmente. La
 ingestión automática de noticias, un panel editorial y la moderación continúan
 aplazados; requieren definir fuentes, derechos de uso y responsabilidades de
 revisión.
+
+## Migrar las fuentes del sitio público bajo la aplicación web
+
+La carpeta raíz `desarrollo-seguro/` contiene las fuentes activas del sitio
+público, las páginas y recursos del sello verificable, y el generador y las
+pruebas dependen de ella. Se aplaza su migración hasta que el usuario la active
+con la palabra `arcarpeta`.
+
+Al activarla, trabajar de forma aislada en esta rama: integrar primero los
+cambios de `main`, y después crear un goal que abarque la migración completa.
+Mover las fuentes a `apps/desarrollo-seguro/web/public-site/`, con páginas y
+artículos separados de las páginas y lógica del sello; actualizar el generador,
+pruebas y empaquetado conservando todas las rutas públicas actuales; verificar
+build, pruebas, contenedor y Lighthouse; y retirar la carpeta raíz solo cuando
+las comprobaciones pasen. Al terminar el goal, volver a integrar `main` en esta
+rama y resolver y verificar cualquier conflicto o regresión. Documentar el
+resultado en `doc/` y eliminar esta idea de la lista. No empezar antes de la
+activación.
+
+## Auditoría Beta D de DesarrolloSeguro
+
+Esta tarea es independiente de la migración de fuentes del sitio público
+activada con `arcarpeta`. Se aplaza hasta que el usuario la active con la palabra
+`autoaudit`.
+
+El objetivo es aplicar a DesarrolloSeguro la auditoría privada Beta D que se
+usa con Grumphya, tomando como base el contrato `beta-d-0.2`, sus siete
+recursos, sus 14 criterios, la evidencia firmada, las lecturas de solo lectura,
+el aislamiento y las verificaciones correspondientes. DesarrolloSeguro debe
+tener identidad, autorización, atestación, permisos y destino propios; no basta
+con cambiar el hostname de Grumphya. Revisar y definir para cada criterio si
+aplica al servicio y qué fuente lo acredita. La falta de evidencia debe quedar
+como `unknown`, nunca como aprobado.
+
+El resumen de la auditoría debe mostrarse en la ficha pública de Desarrollo
+Seguro bajo las mismas condiciones que el de Grumphya: exponer solo el nombre
+comprensible del criterio, su estado y una explicación general del impacto;
+no publicar puntuaciones internas, valores medidos, códigos de motivo, rutas,
+configuración, secretos ni detalles técnicos explotables. Si la revisión está
+incompleta, caducada o no se puede verificar, mostrar «En revisión» y no
+reutilizar un resumen anterior. La auditoría y su resumen permanecen separados
+de la certificación pública y no activan ni modifican el sello. Ampliar la
+proyección pública que hoy está limitada a `grumphya.com` solo para permitir
+esta salida filtrada de DesarrolloSeguro.
+
+Al activar `autoaudit`, trabajar de forma aislada en esta rama: integrar
+primero los cambios de `main` y después crear un goal que abarque la tarea
+completa. Antes de implementar, definir y documentar en `agentic-guidelines/`
+el alcance, criterios, fuentes de evidencia, identidad, permisos, contrato,
+vigencia, límites de red y proyección pública. Revisar cómo se separan hoy las
+responsabilidades de auditoría entre `core`, `worker`, `api` y `persistence`,
+y ubicar los cambios según su responsabilidad sin forzar una única carpeta
+`audit/` si los adaptadores e integraciones pertenecen a paquetes distintos.
+
+Implementar y verificar la auditoría y el resumen público con pruebas de
+criterios, firma, permisos, caducidad, datos filtrados y estados incompletos;
+pruebas de regresión para Grumphya; pruebas de interfaz y extremo a extremo;
+build, análisis estático y pruebas de Lighthouse de laboratorio con los
+umbrales del repositorio. No usar fixtures como evidencia de una auditoría
+real. Mantener las lecturas auditadas en modo de solo lectura y verificar el
+aislamiento y los permisos mínimos. Retirar de este archivo solo esta idea
+cuando esté implementada y verificada, y documentar el comportamiento final en
+`doc/`. Al terminar el goal, volver a integrar `main` en esta rama y resolver y
+verificar cualquier conflicto o regresión. No empezar antes de la activación.

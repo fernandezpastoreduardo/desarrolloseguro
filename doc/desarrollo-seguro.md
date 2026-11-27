@@ -4,6 +4,10 @@ Desarrollo Seguro publica páginas de presentación, metodología, privacidad y 
 
 La navegación principal mantiene los mismos cinco destinos y el mismo orden en la portada, las páginas informativas, Actualidad y el portal `/app/`: Inicio, Actualidad, Metodología, Privacidad y alcance, Sello e informes. El portal conserva además su selector de tema; el sitio público conserva el acceso al buscador.
 
+La política legal de privacidad no ocupa un enlace de navegación principal. Se puede volver a consultar desde el aviso de primera entrada y el footer.
+
+Los heroes de la portada y las páginas informativas se adaptan al ancho de escritorio y móvil. Sus círculos e ilustraciones decorativas se contienen dentro de la maquetación para que no provoquen desplazamiento horizontal ni oculten el texto o las acciones.
+
 Actualidad se encuentra en `/desarrollo-seguro/actualidad.html`. Presenta seis artículos en tarjetas de estilo periodístico y cada tarjeta abre una página con la lectura completa y enlaces a las fuentes. Los artículos se redactan de forma manual y contrastan las afirmaciones con comunicaciones de las entidades u organismos, textos legales, autoridades oficiales y documentación primaria del estándar citado. En incidentes con investigación abierta, el artículo diferencia datos potencialmente afectados de hechos confirmados. La sección no agrega servicios de analítica, cookies ni solicitudes externas al cargar la página; un proveedor externo solo recibe una solicitud cuando la persona abre voluntariamente su enlace.
 
 El dossier de incidentes incluye una selección, no un registro exhaustivo: solo publica los casos para los que se localizó una comunicación directa de la entidad u organismo y deja fuera las afirmaciones que no pudo confirmar en una fuente primaria. La edición y actualización de las noticias es manual; la automatización y el panel editorial siguen aplazados.

@@ -46,7 +46,11 @@ marcador `ds-first-entry-notice-dismissed` en `localStorage`. Muestra el logo,
 el texto «No usamos cookies que envíen o vendan información a nadie en esta
 web.», el enlace a la política y el botón «Entendido». Solo este botón guarda
 el marcador; no se instalan cookies ni se almacena una elección de cookies.
-El marcador es local al navegador y puede borrarse desde su configuración.
+El marcador es local al navegador y puede borrarse desde su configuración. En
+`/app/`, el aviso usa una superficie blanca con texto oscuro para que el
+logotipo corporativo y los controles mantengan contraste. El botón sigue el
+estilo rectangular de los CTA principales: fondo oscuro y texto claro, con
+turquesa oscuro al pasar el puntero.
 
 La política vincula las fuentes oficiales del RGPD, LOPDGDD, LSSI y guía de
 cookies de AEPD. No se usa analítica, publicidad ni recursos remotos incrustados

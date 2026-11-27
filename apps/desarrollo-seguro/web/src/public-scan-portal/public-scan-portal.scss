@@ -182,7 +182,6 @@ $ds-space-block: 40px;
   align-items: center;
   justify-content: center;
   gap: clamp(18px, 2.7vw, 40px);
-  margin-left: auto;
 }
 
 .ds-portal__nav a {
@@ -231,15 +230,17 @@ $ds-space-block: 40px;
 .ds-portal__theme {
   position: relative;
   display: inline-flex;
+  flex: 0 0 auto;
   min-height: 40px;
   align-items: center;
   border: 1px solid var(--ds-line);
-  padding: $ds-space-tight $ds-space $ds-space-tight $ds-space-block;
+  padding: $ds-space-tight $ds-space $ds-space-tight 52px;
   color: var(--ds-muted);
   background: transparent;
   cursor: pointer;
   font-size: 0.7rem;
   font-weight: 750;
+  white-space: nowrap;
 }
 
 .ds-portal__theme::before {
@@ -762,6 +763,7 @@ $ds-space-block: 40px;
 .ds-portal__processor-list details > summary,
 .ds-portal__processor-evidence-disclosure > summary {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.35rem;
   min-height: 2.5rem;
@@ -796,13 +798,16 @@ $ds-space-block: 40px;
 }
 
 .ds-portal__processor-list summary strong {
+  min-width: 0;
   color: var(--ds-ink);
 }
 
 .ds-portal__processor-list summary > span {
+  min-width: 0;
   color: var(--ds-muted);
   font-size: 0.88em;
   font-weight: 500;
+  overflow-wrap: anywhere;
 }
 
 .ds-portal__processor-details {
@@ -2366,7 +2371,7 @@ $ds-space-block: 40px;
 
   .ds-portal__theme {
     min-height: 36px;
-    padding: $ds-space-tight $ds-space-small $ds-space-tight $ds-space-block;
+    padding: $ds-space-tight $ds-space-small $ds-space-tight 48px;
     font-size: 0.64rem;
   }
 
