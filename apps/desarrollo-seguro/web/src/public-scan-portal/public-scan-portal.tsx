@@ -5,6 +5,7 @@ import { parsePublicServiceComparison } from "@desarrolloseguro/core/public-serv
 import { parseScanTargetUrl } from "@desarrolloseguro/core/scan-target-url";
 import { parsePublicAuditProgress, type PublicAuditAspect, type PublicAuditProgress } from "@desarrolloseguro/core/public-audit-progress";
 import { PUBLIC_SERVICE_PROVIDER_INFO } from "@desarrolloseguro/core/public-service-catalog";
+import { FirstEntryNotice } from "../first-entry-notice/first-entry-notice.js";
 import "./public-scan-portal.scss";
 
 const API_ROOT = "/api/desarrollo-seguro/v1";
@@ -749,6 +750,7 @@ export function PublicScanPortal() {
 
   return (
     <main className="ds-portal" data-theme={darkTheme ? "dark" : "light"}>
+      <FirstEntryNotice />
       <a className="ds-portal__skip-link" href="#ds-portal-heading">
         Saltar al contenido
       </a>
@@ -768,7 +770,8 @@ export function PublicScanPortal() {
           <a href="/desarrollo-seguro/">Inicio</a>
           <a href="/desarrollo-seguro/actualidad.html">Actualidad</a>
           <a href="/desarrollo-seguro/metodologia.html">Metodología</a>
-          <a href="/desarrollo-seguro/privacidad.html">Privacidad y alcance</a>
+<a href="/desarrollo-seguro/privacidad.html">Privacidad y alcance</a>
+          <a href="/desarrollo-seguro/politica-de-privacidad.html">Política de privacidad</a>
           <a href="/desarrollo-seguro/sello.html">Sello e informes</a>
         </nav>
         <button
@@ -883,6 +886,7 @@ export function PublicScanPortal() {
       )}
       <footer className="ds-portal__footer">
         <a href="/desarrollo-seguro/">Cómo funciona este servicio</a>
+        <a href="/desarrollo-seguro/politica-de-privacidad.html">Política de privacidad</a>
       </footer>
     </main>
   );
@@ -2750,7 +2754,7 @@ function isProcessorTransparencyAssessment(value: unknown): value is PublicProce
     inventory.attestation.keyId === "grumphya-release-2026" &&
     (inventory.evidenceSource === undefined || inventory.evidenceSource === "grumphya_signed_attestation");
   const selfInventory = inventory.hostname === "desarrolloseguro.org" &&
-    inventory.privacyPolicy.url === "https://desarrolloseguro.org/desarrollo-seguro/privacidad.html" &&
+    inventory.privacyPolicy.url === "https://desarrolloseguro.org/desarrollo-seguro/politica-de-privacidad.html" &&
     inventory.attestation.keyId === "desarrolloseguro-source-registry-v1" &&
     inventory.evidenceSource === "desarrolloseguro_source_registry" &&
     inventory.inventoryStatus === "complete";
@@ -2775,7 +2779,7 @@ function isProcessorDisclosure(value: unknown): value is PublicProcessorDisclosu
     Object.keys(value).sort((left, right) => left.localeCompare(right, "en")).join(",") === "declaredStatements,disclosureStatus,displayName,policyUrl,product,providerId,purpose" &&
     isBoundedString(value.purpose, 500) && typeof value.policyUrl === "string" &&
     (value.policyUrl.startsWith("https://grumphya.com/politica-de-privacidad#") ||
-      value.policyUrl.startsWith("https://desarrolloseguro.org/desarrollo-seguro/privacidad.html#")) &&
+      value.policyUrl.startsWith("https://desarrolloseguro.org/desarrollo-seguro/politica-de-privacidad.html#")) &&
     Array.isArray(value.declaredStatements) && value.declaredStatements.length <= 10 &&
     value.declaredStatements.every((statement) => isBoundedString(statement, 500));
 }

@@ -86,6 +86,7 @@ describe("observeLighthouseMobileProfile", () => {
     await Promise.resolve();
     expect(proceed).toHaveBeenCalledOnce();
     expect(abort).toHaveBeenCalledTimes(2);
+    expect(cdp.send).toHaveBeenCalledWith("Network.setBlockedURLs", { urls: ["wss://*"] });
     expect(cdp.detach).toHaveBeenCalledOnce();
     expect(browser.close).toHaveBeenCalledOnce();
   });

@@ -1,0 +1,66 @@
+.ds-first-entry-notice {
+  width: min(560px, calc(100% - 32px));
+  max-width: none;
+  border: 1px solid #3b4545;
+  border-radius: 24px;
+  padding: 0;
+  color: #fffaf0;
+  background: #141a26;
+  box-shadow: 0 24px 80px #080d14a8;
+}
+
+.ds-first-entry-notice::backdrop {
+  background: #081018b8;
+  backdrop-filter: blur(5px);
+}
+
+.ds-first-entry-notice__content {
+  display: grid;
+  justify-items: center;
+  gap: 20px;
+  padding: clamp(26px, 6vw, 44px);
+  text-align: center;
+}
+
+.ds-first-entry-notice__logo {
+  width: 148px;
+  height: auto;
+}
+
+.ds-first-entry-notice__copy {
+  max-width: 30rem;
+  margin: 0;
+  color: #e3e5eb;
+  font-size: 1.05rem;
+  line-height: 1.55;
+}
+
+.ds-first-entry-notice__policy-link {
+  color: #8ed8cd;
+  font-weight: 700;
+  text-underline-offset: 4px;
+}
+
+.ds-portal .ds-first-entry-notice__dismiss {
+  min-width: 180px;
+  min-height: 54px;
+  border: 0;
+  border-radius: 999px;
+  padding: 12px 26px;
+  color: #fff;
+  background: #206b32;
+  cursor: pointer;
+  font: inherit;
+  font-size: 1.05rem;
+  font-weight: 750;
+}
+
+.ds-portal .ds-first-entry-notice__dismiss:hover {
+  background: #185a29;
+}
+
+.ds-portal .ds-first-entry-notice__dismiss:focus-visible,
+.ds-first-entry-notice__policy-link:focus-visible {
+  outline: 3px solid #8ed8cd;
+  outline-offset: 4px;
+}

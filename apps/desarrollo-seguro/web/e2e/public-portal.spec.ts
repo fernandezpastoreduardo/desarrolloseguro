@@ -1,5 +1,39 @@
 import { expect, test } from "@playwright/test";
 
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("ds-first-entry-notice-dismissed", "1");
+  });
+});
+
+test("shows the first-entry notice once and stores only its acknowledgement", async ({ browser }) => {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.goto("/");
+
+  const notice = page.getByRole("dialog", { name: "Aviso informativo sobre cookies" });
+  await expect(notice).toBeVisible();
+  await expect(notice.getByRole("img", { name: "DesarrolloSeguro.org" })).toBeVisible();
+  await expect(notice).toContainText(
+    "No usamos cookies que envíen o vendan información a nadie en esta web.",
+  );
+  await expect(notice.getByRole("link", { name: "Política de privacidad" })).toHaveAttribute(
+    "href",
+    "/desarrollo-seguro/politica-de-privacidad.html",
+  );
+  expect(await page.evaluate(() => Object.keys(window.localStorage))).toEqual([]);
+  expect(await page.evaluate(() => document.cookie)).toBe("");
+
+  await notice.getByRole("button", { name: "Entendido" }).click();
+  await expect(notice).toHaveCount(0);
+  expect(await page.evaluate(() => Object.keys(window.localStorage))).toEqual([
+    "ds-first-entry-notice-dismissed",
+  ]);
+  await page.reload();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await context.close();
+});
+
 test("renders the public portal and allows changing its theme", async ({
   page,
 }) => {
@@ -20,6 +54,14 @@ test("renders the public portal and allows changing its theme", async ({
     "Metodología",
   );
   const publicNavigation = page.getByRole("navigation", { name: "Navegación principal" });
+  await expect(publicNavigation.getByRole("link")).toHaveText([
+    "Inicio",
+    "Actualidad",
+    "Metodología",
+    "Privacidad y alcance",
+    "Política de privacidad",
+    "Sello e informes",
+  ]);
   await expect(publicNavigation.getByRole("link", { name: "Inicio" })).toHaveAttribute(
     "href",
     "/desarrollo-seguro/",
@@ -28,11 +70,15 @@ test("renders the public portal and allows changing its theme", async ({
     "href",
     "/desarrollo-seguro/metodologia.html",
   );
-  await expect(publicNavigation.getByRole("link", { name: "Privacidad" })).toHaveAttribute(
+  await expect(publicNavigation.getByRole("link", { name: "Privacidad y alcance", exact: true })).toHaveAttribute(
     "href",
     "/desarrollo-seguro/privacidad.html",
   );
-  await expect(publicNavigation.getByRole("link", { name: "Sello" })).toHaveAttribute(
+  await expect(publicNavigation.getByRole("link", { name: "Política de privacidad" })).toHaveAttribute(
+    "href",
+    "/desarrollo-seguro/politica-de-privacidad.html",
+  );
+  await expect(publicNavigation.getByRole("link", { name: "Sello e informes" })).toHaveAttribute(
     "href",
     "/desarrollo-seguro/sello.html",
   );

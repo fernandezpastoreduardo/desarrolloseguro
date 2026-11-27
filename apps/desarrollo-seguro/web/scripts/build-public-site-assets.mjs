@@ -19,10 +19,11 @@ const htmlPages = [
   "actualidad/aviso-cookies-proveedores.html",
   "metodologia.html",
   "privacidad.html",
+  "politica-de-privacidad.html",
   "sello.html",
   "verificar.html",
 ];
-const publicScripts = ["badge-widget.js", "verificar.js"];
+const publicScripts = ["badge-widget.js", "first-entry-notice.js", "verificar.js"];
 const publicAssets = [
   "assets/desarrollo-seguro-logo-v1.svg",
   "assets/grumphya-mascot-isotype.svg",

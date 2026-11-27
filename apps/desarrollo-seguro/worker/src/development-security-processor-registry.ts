@@ -9,7 +9,7 @@ export const DEVELOPMENT_SECURITY_PROCESSOR_REGISTRY = {
     product: "VPS",
     disclosureStatus: "published",
     purpose: "Alojamiento de la web pública, la API y la base de datos de Desarrollo Seguro.",
-    policyUrl: "https://desarrolloseguro.org/desarrollo-seguro/privacidad.html#ionos-hosting",
+    policyUrl: "https://desarrolloseguro.org/desarrollo-seguro/politica-de-privacidad.html#ionos-hosting",
     declaredStatements: [
       "Desarrollo Seguro está alojado en un VPS de IONOS que ejecuta la web pública, la API y la base de datos.",
     ],

@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="es-ES">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self'; form-action 'none'" />
+    <meta name="description" content="Política de privacidad de DesarrolloSeguro.org: responsable, datos, auditorías públicas, conservación y derechos." />
+    <title>Política de privacidad · DesarrolloSeguro.org</title>
+    <link rel="stylesheet" href="/app/site.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#contenido">Saltar al contenido</a>
+    <header class="site-header">
+      <a class="brand" href="/desarrollo-seguro/" aria-label="Desarrollo Seguro, inicio"><img class="brand-logo" src="/desarrollo-seguro/assets/desarrollo-seguro-logo-v1.svg" alt="DesarrolloSeguro.org" /></a>
+      <nav class="main-nav" aria-label="Navegación principal"><a href="/desarrollo-seguro/">Inicio</a><a href="/desarrollo-seguro/actualidad.html">Actualidad</a><a href="/desarrollo-seguro/metodologia.html">Metodología</a><a href="/desarrollo-seguro/privacidad.html">Privacidad y alcance</a><a aria-current="page" href="/desarrollo-seguro/politica-de-privacidad.html">Política de privacidad</a><a href="/desarrollo-seguro/sello.html">Sello e informes</a></nav>
+      <a class="header-cta" href="/app/">Abrir el buscador <span aria-hidden="true">↗</span></a>
+    </header>
+    <main id="contenido">
+      <section class="inner-hero page-shell">
+        <p class="eyebrow"><span class="eyebrow-dot" aria-hidden="true"></span> INFORMACIÓN LEGAL · PROTECCIÓN DE DATOS</p>
+        <h1>Política de <em>privacidad.</em></h1>
+        <p class="inner-lead">Qué datos trata DesarrolloSeguro.org, para qué, durante cuánto tiempo y cómo ejercer tus derechos.</p>
+        <p class="privacy-small">Actualizada el 27 de noviembre de 2026.</p>
+      </section>
+      <section class="privacy-content page-shell" aria-label="Política de privacidad">
+        <section class="scope-panel" aria-labelledby="privacy-controller-title">
+          <p class="eyebrow">01 · RESPONSABLE</p>
+          <h2 id="privacy-controller-title">Quién trata tus datos</h2>
+          <p>El responsable del tratamiento es Eduardo Fernández Pastor, con domicilio en Avenida de América 46, 4.º A, 50007 Zaragoza, España.</p>
+          <p>Para cuestiones de privacidad o para ejercer tus derechos, escribe a <a href="mailto:contacto@desarrolloseguro.org">contacto@desarrolloseguro.org</a>.</p>
+          <p>No se ha designado delegado o delegada de protección de datos.</p>
+        </section>
+
+        <section class="scope-panel" aria-labelledby="privacy-data-title">
+          <p class="eyebrow">02 · DATOS Y FINALIDADES</p>
+          <h2 id="privacy-data-title">Qué datos se tratan</h2>
+          <ul>
+            <li><strong>Solicitudes al portal:</strong> la configuración de Nginx registra la fecha, el método y la URI completa (incluida la consulta), el estado HTTP, el referente y el user-agent. La dirección que Nginx registra es la del proxy Caddy que se conecta con él; Nginx no está configurado para sustituirla por la IP real del visitante.</li>
+            <li><strong>URL auditada:</strong> si solicitas un análisis, se procesa la URL HTTPS que introduces, incluida su ruta y consulta. Esta información queda en el informe público. La consulta puede contener datos personales o secretos: no incluyas correos, tokens, credenciales ni datos privados en la URL.</li>
+            <li><strong>Informe técnico:</strong> dominio, alcance, fecha, resultados, mediciones y evidencias técnicas limitadas necesarias para explicar la auditoría. El sistema no publica una copia completa de la página analizada.</li>
+            <li><strong>Contacto por correo:</strong> dirección y contenido que envíes al responsable, utilizados para responder a tu mensaje.</li>
+          </ul>
+          <p>La finalidad de la auditoría es comprobar públicamente la URL indicada, elaborar un informe y mostrar sus resultados. DesarrolloSeguro.org se somete al mismo informe público de transparencia y a la misma auditoría que los sitios de clientes. Además, mantiene un inventario interno versionado de sus propios proveedores de infraestructura.</p>
+        </section>
+
+        <section class="scope-panel" aria-labelledby="privacy-legal-basis-title">
+          <p class="eyebrow">03 · BASE JURÍDICA</p>
+          <h2 id="privacy-legal-basis-title">Por qué se tratan</h2>
+          <p>La base jurídica declarada para prestar el análisis solicitado y publicar su informe es el interés legítimo del responsable, conforme al artículo 6.1.f del RGPD, en ofrecer comprobaciones técnicas públicas y transparentes sobre sitios web. Para los registros de acceso, el interés legítimo es operar, proteger y evitar abusos del servicio. Estos tratamientos se limitan a lo descrito en esta política.</p>
+        </section>
+
+        <section class="scope-panel" aria-labelledby="privacy-storage-title">
+          <p class="eyebrow">04 · ALMACENAMIENTO Y CONSERVACIÓN</p>
+          <h2 id="privacy-storage-title">Qué queda en el navegador y en el servidor</h2>
+          <p>Esta web no utiliza cookies de analítica o publicidad ni cookies de terceros. El aviso de primera visita guarda en el almacenamiento local del navegador una única clave, <code>ds-first-entry-notice-dismissed</code>, cuando pulsas «Entendido», para no volver a mostrarlo en ese navegador. No guarda una elección de cookies, un perfil ni otros datos. Puedes borrar esta clave desde la configuración del navegador.</p>
+          <p>Un informe conserva su vigencia durante 60 minutos. Al vencer, deja de ser el informe vigente, pero el enlace público sigue disponible. En producción, los informes se eliminan tras superar 90 días desde su finalización, en un ciclo diario de purga; por ello, pueden permanecer algo más de 90 días.</p>
+          <p>Los logs de acceso de Nginx se envían a stdout y los errores de nivel warning o superior a stderr; Docker los guarda en el VPS. En la configuración comprobada no hay rotación ni plazo de borrado automático: permanecen hasta que se eliminen manualmente o se sustituya/elimine el contenedor que los contiene.</p>
+        </section>
+
+        <section class="scope-panel" aria-labelledby="privacy-recipients-title">
+          <p class="eyebrow">05 · DESTINATARIOS Y TRANSFERENCIAS</p>
+          <h2 id="privacy-recipients-title">Quién puede recibir datos</h2>
+          <p id="ionos-vps">IONOS presta el VPS donde se alojan la web pública, la API y la base de datos, y trata los datos alojados para prestar esa infraestructura. Consulta la <a href="https://www.ionos.com/terms-gtc/privacy-policy/" rel="noopener noreferrer">política de privacidad de IONOS</a> y su <a href="https://www.ionos.es/ayuda/proteccion-de-datos/informacion-general-sobre-el-rgpd/contrato-de-tratamiento-de-datos/" rel="noopener noreferrer">información sobre el contrato de tratamiento, disponible para VPS</a>. Según la configuración actual del servicio, confirmada por el responsable, los datos de usuarios alojados no se transfieren fuera del Espacio Económico Europeo.</p>
+          <p>Al auditar una URL, el servidor envía solicitudes técnicas al dominio indicado y a los recursos que permita el perfil. Algunos destinos pueden estar fuera del Espacio Económico Europeo. El sitio de destino recibe la solicitud desde el VPS, su dirección IP pública y datos técnicos de conexión; la URL completa y su consulta también se envían para obtener el recurso solicitado. Esas conexiones corresponden al destino de auditoría, no a un proveedor de alojamiento de DesarrolloSeguro.org.</p>
+          <p>Los informes son públicos y accesibles mediante su enlace de informe. No introduzcas en la URL datos que deban permanecer privados.</p>
+        </section>
+
+        <section class="scope-panel" aria-labelledby="privacy-rights-title">
+          <p class="eyebrow">06 · DERECHOS</p>
+          <h2 id="privacy-rights-title">Cómo ejercer tus derechos</h2>
+          <p>Puedes solicitar acceso, rectificación, supresión, limitación u oposición al tratamiento y, cuando proceda, portabilidad. Escribe a <a href="mailto:contacto@desarrolloseguro.org">contacto@desarrolloseguro.org</a> e indica el derecho que quieres ejercer y la información necesaria para localizar los datos. Se responderá dentro de los plazos del RGPD.</p>
+          <p>También puedes presentar una reclamación ante la <a href="https://www.aepd.es/" rel="noopener noreferrer">Agencia Española de Protección de Datos (AEPD)</a>.</p>
+        </section>
+
+        <section class="scope-panel" aria-labelledby="privacy-automated-title">
+          <p class="eyebrow">07 · EVALUACIONES AUTOMATIZADAS</p>
+          <h2 id="privacy-automated-title">Qué evalúa el informe</h2>
+          <p>Los cálculos automáticos se refieren a características técnicas y prácticas públicas de la URL auditada. No evalúan la idoneidad de una persona ni se utilizan para tomar decisiones automatizadas sobre ella que produzcan efectos jurídicos o la afecten significativamente de forma similar.</p>
+        </section>
+
+        <section class="scope-panel" aria-labelledby="privacy-law-title">
+          <p class="eyebrow">08 · NORMATIVA</p>
+          <h2 id="privacy-law-title">Normas aplicables</h2>
+          <ul>
+            <li><a href="https://eur-lex.europa.eu/eli/reg/2016/679/oj?locale=es" rel="noopener noreferrer">Reglamento (UE) 2016/679 (RGPD)</a>.</li>
+            <li><a href="https://www.boe.es/buscar/act.php?id=BOE-A-2018-16673" rel="noopener noreferrer">Ley Orgánica 3/2018, de Protección de Datos Personales y garantía de los derechos digitales</a>.</li>
+            <li><a href="https://www.boe.es/buscar/act.php?id=BOE-A-2002-13758" rel="noopener noreferrer">Ley 34/2002, de servicios de la sociedad de la información y de comercio electrónico</a>.</li>
+            <li><a href="https://www.aepd.es/guias/guia-cookies.pdf" rel="noopener noreferrer">Guía de cookies de la AEPD</a>.</li>
+          </ul>
+        </section>
+
+        <div class="method-cta"><p>Consulta los informes públicos y su alcance.</p><a class="button button-primary" href="/app/">Abrir el buscador <span aria-hidden="true">↗</span></a></div>
+      </section>
+    </main>
+    <footer class="site-footer">
+      <div class="page-shell footer-main">
+        <a class="brand brand-footer" href="/desarrollo-seguro/"><img class="brand-logo brand-logo--footer" src="/desarrollo-seguro/assets/desarrollo-seguro-logo-v1.svg" alt="DesarrolloSeguro.org" /></a>
+        <nav aria-label="Navegación del pie">
+          <a href="/desarrollo-seguro/">Inicio</a>
+          <a href="/desarrollo-seguro/metodologia.html">Metodología</a>
+          <a href="/desarrollo-seguro/privacidad.html">Privacidad y alcance</a>
+          <a aria-current="page" href="/desarrollo-seguro/politica-de-privacidad.html">Política de privacidad</a>
+          <a href="/desarrollo-seguro/sello.html">Sello e informes</a>
+          <a href="/app/">Buscador</a>
+        </nav>
+        <a data-ds-verified-badge data-hostname="desarrolloseguro.org" data-token="" hidden></a>
+        <script src="/desarrollo-seguro/badge-widget.js" defer></script>
+      </div>
+      <div class="footer-bottom">© Desarrollo Seguro · desarrolloseguro.org</div>
+    </footer>
+    <script src="/desarrollo-seguro/first-entry-notice.js" defer></script>
+  </body>
+</html>
