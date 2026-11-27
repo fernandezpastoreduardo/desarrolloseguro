@@ -6,6 +6,7 @@ export const PROCESSOR_INVENTORY_HOSTNAME = "grumphya.com" as const;
 export const DEVELOPMENT_SECURITY_INVENTORY_HOSTNAME = "desarrolloseguro.org" as const;
 export const PROCESSOR_INVENTORY_POLICY_URL = "https://grumphya.com/politica-de-privacidad" as const;
 export const DEVELOPMENT_SECURITY_INVENTORY_POLICY_URL = "https://desarrolloseguro.org/desarrollo-seguro/politica-de-privacidad.html" as const;
+const LEGACY_DEVELOPMENT_SECURITY_INVENTORY_POLICY_URL = "https://desarrolloseguro.org/desarrollo-seguro/privacidad.html" as const;
 export const PROCESSOR_INVENTORY_ATTESTATION_KID = "grumphya-release-2026" as const;
 export const DEVELOPMENT_SECURITY_INVENTORY_KID = "desarrolloseguro-source-registry-v1" as const;
 export const PROCESSOR_INVENTORY_MAX_AGE_MS = 24 * 60 * 60 * 1_000;
@@ -37,7 +38,11 @@ export type VerifiedProcessorInventory = {
   hostname: typeof PROCESSOR_INVENTORY_HOSTNAME | typeof DEVELOPMENT_SECURITY_INVENTORY_HOSTNAME;
   deploymentDigest: string;
   inventoryStatus: "complete" | "incomplete";
-  privacyPolicy: { url: typeof PROCESSOR_INVENTORY_POLICY_URL | typeof DEVELOPMENT_SECURITY_INVENTORY_POLICY_URL; revision: string };
+  privacyPolicy: {
+    url: typeof PROCESSOR_INVENTORY_POLICY_URL | typeof DEVELOPMENT_SECURITY_INVENTORY_POLICY_URL |
+      typeof LEGACY_DEVELOPMENT_SECURITY_INVENTORY_POLICY_URL;
+    revision: string;
+  };
   processors: ProcessorDisclosure[];
   attestation: { verified: true; keyId: typeof PROCESSOR_INVENTORY_ATTESTATION_KID | typeof DEVELOPMENT_SECURITY_INVENTORY_KID };
   evidenceSource?: "grumphya_signed_attestation" | "desarrolloseguro_source_registry";
@@ -308,7 +313,8 @@ function isProcessor(value: unknown): value is ProcessorDisclosure {
     isBoundedText(value.purpose, PROCESSOR_INVENTORY_MAX_TEXT_LENGTH) &&
     typeof value.policyUrl === "string" &&
     (value.policyUrl.startsWith(`${PROCESSOR_INVENTORY_POLICY_URL}#`) ||
-      value.policyUrl.startsWith(`${DEVELOPMENT_SECURITY_INVENTORY_POLICY_URL}#`)) &&
+      value.policyUrl.startsWith(`${DEVELOPMENT_SECURITY_INVENTORY_POLICY_URL}#`) ||
+      value.policyUrl.startsWith(`${LEGACY_DEVELOPMENT_SECURITY_INVENTORY_POLICY_URL}#`)) &&
     Array.isArray(value.declaredStatements) && value.declaredStatements.length <= PROCESSOR_INVENTORY_MAX_STATEMENTS &&
     value.declaredStatements.every((statement) => isBoundedText(statement, PROCESSOR_INVENTORY_MAX_TEXT_LENGTH)) &&
     new Set(value.declaredStatements).size === value.declaredStatements.length;
@@ -339,7 +345,8 @@ function isVerifiedProjection(value: unknown): value is VerifiedProcessorInvento
       (!hasSource || value.evidenceSource === "grumphya_signed_attestation")) {
     // Legacy reports did not carry an evidenceSource field.
   } else if (value.hostname === DEVELOPMENT_SECURITY_INVENTORY_HOSTNAME &&
-      value.privacyPolicy.url === DEVELOPMENT_SECURITY_INVENTORY_POLICY_URL &&
+      (value.privacyPolicy.url === DEVELOPMENT_SECURITY_INVENTORY_POLICY_URL ||
+        value.privacyPolicy.url === LEGACY_DEVELOPMENT_SECURITY_INVENTORY_POLICY_URL) &&
       value.attestation.keyId === DEVELOPMENT_SECURITY_INVENTORY_KID &&
       value.evidenceSource === "desarrolloseguro_source_registry" &&
       value.inventoryStatus === "complete") {

@@ -106,6 +106,13 @@ aditiva asociada al informe y protegida por la misma regla de inmutabilidad que
 el resto del informe. Almacena solo la proyección allowlisted y metadatos de
 integridad; nunca se persiste la respuesta cruda ni material de autenticación.
 
+Las lecturas de informes propios ya persistidos deben seguir aceptando la ruta
+de privacidad histórica `/desarrollo-seguro/privacidad.html` además de la ruta
+actual `/desarrollo-seguro/politica-de-privacidad.html`. Esta compatibilidad
+solo permite leer la evidencia inmutable ya guardada; no cambia ni reescribe
+la URL que contiene cada informe ni permite emitir nuevas proyecciones con la
+ruta histórica.
+
 La lectura se realiza mediante un auditor aislado que conserva la clave JWT y
 la clave pública de atestación. Worker y auditor se comunican por un socket
 Unix en un volumen dedicado, con permisos mínimos y protocolo JSONL acotado.

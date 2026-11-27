@@ -74,6 +74,39 @@ describe("verifyProcessorInventory", () => {
     expect(parseProcessorTransparencyAssessment(assessment)).toEqual(assessment);
   });
 
+  it("reads immutable self-domain reports that retain the previous privacy-policy route", () => {
+    const current = assessDevelopmentSecurityProcessorRegistry({
+      deploymentRevision: "a".repeat(40),
+      registryRevision: "v2",
+      processors: [{
+        providerId: "ionos",
+        displayName: "IONOS",
+        product: "VPS",
+        disclosureStatus: "published",
+        purpose: "Alojamiento de la web pública, la API y la base de datos de Desarrollo Seguro.",
+        policyUrl: "https://desarrolloseguro.org/desarrollo-seguro/politica-de-privacidad.html#ionos-hosting",
+        declaredStatements: [
+          "Desarrollo Seguro está alojado en un VPS de IONOS que ejecuta la web pública, la API y la base de datos.",
+        ],
+      }],
+      now,
+    });
+    const legacyRoute = "https://desarrolloseguro.org/desarrollo-seguro/privacidad.html";
+    const historical = {
+      ...current,
+      inventory: {
+        ...current.inventory!,
+        privacyPolicy: { url: legacyRoute, revision: "v2" },
+        processors: current.inventory!.processors.map((processor) => ({
+          ...processor,
+          policyUrl: `${legacyRoute}#ionos-hosting`,
+        })),
+      },
+    };
+
+    expect(parseProcessorTransparencyAssessment(historical)).toEqual(historical);
+  });
+
   it("leaves the self-domain result unknown when no deployment revision is present", () => {
     expect(assessDevelopmentSecurityProcessorRegistry({
       deploymentRevision: "local",

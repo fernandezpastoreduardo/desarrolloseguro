@@ -9,3 +9,5 @@ Para Desarrollo Seguro, el worker usa el registro local y versionado [`developme
 Los destinos que reciben comprobaciones técnicas solicitadas se clasifican como destinos del análisis y no como procesadores de los datos de la aplicación. La consulta autenticada al inventario de Grumphya se activa al analizar Grumphya y no se atribuye a la web pública de Desarrollo Seguro. Ningún dato de OpenAI se afirma mientras el runtime del producto no tenga una integración que le transmita datos.
 
 Una declaración solo aprueba cuando está ligada a una revisión de producción reconocida, se valida con el esquema de inventario y todos los proveedores activos están publicados. Revisión ausente o evidencia no válida queda como `unknown`. Los informes atribuyen el registro propio a Desarrollo Seguro.
+
+El lector también conserva compatibilidad con los informes propios inmutables que enlazaban a `/desarrollo-seguro/privacidad.html`. Esa ruta histórica solo se admite al leer informes guardados; los informes nuevos usan `/desarrollo-seguro/politica-de-privacidad.html`.
