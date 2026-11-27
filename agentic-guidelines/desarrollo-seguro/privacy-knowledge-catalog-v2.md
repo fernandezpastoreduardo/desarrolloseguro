@@ -5,6 +5,10 @@
 
 ## Objetivo
 
+Este documento conserva el alcance histórico de `privacy-knowledge-v2`.
+Las reglas de mapas de calor añadidas después se especifican en
+[`privacy-knowledge-catalog-v3-heatmaps.md`](privacy-knowledge-catalog-v3-heatmaps.md).
+
 Ampliar el catálogo local de Solistos para identificar, con evidencia técnica
 reproducible, un conjunto inicial de servicios de analítica, publicidad,
 publicidad social y gestión del consentimiento en páginas de inicio observadas

@@ -31,6 +31,10 @@
     "./legal-cookie-findings": {
       "types": "./dist/legal-cookie-findings.d.ts",
       "import": "./dist/legal-cookie-findings.js"
+    },
+    "./privacy-score": {
+      "types": "./dist/privacy-score.d.ts",
+      "import": "./dist/privacy-score.js"
     }
   },
   "scripts": {

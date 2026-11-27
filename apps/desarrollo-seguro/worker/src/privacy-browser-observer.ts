@@ -33,7 +33,7 @@ const MAX_RECORDED_NAMES = 200;
 const MAX_PHASE_SNAPSHOT_NAMES = 50;
 const MAX_RECORDED_HOSTS = 200;
 const MAX_PROVIDER_CONTEXTS = Math.min(PRIVACY_BROWSER_BUDGET.individualProviders, PRIVACY_BROWSER_BUDGET.contexts - 4);
-const NONESSENTIAL_TRACKING_CATEGORIES = new Set(["analytics", "advertising", "social"]);
+const NONESSENTIAL_TRACKING_CATEGORIES = new Set(["analytics", "advertising", "social", "heatmap"]);
 
 export type PrivacyBrowserInput = {
   protocolVersion: 1;
@@ -538,19 +538,30 @@ async function runFlow(
     let legacyFinalSnapshot: PrivacyBrowserStateSnapshot | undefined;
     let legacyFlowHosts: Set<string> | undefined;
     let legacyCompletedHosts: Set<string> | undefined;
-    if (action === "reject" && !gate.hasExceededBudget()) {
+    if (action === "accept") {
+      // Preserve the legacy post-choice inventory while recording the reload
+      // as a separate phase. This snapshot does not assert that acceptance
+      // persisted; only rejection has a dedicated persisted-choice check.
+      legacyFinalSnapshot = await captureStateSnapshot(context, page, timeline.elapsed(), MAX_RECORDED_NAMES);
+      legacyFlowHosts = new Set(flowHosts);
+      legacyCompletedHosts = new Set(completedHosts);
+    }
+    if ((action === "accept" || action === "reject") && !gate.hasExceededBudget()) {
       try {
         reloadStartedAtMs = timeline.setPhase("after_reload");
         await page.reload({ waitUntil: "domcontentloaded" });
-        const afterReloadControls = await inspectConsentControls(page);
-        rejectionPersistedAfterReload = !afterReloadControls.some(({ kind }) => kind === "accept" || kind === "reject");
-        legacyFinalSnapshot = await captureStateSnapshot(context, page, timeline.elapsed(), MAX_RECORDED_NAMES);
-        afterReload = limitPhaseSnapshot(legacyFinalSnapshot);
-        legacyFlowHosts = new Set(flowHosts);
-        legacyCompletedHosts = new Set(completedHosts);
-        rejectionChoiceEvidence = await capturePersistedChoiceState(page, gate, timeline);
+        const reloadedSnapshot = await captureStateSnapshot(context, page, timeline.elapsed(), MAX_RECORDED_NAMES);
+        afterReload = limitPhaseSnapshot(reloadedSnapshot);
+        if (action === "reject") {
+          const afterReloadControls = await inspectConsentControls(page);
+          rejectionPersistedAfterReload = !afterReloadControls.some(({ kind }) => kind === "accept" || kind === "reject");
+          legacyFinalSnapshot = reloadedSnapshot;
+          legacyFlowHosts = new Set(flowHosts);
+          legacyCompletedHosts = new Set(completedHosts);
+          rejectionChoiceEvidence = await capturePersistedChoiceState(page, gate, timeline);
+        }
       } catch {
-        rejectionPersistedAfterReload = null;
+        if (action === "reject") rejectionPersistedAfterReload = null;
       }
     }
     return await captureFlow(context, page, {

@@ -56,6 +56,10 @@ describe("assessPrivacyObservation", () => {
     const result = assessPrivacyObservation(observation({ hostname: "talentoypersonas.com", initial }));
     expect(result.score).toBeLessThan(100);
     expect(result.criteria[0]).toMatchObject({ status: "evaluated", confirmedFindings: 2 });
+    expect(result.evidence.cookieAudit).toMatchObject({
+      initial: { complete: true, cookieCount: 1, matchedCookieCount: 1, cookies: [{ name: "_ga", ruleIds: ["google-analytics-cookie-ga-v1"] }] },
+      catalog: [{ ruleId: "google-analytics-cookie-ga-v1", provider: "Google Analytics", category: "analytics", classification: "confirmed" }],
+    });
   });
 
   it("publishes browser counts and separates blocked tracking attempts from received responses", () => {
@@ -101,6 +105,36 @@ describe("assessPrivacyObservation", () => {
     });
   });
 
+  it("keeps a complete cookie inventory evaluable when storage inspection is incomplete", () => {
+    const initial = flow({
+      status: "unknown",
+      storageReadComplete: false,
+      phaseEvidence: {
+        ...flow().phaseEvidence,
+        beforeChoice: {
+          capturedAtMs: 20,
+          cookies: [{ name: "_ga", domain: ".talentoypersonas.com", secure: true, httpOnly: false }],
+          storageKeys: [],
+          cookieReadComplete: true,
+          storageReadComplete: false,
+        },
+        networkRequests: [{
+          phaseAtStart: "before_choice", responsePhase: null, responseAtMs: null, phaseAtCompletion: null,
+          startedAtMs: 10, completedAtMs: null, url: "https://region1.google-analytics.com/g/collect",
+          hostname: "region1.google-analytics.com", method: "POST", resourceType: "fetch", responseStatus: null,
+          blockedByAudit: true, failed: true, sentCookieNames: [], receivedCookieNames: [],
+        }],
+      },
+    });
+    const checks = mergePrivacyBrowserChecks([
+      { controlId: "DS-PRIV-05", status: "unknown", required: true, severity: "medium", observedAt: new Date(), targetPath: "/", method: "GET", summary: "", limitation: "", evidence: {} },
+      { controlId: "DS-PRIV-06", status: "unknown", required: true, severity: "medium", observedAt: new Date(), targetPath: "/", method: "GET", summary: "", limitation: "", evidence: {} },
+    ], observation({ hostname: "talentoypersonas.com", initial }));
+
+    expect(checks[0]).toMatchObject({ status: "fail", evidence: { browserObservationComplete: true, browserCookieCount: 1 } });
+    expect(checks[1]).toMatchObject({ status: "fail", evidence: { browserObservationComplete: true } });
+  });
+
   it("adds complete browser performance metrics to a provisional unknown DS-QUAL-02", () => {
     const performance = {
       profiles: [
@@ -137,7 +171,7 @@ describe("assessPrivacyObservation", () => {
     const performance = {
       profiles: [
         { profile: "mobile", status: "complete", fcpMs: 800, speedIndexMs: 1_000, lcpMs: 1_200, cls: 0.04, tbtMs: 45, ttfbMs: 100, transferBytes: 12_000, score: 94 },
-        { profile: "desktop", status: "unknown", fcpMs: null, speedIndexMs: null, lcpMs: null, cls: null, tbtMs: null, ttfbMs: null, transferBytes: null, score: null },
+        { profile: "desktop", status: "unknown", fcpMs: null, speedIndexMs: null, lcpMs: null, cls: null, tbtMs: null, ttfbMs: null, transferBytes: null, score: null, diagnostic: { code: "required_measurement_missing", missingMetrics: ["fcpMs", "lcpMs"] } },
       ],
     } as const;
     const result = mergePrivacyBrowserChecks([{
@@ -158,6 +192,8 @@ describe("assessPrivacyObservation", () => {
         mobileTtfbMs: 100,
         mobileTransferBytes: 12_000,
         mobileScore: 94,
+        desktopDiagnosticCode: "required_measurement_missing",
+        desktopMissingMetricsMask: 5,
       },
     });
     expect(result[0]?.evidence).not.toHaveProperty("desktopScore");
@@ -252,10 +288,11 @@ describe("assessPrivacyObservation", () => {
       accept: flow({ consentPromptDetected: true, completedHostsAfterChoice: ["www.google-analytics.com"], cookiesAfterChoice }),
       reject: flow({ consentPromptDetected: true, rejectionPersistedAfterReload: true }),
     }));
-    expect(result.evidence).toEqual({
+    expect(result.evidence).toMatchObject({
       cookieNames: cookiesAfterChoice.map(({ name }) => name),
       providers: ["Google Analytics"],
       domains: ["www.google-analytics.com"],
+      cookieAudit: { initial: null, catalog: [], accept: { status: "unknown" }, reject: { status: "unknown" } },
     });
     expect(result.criteria[1]?.status).toBe("evaluated");
     expect(result.criteria[1]?.confirmedFindings).toBe(1);

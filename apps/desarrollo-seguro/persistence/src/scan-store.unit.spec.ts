@@ -583,12 +583,15 @@ describe("PostgresScanStore unit behavior", () => {
       policyVersion: string;
       score: number | null;
       unknownCriteria: number;
+      evidence: { cookieAudit?: unknown };
     };
     expect(persistedPrivacyAssessment).toMatchObject({
-      policyVersion: "privacy-v1",
+      policyVersion: "privacy-v2",
       score: null,
       unknownCriteria: 5,
     });
+    expect(persistedPrivacyAssessment.evidence.cookieAudit).toBeDefined();
+    expect(JSON.stringify(persistedPrivacyAssessment)).not.toContain("secret-value");
   });
 
   it("rejects malformed privacy scores before writing the report", async () => {

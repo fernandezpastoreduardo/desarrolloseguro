@@ -1,4 +1,4 @@
-export const PRIVACY_POLICY_VERSION = "privacy-v1" as const;
+export const PRIVACY_POLICY_VERSION = "privacy-v2" as const;
 
 export const PRIVACY_CRITERIA = [
   { id: "preference-before-tracking", label: "Actividad antes de elegir", weight: 30 },

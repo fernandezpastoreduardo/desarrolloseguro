@@ -604,6 +604,60 @@ $ds-space-block: 40px;
   overflow-wrap: anywhere;
 }
 
+.ds-portal__cookie-audit {
+  margin-top: $ds-space-block;
+  border-top: 1px solid var(--ds-line);
+  padding-top: $ds-space;
+}
+
+.ds-portal__cookie-audit > h4,
+.ds-portal__cookie-flow > h5,
+.ds-portal__cookie-stage > h5 {
+  margin: 0 0 0.5rem;
+}
+
+.ds-portal__cookie-flows {
+  display: grid;
+  gap: $ds-space;
+  margin-top: $ds-space;
+}
+
+.ds-portal__cookie-flow {
+  border: 1px solid var(--ds-line);
+  border-radius: var(--ds-radius);
+  padding: $ds-space-small;
+  background: color-mix(in srgb, var(--ds-canvas) 86%, var(--ds-accent));
+}
+
+.ds-portal__cookie-flow > div {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+  gap: $ds-space-small;
+}
+
+.ds-portal__cookie-stage {
+  min-width: 0;
+  border-top: 2px solid var(--ds-accent);
+  padding-top: 0.65rem;
+}
+
+.ds-portal__cookie-stage p,
+.ds-portal__cookie-stage ul {
+  margin: 0.35rem 0;
+  overflow-wrap: anywhere;
+}
+
+.ds-portal__cookie-stage ul {
+  padding-left: 1.25rem;
+}
+
+.ds-portal__cookie-match {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--ds-muted);
+  font-size: 0.9em;
+}
+
 .ds-portal__internal-audit {
   margin: $ds-space-block 0 0;
   border: 1px solid var(--ds-line);
@@ -1299,6 +1353,18 @@ $ds-space-block: 40px;
   list-style: none;
 }
 
+.ds-portal__category-legal-findings {
+  margin-top: $ds-space-small;
+  border-left: 3px solid var(--ds-danger, #b83b32);
+  padding: 0.6rem 0.75rem;
+  background: color-mix(in srgb, var(--ds-danger, #b83b32) 8%, var(--ds-canvas));
+}
+
+.ds-portal__category-legal-findings ul {
+  margin: 0.45rem 0 0;
+  padding-left: 1.2rem;
+}
+
 .ds-portal__category-evidence li {
   display: grid;
   grid-template-columns: minmax(90px, .45fr) 1fr;
@@ -1738,8 +1804,9 @@ $ds-space-block: 40px;
   background: color-mix(in srgb, var(--ds-paper) 88%, var(--ds-accent));
 }
 
-.ds-portal__beta-chart[data-level="no-observado"] { --ds-chart-color: #c65c49; }
-.ds-portal__beta-chart[data-level="inconclusive"] { --ds-chart-color: #7b8490; }
+.ds-portal__beta-chart[data-level="findings"] { --ds-chart-color: #c65c49; }
+.ds-portal__beta-chart[data-level="unknown"],
+.ds-portal__beta-chart[data-level="not-applicable"] { --ds-chart-color: #7b8490; }
 
 .ds-portal__beta-chart-svg {
   display: block;

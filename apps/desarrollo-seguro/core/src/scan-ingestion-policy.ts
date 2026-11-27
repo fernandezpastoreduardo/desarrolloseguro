@@ -216,6 +216,8 @@ const CONTROLS: Readonly<Record<string, ControlContract>> = {
       mobileTtfbMs: "performance_ms",
       mobileTransferBytes: "performance_bytes",
       mobileScore: "performance_score",
+      mobileDiagnosticCode: ["observation_budget_exhausted", "observation_stopped_early", "request_budget_exceeded", "required_measurement_missing", "browser_timeout", "browser_observation_error"],
+      mobileMissingMetricsMask: "count",
       desktopFcpMs: "performance_ms",
       desktopLcpMs: "performance_ms",
       desktopClsMilli: "performance_cls_milli",
@@ -223,6 +225,8 @@ const CONTROLS: Readonly<Record<string, ControlContract>> = {
       desktopTtfbMs: "performance_ms",
       desktopTransferBytes: "performance_bytes",
       desktopScore: "performance_score",
+      desktopDiagnosticCode: ["observation_budget_exhausted", "observation_stopped_early", "request_budget_exceeded", "required_measurement_missing", "browser_timeout", "browser_observation_error"],
+      desktopMissingMetricsMask: "count",
     },
   },
   "DS-QUAL-01": {

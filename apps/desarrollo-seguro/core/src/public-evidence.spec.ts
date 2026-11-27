@@ -82,4 +82,19 @@ describe("projectPublicEvidence", () => {
       browserTrackingResponseCount: 1,
     });
   });
+
+  it("projects only bounded profile diagnostics for incomplete performance results", () => {
+    expect(projectPublicEvidence("DS-QUAL-02", {
+      desktopDiagnosticCode: "required_measurement_missing",
+      desktopMissingMetricsMask: 68,
+      mobileDiagnosticCode: "browser_timeout",
+      mobileMissingMetricsMask: 255,
+      desktopRuntimeError: "private stack trace",
+    })).toEqual({
+      desktopDiagnosticCode: "required_measurement_missing",
+      desktopMissingMetricsMask: 68,
+      mobileDiagnosticCode: "browser_timeout",
+      mobileMissingMetricsMask: 255,
+    });
+  });
 });

@@ -58,8 +58,18 @@ global ordinaria del MVP junto con la puntuación Ética vigente, que aporta el
 50 % restante. La excepción jurídica de `mvp-global-v2` fija la nota global en
 0 cuando el informe acredita una infracción legal, sin alterar las dos notas
 técnicas. Los informes nuevos usan Ética v5; los históricos conservan la versión que tenían.
-La nota Privacidad no concede, bloquea ni suspende una
-certificación. Se calcula con la política versionada `privacy-v1`:
+La nota Privacidad no concede, bloquea ni suspende una certificación. Los
+informes históricos `privacy-v1` conservan la fórmula y lectura con las que se
+generaron. Los informes nuevos usan `privacy-v2`: muestran la cobertura de sus
+cinco criterios y no publican nota si alguno requerido sigue sin resultado.
+La evidencia de cookies diferencia primera visita, aceptación y rechazo,
+incluyendo la carga previa, el estado posterior al clic y la recarga cuando se
+capturó. Cada fase muestra el total observado y las coincidencias catalogadas;
+puede listar hasta tres ejemplos por fase. La clasificación de mapas de calor
+incluye reglas con fuente oficial, sin inferir venta de datos por la mera
+presencia de un proveedor.
+
+La política histórica `privacy-v1` era:
 
 | Criterio | Peso |
 | --- | ---: |
@@ -69,7 +79,7 @@ certificación. Se calcula con la política versionada `privacy-v1`:
 | Eficacia del rechazo y persistencia | 20 |
 | Controles de proveedores | 20 |
 
-Cada hallazgo confirmado descuenta 0,25 (bajo), 0,5 (medio) o 1 (alto) punto
+En `privacy-v1`, cada hallazgo confirmado descuenta 0,25 (bajo), 0,5 (medio) o 1 (alto) punto
 absoluto, hasta el peso del criterio. Coincidencias dudosas y evidencia
 incompleta por un fallo o límite del auditor quedan como `unknown` y restan
 cero. Los criterios desconocidos se excluyen del denominador; el informe muestra

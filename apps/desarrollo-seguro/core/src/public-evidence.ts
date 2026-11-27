@@ -14,7 +14,8 @@ const PUBLIC_EVIDENCE_FIELDS: Readonly<Record<string, readonly string[]>> = {
     "mobileFcpMs", "mobileSpeedIndexMs", "mobileScoreModelVersion", "mobileLcpMs", "mobileClsMilli", "mobileTbtMs", "mobileTtfbMs",
     "mobileTransferBytes", "mobileScore", "desktopFcpMs", "desktopLcpMs",
     "desktopClsMilli", "desktopTbtMs", "desktopTtfbMs", "desktopTransferBytes",
-    "desktopScore", "probeErrorCode",
+    "desktopScore", "mobileDiagnosticCode", "mobileMissingMetricsMask",
+    "desktopDiagnosticCode", "desktopMissingMetricsMask", "probeErrorCode",
   ],
 };
 
@@ -31,6 +32,8 @@ const PUBLIC_EVIDENCE_ENUMS: Readonly<Record<string, readonly string[]>> = {
   finalScheme: ["http", "https"],
   policyLanguageCatalogVersion: ["public-policy-language-eea-v1"],
   mobileScoreModelVersion: ["lighthouse-13.6.0"],
+  mobileDiagnosticCode: ["observation_budget_exhausted", "observation_stopped_early", "request_budget_exceeded", "required_measurement_missing", "browser_timeout", "browser_observation_error"],
+  desktopDiagnosticCode: ["observation_budget_exhausted", "observation_stopped_early", "request_budget_exceeded", "required_measurement_missing", "browser_timeout", "browser_observation_error"],
   requestedHostname: ["grumphya.com", "www.grumphya.com"],
   finalHostname: ["grumphya.com", "www.grumphya.com"],
   canonicalHostname: ["grumphya.com", "www.grumphya.com"],

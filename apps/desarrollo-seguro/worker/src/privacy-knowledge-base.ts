@@ -1,9 +1,9 @@
-export const PRIVACY_KNOWLEDGE_BASE_VERSION = "privacy-knowledge-v1" as const;
+export const PRIVACY_KNOWLEDGE_BASE_VERSION = "privacy-knowledge-v3" as const;
 
 export type PrivacySignalType = "cookie_name" | "storage_key" | "request_host" | "script_url" | "cmp_vendor";
 export type PrivacyRuleMatch = "exact" | "prefix";
 export type PrivacyRuleConfidence = "high" | "medium" | "low";
-export type PrivacyRuleCategory = "analytics" | "advertising" | "social" | "consent" | "other";
+export type PrivacyRuleCategory = "analytics" | "advertising" | "social" | "heatmap" | "consent" | "other";
 
 export type PrivacyKnowledgeRule = {
   ruleId: string;
@@ -71,7 +71,7 @@ function matchesRule(signal: PrivacyObservedSignal, rule: PrivacyKnowledgeRule):
   if (!value || !pattern) return false;
   if (rule.match === "exact") return value === pattern;
   if (signal.signalType === "request_host" || signal.signalType === "script_url") {
-    return value.endsWith(`.${pattern}`);
+    return value === pattern || value.endsWith(`.${pattern}`);
   }
   return value.startsWith(pattern);
 }

@@ -4,7 +4,10 @@ import { PRIVACY_KNOWLEDGE_RULES } from "./privacy-knowledge-catalog.js";
 import { matchPrivacySignal } from "./privacy-knowledge-base.js";
 import type { PrivacyBrowserObservation } from "./privacy-browser-observer.js";
 
-const TRACKING_CATEGORIES = new Set(["analytics", "advertising", "social"]);
+const TRACKING_CATEGORIES = new Set(["analytics", "advertising", "social", "heatmap"]);
+const PERFORMANCE_DIAGNOSTIC_FIELDS = [
+  "fcpMs", "speedIndexMs", "lcpMs", "cls", "tbtMs", "ttfbMs", "transferBytes", "score",
+] as const;
 
 /** Projects bounded browser observations into public cookie and tracker controls. */
 export function mergePrivacyBrowserChecks(
@@ -21,8 +24,10 @@ export function mergePrivacyBrowserChecks(
   const trackingRequests = thirdPartyRequests.filter(({ hostname }) =>
     matchPrivacySignal({ signalType: "request_host", value: hostname, observedHostname: hostname }, PRIVACY_KNOWLEDGE_RULES)
       .some(({ classification, category }) => classification === "confirmed" && TRACKING_CATEGORIES.has(category)));
-  const cookieReadComplete = flow.status === "evaluated" && snapshot?.cookieReadComplete === true;
-  const networkReadComplete = flow.status === "evaluated" && flow.phaseEvidence.networkRequestsComplete;
+  // Each evidence source has its own coverage. A failed storage snapshot must
+  // not erase a complete cookie inventory or a complete request timeline.
+  const cookieReadComplete = flow.pageLoaded && snapshot?.cookieReadComplete === true;
+  const networkReadComplete = flow.pageLoaded && snapshot !== null && flow.phaseEvidence.networkRequestsComplete;
   const cookies = cookieReadComplete ? snapshot.cookies : [];
   const catalogMatchCount = cookies.filter((cookie) =>
     matchPrivacySignal({
@@ -48,15 +53,24 @@ export function mergePrivacyBrowserChecks(
   return checks.map((check) => {
     if (check.controlId === "DS-QUAL-02" && observation.performance) {
       const profileEvidence = Object.fromEntries(observation.performance.profiles.flatMap((profile) => {
-        if (profile.status !== "complete") return [];
         const prefix = profile.profile;
-        return [
+        const metricEvidence = profile.status === "complete" ? [
           [`${prefix}FcpMs`, profile.fcpMs], ...(prefix === "mobile" ? [["mobileSpeedIndexMs", profile.speedIndexMs] as const] : []),
           [`${prefix}LcpMs`, profile.lcpMs],
           [`${prefix}ClsMilli`, profile.cls === null ? null : Math.round(profile.cls * 1_000)],
           [`${prefix}TbtMs`, profile.tbtMs], [`${prefix}TtfbMs`, profile.ttfbMs],
           [`${prefix}TransferBytes`, profile.transferBytes], [`${prefix}Score`, profile.score],
-        ].filter(([, value]) => typeof value === "number") as Array<[string, number | string]>;
+        ].filter(([, value]) => typeof value === "number") as Array<[string, number | string]> : [];
+        if (!profile.diagnostic) return metricEvidence;
+        const missingMask = (profile.diagnostic.missingMetrics ?? []).reduce((mask, field) => {
+          const index = PERFORMANCE_DIAGNOSTIC_FIELDS.indexOf(field);
+          return index < 0 ? mask : mask | (1 << index);
+        }, 0);
+        return [
+          ...metricEvidence,
+          [`${prefix}DiagnosticCode`, profile.diagnostic.code],
+          [`${prefix}MissingMetricsMask`, missingMask],
+        ];
       }));
       if (observation.performance.profiles[0]?.status === "complete") {
         profileEvidence.mobileScoreModelVersion = "lighthouse-13.6.0";

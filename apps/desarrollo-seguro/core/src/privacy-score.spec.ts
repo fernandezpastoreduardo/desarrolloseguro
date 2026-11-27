@@ -79,16 +79,24 @@ describe("assessPrivacy", () => {
     expect(result.score).toBe(70);
   });
 
-  it("excludes unknown criteria from the partial score denominator", () => {
+  it("withholds the dimension score when any required criterion is unknown", () => {
     const input = criteria();
     input[0]!.status = "unknown";
 
     const result = assessPrivacy({ criteria: input });
 
-    expect(result.score).toBe(100);
+    expect(result.score).toBeNull();
     expect(result.assessedCriteria).toBe(4);
     expect(result.unknownCriteria).toBe(1);
     expect(result.criteria[0]!.awarded).toBeNull();
+  });
+
+  it("continues to parse privacy-v1 historical partial scores without reinterpreting them", () => {
+    const rows = criteria();
+    rows[0]!.status = "unknown";
+    const result = assessPrivacy({ criteria: rows });
+    const historical = { ...result, policyVersion: "privacy-v1", score: 100 };
+    expect(parsePrivacyAssessment(historical)).toMatchObject({ policyVersion: "privacy-v1", score: 100 });
   });
 
   it("does not penalize unconfirmed findings and treats duplicate criterion rows as unknown", () => {
@@ -101,7 +109,7 @@ describe("assessPrivacy", () => {
 
     const withDuplicateCriterion = assessPrivacy({ criteria: [...input, input[0]] });
     expect(withDuplicateCriterion.criteria[0]!.status).toBe("unknown");
-    expect(withDuplicateCriterion.score).toBe(100);
+    expect(withDuplicateCriterion.score).toBeNull();
     expect(withDuplicateCriterion.assessedCriteria).toBe(4);
   });
 
@@ -130,7 +138,7 @@ describe("assessPrivacy", () => {
 
     expect(result.criteria[0]!.status).toBe("unknown");
     expect(result.criteria[0]!.deduction).toBeNull();
-    expect(result.score).toBe(100);
+    expect(result.score).toBeNull();
   });
 
   it("returns an unknown score when no criterion could be evaluated", () => {

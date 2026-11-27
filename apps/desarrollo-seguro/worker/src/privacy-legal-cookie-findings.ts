@@ -3,7 +3,7 @@ import { matchPrivacySignal } from "./privacy-knowledge-base.js";
 import { PRIVACY_KNOWLEDGE_RULES } from "./privacy-knowledge-catalog.js";
 import type { PrivacyBrowserFlowObservation, PrivacyBrowserObservation, PrivacyBrowserStateSnapshot } from "./privacy-browser-observer.js";
 
-const TRACKING_CATEGORIES = new Set(["analytics", "advertising", "social"]);
+const TRACKING_CATEGORIES = new Set(["analytics", "advertising", "social", "heatmap"]);
 const LSSI_URL = "https://www.boe.es/buscar/act.php?id=BOE-A-2002-13758";
 
 /** Builds a separate LSSI finding set solely from directly observed, phase-specific cookie evidence. */

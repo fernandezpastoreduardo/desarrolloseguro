@@ -3,6 +3,7 @@ import { parseFirstEntryPolicyAccess, type FirstEntryPolicyAccess } from "@desar
 import { parseLegalCookieFindings, type LegalCookieFinding } from "@desarrolloseguro/core/legal-cookie-findings";
 import { parsePublicServiceComparison } from "@desarrolloseguro/core/public-service-comparison";
 import { parseScanTargetUrl } from "@desarrolloseguro/core/scan-target-url";
+import { parsePrivacyAssessment, type PrivacyAssessment } from "@desarrolloseguro/core/privacy-score";
 import { parsePublicAuditProgress, type PublicAuditAspect, type PublicAuditProgress } from "@desarrolloseguro/core/public-audit-progress";
 import { PUBLIC_SERVICE_PROVIDER_INFO } from "@desarrolloseguro/core/public-service-catalog";
 import { FirstEntryNotice } from "../first-entry-notice/first-entry-notice.js";
@@ -100,9 +101,9 @@ const REPORT_CATEGORIES = [
   { id: "performance", label: "Rendimiento", description: "Mide esta página con Lighthouse en móvil simulado y con una prueba propia en escritorio.", criteria: ["performance"], controls: ["DS-QUAL-02"] },
 ] as const;
 const BETA_EVALUATION_LEVELS = [
-  { id: "observed", label: "Observado", statuses: ["pass"] },
-  { id: "not-observed", label: "No observado", statuses: ["fail"] },
-  { id: "review", label: "En revisión", statuses: ["unknown"] },
+  { id: "passed", label: "Superadas", statuses: ["pass"] },
+  { id: "findings", label: "Incumplimientos detectados", statuses: ["fail"] },
+  { id: "unknown", label: "Sin resultado", statuses: ["unknown"] },
   { id: "not-applicable", label: "No aplica", statuses: ["not_applicable"] },
 ] as const;
 const CRITERION_EXPLANATIONS: Record<string, string> = {
@@ -153,6 +154,8 @@ const EVIDENCE_LABELS: Record<string, string> = {
   mobileScore: "Móvil · puntuación", desktopFcpMs: "Escritorio · FCP", desktopLcpMs: "Escritorio · LCP",
   desktopClsMilli: "Escritorio · CLS", desktopTbtMs: "Escritorio · TBT", desktopTtfbMs: "Escritorio · TTFB",
   desktopTransferBytes: "Escritorio · Datos transferidos", desktopScore: "Escritorio · puntuación",
+  mobileDiagnosticCode: "Móvil · causa de medición incompleta", mobileMissingMetricsMask: "Móvil · métricas ausentes",
+  desktopDiagnosticCode: "Escritorio · causa de medición incompleta", desktopMissingMetricsMask: "Escritorio · métricas ausentes",
 };
 
 type PortalState = "idle" | "loading" | "ready" | "error";
@@ -319,25 +322,7 @@ type PublicReport = {
     reasons: string[];
     interpretation: string;
   };
-  privacyAssessment?: {
-    policyVersion: "privacy-v1";
-    score: number | null;
-    assessedCriteria: number;
-    unknownCriteria: number;
-    notApplicableCriteria: number;
-    totalCriteria: number;
-    evidence: { cookieNames: string[]; providers: string[]; domains: string[] };
-    criteria: Array<{
-      id: string;
-      label: string;
-      status: "evaluated" | "unknown" | "not_applicable";
-      weight: number;
-      deduction: number | null;
-      awarded: number | null;
-      confirmedFindings: number;
-      unknownFindings: number;
-    }>;
-  } | null;
+  privacyAssessment?: PrivacyAssessment | null;
   processorTransparencyAssessment: PublicProcessorTransparencyAssessment | null;
   publicPolicyTransparencyAssessment: PublicPolicyTransparencyAssessment | null;
   publicServiceComparison?: PublicServiceComparison | null;
@@ -1130,6 +1115,11 @@ function ReportSummary({
 }) {
   const isCurrent = state === "fresh";
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
+  const ethicsStatusCounts = {
+    pass: report.ethicsAssessment.criteria.filter(({ status }) => status === "pass").length,
+    fail: report.ethicsAssessment.criteria.filter(({ status }) => status === "fail").length,
+    unknown: report.ethicsAssessment.criteria.filter(({ status }) => status === "unknown").length,
+  };
 
   return (
     <>
@@ -1146,16 +1136,18 @@ function ReportSummary({
         <p className="ds-portal__ethics-score">
           <strong>Ética</strong><br />
           {report.ethicsAssessment.score === null
-            ? `En revisión · ${report.ethicsAssessment.assessedCriteria} de ${report.ethicsAssessment.totalCriteria} comprobaciones completas`
-            : `${report.ethicsAssessment.score}/100 · ${report.ethicsAssessment.assessedCriteria} de ${report.ethicsAssessment.totalCriteria} comprobaciones completas`}
+            ? `En revisión · ${ethicsStatusCounts.pass} superadas · ${ethicsStatusCounts.fail} incumplimientos detectados · ${ethicsStatusCounts.unknown} sin resultado`
+            : `${report.ethicsAssessment.score}/100 · ${ethicsStatusCounts.pass} superadas · ${ethicsStatusCounts.fail} incumplimientos detectados · ${ethicsStatusCounts.unknown} sin resultado`}
         </p>
         <BetaEvaluationCharts criteria={report.ethicsAssessment.criteria} />
         <div className="ds-portal__report-categories">
           {REPORT_CATEGORIES.map((category) => {
             const aspectProgress = state === "updating" ? auditProgress?.aspects[category.id as PublicAuditAspect] ?? "pending" : null;
-            const criteria = report.ethicsAssessment.criteria.filter((criterion) =>
-              (category.criteria as readonly string[]).includes(criterion.id),
-            );
+            const criteria = category.id === "privacy" && report.privacyAssessment
+              ? report.privacyAssessment.criteria.map(toPublicCriterion)
+              : report.ethicsAssessment.criteria.filter((criterion) =>
+                (category.criteria as readonly string[]).includes(criterion.id),
+              );
             const visibleCriteria = category.id === "security"
               ? (category.criteria as readonly string[])
                 .map((criterionId) => criteria.find((criterion) => criterion.id === criterionId))
@@ -1171,6 +1163,12 @@ function ReportSummary({
                 { label: "Ordenador", score: getPerformanceProfileScore(report.checks, "desktop") },
               ]
               : [];
+            const privacyScoreApplies = category.id === "privacy" && report.privacyAssessment !== null && report.privacyAssessment !== undefined;
+            const categoryScoreLabel = privacyScoreApplies
+              ? getPrivacyAssessmentScoreLabel(report.privacyAssessment!)
+              : performanceScoreApplies
+                ? getPerformanceScoreLabel(performanceScore)
+                : getCategoryScoreLabel(criteria);
             const isExpanded = activeCategoryId === category.id;
             return (
               <section
@@ -1182,14 +1180,17 @@ function ReportSummary({
                 <div className="ds-portal__category-heading">
                   <div>
                     <h4>{"cardTitle" in category ? category.cardTitle : category.label}</h4>
-                    <strong>{performanceScoreApplies
-                      ? getPerformanceScoreLabel(performanceScore)
-                      : getCategoryScoreLabel(criteria)}</strong>
+                    <strong>{categoryScoreLabel}</strong>
                   </div>
                   <CategoryScoreRing
                     label={category.label}
                     criteria={criteria}
-                    scoreOverride={performanceScoreApplies ? performanceScore : undefined}
+                    scoreOverride={performanceScoreApplies
+                      ? performanceScore
+                      : privacyScoreApplies ? report.privacyAssessment!.score : undefined}
+                    coverageOverride={privacyScoreApplies
+                      ? { assessedCriteria: report.privacyAssessment!.assessedCriteria, totalCriteria: report.privacyAssessment!.totalCriteria }
+                      : undefined}
                   />
                 </div>
                 {performanceScoreApplies && (
@@ -1217,6 +1218,14 @@ function ReportSummary({
                       ))}
                   </ul>
                 )}
+                {category.id === "ethics" && (report.legalCookieFindings?.length ?? 0) > 0 && (
+                  <div className="ds-portal__category-legal-findings">
+                    <strong>{report.legalCookieFindings!.length} incumplimientos legales acreditados</strong>
+                    <ul>
+                      {report.legalCookieFindings!.map((finding) => <li key={finding.ruleId}>{finding.title}</li>)}
+                    </ul>
+                  </div>
+                )}
                 <button
                   className="ds-portal__category-more"
                   type="button"
@@ -1239,9 +1248,11 @@ function ReportSummary({
             (category) => category.id === activeCategoryId,
           );
           if (!activeCategory) return null;
-          const activeCriteria = report.ethicsAssessment.criteria.filter((criterion) =>
-            (activeCategory.criteria as readonly string[]).includes(criterion.id),
-          );
+          const activeCriteria = activeCategory.id === "privacy" && report.privacyAssessment
+            ? report.privacyAssessment.criteria.map(toPublicCriterion)
+            : report.ethicsAssessment.criteria.filter((criterion) =>
+              (activeCategory.criteria as readonly string[]).includes(criterion.id),
+            );
           const activeChecks = report.checks.filter((check) =>
             (activeCategory.controls as readonly string[]).includes(check.controlId),
           );
@@ -1302,15 +1313,16 @@ function ReportSummary({
           <p className="ds-portal__eyebrow">Nota independiente</p>
           <h3 id="privacy-summary-heading">Privacidad</h3>
           <p>
-            {report.privacyAssessment.score === null
-              ? `Sin puntuación: falta evidencia del navegador · ${report.privacyAssessment.assessedCriteria} de ${report.privacyAssessment.totalCriteria} criterios evaluados · ${report.privacyAssessment.unknownCriteria} desconocidos · ${report.privacyAssessment.notApplicableCriteria} no aplican`
-              : `${report.privacyAssessment.score}/100 · ${report.privacyAssessment.assessedCriteria} de ${report.privacyAssessment.totalCriteria} criterios evaluados · ${report.privacyAssessment.unknownCriteria} desconocidos · ${report.privacyAssessment.notApplicableCriteria} no aplican`}
+            {getPrivacyAssessmentScoreLabel(report.privacyAssessment)}
           </p>
           <dl className="ds-portal__privacy-evidence">
             <div><dt>Cookies observadas</dt><dd>{report.privacyAssessment.evidence.cookieNames.join(", ") || "Ninguna detectada"}</dd></div>
             <div><dt>Proveedores identificados</dt><dd>{report.privacyAssessment.evidence.providers.join(", ") || "Ninguno identificado"}</dd></div>
             <div><dt>Dominios de terceros</dt><dd>{report.privacyAssessment.evidence.domains.join(", ") || "Ninguno observado"}</dd></div>
           </dl>
+          {report.privacyAssessment.evidence.cookieAudit && (
+            <PrivacyCookieAuditSection audit={report.privacyAssessment.evidence.cookieAudit} />
+          )}
         </section>
       )}
       <div className="ds-portal__verdict" data-verdict={report.verdict}>
@@ -1768,6 +1780,76 @@ function FirstEntryPolicyAccessSection({ access }: { access: FirstEntryPolicyAcc
   );
 }
 
+function PrivacyCookieAuditSection({ audit }: { audit: NonNullable<PrivacyAssessment["evidence"]["cookieAudit"]> }) {
+  const catalog = new Map(audit.catalog.map((entry) => [entry.ruleId, entry]));
+  const renderSnapshot = (label: string, snapshot: NonNullable<PrivacyAssessment["evidence"]["cookieAudit"]>["initial"]) => (
+    <article className="ds-portal__cookie-stage" key={label}>
+      <h5>{label}</h5>
+      <p>{snapshot === null
+        ? "Sin resultado: el auditor no capturó esta etapa."
+        : snapshot.complete
+          ? `${snapshot.cookieCount} ${snapshot.cookieCount === 1 ? "cookie" : "cookies"} observadas; ${snapshot.matchedCookieCount} coincidencias de catálogo${snapshot.matchedCookieCount > snapshot.cookies.length ? ` (se muestran ${snapshot.cookies.length})` : ""}`
+          : "Inventario incompleto; el recuento total no está disponible."}</p>
+      {snapshot?.cookies.length ? (
+        <ul>
+          {snapshot.cookies.map((cookie) => (
+            <li key={`${cookie.name}-${cookie.domain}`}>
+              <strong>{cookie.name}</strong> · {cookie.domain}
+              {cookie.ruleIds.map((ruleId) => {
+                const entry = catalog.get(ruleId);
+                if (!entry) return null;
+                return (
+                  <span className="ds-portal__cookie-match" key={ruleId}>
+                    {entry.classification === "confirmed" ? entry.provider : "Proveedor sin confirmar"} · {getCookieCategoryLabel(entry.category)} · {entry.purpose}
+                    {" "}<a href={entry.sourceUrl} target="_blank" rel="noopener noreferrer">Fuente oficial</a>
+                  </span>
+                );
+              })}
+            </li>
+          ))}
+        </ul>
+      ) : snapshot?.complete ? <p>No se identificaron coincidencias de catálogo en esta etapa.</p> : null}
+    </article>
+  );
+
+  const flows = [
+    { heading: "Primera visita", snapshots: [renderSnapshot("Antes de elegir", audit.initial)] },
+    { heading: "Rechazo · perfil limpio", snapshots: [
+      renderSnapshot("Antes del rechazo", audit.reject.beforeChoice),
+      renderSnapshot("Después de rechazar", audit.reject.afterChoice),
+      renderSnapshot("Después de recargar", audit.reject.afterReload),
+    ] },
+    { heading: "Aceptación · perfil limpio", snapshots: [
+      renderSnapshot("Antes de aceptar", audit.accept.beforeChoice),
+      renderSnapshot("Después de aceptar", audit.accept.afterChoice),
+      renderSnapshot("Después de recargar", audit.accept.afterReload),
+    ] },
+  ];
+
+  return (
+    <section className="ds-portal__cookie-audit" aria-labelledby="cookie-audit-heading">
+      <h4 id="cookie-audit-heading">Cookies antes y después de elegir</h4>
+      <p>Los flujos de aceptar y rechazar usan visitas independientes con almacenamiento limpio. Se muestran cantidades por etapa; las cookies catalogadas aparecen con su proveedor, finalidad y fuente.</p>
+      <div className="ds-portal__cookie-flows">
+        {flows.map(({ heading, snapshots }) => (
+          <section className="ds-portal__cookie-flow" key={heading}>
+            <h5>{heading}</h5>
+            <div>{snapshots}</div>
+          </section>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function getCookieCategoryLabel(category: string): string {
+  const labels: Record<string, string> = {
+    analytics: "Analítica", advertising: "Publicidad", social: "Redes sociales", consent: "Consentimiento",
+    heatmap: "Mapa de calor", other: "Otros servicios",
+  };
+  return labels[category] ?? "Servicio catalogado";
+}
+
 function LegalCookieFindingsSection({ findings }: { findings: LegalCookieFinding[] }) {
   return (
     <section className="ds-portal__provider-contradiction" aria-labelledby="legal-cookie-findings-heading">
@@ -2053,6 +2135,12 @@ function GlobalScoreRing({ score, status }: { score: number | null; status: Publ
 }
 
 function BetaEvaluationCharts({ criteria }: { criteria: PublicEthicsCriterion[] }) {
+  const counts = {
+    pass: criteria.filter(({ status }) => status === "pass").length,
+    fail: criteria.filter(({ status }) => status === "fail").length,
+    unknown: criteria.filter(({ status }) => status === "unknown").length,
+    notApplicable: criteria.filter(({ status }) => status === "not_applicable").length,
+  };
   return (
     <section className="ds-portal__beta-evaluation" aria-labelledby="beta-evaluation-heading">
       <div className="ds-portal__beta-evaluation-heading">
@@ -2060,7 +2148,10 @@ function BetaEvaluationCharts({ criteria }: { criteria: PublicEthicsCriterion[] 
           <p className="ds-portal__eyebrow">Lectura beta</p>
           <h3 id="beta-evaluation-heading">Niveles de evaluación</h3>
         </div>
-        <p>La lectura separa lo observado, lo que no se observó y lo que todavía no tiene evidencia suficiente.</p>
+        <p>
+          {counts.pass} superadas · {counts.fail} incumplimientos detectados · {counts.unknown} sin resultado · {counts.notApplicable} no aplican.
+          {" "}Un incumplimiento detectado significa que la comprobación se ejecutó y falló; sin resultado significa que no pudo completarse.
+        </p>
       </div>
       <div className="ds-portal__beta-charts">
         {BETA_EVALUATION_LEVELS.map((level) => {
@@ -2146,16 +2237,20 @@ function CategoryScoreRing({
   label,
   criteria,
   scoreOverride,
+  coverageOverride,
 }: {
   label: string;
   criteria: PublicEthicsCriterion[];
   scoreOverride?: number | null;
+  coverageOverride?: { assessedCriteria: number; totalCriteria: number };
 }) {
   const { ref, isVisible } = useRevealOnView<HTMLDivElement>();
   const categoryScore = getCategoryScore(criteria);
   const score = scoreOverride === undefined ? categoryScore.score : scoreOverride;
-  const assessedCriteria = scoreOverride === undefined ? categoryScore.assessedCriteria : score === null ? 0 : 1;
-  const totalCriteria = scoreOverride === undefined ? categoryScore.totalCriteria : 1;
+  const assessedCriteria = coverageOverride?.assessedCriteria ??
+    (scoreOverride === undefined ? categoryScore.assessedCriteria : score === null ? 0 : 1);
+  const totalCriteria = coverageOverride?.totalCriteria ??
+    (scoreOverride === undefined ? categoryScore.totalCriteria : 1);
   const value = score ?? 0;
   const radius = 30;
   const circumference = 2 * Math.PI * radius;
@@ -2531,9 +2626,11 @@ function isInternalAuditPublicSummary(value: unknown): value is InternalAuditPub
     : criteria.every((item) => isRecord(item) && item.status === "unknown");
 }
 
-function isPrivacyAssessment(value: unknown): value is NonNullable<PublicReport["privacyAssessment"]> | null | undefined {
+function isPrivacyAssessment(value: unknown): value is PrivacyAssessment | null | undefined {
   if (value === null || value === undefined) return true;
-  if (!isRecord(value) || value.policyVersion !== "privacy-v1" ||
+  if (!isRecord(value)) return false;
+  if (value.policyVersion === "privacy-v2") return parsePrivacyAssessment(value) !== null;
+  if (value.policyVersion !== "privacy-v1" ||
       (value.score !== null && !isBoundedScore(value.score)) ||
       !isInteger(value.assessedCriteria) || !isInteger(value.unknownCriteria) ||
       !isInteger(value.notApplicableCriteria) || value.totalCriteria !== 5 ||
@@ -2617,20 +2714,6 @@ function isGlobalAssessmentConsistent(
     privacy.assessedCriteria + privacy.notApplicableCriteria === privacy.totalCriteria;
   if (!complete) return global.status === "review" && global.score === null;
   return global.status === "scored" && global.score === Math.round((ethics.score! + privacy.score!) / 2);
-}
-
-function isEvidenceNames(value: unknown, maxLength: number): value is string[] {
-  return Array.isArray(value) && value.length <= 100 && value.every((item) =>
-    typeof item === "string" && item.length > 0 && item.length <= maxLength && isCleanEvidenceText(item),
-  ) && new Set(value).size === value.length;
-}
-
-function isCleanEvidenceText(value: string): boolean {
-  for (let index = 0; index < value.length; index += 1) {
-    const code = value.charCodeAt(index);
-    if (code <= 31 || code === 127) return false;
-  }
-  return true;
 }
 
 function isPublicReportHistory(value: unknown): value is PublicReportHistoryEntry[] {
@@ -2786,6 +2869,20 @@ function isProcessorDisclosure(value: unknown): value is PublicProcessorDisclosu
 
 function isInteger(value: unknown): value is number {
   return typeof value === "number" && Number.isInteger(value);
+}
+
+function isEvidenceNames(value: unknown, maxLength: number): value is string[] {
+  return Array.isArray(value) && value.length <= 100 && value.every((item) =>
+    typeof item === "string" && item.length > 0 && item.length <= maxLength && isCleanEvidenceText(item),
+  ) && new Set(value).size === value.length;
+}
+
+function isCleanEvidenceText(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code <= 31 || code === 127) return false;
+  }
+  return true;
 }
 
 function isBoundedScore(value: unknown): value is number {
@@ -2974,6 +3071,21 @@ function getCategoryScoreLabel(criteria: Array<{ status: string; weight: number 
     return `${categoryScore.score}/100 provisional · ${coverage}`;
   }
   return `${categoryScore.score}/100 · ${coverage}`;
+}
+
+function getPrivacyAssessmentScoreLabel(assessment: PrivacyAssessment): string {
+  const coverage = `${assessment.assessedCriteria} de ${assessment.totalCriteria} criterios evaluados`;
+  const pending = `${assessment.unknownCriteria} sin resultado · ${assessment.notApplicableCriteria} no aplican`;
+  if (assessment.score === null) return `Sin puntuación · ${coverage} · ${pending}`;
+  const provisional = assessment.policyVersion === "privacy-v1" && assessment.unknownCriteria > 0;
+  return `${assessment.score}/100${provisional ? " provisional" : ""} · ${coverage} · ${pending}`;
+}
+
+function toPublicCriterion(criterion: PrivacyAssessment["criteria"][number]): PublicEthicsCriterion {
+  const status: CheckStatus = criterion.status === "evaluated"
+    ? criterion.confirmedFindings > 0 ? "fail" : criterion.unknownFindings > 0 ? "unknown" : "pass"
+    : criterion.status;
+  return { id: criterion.id, label: criterion.label, weight: criterion.weight, status };
 }
 
 function getPerformanceScore(checks: PublicCheck[]): number | null {
@@ -3185,8 +3297,24 @@ function getCriterionEvidenceSummary(
         const score = getPerformanceScore(checks);
         const mobileScore = number("mobileScore");
         const desktopScore = number("desktopScore");
+        const diagnostic = (profile: "mobile" | "desktop") => {
+          const code = text(`${profile}DiagnosticCode`);
+          const mask = number(`${profile}MissingMetricsMask`);
+          if (!code) return `${profile === "mobile" ? "Móvil" : "Escritorio"}: sin diagnóstico publicado`;
+          const codeLabels: Record<string, string> = {
+            observation_budget_exhausted: "se agotó el presupuesto de observación",
+            observation_stopped_early: "la observación terminó antes de tiempo",
+            request_budget_exceeded: "se alcanzó el límite de solicitudes",
+            required_measurement_missing: "faltan mediciones obligatorias",
+            browser_timeout: "Chromium agotó el tiempo de espera",
+            browser_observation_error: "falló la observación en Chromium",
+          };
+          const metricLabels = ["FCP", "Speed Index", "LCP", "CLS", "TBT", "TTFB", "datos transferidos", "puntuación"];
+          const missing = metricLabels.filter((_, index) => mask !== null && (mask & (1 << index)) !== 0);
+          return `${profile === "mobile" ? "Móvil" : "Escritorio"}: ${codeLabels[code] ?? "falló la observación"}${missing.length ? `; faltan ${missing.join(", ")}` : ""}`;
+        };
         return score === null
-          ? `Medición incompleta: móvil ${mobileScore === null ? "sin puntuación" : `${mobileScore}/100`}; escritorio ${desktopScore === null ? "sin puntuación" : `${desktopScore}/100`}. No se calcula la media si falta un dato requerido.`
+          ? `Medición incompleta: móvil ${mobileScore === null ? "sin puntuación" : `${mobileScore}/100`}; escritorio ${desktopScore === null ? "sin puntuación" : `${desktopScore}/100`}. ${diagnostic("mobile")}. ${diagnostic("desktop")}. No se calcula la media si falta un dato requerido.`
           : `Móvil ${mobileScore}/100 con Lighthouse 13.6.0 y escritorio ${desktopScore}/100; nota media ${score}/100.`;
       }
       const responseTime = number("responseTimeMs");
@@ -3299,6 +3427,22 @@ function formatEvidenceValue(value: string | number | boolean, key: string): str
     if (key === "mobileClsMilli" || key === "desktopClsMilli") return new Intl.NumberFormat("es-ES", { minimumFractionDigits: 3, maximumFractionDigits: 3 }).format(value / 1_000);
     if (key === "mobileTransferBytes" || key === "desktopTransferBytes") return `${new Intl.NumberFormat("es-ES").format(value)} bytes (${formatByteCount(value)})`;
     if (key === "mobileScore" || key === "desktopScore") return `${value}/100`;
+    if (key.endsWith("MissingMetricsMask")) {
+      const metricLabels = ["FCP", "Speed Index", "LCP", "CLS", "TBT", "TTFB", "datos transferidos", "puntuación"];
+      const missing = metricLabels.filter((_, index) => (value & (1 << index)) !== 0);
+      return missing.length ? missing.join(", ") : "ninguna";
+    }
+    if (key.endsWith("DiagnosticCode")) {
+      const labels: Record<number | string, string> = {
+        observation_budget_exhausted: "presupuesto de observación agotado",
+        observation_stopped_early: "observación detenida antes de tiempo",
+        request_budget_exceeded: "límite de solicitudes alcanzado",
+        required_measurement_missing: "faltan mediciones obligatorias",
+        browser_timeout: "tiempo de espera de Chromium agotado",
+        browser_observation_error: "error de observación de Chromium",
+      };
+      return labels[value] ?? value;
+    }
     return String(value);
   }
   const labels: Record<string, string> = {

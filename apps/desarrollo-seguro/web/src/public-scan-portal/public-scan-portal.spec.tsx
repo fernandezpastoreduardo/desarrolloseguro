@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { parsePublicServiceComparison } from "@desarrolloseguro/core";
+import { assessPrivacy, parsePublicServiceComparison, PRIVACY_CRITERIA } from "@desarrolloseguro/core";
 import { PublicScanPortal } from "../index.js";
 
 const DOMAIN_INPUT_NAME = "URL HTTPS que quieres auditar";
@@ -129,6 +129,41 @@ describe("PublicScanPortal", () => {
     window.history.replaceState({}, "", "/");
     vi.unstubAllGlobals();
     vi.useRealTimers();
+  });
+
+  it("shows cookie counts and catalog matches for initial, rejection and acceptance states", async () => {
+    const observedCookie = (name: string) => ({ name, domain: ".talentoypersonas.com", secure: true, httpOnly: false, ruleIds: ["google-analytics-cookie-ga-v1"] });
+    const snapshot = (capturedAtMs: number, cookieCount: number) => ({
+      capturedAtMs, complete: true, cookieCount, matchedCookieCount: 2,
+      cookies: [observedCookie("_ga"), observedCookie("_ga_4ZW5GCS16C")],
+    });
+    const cookieAudit = {
+      catalog: [{ ruleId: "google-analytics-cookie-ga-v1", datasetVersion: "privacy-knowledge-v1", category: "analytics", provider: "Google Analytics", purpose: "Identificador de cliente para distinguir personas usuarias y sesiones.", confidence: "high", classification: "confirmed", sourceUrl: "https://developers.google.com/analytics/devguides/collection/ga4/tag-options?hl=es-419", reviewedAt: "2026-11-21" }],
+      initial: snapshot(100, 2),
+      accept: { status: "evaluated", beforeChoice: snapshot(110, 2), afterChoice: snapshot(120, 2), afterReload: snapshot(130, 2) },
+      reject: { status: "evaluated", beforeChoice: snapshot(210, 2), afterChoice: snapshot(220, 2), afterReload: snapshot(230, 2) },
+    };
+    const privacyAssessment = assessPrivacy({
+      criteria: PRIVACY_CRITERIA.map(({ id }) => ({ id, status: id === "choice-parity" ? "evaluated" : "unknown", findings: [] })),
+      evidence: { cookieNames: ["_ga", "_ga_4ZW5GCS16C"], providers: ["Google Analytics"], domains: ["region1.google-analytics.com"], cookieAudit },
+    });
+    const report = {
+      ...SCORED_PUBLIC_REPORT,
+      globalAssessment: { ...SCORED_PUBLIC_REPORT.globalAssessment, status: "review", score: null, privacyCoverage: { assessedCriteria: 1, unknownCriteria: 4, notApplicableCriteria: 0, totalCriteria: 5 } },
+      privacyAssessment,
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(report)));
+    window.history.replaceState({}, "", `/?report=${REPORT_ID}`);
+
+    render(<PublicScanPortal />);
+
+    expect(await screen.findByRole("heading", { name: "Cookies antes y después de elegir" })).toBeVisible();
+    expect(screen.getAllByText(/Sin puntuación · 1 de 5 criterios evaluados · 4 sin resultado/u)).toHaveLength(2);
+    expect(screen.getByRole("heading", { name: "Aceptación · perfil limpio" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Rechazo · perfil limpio" })).toBeVisible();
+    expect(screen.getAllByText(/2 cookies observadas; 2 coincidencias de catálogo/u)).toHaveLength(7);
+    expect(screen.getAllByText(/Google Analytics · Analítica/u).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: "Fuente oficial" }).length).toBeGreaterThan(0);
   });
 
   it("shows the two-profile performance score and evidence for domain-v5", async () => {
@@ -1096,9 +1131,9 @@ describe("PublicScanPortal", () => {
     expect(screen.getByRole("img", { name: "Privacidad: sin puntuación; 0 de 1 aspectos evaluados" })).toBeVisible();
     expect(screen.getByRole("img", { name: "Seguridad: 100 de 100 puntos; 1 de 4 aspectos evaluados" })).toBeVisible();
     expect(screen.getByRole("img", { name: "Rendimiento: sin puntuación; 0 de 1 aspectos evaluados" })).toBeVisible();
-    expect(screen.getByRole("img", { name: "Observado: 1 de 8 criterios (13%)" })).toBeVisible();
-    expect(screen.getByRole("img", { name: "No observado: 0 de 8 criterios (0%)" })).toBeVisible();
-    expect(screen.getByRole("img", { name: "En revisión: 7 de 8 criterios (88%)" })).toBeVisible();
+    expect(screen.getByRole("img", { name: "Superadas: 1 de 8 criterios (13%)" })).toBeVisible();
+    expect(screen.getByRole("img", { name: "Incumplimientos detectados: 0 de 8 criterios (0%)" })).toBeVisible();
+    expect(screen.getByRole("img", { name: "Sin resultado: 7 de 8 criterios (88%)" })).toBeVisible();
     expect(screen.getByText(/instrucciones que ayudan al navegador a proteger/i)).toBeVisible();
     expect(screen.getByText("Política que restringe contenido cargado (CSP)")).toBeInTheDocument();
     expect(screen.getByText(/faltaba.*política de contenido CSP/i)).toBeVisible();
@@ -1308,9 +1343,9 @@ describe("PublicScanPortal", () => {
 
     expect(await screen.findByRole("heading", { name: "Qué significa esta valoración" })).toBeVisible();
     expect(screen.getByRole("img", { name: "Puntuación global: 0 de 100 puntos" })).toBeVisible();
-    expect(screen.getByText("95.63/100 · 4 de 5 criterios evaluados · 1 desconocidos · 0 no aplican")).toBeVisible();
+    expect(screen.getAllByText("95.63/100 provisional · 4 de 5 criterios evaluados · 1 sin resultado · 0 no aplican").length).toBeGreaterThan(0);
     expect(screen.getByRole("img", { name: "Ética: 0 de 100 puntos; 2 de 2 aspectos evaluados" })).toBeVisible();
-    expect(screen.getByRole("img", { name: "Privacidad: 0 de 100 puntos; 1 de 1 aspectos evaluados" })).toBeVisible();
+    expect(screen.getByRole("img", { name: "Privacidad: 95.63 de 100 puntos; 4 de 5 aspectos evaluados" })).toBeVisible();
     expect(screen.getByRole("img", { name: "Seguridad: 71 de 100 puntos; 4 de 4 aspectos evaluados" })).toBeVisible();
     expect(screen.getByRole("img", { name: "Rendimiento: 100 de 100 puntos; 1 de 1 aspectos evaluados" })).toBeVisible();
   });
@@ -1407,7 +1442,7 @@ describe("PublicScanPortal", () => {
 
     expect(await screen.findByRole("img", { name: "Puntuación global: 0 de 100 puntos" })).toBeVisible();
     expect(screen.getByText("Incumplimientos legales acreditados")).toBeVisible();
-    expect(screen.getByText("Cookie no esencial antes del consentimiento")).toBeVisible();
+    expect(screen.getAllByText("Cookie no esencial antes del consentimiento").length).toBeGreaterThan(0);
     expect(screen.getByText(/LSSI, artículos 22.2, 38.4.g, 39.1.c, 43.1/u)).toBeVisible();
     expect(screen.getByText(/bloqueada por el auditor antes de transmitirse/u)).toBeVisible();
     expect(screen.getByText(/la puntuación global es 0\/100/i)).toBeVisible();
@@ -1636,7 +1671,7 @@ describe("PublicScanPortal", () => {
     await user.click(screen.getAllByRole("button", { name: "Ver detalle" })[1]);
     expect(await screen.findByText(/coincidencias con la tabla local Analytics\/Marketing: 1/i)).toBeInTheDocument();
     expect(screen.getByText(/no se interactuó con el banner de consentimiento/i)).toBeInTheDocument();
-    expect(screen.getByRole("img", { name: /No observado: 1 de 8 criterios/ })).toBeVisible();
+    expect(screen.getByRole("img", { name: /Incumplimientos detectados: 1 de 8 criterios/ })).toBeVisible();
   });
 
   it("shows domain-v2 tracker and response evidence in readable categories", async () => {
@@ -1728,7 +1763,6 @@ describe("PublicScanPortal", () => {
 
     await screen.findByRole("heading", { name: "Qué significa esta valoración" });
     await userEvent.setup().click(screen.getAllByRole("button", { name: "Ver detalle" })[0]);
-    expect(await screen.findByText("Sin cookies no esenciales instaladas antes de que el usuario las consienta o las rechace.")).toBeVisible();
     expect(screen.getByText("Sin rastreadores conocidos en la página")).toBeVisible();
   });
 

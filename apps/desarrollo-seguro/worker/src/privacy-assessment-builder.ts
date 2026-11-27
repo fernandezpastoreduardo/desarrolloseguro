@@ -23,7 +23,8 @@ export function assessPrivacyObservation(observation: PrivacyBrowserObservation)
   const rejection = assessRejection(observation);
   const vendorControls = assessVendorControls(observation);
   const evidence = summarizePublicEvidence(observation);
-  return assessPrivacy({ criteria: [initial, excess, parity, rejection, vendorControls], evidence });
+  const cookieAudit = summarizeCookieAudit(observation);
+  return assessPrivacy({ criteria: [initial, excess, parity, rejection, vendorControls], evidence: { ...evidence, cookieAudit } });
 }
 
 /** Returns known providers and stable destination records from completed third-party requests. */
@@ -98,9 +99,77 @@ function summarizePublicEvidence(observation: PrivacyBrowserObservation): Privac
     }
   }
   return {
-    cookieNames: [...cookieNames].sort((left, right) => left.localeCompare(right, "en-US")).slice(0, 100),
-    providers: [...providers].sort((left, right) => left.localeCompare(right, "en-US")).slice(0, 100),
-    domains: [...domains].sort((left, right) => left.localeCompare(right, "en-US")).slice(0, 100),
+    cookieNames: [...cookieNames].sort((left, right) => left.localeCompare(right, "en-US")).slice(0, 15),
+    providers: [...providers].sort((left, right) => left.localeCompare(right, "en-US")).slice(0, 15),
+    domains: [...domains].sort((left, right) => left.localeCompare(right, "en-US")).slice(0, 15),
+  };
+}
+
+function summarizeCookieAudit(observation: PrivacyBrowserObservation): NonNullable<PrivacyAssessment["evidence"]["cookieAudit"]> {
+  const catalog = new Map<string, NonNullable<PrivacyAssessment["evidence"]["cookieAudit"]>["catalog"][number]>();
+  const initial = summarizeCookieSnapshot(observation.initial, "beforeChoice", catalog);
+  const accept = summarizeCookieFlow(observation.accept, catalog);
+  const reject = summarizeCookieFlow(observation.reject, catalog);
+  return {
+    catalog: [...catalog.values()].slice(0, 20),
+    initial,
+    accept,
+    reject,
+  };
+}
+
+function summarizeCookieFlow(
+  flow: PrivacyBrowserFlowObservation,
+  catalog: Map<string, NonNullable<PrivacyAssessment["evidence"]["cookieAudit"]>["catalog"][number]>,
+): NonNullable<PrivacyAssessment["evidence"]["cookieAudit"]>["accept"] {
+  const notApplicable = flow.consentPromptDetected === false;
+  return {
+    status: notApplicable ? "not_applicable" : flow.phaseEvidence.afterChoice ? "evaluated" : "unknown",
+    beforeChoice: summarizeCookieSnapshot(flow, "beforeChoice", catalog),
+    afterChoice: summarizeCookieSnapshot(flow, "afterChoice", catalog),
+    afterReload: summarizeCookieSnapshot(flow, "afterReload", catalog),
+  };
+}
+
+function summarizeCookieSnapshot(
+  flow: PrivacyBrowserFlowObservation,
+  phase: "beforeChoice" | "afterChoice" | "afterReload",
+  catalog: Map<string, NonNullable<PrivacyAssessment["evidence"]["cookieAudit"]>["catalog"][number]>,
+): NonNullable<PrivacyAssessment["evidence"]["cookieAudit"]>["initial"] {
+  const snapshot = flow.phaseEvidence[phase];
+  if (!snapshot) return null;
+  const complete = snapshot.cookieReadComplete;
+  const phaseByName = { beforeChoice: "before_choice", afterChoice: "after_choice", afterReload: "after_reload" } as const;
+  const corroboratingHosts = [...new Set(flow.phaseEvidence.networkRequests
+    .filter(({ phaseAtStart }) => phaseAtStart === phaseByName[phase])
+    .map(({ hostname }) => hostname))];
+  const allMatchedCookies = snapshot.cookies.flatMap((cookie) => {
+    const matches = matchCookie(cookie.name, cookie.domain, corroboratingHosts);
+    if (matches.length === 0) return [];
+    const ruleIds = matches.map((match) => match.ruleId).slice(0, 3);
+    for (const match of matches) {
+      if (!catalog.has(match.ruleId) && catalog.size < 20) {
+        catalog.set(match.ruleId, {
+          ruleId: match.ruleId,
+          datasetVersion: PRIVACY_KNOWLEDGE_RULES.find(({ ruleId }) => ruleId === match.ruleId)?.datasetVersion ?? "unknown",
+          category: match.category,
+          provider: match.provider,
+          purpose: match.purpose,
+          confidence: match.confidence,
+          classification: match.classification,
+          sourceUrl: match.source.url,
+          reviewedAt: match.source.reviewedAt,
+        });
+      }
+    }
+    return [{ name: cookie.name, domain: cookie.domain, secure: cookie.secure, httpOnly: cookie.httpOnly, ruleIds }];
+  });
+  return {
+    capturedAtMs: snapshot.capturedAtMs,
+    complete,
+    cookieCount: complete ? snapshot.cookies.length : null,
+    matchedCookieCount: allMatchedCookies.length,
+    cookies: allMatchedCookies.slice(0, 3),
   };
 }
 

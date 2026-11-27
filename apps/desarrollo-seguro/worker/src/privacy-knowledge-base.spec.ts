@@ -137,4 +137,58 @@ describe("local privacy knowledge base", () => {
     expect(confirmed?.provider).toBe("Matomo");
     expect(confirmed?.classification).toBe("confirmed");
   });
+
+  it("attributes Microsoft Clarity heatmap hosts and cookies only with a matching official host", () => {
+    const [hostMatch] = matchPrivacySignal({
+      signalType: "request_host",
+      value: "www.clarity.ms",
+      observedHostname: "www.clarity.ms",
+    }, PRIVACY_KNOWLEDGE_RULES);
+    const [cookieMatch] = matchPrivacySignal({
+      signalType: "cookie_name",
+      value: "_clck",
+      observedHostname: "audited.example",
+      corroboratingHostnames: ["a.clarity.ms"],
+    }, PRIVACY_KNOWLEDGE_RULES);
+
+    expect(hostMatch).toMatchObject({ provider: "Microsoft Clarity", category: "heatmap", classification: "confirmed" });
+    expect(hostMatch?.purpose).toContain("mapas de calor");
+    expect(cookieMatch).toMatchObject({ provider: "Microsoft Clarity", category: "heatmap", classification: "confirmed" });
+  });
+
+  it("attributes Fullstory EU capture hosts and documented first-party cookies", () => {
+    const [hostMatch] = matchPrivacySignal({
+      signalType: "request_host",
+      value: "edge.eu1.fullstory.com",
+      observedHostname: "edge.eu1.fullstory.com",
+    }, PRIVACY_KNOWLEDGE_RULES);
+    const [cookieMatch] = matchPrivacySignal({
+      signalType: "cookie_name",
+      value: "fs_uid",
+      observedHostname: "audited.example",
+      corroboratingHostnames: ["rs.eu1.fullstory.com"],
+    }, PRIVACY_KNOWLEDGE_RULES);
+
+    expect(hostMatch).toMatchObject({ provider: "Fullstory", category: "heatmap", classification: "confirmed" });
+    expect(hostMatch?.purpose).toContain("mapas de calor");
+    expect(cookieMatch).toMatchObject({ provider: "Fullstory", category: "heatmap", classification: "confirmed" });
+  });
+
+  it("rejects spoofed heatmap host suffixes and does not claim data resale from a host match", () => {
+    const matches = matchPrivacySignal({
+      signalType: "request_host",
+      value: "fullstory.com.attacker.example",
+      observedHostname: "fullstory.com.attacker.example",
+    }, PRIVACY_KNOWLEDGE_RULES);
+    const [validMatch] = matchPrivacySignal({
+      signalType: "request_host",
+      value: "edge.fullstory.com",
+      observedHostname: "edge.fullstory.com",
+    }, PRIVACY_KNOWLEDGE_RULES);
+
+    expect(matches).toEqual([]);
+    expect(validMatch).toMatchObject({ provider: "Fullstory", category: "heatmap", classification: "confirmed" });
+    expect(validMatch).not.toHaveProperty("dataSale");
+    expect(validMatch?.purpose).not.toMatch(/venta|reventa|sell(?:ing)? data/iu);
+  });
 });

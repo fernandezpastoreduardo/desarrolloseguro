@@ -223,6 +223,34 @@ describe("observePrivacyBehavior", () => {
     expect(result.reject.rejectionPersistedAfterReload).toBe(false);
   });
 
+  it("captures the accepted inventory after reload without claiming acceptance persistence", async () => {
+    vi.stubGlobal("HTMLElement", MockElement);
+    vi.stubGlobal("HTMLButtonElement", MockButton);
+    vi.stubGlobal("HTMLInputElement", MockInput);
+    vi.stubGlobal("getComputedStyle", () => ({ display: "block", visibility: "visible", opacity: "1" }));
+    vi.stubGlobal("document", { getElementById: () => null });
+    const acceptedCookie = { name: "accepted-analytics", domain: "grumphya.com", secure: true, httpOnly: false };
+    const initialContext = makeContext([], undefined, ["Aceptar todo", "Rechazar todo"]);
+    const acceptContext = makeContext([], undefined, ["Aceptar todo", "Rechazar todo"], false,
+      undefined, false, null, 0, [acceptedCookie]);
+    const rejectContext = makeContext([], undefined, ["Aceptar todo", "Rechazar todo"]);
+    const contexts = [initialContext, acceptContext, rejectContext, makeContext()];
+    const browser = { newContext: vi.fn(async () => contexts.shift()!), close: vi.fn(async () => undefined) };
+
+    const result = await observePrivacyBehavior({
+      protocolVersion: 1, requestId: "947dd0c9-564c-4a30-8ce3-efb4ecae9136", hostname: "grumphya.com",
+    }, { proxyUrl: "http://privacy-egress:3128", launchBrowser: vi.fn(async () => browser as never) as never });
+
+    expect(acceptContext.page.reload).toHaveBeenCalledOnce();
+    expect(result.accept.phaseEvidence.afterChoice?.cookies).toEqual([]);
+    expect(result.accept.phaseEvidence.afterReload).toMatchObject({
+      cookies: [acceptedCookie],
+      cookieReadComplete: true,
+    });
+    expect(result.accept.rejectionPersistedAfterReload).toBeNull();
+    expect(result.accept.phaseEvidence.rejectionChoiceStateAfterReload).toBe("unknown");
+  });
+
   it("checks a known provider toggle in an accepted session and confirms it stays disabled", async () => {
     vi.stubGlobal("HTMLElement", MockElement);
     vi.stubGlobal("HTMLButtonElement", MockButton);
@@ -313,7 +341,9 @@ function makeContext(
   navigationFails = false,
   websocketUrl: string | null = null,
   controlsAppearAfterMs = 0,
+  cookiesAfterReload?: unknown[],
 ) {
+  let currentCookies = cookies;
   const delayedLabels = controlsAppearAfterMs > 0 ? [...controlLabels] : [];
   const elements = controlsAppearAfterMs > 0 ? [] : controlLabels.map((label) => new MockButton(label));
   let waitElapsedMs = 0;
@@ -351,17 +381,18 @@ function makeContext(
       }) })),
     })),
     frames: vi.fn(() => [{ url: () => "https://grumphya.com/", evaluate: vi.fn(async () => storage) }]),
-    reload: vi.fn(async () => undefined),
+    reload: vi.fn(async () => { if (cookiesAfterReload) currentCookies = cookiesAfterReload; }),
     close: vi.fn(async () => undefined),
   };
   return {
     route: vi.fn(async (_pattern: string, handler: (route: unknown) => Promise<void>) => { requestRoute = handler; }),
     routeWebSocket: vi.fn(async (_pattern: string, handler: (socket: unknown) => void) => { websocketRoute = handler; }),
     newPage: vi.fn(async () => page),
+    page,
     on: vi.fn(),
     cookies: vi.fn(async () => {
       if (cookieInspectionFails) throw new Error("cookie inspection blocked");
-      return cookies;
+      return currentCookies;
     }),
     close: vi.fn(async () => undefined),
   };
