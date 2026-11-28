@@ -33,6 +33,10 @@ test("LAB-04 never passes a fixture private key to an image build", () => {
 test("LAB-04 proves browser retry, persisted cookie phases, and both performance profiles", () => {
   assert.match(runner, /Volver a solicitar análisis/u);
   assert.match(runner, /LAB-04_RETRY_READY/u);
+  assert.match(runner, /DS_RUNTIME_EGRESS_NETWORK: "\$\{PROJECT\}-retry-egress"/u);
+  assert.ok(runner.indexOf('docker network connect --alias "$FIXTURE_ALIAS"') < runner.indexOf('"$WORKER_DIR/ui-runner.mjs" <"$UI_STDIN"'));
+  assert.ok(runner.indexOf("wait_for_log LAB-04_RETRY_READY") < runner.indexOf('DS_RUNTIME_EGRESS_NETWORK: "${PROJECT}-egress"'));
+  assert.match(runner, /compose up --detach --force-recreate --wait development-security-runtime-coordinator/u);
   assert.match(runner, /docker network connect --alias "\$FIXTURE_ALIAS"/u);
   assert.match(runner, /typeof retryAdmission\?\.jobId !== 'string'/u);
   assert.match(runner, /new URLSearchParams\(\{ targetUrl, jobId \}\)/u);
@@ -64,4 +68,5 @@ test("cleanup removes only this run's labeled resources and the exact Compose pr
   assert.match(runner, /Refusing to remove unexpected labeled volume/u);
   assert.equal((runner.match(/docker network connect --alias "\$FIXTURE_ALIAS"/gu) ?? []).length, 1);
   assert.ok(runner.indexOf("compose stop --timeout 30 development-security-worker") < runner.indexOf("cleanup_labeled_runtime_resources || status=1"));
+  assert.ok(runner.lastIndexOf("compose down --volumes --remove-orphans") < runner.lastIndexOf("cleanup_labeled_runtime_resources || status=1"));
 });

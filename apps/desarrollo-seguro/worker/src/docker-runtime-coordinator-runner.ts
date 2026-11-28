@@ -930,6 +930,7 @@ async function runDocker(
           finish(undefined, Buffer.concat(chunks).toString("utf8"));
           return;
         }
+        writeLabDockerFailureDiagnostic(args[0], errorOutput);
         finish(new Error(classifyDockerCommandFailure(errorOutput)));
         return;
       }
@@ -942,6 +943,23 @@ async function runDocker(
     }
     child.stdin?.end(input);
   });
+}
+
+function writeLabDockerFailureDiagnostic(command: string | undefined, output: string): void {
+  if (!process.env.DS_LAB_RUN_ID) return;
+  process.stderr.write(`${JSON.stringify(createLabDockerFailureDiagnostic(command, output))}\n`);
+}
+
+export function createLabDockerFailureDiagnostic(command: string | undefined, output: string) {
+  const safeCommand = ["run", "network", "volume", "stop", "logs", "rm", "exec"].includes(command ?? "")
+    ? command
+    : "other";
+  const safeOutput = output
+    .replace(/https?:\/\/\S+/giu, "[url]")
+    .replace(/[\r\n\t]+/gu, " ")
+    .replace(/\s{2,}/gu, " ")
+    .slice(0, 500);
+  return { type: "lab_docker_command_failure", command: safeCommand, detail: safeOutput } as const;
 }
 
 function classifyDockerCommandFailure(output: string): RuntimeDiagnosticCode {

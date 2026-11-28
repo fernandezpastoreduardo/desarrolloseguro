@@ -26,6 +26,7 @@ readonly EGRESS_PROBE_CONTAINER="${PROJECT}-egress-probe"
 readonly TEMP_ROOT="$(mktemp -d)"
 readonly UI_STDIN="${TEMP_ROOT}/ui-stdin"
 readonly UI_LOG="${TEMP_ROOT}/ui.log"
+readonly RUNTIME_EGRESS_OVERRIDE_FILE="${TEMP_ROOT}/runtime-egress.override.yaml"
 readonly ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 readonly SHIM_SOURCE="${ROOT}/apps/desarrollo-seguro/worker/scripts/public-audit-lab/lab-docker-cli.mjs"
 readonly FIXTURE_ENTRYPOINT="${ROOT}/apps/desarrollo-seguro/worker/scripts/public-audit-lab/fixture-container.mjs"
@@ -40,7 +41,11 @@ readonly POSTGRES_HOST='development-security-database'
 readonly POSTGRES_DB='desarrollo_seguro'
 
 compose() {
-  docker compose --project-name "$PROJECT" --file "$ROOT/compose.production.yaml" --file "$OVERRIDE_FILE" "$@"
+  local -a files=(--file "$ROOT/compose.production.yaml" --file "$OVERRIDE_FILE")
+  if [[ -f $RUNTIME_EGRESS_OVERRIDE_FILE ]]; then
+    files+=(--file "$RUNTIME_EGRESS_OVERRIDE_FILE")
+  fi
+  docker compose --project-name "$PROJECT" "${files[@]}" "$@"
 }
 
 assert_absent() {
@@ -123,6 +128,9 @@ cleanup() {
     cleanup_labeled_runtime_resources || status=1
     if [[ -f $OVERRIDE_FILE ]]; then
       compose down --volumes --remove-orphans >/dev/null 2>&1 || status=1
+      # Compose owns attached service containers, so remove external, run-labeled
+      # networks only after those containers have detached during `down`.
+      cleanup_labeled_runtime_resources || status=1
     fi
   else
     printf 'Docker unavailable during cleanup; run %s resources remain labeled for manual inspection.\n' "$RUN_ID" >&2
@@ -229,7 +237,7 @@ services:
       DS_RUNTIME_PRIVACY_BROWSER_IMAGE: "desarrolloseguro-public-audit-lab-privacy-browser:${RUN_ID}"
       DS_RUNTIME_PRIVACY_EGRESS_IMAGE: "desarrolloseguro-public-audit-lab-privacy-egress:${RUN_ID}"
       DS_RUNTIME_DOCKER_BINARY: /run/public-audit-lab/lab-docker-cli.mjs
-      DS_RUNTIME_EGRESS_NETWORK: "${PROJECT}-egress"
+      DS_RUNTIME_EGRESS_NETWORK: "${PROJECT}-retry-egress"
       DS_LAB_RUN_ID: "${RUN_ID}"
       DS_LAB_BROKER_IMAGE: "desarrolloseguro-public-audit-lab-broker:${RUN_ID}"
       DS_LAB_PRIVACY_EGRESS_IMAGE: "desarrolloseguro-public-audit-lab-privacy-egress:${RUN_ID}"
@@ -317,31 +325,6 @@ compose up --detach --no-build \
   development-security-web
 compose ps --all
 
-# Force a deterministic runtime startup error first: the production coordinator
-# cannot start its broker while the run-scoped egress network is absent. The
-# network is recreated only after the UI exposes its retry control.
-if docker network inspect "${PROJECT}-egress" >/dev/null 2>&1; then
-  network_project="$(docker network inspect --format '{{ index .Labels "com.docker.compose.project" }}' "${PROJECT}-egress")"
-  network_internal="$(docker network inspect --format '{{.Internal}}' "${PROJECT}-egress")"
-  [[ $network_project == "$PROJECT" && $network_internal == true ]] || {
-    printf 'Refusing to remove an unowned or externally connected egress network.\n' >&2
-    exit 1
-  }
-  while IFS= read -r attached; do
-    [[ -n $attached ]] || continue
-    service="$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.service" }}' "$attached")"
-    attached_project="$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.project" }}' "$attached")"
-    [[ $service == development-security-processor-auditor && $attached_project == "$PROJECT" ]] || {
-      printf 'Unexpected container attached to the isolated egress network; aborting.\n' >&2
-      exit 1
-    }
-    docker network disconnect "${PROJECT}-egress" "$attached"
-  done < <(docker network inspect --format '{{range $id, $container := .Containers}}{{println $id}}{{end}}' "${PROJECT}-egress")
-  network_containers="$(docker network inspect --format '{{len .Containers}}' "${PROJECT}-egress")"
-  [[ $network_containers == 0 ]] || { printf 'Egress network still has an attached container.\n' >&2; exit 1; }
-  docker network rm "${PROJECT}-egress" >/dev/null
-fi
-
 docker run --detach --name "$FIXTURE_CONTAINER" \
   --label "${LABEL_KEY}=${RUN_ID}" \
   --network "${PROJECT}-ingress" --network-alias "$FIXTURE_ALIAS" \
@@ -356,6 +339,7 @@ docker run --detach --name "$FIXTURE_CONTAINER" \
   --env DS_LAB_TLS_CERT_FILE=/run/lab-tls/fixture.crt \
   --entrypoint node "desarrolloseguro-public-audit-lab-broker:${RUN_ID}" \
   "$WORKER_DIR/fixture-container.mjs" >/dev/null
+docker network connect --alias "$FIXTURE_ALIAS" "${PROJECT}-egress" "$FIXTURE_CONTAINER"
 
 cat > "$TEMP_ROOT/ui-runner.mjs" <<'NODE'
 import { chromium } from 'playwright';
@@ -515,13 +499,16 @@ docker run --interactive --name "$UI_CONTAINER" \
 readonly UI_DOCKER_PID=$!
 exec 9>"$UI_STDIN"
 wait_for_log LAB-04_RETRY_READY 240 >/dev/null
-# Only now can scanner containers start. Recreate the missing network as an
-# internal-only Compose resource, then attach the fixture to it.
-docker network create --internal \
-  --label "${LABEL_KEY}=${RUN_ID}" \
-  --label "com.docker.compose.project=${PROJECT}" \
-  --label com.docker.compose.network=development-security-analysis-egress \
-  "${PROJECT}-egress" >/dev/null
+# The first job used an intentionally nonexistent network and failed at broker
+# startup. Recreate only the run-scoped runtime coordinator with its valid,
+# existing internal egress network before the user-triggered retry.
+cat > "$RUNTIME_EGRESS_OVERRIDE_FILE" <<EOF
+services:
+  development-security-runtime-coordinator:
+    environment:
+      DS_RUNTIME_EGRESS_NETWORK: "${PROJECT}-egress"
+EOF
+compose up --detach --force-recreate --wait development-security-runtime-coordinator
 # Make an outbound TCP attempt from inside the same internal network used by
 # scanner egress. Any HTTP response means the lab has an unexpected route out.
 docker run --rm --name "$EGRESS_PROBE_CONTAINER" --network "${PROJECT}-egress" \
@@ -531,7 +518,6 @@ docker run --rm --name "$EGRESS_PROBE_CONTAINER" --network "${PROJECT}-egress" \
   --tmpfs /tmp:rw,noexec,nosuid,size=8m,uid=1001,gid=1001 \
   --entrypoint node "desarrolloseguro-public-audit-lab-privacy-browser:${RUN_ID}" \
   --input-type=module -e 'import {get} from "node:http"; const request=get("http://93.184.216.34/",(response)=>{response.resume();process.exit(3)}); request.setTimeout(3000,()=>request.destroy(new Error("egress_probe_timeout"))); request.on("error",()=>process.exit(0));'
-docker network connect --alias "$FIXTURE_ALIAS" "${PROJECT}-egress" "$FIXTURE_CONTAINER"
 printf '\n' >&9
 exec 9>&-
 ui_exit=0

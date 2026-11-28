@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ScanRunInput } from "@desarrolloseguro/persistence";
 import {
   classifyBrokerStartupStderr,
+  createLabDockerFailureDiagnostic,
   createDockerRuntimeCoordinatorRunner,
   createDockerRuntimeSessionFactory,
   runRuntimePhase,
@@ -269,6 +270,22 @@ describe("createDockerRuntimeCoordinatorRunner", () => {
     expect(classifyBrokerStartupStderr("Conflict. The container name \"/broker\" is already in use."))
       .toBe("runtime_broker_name_conflict");
     expect(classifyBrokerStartupStderr("secret host path and token")).toBeUndefined();
+  });
+
+  it("logs bounded Docker failure details only in the isolated lab with URLs redacted", () => {
+    expect(createLabDockerFailureDiagnostic(
+      "run",
+      "failed to create container for https://fixture.example/path?token=secret\nnetwork unavailable",
+    )).toEqual({
+      type: "lab_docker_command_failure",
+      command: "run",
+      detail: "failed to create container for [url] network unavailable",
+    });
+    expect(createLabDockerFailureDiagnostic("secret-command", "x".repeat(600))).toEqual({
+      type: "lab_docker_command_failure",
+      command: "other",
+      detail: "x".repeat(500),
+    });
   });
 
   it("validates the executor response and closes the per-job runtime", async () => {
