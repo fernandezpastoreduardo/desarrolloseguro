@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+const JOB_ID = "123e4567-e89b-42d3-a456-426614174000";
+
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.setItem("ds-first-entry-notice-dismissed", "1");
@@ -138,7 +140,7 @@ test("automatically requests an analysis for the exact HTTPS URL when no report 
     await route.fulfill({
       status: 202,
       contentType: "application/json",
-      body: JSON.stringify({ hostname: "demo.example.org", targetUrl, state: "queued" }),
+      body: JSON.stringify({ hostname: "demo.example.org", targetUrl, state: "queued", jobId: JOB_ID }),
     });
   });
 
@@ -171,7 +173,7 @@ test(
       enrollment: "on_demand",
       state,
       failureCode: null,
-      activeJobId: state === "updating" ? "123e4567-e89b-42d3-a456-426614174000" : null,
+      activeJobId: state === "updating" ? JOB_ID : null,
       ...(state === "updating" ? {
         auditProgress: {
           policyVersion: "public-audit-progress-v1",
@@ -339,7 +341,7 @@ test(
     route.fulfill({
       status: 202,
       contentType: "application/json",
-      body: JSON.stringify({ hostname: "grumphya.com", state: "queued" }),
+      body: JSON.stringify({ hostname: "grumphya.com", targetUrl: "https://grumphya.com/perfil?source=e2e", state: "queued", jobId: JOB_ID }),
     }),
   );
 
@@ -473,7 +475,7 @@ test("stops polling and reports an admission mismatch when no scan job appears",
     route.fulfill({
       status: 202,
       contentType: "application/json",
-      body: JSON.stringify({ hostname: "stuck.example.org", targetUrl: "https://stuck.example.org/", state: "queued" }),
+      body: JSON.stringify({ hostname: "stuck.example.org", targetUrl: "https://stuck.example.org/", state: "queued", jobId: JOB_ID }),
     }),
   );
 
@@ -503,7 +505,7 @@ test("retry submits another analysis request without reloading", async ({ page }
         enrollment: "on_demand",
         state: isRetryAdmitted ? "updating" : "not_scanned",
         failureCode: null,
-        activeJobId: isRetryAdmitted ? "123e4567-e89b-42d3-a456-426614174000" : null,
+        activeJobId: isRetryAdmitted ? JOB_ID : null,
         ...(isRetryAdmitted ? {
           auditProgress: {
             policyVersion: "public-audit-progress-v1",
@@ -528,6 +530,7 @@ test("retry submits another analysis request without reloading", async ({ page }
         hostname: "retry.example.org",
         targetUrl: "https://retry.example.org/",
         state: "queued",
+        jobId: JOB_ID,
       }),
     });
   });
@@ -553,4 +556,69 @@ test("retry submits another analysis request without reloading", async ({ page }
   await expect(retry).toHaveCount(0);
   expect(page.url()).toBe(pageUrlBeforeRetry);
   expect(statusReads).toBeGreaterThanOrEqual(3);
+});
+
+test("ignores a late analysis response after the user changes the URL", async ({ page }) => {
+  const secondJobId = "223e4567-e89b-42d3-a456-426614174000";
+  let releaseFirstRequest: (() => void) | undefined;
+  let firstRequestStarted = false;
+  const pollJobIds: string[] = [];
+
+  await page.route("**/domains/*.example.org/status*", async (route) => {
+    const url = new URL(route.request().url());
+    const hostname = url.pathname.split("/").at(-2);
+    const jobId = url.searchParams.get("jobId");
+    if (jobId) pollJobIds.push(jobId);
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        hostname,
+        enrollment: "on_demand",
+        state: jobId ? "updating" : "not_scanned",
+        failureCode: null,
+        activeJobId: jobId,
+        ...(jobId ? {
+          auditProgress: {
+            policyVersion: "public-audit-progress-v1",
+            aspects: { ethics: "running", privacy: "pending", security: "pending", performance: "pending" },
+          },
+        } : {}),
+        lastReport: null,
+        checkedAt: "2026-11-11T00:00:00.000Z",
+      }),
+    });
+  });
+  await page.route("**/analysis-requests", async (route) => {
+    const { targetUrl } = route.request().postDataJSON() as { targetUrl: string };
+    if (targetUrl === "https://first.example.org/") {
+      firstRequestStarted = true;
+      await new Promise<void>((resolve) => { releaseFirstRequest = resolve; });
+      await route.fulfill({
+        status: 202,
+        contentType: "application/json",
+        body: JSON.stringify({ hostname: "first.example.org", targetUrl, state: "queued", jobId: JOB_ID }),
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 202,
+      contentType: "application/json",
+      body: JSON.stringify({ hostname: "second.example.org", targetUrl, state: "queued", jobId: secondJobId }),
+    });
+  });
+
+  await page.goto("/");
+  const input = page.getByRole("textbox", { name: "URL HTTPS que quieres auditar" });
+  await input.fill("https://first.example.org/");
+  await page.getByRole("button", { name: "Consultar informe" }).click();
+  await expect.poll(() => firstRequestStarted).toBe(true);
+
+  await input.fill("https://second.example.org/");
+  await page.getByRole("button", { name: "Consultar informe" }).click();
+  await expect(page.getByRole("progressbar", { name: "Progreso del análisis" }))
+    .toHaveAttribute("data-phase", "queued");
+  releaseFirstRequest?.();
+  await expect.poll(() => pollJobIds.length, { timeout: 10_000 }).toBeGreaterThan(0);
+  expect(pollJobIds).toContain(secondJobId);
+  expect(pollJobIds).not.toContain(JOB_ID);
 });

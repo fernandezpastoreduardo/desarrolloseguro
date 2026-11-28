@@ -214,6 +214,14 @@ export type PublicDomainSnapshot = {
   };
 };
 
+export type PublicScanJobSnapshot = {
+  jobId: string;
+  state: "queued" | "running" | "completed" | "failed";
+  progress: PublicAuditProgress | null;
+  reportId: string | null;
+  lastFailure: { code: ScanFailureCode; failedAt: Date; diagnostic?: ScanFailureDiagnostic | null } | null;
+};
+
 export type EnsureScanInput = {
   hostname: string;
   profileVersion: string;
@@ -462,7 +470,8 @@ export class PostgresScanStore implements ScanJobStore {
            AND profile_version = CASE WHEN $2::text IS NULL
              THEN domains.profile_version ELSE 'domain-v5' END
            AND state = 'failed'
-           AND $2::text IS NULL
+           AND $3::text IS NULL
+           AND (profile_version <> 'domain-v5' OR trigger = 'scheduled')
          ORDER BY finished_at DESC NULLS LAST, queued_at DESC LIMIT 1
        ) AS failed_job ON true
        LEFT JOIN LATERAL (
@@ -526,6 +535,38 @@ export class PostgresScanStore implements ScanJobStore {
       ...snapshot,
       lastReport: null,
       hostnameResolution: redirect,
+    };
+  }
+
+  async readPublicScanJobSnapshot(hostname: string, jobId: string): Promise<PublicScanJobSnapshot | null> {
+    const result = await this.pool.query<Record<string, unknown>>(
+      `SELECT jobs.id AS job_id, jobs.state, jobs.progress_json,
+         jobs.public_error_code AS last_failure_code,
+         jobs.failure_diagnostic AS last_failure_diagnostic,
+         jobs.finished_at AS last_failure_at,
+         reports.id AS report_id
+       FROM public.ds_scan_jobs AS jobs
+       INNER JOIN public.ds_domains AS domains ON domains.hostname = jobs.hostname
+         AND domains.opted_out_at IS NULL
+       LEFT JOIN public.ds_scan_runs AS reports ON reports.job_id = jobs.id
+         AND reports.hostname = jobs.hostname
+         AND reports.profile_version = jobs.profile_version
+       WHERE jobs.id = $1::uuid AND jobs.hostname = $2
+         AND jobs.profile_version = 'domain-v5' AND jobs.trigger = 'requested'
+       LIMIT 1`,
+      [jobId, hostname],
+    );
+    const row = result.rows[0];
+    if (!row) return null;
+    const state = parseOneOf(row.state, ["queued", "running", "completed", "failed"] as const);
+    const lastFailure = state === "failed" ? parsePublicScanFailure(row) : null;
+    if (state === "failed" && !lastFailure) throw new Error("public_scan_job_failure_missing");
+    return {
+      jobId: requireString(row.job_id),
+      state,
+      progress: parsePublicAuditProgress(row.progress_json),
+      reportId: row.report_id ? requireString(row.report_id) : null,
+      lastFailure: lastFailure ?? null,
     };
   }
 

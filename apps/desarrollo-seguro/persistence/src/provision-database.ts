@@ -297,11 +297,11 @@ async function applyRuntimeGrants(pool: Pool): Promise<void> {
     GRANT SELECT (hostname, enrollment, profile_version, opted_out_at)
       ON public.ds_domains TO ds_read;
     GRANT SELECT (
-      id, hostname, profile_version, state, queued_at, finished_at,
+      id, hostname, profile_version, trigger, state, queued_at, finished_at,
       public_error_code, failure_diagnostic, target_url, progress_json
     )
       ON public.ds_scan_jobs TO ds_read;
-    GRANT SELECT (id, hostname, profile_version, scanner_version, vantage,
+    GRANT SELECT (id, job_id, hostname, profile_version, scanner_version, vantage,
       trigger, started_at, completed_at, expires_at, verdict, scope_json)
       ON public.ds_scan_runs TO ds_read;
     GRANT SELECT (

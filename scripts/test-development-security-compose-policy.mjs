@@ -28,13 +28,14 @@ const SECRET_NAMES = [
   "internal_tls_ca.crt",
 ];
 
-const [compose, nginx, postgresHba, dockerfile, caddyFragment, workflow] = await Promise.all([
+const [compose, nginx, postgresHba, dockerfile, caddyFragment, workflow, auditLab] = await Promise.all([
   readFile(COMPOSE_PATH, "utf8"),
   readFile(NGINX_PATH, "utf8"),
   readFile("docker/postgres-pg_hba.conf", "utf8"),
   readFile("Dockerfile", "utf8"),
   readFile(CADDY_FRAGMENT_PATH, "utf8"),
   readFile(".github/workflows/ci.yml", "utf8"),
+  readFile("scripts/run-development-security-public-audit-lab-01.sh", "utf8"),
 ]);
 const sandboxVerifier = await readFile(
   "scripts/verify-executor-sandbox.sh",
@@ -80,6 +81,25 @@ assert.match(workflow, /database_image=desarrolloseguro-postgres:pg19-candidate/
 assert.match(workflow, /--ignore-unfixed/u);
 assert.match(workflow, /desarrollo-seguro-trivy-raw-reports/u);
 assert.match(workflow, /scripts\/test-postgres-major-upgrade\.sh/u);
+assert.match(
+  workflow,
+  /scripts\/run-development-security-public-audit-lab-01\.sh/u,
+);
+assert.match(auditLab, /docker network create --internal/u);
+assert.match(auditLab, /--label "\$\{RESOURCE_LABEL\}=\$\{RUN_ID\}"/u);
+assert.match(auditLab, /--network "\$NETWORK_NAME"/u);
+assert.match(auditLab, /DATABASE_HOST=development-security-database/u);
+assert.match(auditLab, /DATABASE_NAME=desarrollo_seguro/u);
+assert.match(auditLab, /DS_PRODUCTION_BOOTSTRAP_ENABLED=1/u);
+assert.match(auditLab, /DS_PRODUCTION_TLS_CA_FILE=/u);
+assert.doesNotMatch(auditLab, /DS_TEST_POSTGRES_ISOLATED/u);
+assert.doesNotMatch(auditLab, /--publish|docker compose down|docker system prune/u);
+assert.match(auditLab, /resource_name == "\$NETWORK_NAME"/u);
+assert.match(auditLab, /resource_name == "\$VOLUME_NAME"/u);
+assert.match(
+  auditLab,
+  /"\$DATABASE_CONTAINER_NAME"\|"\$MIGRATE_CONTAINER_NAME"\|"\$API_CONTAINER_NAME"/u,
+);
 
 assert.match(migration, /DS_PRODUCTION_BOOTSTRAP_ENABLED:\s*"1"/u);
 assert.match(migration, /production-provision-database\.js/u);

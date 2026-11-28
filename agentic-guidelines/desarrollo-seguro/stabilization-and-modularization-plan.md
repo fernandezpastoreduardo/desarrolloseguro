@@ -23,7 +23,7 @@ preceptos, autoridad y consecuencias económicas. Un error del auditor no acredi
 cumplimiento del sitio ni borra un incumplimiento ya demostrado. Cambiar criterios,
 pesos, conclusiones o información del informe requiere aprobación explícita previa.
 
-## Diagnóstico comprobado
+## Diagnóstico comprobado al iniciar la estabilización
 
 | Evidencia | Consecuencia |
 | --- | --- |
@@ -33,10 +33,12 @@ pesos, conclusiones o información del informe requiere aprobación explícita p
 | `worker/src/privacy-browser-observer.ts:231-299`: presupuesto global y catch que devuelve todas las fases desconocidas | Un error tardío puede borrar evidencia anterior válida |
 | `worker/src/privacy-public-browser-evidence.ts:57`: publica métricas solo con perfil completo | Se pierden medidas parciales válidas antes de llegar a la UI |
 | `core/src/scan-ingestion-policy.ts:489-525`: normaliza DS-QUAL-02 sin conservar diagnóstico de rendimiento | La causa termina como «Comprobación DS-QUAL-02: unknown.» |
+| `worker/src/docker-runtime-coordinator-runner.ts`: al validar el resultado no pasa la ruta exacta al parser, que por defecto exige `/` | Una auditoría de ruta/query válida se rechaza como `executor_response_invalid` y no genera informe |
+| `persistence/src/scan-store.ts`: los fallos terminales solo se consultan cuando la URL no se especifica; las migraciones borran la URL al terminar el job | La consulta por URL exacta oculta el fallo y muestra `not_scanned`, sin diagnóstico ni retry claro |
 | Hardcodes de Grumphya en contratos/auth/reader/worker/API/SQL; DesarrolloSeguro usa registro especial | Autoauditoría y nuevos clientes no siguen un mecanismo común |
 | Playwright usa Vite dev y API interceptada; smoke productivo solo admite dos dominios | Las puertas no demuestran el recorrido completo de un dominio nuevo |
 | Hooks presentes pero sin `core.hooksPath` configurado aquí; pre-push solo comprueba migraciones | No puede afirmarse que precommit/push ejerzan todas las garantías |
-| Sonar local configurado, artefacto anterior al release; puerto 9000 inaccesible durante revisión | No existe baseline actual comprobada de hallazgos Sonar |
+| En la inspección inicial, Sonar local tenía un análisis anterior al release y el puerto 9000 no era accesible | Quedó pendiente actualizar la baseline; P0 la obtuvo después y su estado está anotado en el registro de ejecución |
 
 La consulta de solo lectura al informe vigente de referencia conservaba inventarios
 inicial/aceptación/rechazo completos de dos cookies catalogadas, con criterios de
@@ -106,9 +108,11 @@ persistencia y UI reales. En las fronteras de salida usar adaptadores exclusivos
 prueba que conectan el hostname exacto al fixture y preservan Host/SNI/query. No
 añadir modo de resolución permisivo ni allowlist de test a configuración de
 producción. En el mismo corpus, verificar por separado que el adaptador de producción
-rechaza loopback/RFC1918/link-local antes de abrir la conexión. No usar el Compose
-productivo, sus redes, volúmenes o secretos como stack del laboratorio. El coordinador
-del laboratorio necesitará montar el socket Docker local para crear los ejecutores.
+rechaza loopback/RFC1918/link-local antes de abrir la conexión. El laboratorio puede
+reutilizar definiciones y artefactos del Compose productivo solo con overrides y
+recursos efímeros aislados; nunca debe acceder a sus servicios, redes, volúmenes o
+secretos. El coordinador del laboratorio necesitará montar el socket Docker local
+para crear los ejecutores.
 El socket concede acceso amplio al daemon; por ello el test solo usará fixtures
 controlados y nombres/volúmenes/redes únicos, y validará que cleanup afecte únicamente
 a recursos etiquetados con el identificador de esa corrida.
@@ -128,10 +132,49 @@ Descomposición ejecutable de P1:
    limitados al FQDN efímero y fixture. Preservar Host/SNI/query; red `internal` sin
    salida externa. Las imágenes de producción y su configuración no reciben flags
    permisivos ni allowlists adicionales.
+   El runtime coordinator mantiene su CLI productiva y apunta a un shim JS exclusivo
+   de laboratorio mediante el parámetro de configuración ya existente
+   `DS_RUNTIME_DOCKER_BINARY`. Cada imagen se construye con `--build-arg
+   DS_LAB_RUN_ID=<run-id>` y lleva el certificado público en
+   `/run/public-audit-lab/fixture.pem`; su tag incorpora ese run id. El shim acepta
+   solamente las imágenes exactas
+   `desarrolloseguro-public-audit-lab-broker:<run-id>` y
+   `desarrolloseguro-public-audit-lab-privacy-egress:<run-id>` para inyectar las
+   variables del broker y proxy. La imagen de navegador de prueba
+   `desarrolloseguro-public-audit-lab-privacy-browser:<run-id>` parte de la imagen
+   productiva de navegador y añade solo el entrypoint de confianza TLS del fixture
+   y el certificado público; no requiere variables de configuración extra. Las tres
+   imágenes se construyen sobre sus bases productivas ya creadas, con los build args
+   `DS_LAB_RUN_ID`, `DS_LAB_BROKER_BASE_IMAGE`,
+   `DS_LAB_PRIVACY_EGRESS_BASE_IMAGE` y `DS_LAB_PRIVACY_BROWSER_BASE_IMAGE`. El build
+   helper comprueba SAN, ausencia de clave privada, tags exactos, label de corrida y
+   carga las configuraciones en contenedores `--network none`. Agrega el label
+   `com.desarrolloseguro.public-audit-lab.run=<run-id>` a `docker run`, `volume create`
+   y `network create`; para las dos imágenes anteriores solo inyecta variables
+   `DS_LAB_*` de hostname/alias/puertos/ruta del certificado. El certificado TLS
+   público de la fixture se incorpora en la imagen de prueba por build context; el
+   shim no intenta montar una ruta del contenedor coordinador como si fuera ruta del
+   host. Otros argumentos, imágenes y subcomandos pasan intactos. Pruebas sin daemon
+   cubren validación, passthrough, etiquetas e inyección limitada.
 4. **LAB-04 · recorrido real**: navegador contra web construida; API, cola, worker,
    coordinador IPC, ejecución aislada, persistencia e informe reales. Sin interceptar
    las rutas API. Comprobar informe terminal visible, evidencia por perfil, retry
-   posterior a error, nueva admisión y resultado sin recargar.
+   posterior a error, nueva admisión y resultado sin recargar. La fixture de
+   consentimiento debe exponer un enlace de política en la primera capa y permitir
+   aceptar/rechazar de forma observable; comprobar snapshots completos antes de
+   elegir, tras cada elección y tras recargar, con conteos que detecten rechazo y
+   persistencia. El caso normal debe exigir las métricas y puntuación numéricas de
+   ambos perfiles de Rendimiento; códigos diagnósticos por sí solos no satisfacen
+   este gate.
+   La red edge interna usa asignación IPAM automática de Docker; no fija subredes que
+   puedan colisionar con redes locales o con rangos reservados por Docker Desktop.
+   Los procesos de proxy del laboratorio conservan el protocolo productivo de
+   readiness y estadísticas para que la fixture pruebe la misma integración.
+   Criterio de aceptación adicional: ingestión, sanitización y proyección deben
+   manejar hostnames genéricos válidos. Las redirecciones solo pueden permanecer en
+   el hostname solicitado o su alias `www` correspondiente; ningún dominio de
+   cliente queda codificado como allowlist. Las pruebas usan hostnames sintéticos y
+   mantienen las restricciones de destino y SSRF. No se alteran criterios ni notas.
 5. **LAB-05 · seguridad y limpieza**: solicitudes negativas de SSRF, intento de
    recurso externo bloqueado, DNS público/privado mezclado y egress efectivo; cerrar
    solo recursos con la etiqueta de la corrida. Comprobar que los contenedores,
@@ -144,6 +187,40 @@ productiva no se inicia ni se usa para estos tests.
 
 Salida: reproducciones fallan por los bugs actuales y pasan únicamente al corregirlos;
 el recorrido no depende de nombres ni resultados esperados de clientes conocidos.
+
+#### Hallazgos LAB-04 confirmados el 28-11-2026
+
+- Pasar al validador la ruta exacta de la URL domain-v5, incluida su query, igual
+  que ya hacen el servidor IPC y los otros adaptadores. No relajar el contrato para
+  aceptar un scope diferente.
+- Al terminar el job, la fila borra `target_url` y no conserva una huella de la URL.
+  El navegador retiene la URL exacta solo en memoria durante la solicitud; el informe
+  persistido conserva la ruta y query auditadas según el alcance aprobado. El POST
+  devuelve el UUID aleatorio del job para estados `queued`/`running`; el navegador lo
+  usa para consultar el estado de ese job.
+  La lectura de persistencia exige `jobId + hostname + profile_version=domain-v5` y
+  devuelve únicamente estado, progreso, fallo técnico allowlistado o el informe
+  asociado por `ds_scan_runs.job_id`. Los grants del rol de lectura deben cubrir solo
+  las columnas necesarias para estas consultas, incluidos `ds_scan_jobs.trigger` y
+  `ds_scan_runs.job_id`; una prueba Postgres debe ejecutar la lectura bajo `ds_api`.
+  La lectura normal de una URL no adjunta fallos
+  terminales de otros jobs del hostname. No exponer URL, token de lease ni texto de
+  error sin sanear. Sin un `jobId` en memoria no se muestra un fallo técnico de otra
+  solicitud; se conserva el informe disponible y se permite iniciar una revisión.
+- El estado `failed` y el botón de reintento corresponden solo a un fallo técnico
+  terminal del job completo antes de publicar su informe. Fallos, incumplimientos,
+  resultados parciales o estados sin evidencia de criterios pertenecen al informe y
+  nunca se convierten en fallo global reintentable. Los códigos de job quedan
+  limitados a `SCAN_FAILURE_CODES`.
+- Criterio de salida: una URL sintética con query genera un informe consultable tras
+  el retry; si un job falla y se borra su URL, su `jobId` permite mostrar el estado y
+  diagnóstico técnico solo a esa consulta. La ruta B del mismo hostname no recibe
+  el error del job A. Un informe completo con criterios fallidos o sin resultado
+  permanece `completed` y no muestra el mensaje técnico ni el botón de retry.
+- La lista de diagnósticos aceptados por PostgreSQL debe incluir todos los códigos
+  de arranque del broker definidos en el contrato TypeScript; comprobar persistencia
+  en el test Postgres y en LAB-04. Un diagnóstico rechazado por SQL no puede dejar
+  el job en ejecución ni ocultar el error terminal al usuario.
 
 ### P2. Correcciones del recorrido y preservación de evidencia
 
@@ -160,12 +237,35 @@ de Privacidad con aislamiento de excepciones; (c) conservar métricas parciales;
   huérfanos para que nunca queden spinners indefinidos ni duplicación de trabajo.
 - Diagnóstico trazable por release/request/job/run/aspecto/fase, duración,
   presupuesto consumido, causa y reintento permitido. Retención y cardinalidad acotadas.
+- Los errores del observador de Privacidad/Rendimiento que ya sean códigos operativos
+  allowlistados conservan su categoría al llegar a logs y al estado del job; texto
+  libre del error o datos de la URL no se registran.
+- El contenedor de Chromium de Privacidad/Rendimiento se ejecuta con el UID/GID
+  `pwuser` de la imagen y con su `tmpfs` escribible; el runtime no debe cambiar su
+  identidad de sistema a un UID que no pueda usar el perfil del navegador.
 
 Salida: corpus completo y parcial conserva valores entre todas las fronteras;
 errores terminales explicados, retry efectivo y evidencia jurídica preservada.
 Primer release de recuperación elegible solo al superar P1/P2 y las verificaciones
 previas y recuperación de P7. La preparación de entrega segura se trabaja desde P0,
 sin esperar al final del refactor.
+
+#### Corrección acotada: proyección pública de bytes de Rendimiento
+
+La proyección pública de `DS-QUAL-02` debe conservar `mobileTransferBytes` y
+`desktopTransferBytes` en todo el rango que ya admite la ingesta (0 a 64 MiB).
+El límite general de otros campos no cambia. No se modifica la fórmula, pesos,
+umbrales ni puntuaciones de Rendimiento.
+
+Criterios de aceptación:
+
+- Los dos campos de transferencia mayores de 1.000.000 y hasta 64 MiB sobreviven
+  `projectPublicEvidence("DS-QUAL-02", ...)`.
+- Una respuesta pública con esos bytes conserva las métricas y las notas de móvil,
+  escritorio y media que ya produjo la evaluación.
+- Valores negativos, fraccionarios o superiores a 64 MiB siguen rechazándose en
+  la frontera de ingesta/proyección correspondiente.
+- La evidencia de otros controles conserva su límite público actual.
 
 ### P3. Contratos y políticas como fuente única
 
@@ -299,25 +399,46 @@ verificada ante fallo.
   la API y el smoke público contempla solo los dos casos configurados. No hay aún
   recorrido integral de un hostname nuevo hasta el informe visible.
 
-### P1 · en curso
+### P1 · laboratorio integrado y correlación por job verificados localmente
 
-- Reproducción aislada del retry en navegador con hostname sintético y API simulada:
-  envío inicial `1`; tras pulsar «Volver a solicitar análisis», envíos `1`. El botón
-  no tiene clase y muestra estilos predeterminados del navegador. Esto demuestra que
-  el click no vuelve a solicitar y que el E2E existente no lo detecta; no atribuye
-  por sí solo el fallo de las dos webs externas.
+- La reproducción inicial aislada del retry mostró que el click no enviaba una
+  segunda solicitud. El fix conserva la autorización para la misma URL y ahora
+  reenvía la solicitud, recibe admisión, muestra progreso y actualiza el informe
+  sin recarga; E2E y LAB-04 lo verifican.
 - El recorrido de laboratorio API → cola → worker → runtime → PostgreSQL → navegador
-  sigue pendiente. El Compose de producción no es reutilizable como laboratorio:
-  depende de secretos/redes externas y monta el socket Docker en el coordinador. El
-  Sonar local está activo; el contenedor de integración PostgreSQL preexistente está
-  detenido. No se iniciaron ni detuvieron contenedores durante este diagnóstico.
+  pasa en Docker local con artefactos de producción. La primera ejecución falla de
+  forma controlada; al reintentar, la UI envía una nueva solicitud y muestra el
+  informe sin recargar. La prueba usa una URL sintética con ruta y query nuevas.
+  Reutiliza composición y artefactos productivos con overrides, secretos, redes y
+  recursos efímeros aislados; no conecta ni modifica servicios productivos.
 - P1 reutilizará las interfaces inyectables existentes en
   `transport-v1-network-observer.ts` y `privacy-egress-proxy.ts`, con adaptadores de prueba en fronteras
-  aisladas. Aún falta definir e implementar la composición desechable; no se ha
-  debilitado SSRF ni alterado la configuración productiva.
-- Reproducción pendiente de Privacidad y Rendimiento en frontera de adquisición,
-  ingesta, persistencia y presentación, con carga parcial y completa.
-- No se instalaron dependencias ni se modificó código de producto durante P0/P1.
+  aisladas. LAB-02 ya incluye fixture HTTPS sintético por corrida, TLS/SNI y Host
+  exactos, query preservada, cookie de consentimiento, recurso demorado y puerto HTTP
+  opcional. LAB-03 ya incluye adaptadores exclusivos de laboratorio que resuelven un
+  hostname sintético y conectan solo con el fixture interno. No se ha debilitado SSRF
+  ni alterado configuración productiva.
+- Los contratos fixture y adaptadores pasan sus pruebas locales. LAB-01 pasa en
+  Docker local: red interna, PostgreSQL con TLS, 75 migraciones reales y API de
+  producción saludable; no publica puertos y limpia los recursos de la corrida.
+  LAB-04 pasa con artefactos construidos del árbol actual: retry, persistencia del
+  informe, aviso con enlace a política, tres fases completas para rechazo/aceptación,
+  conteos de cookie de fixture 1→0→1 al rechazar y recargar y métricas numéricas de
+  móvil/escritorio. El test de Rendimiento exige FCP, LCP, CLS, TBT, TTFB, bytes y
+  score por perfil. El intento fallido confirmó además persistencia de los códigos
+  de diagnóstico PostgreSQL permitidos. CI incluye LAB-01 y ahora ejecuta LAB-04
+  con artefactos del mismo SHA; deploy permanece condicionado a todos los gates.
+- Se añadió el shim test-only de Docker, con pruebas de etiquetas, argumentos y
+  scope exacto, junto con targets para construir por corrida broker, proxy y browser
+  sobre sus imágenes productivas. El helper verifica cert SAN y ausencia de clave
+  privada, y ejecuta smoke de configuración con `--network none`. Contratos y capas
+  de imágenes pasan localmente; el workflow de CI construye estas capas y corre
+  LAB-04 sobre los artefactos del SHA que va a evaluar.
+- El laboratorio ha probado carga completa en Privacidad y Rendimiento. Los tests
+  unitarios y PostgreSQL cubren carga parcial y los diagnósticos permitidos; las
+  comprobaciones con dominios ajenos son contraste adicional, no el único gate.
+- No se instalaron dependencias; los adaptadores son de prueba y no forman parte de
+  los entrypoints de producto.
 
 ### P2 · correcciones adelantadas · verificación local
 
@@ -330,12 +451,23 @@ verificada ante fallo.
   se persisten.
 - (c/d) Rendimiento: métricas numéricas disponibles y diagnósticos por perfil se
   conservan en perfiles parciales y sobreviven la normalización de ingesta.
-- Verificaciones locales: `ci:verify quality` aprobado; E2E 6/6; Lighthouse mobile
+- Verificaciones locales: `ci:verify quality` aprobado; E2E 7/7; Lighthouse mobile
   y desktop 100 en Rendimiento, Accesibilidad y Buenas prácticas (SEO 60 informativo);
-  PostgreSQL 195 tests de persistencia y 1 de worker aprobados; análisis Sonar Quality
-  Gate aprobado. Repetir Sonar después del commit para eliminar la advertencia SCM
-  sobre cambios sin blame en el árbol de trabajo.
-- P2 no está completo: progreso/estados terminales y recuperación de leases siguen
-  pendientes. El laboratorio P1 completo sigue siendo la puerta para llamar verificado
-  al recorrido API → worker → navegador. No desplegar antes de completarlo y pasar
-  CI remoto e imágenes.
+  LAB-01 y LAB-04 pasaron con imágenes de producción construidas del árbol actual;
+  PostgreSQL 200 tests de persistencia y 1 de worker aprobados; análisis Sonar Quality
+  Gate aprobado. La consulta Sonar posterior al análisis muestra 87 issues históricos
+  cerrados y cero abiertos; el quality gate está aprobado. La salida aún advierte rutas
+  LCOV sin resolver y falta de blame en cambios sin commit, que deben revisarse después
+  de subirlos. El workflow remoto sigue siendo la última puerta antes del deploy.
+- PostgreSQL detectó que la migración 074 reintroducía el fallo de no borrar
+  `target_url` al pasar `ds_fail_scan` a estado terminal. La migración se corrigió y
+  las pruebas verifican el borrado. La correlación terminal ya usa el UUID aleatorio
+  del job en memoria: no requiere hash ni retiene la URL. Se añadieron `trigger` y
+  `job_id` a los grants mínimos de lectura; la integración ejecutada como `ds_api`
+  pasa.
+- Los fixes de retry, privacidad, rendimiento y correlación de fallo del P2 están
+  completados localmente. Un fallo técnico del job completo es el único que muestra
+  mensaje genérico y retry. Los incumplimientos, criterios
+  incompletos y estados desconocidos siguen en el informe, nunca se convierten en ese
+  error. La recuperación general de leases/jobs huérfanos sigue siendo trabajo
+  diferido; el workflow remoto y la inspección de imágenes bloquean la promoción.

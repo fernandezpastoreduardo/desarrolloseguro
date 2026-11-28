@@ -178,6 +178,7 @@ const MIGRATIONS = [
   { version: "071_domain_v5_mobile_score_version", file: "071_domain_v5_mobile_score_version.sql" },
   { version: "072_privacy_v2_cookie_audit", file: "072_privacy_v2_cookie_audit.sql" },
   { version: "073_domain_v5_performance_diagnostics", file: "073_domain_v5_performance_diagnostics.sql" },
+  { version: "074_runtime_broker_startup_diagnostics", file: "074_runtime_broker_startup_diagnostics.sql" },
   { version: "070_temporary_fresh_report_refresh", file: "070_temporary_fresh_report_refresh.sql" },
 ] as const;
 

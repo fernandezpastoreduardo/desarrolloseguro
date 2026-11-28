@@ -31,8 +31,9 @@ export class PublicScanController {
   getDomainStatus(
     @Param("hostname") hostname: string,
     @Query("targetUrl") targetUrl?: string,
+    @Query("jobId") jobId?: string,
   ): Promise<PublicDomainStatus> {
-    return this.scans.getDomainStatus(hostname, targetUrl);
+    return this.scans.getDomainStatus(hostname, targetUrl, jobId);
   }
 
   @Post("domains/:hostname/analysis-requests")

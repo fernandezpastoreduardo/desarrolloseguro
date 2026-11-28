@@ -31,6 +31,7 @@ const dockerBehavior = {
   executorExitCode: 0,
   hangExecutor: false,
   spawnErrorOnVolumeCreate: false,
+  spawnErrorOnPrivacyBrowser: false,
   privacyProxyStopped: false,
   privacyBrowserOutput: undefined as string | undefined,
 };
@@ -51,6 +52,7 @@ beforeEach(() => {
     executorExitCode: 0,
     hangExecutor: false,
     spawnErrorOnVolumeCreate: false,
+    spawnErrorOnPrivacyBrowser: false,
     privacyProxyStopped: false,
     privacyBrowserOutput: undefined,
   });
@@ -101,7 +103,9 @@ beforeEach(() => {
     } else if (args[0] === "run" && isExecutor) {
       // The executor response is scheduled when the command's stdin closes.
     } else if (args[0] === "run" && isPrivacyBrowser) {
-      // The bounded browser observation is emitted at process completion.
+      if (dockerBehavior.spawnErrorOnPrivacyBrowser) {
+        queueMicrotask(() => child.emit("error", new Error("private spawn detail")));
+      }
     } else if (args[0] === "logs") {
       const output = dockerBehavior.privacyProxyStopped
         ? '{"event":"privacy_proxy_stats","receivedBytes":321,"budgetExceeded":false}\n'
@@ -176,11 +180,13 @@ describe("createDockerRuntimeCoordinatorRunner", () => {
     expect(dockerCalls.some((args) => args[0] === "network" && args[1] === "create" && args.includes("--internal"))).toBe(true);
     const browserRun = dockerCalls.find((args) => args[0] === "run" && args.includes("privacy-browser:local"));
     expect(browserRun?.[browserRun.indexOf("--network") + 1]).toMatch(/^development-security-privacy-/u);
+    expect(browserRun?.[browserRun.indexOf("--user") + 1]).toBe("1001:1001");
     expect(browserRun).not.toContain("development-security-egress");
     expect(browserRun).toContain("--cap-drop");
     expect(browserRun).toContain("ALL");
     expect(browserRun?.[browserRun.indexOf("--memory") + 1]).toBe("1024m");
     expect(browserRun?.[browserRun.indexOf("--cpus") + 1]).toBe("1");
+    expect(browserRun?.[browserRun.indexOf("--tmpfs") + 1]).toContain("uid=1001,gid=1001");
     expect(dockerCalls.some((args) => args[0] === "network" && args[1] === "connect" && args.includes("--alias"))).toBe(true);
   });
 
@@ -226,6 +232,25 @@ describe("createDockerRuntimeCoordinatorRunner", () => {
     });
   });
 
+  it("preserves allowlisted Docker failure categories for browser observation", async () => {
+    dockerBehavior.spawnErrorOnPrivacyBrowser = true;
+    const diagnostics: RuntimeDiagnosticEvent[] = [];
+    const runner = createDockerRuntimeCoordinatorRunner(createDockerRuntimeSessionFactory({
+      executorImage: "executor:local", brokerImage: "broker:local",
+      privacyBrowserImage: "privacy-browser:local", privacyEgressImage: "privacy-egress:local",
+      brokerNetwork: "development-security-egress",
+      diagnostic: (event) => diagnostics.push(event),
+    }));
+
+    await runner.execute(REQUEST, new AbortController().signal);
+
+    expect(diagnostics).toContainEqual({
+      type: "runtime_diagnostic",
+      stage: "privacy_browser_observation",
+      code: "docker_runtime_unavailable",
+    });
+  });
+
   it("reduces broker startup stderr to a safe failure category", () => {
     expect(classifyBrokerStartupStderr("Cannot find module '/private/runtime.js'"))
       .toBe("runtime_broker_module_load_failed");
@@ -233,6 +258,16 @@ describe("createDockerRuntimeCoordinatorRunner", () => {
       .toBe("runtime_broker_permission_denied");
     expect(classifyBrokerStartupStderr("Cannot find package parse5 imported from /private/path"))
       .toBe("runtime_broker_html_parser_missing");
+    expect(classifyBrokerStartupStderr("network ds-public-audit-lab-run-egress not found"))
+      .toBe("runtime_broker_network_missing");
+    expect(classifyBrokerStartupStderr("No such image: broker:run-id"))
+      .toBe("runtime_broker_image_unavailable");
+    expect(classifyBrokerStartupStderr("invalid mount config for type volume"))
+      .toBe("runtime_broker_mount_invalid");
+    expect(classifyBrokerStartupStderr("failed to create task for container"))
+      .toBe("runtime_broker_container_runtime_failed");
+    expect(classifyBrokerStartupStderr("Conflict. The container name \"/broker\" is already in use."))
+      .toBe("runtime_broker_name_conflict");
     expect(classifyBrokerStartupStderr("secret host path and token")).toBeUndefined();
   });
 
@@ -255,6 +290,34 @@ describe("createDockerRuntimeCoordinatorRunner", () => {
     expect(factory.create).toHaveBeenCalledExactlyOnceWith(REQUEST, signal);
     expect(execute).toHaveBeenCalledExactlyOnceWith(REQUEST, signal);
     expect(close).toHaveBeenCalledOnce();
+  });
+
+  it("validates the exact domain-v5 path and query returned by the executor", async () => {
+    const targetUrl = "https://sample.example.net/careers?campaign=summer";
+    const request: TransportV1ExecutorRequest = {
+      ...REQUEST,
+      profileVersion: "domain-v5",
+      targetUrl,
+    };
+    const result = makeDomainV5Result("/careers?campaign=summer");
+    const factory: DockerRuntimeSessionFactory = {
+      create: vi.fn().mockResolvedValue({
+        execute: vi.fn().mockResolvedValue({
+          protocolVersion: 1,
+          requestId: request.requestId,
+          result: JSON.parse(JSON.stringify(result)) as unknown,
+        }),
+        close: vi.fn().mockResolvedValue(undefined),
+      }),
+    };
+
+    await expect(createDockerRuntimeCoordinatorRunner(factory).execute(
+      request,
+      new AbortController().signal,
+    )).resolves.toMatchObject({
+      scannerVersion: "domain-v5-network-adapter-2",
+      scope: ["/careers?campaign=summer"],
+    });
   });
 
   it("logs a privacy-assessment phase error and preserves the base scan", async () => {
@@ -1032,6 +1095,36 @@ function makeResult(): Omit<ScanRunInput, "jobId" | "leaseToken" | "hostname" | 
       limitation: "Fixture only.",
       evidence: {},
     })),
+    metrics: { requestsCount: 0, bytesCount: 0, durationMs: 0, pagesCount: 0 },
+  };
+}
+
+function makeDomainV5Result(targetPath: string): ReturnType<typeof makeResult> {
+  const observedAt = new Date("2026-11-27T22:00:00.000Z");
+  const checks = [
+    ["DS-DNS-01", "DNS"], ["DS-TLS-01", "TLS"], ["DS-TLS-02", "TLS"],
+    ["DS-HTTP-01", "HEAD"], ["DS-HTTP-01", "GET"], ["DS-HDR-01", "GET"],
+    ["DS-PRIV-04", "GET"], ["DS-PRIV-05", "GET"], ["DS-PRIV-06", "GET"],
+    ["DS-QUAL-02", "GET"],
+  ].map(([controlId, method]) => ({
+    controlId,
+    status: "unknown" as const,
+    required: true as const,
+    severity: "high",
+    observedAt,
+    targetPath,
+    method,
+    summary: "Fixture observation.",
+    limitation: "Fixture only.",
+    evidence: {},
+  }));
+  return {
+    scannerVersion: "domain-v5-network-adapter-2",
+    startedAt: observedAt,
+    completedAt: observedAt,
+    verdict: "inconclusive",
+    scope: [targetPath],
+    checks,
     metrics: { requestsCount: 0, bytesCount: 0, durationMs: 0, pagesCount: 0 },
   };
 }

@@ -21,25 +21,33 @@ describe("projectPublicEvidence", () => {
     })).toEqual({ statusCode: 200, redirectedToHttps: true });
   });
 
-  it("projects only the authorized Grumphya redirect identity fields", () => {
+  it("projects safe redirect identity fields for a synthetic hostname", () => {
     expect(projectPublicEvidence("DS-HTTP-01", {
       statusCode: 301,
-      requestedHostname: "www.grumphya.com",
-      finalHostname: "grumphya.com",
-      canonicalHostname: "grumphya.com",
+      requestedHostname: "www.example.net",
+      finalHostname: "example.net",
+      canonicalHostname: "example.net",
       redirectStatusCode: 301,
-      redirectFromHostname: "www.grumphya.com",
-      redirectToHostname: "grumphya.com",
-      redirectLocation: "https://grumphya.com/private?token=secret",
+      redirectFromHostname: "www.example.net",
+      redirectToHostname: "example.net",
+      redirectLocation: "https://example.net/private?token=secret",
     })).toEqual({
       statusCode: 301,
-      requestedHostname: "www.grumphya.com",
-      finalHostname: "grumphya.com",
-      canonicalHostname: "grumphya.com",
+      requestedHostname: "www.example.net",
+      finalHostname: "example.net",
+      canonicalHostname: "example.net",
       redirectStatusCode: 301,
-      redirectFromHostname: "www.grumphya.com",
-      redirectToHostname: "grumphya.com",
+      redirectFromHostname: "www.example.net",
+      redirectToHostname: "example.net",
     });
+  });
+
+  it("omits malformed hostname values from public transport evidence", () => {
+    expect(projectPublicEvidence("DS-HTTP-01", {
+      requestedHostname: "example.net:443",
+      finalHostname: "not a hostname",
+      canonicalHostname: "example..net",
+    })).toEqual({});
   });
 
   it("projects only allowlisted TLS probe diagnostics", () => {
@@ -96,5 +104,27 @@ describe("projectPublicEvidence", () => {
       mobileDiagnosticCode: "browser_timeout",
       mobileMissingMetricsMask: 255,
     });
+  });
+
+  it("preserves mobile and desktop transfer sizes through the accepted 64 MiB bound", () => {
+    const mobileTransferBytes = 2_000_000;
+    const desktopTransferBytes = 1_250_000;
+    expect(projectPublicEvidence("DS-QUAL-02", {
+      mobileTransferBytes,
+      mobileScore: 84,
+      desktopTransferBytes,
+      desktopScore: 92,
+      responseBytes: 2_000_000,
+    })).toEqual({
+      mobileTransferBytes,
+      mobileScore: 84,
+      desktopTransferBytes,
+      desktopScore: 92,
+    });
+
+    expect(projectPublicEvidence("DS-QUAL-02", {
+      mobileTransferBytes: 64 * 1024 * 1024,
+      desktopTransferBytes: 64 * 1024 * 1024 + 1,
+    })).toEqual({ mobileTransferBytes: 64 * 1024 * 1024 });
   });
 });

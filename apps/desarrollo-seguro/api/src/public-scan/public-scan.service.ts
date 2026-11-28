@@ -35,6 +35,7 @@ import {
   type EnsureScanResult,
   type PostgresScanStore,
   type PublicDomainSnapshot,
+  type PublicScanJobSnapshot,
   type PublicScanReport,
   type PublicBetaCertification,
   type PublicScanSeverity,
@@ -140,12 +141,19 @@ export type PublicAnalysisRequest = {
   hostname: string;
   state: PublicAnalysisRequestState;
   targetUrl: string;
-};
+} & (
+  | { state: "queued" | "running"; jobId: string }
+  | { state: Exclude<PublicAnalysisRequestState, "queued" | "running">; jobId?: never }
+);
 
 type PublicReadStore = Pick<
   PostgresScanStore,
   "readPublicDomainSnapshot" | "readPublicReport"
 > & {
+  readPublicScanJobSnapshot?: (
+    hostname: string,
+    jobId: string,
+  ) => Promise<PublicScanJobSnapshot | null>;
   readPublicReportHistory?: (
     hostname: string,
     limit: number,
@@ -160,17 +168,34 @@ export class PublicScanService {
 
   constructor(private readonly store: { scanStore: PublicReadStore }) {}
 
-  async getDomainStatus(input: unknown, targetUrlInput?: unknown): Promise<PublicDomainStatus> {
+  async getDomainStatus(
+    input: unknown,
+    targetUrlInput?: unknown,
+    jobIdInput?: unknown,
+  ): Promise<PublicDomainStatus> {
     const hostname = normalizeRequestHostname(input);
     const targetUrl = targetUrlInput === undefined
       ? undefined
       : normalizeTargetUrl(targetUrlInput, hostname);
+    const jobId = jobIdInput === undefined ? undefined : normalizeJobId(jobIdInput);
     const checkedAt = new Date();
     let snapshot: PublicDomainSnapshot | null;
+    let jobSnapshot: PublicScanJobSnapshot | null = null;
+    let jobReport: PublicScanReport | null = null;
     try {
       snapshot = targetUrl === undefined
         ? await this.store.scanStore.readPublicDomainSnapshot(hostname)
         : await this.store.scanStore.readPublicDomainSnapshot(hostname, targetUrl);
+      if (jobId !== undefined) {
+        const readJobSnapshot = this.store.scanStore.readPublicScanJobSnapshot;
+        if (!readJobSnapshot) throw new Error("public_scan_job_status_unavailable");
+        jobSnapshot = await readJobSnapshot.call(this.store.scanStore, hostname, jobId);
+        if (jobSnapshot?.state === "completed") {
+          if (!jobSnapshot.reportId) throw new Error("public_scan_job_report_missing");
+          jobReport = await this.store.scanStore.readPublicReport(jobSnapshot.reportId);
+          if (!jobReport) throw new Error("public_scan_job_report_missing");
+        }
+      }
     } catch {
       this.logger.error(PUBLIC_SCAN_READ_FAILED);
       throw new ServiceUnavailableException(PUBLIC_STORAGE_ERROR);
@@ -190,13 +215,18 @@ export class PublicScanService {
     }
 
     const isOptedOut = snapshot.optedOut;
-    const report = isOptedOut ? null : snapshot.lastReport;
-    const isUpdating = !isOptedOut && snapshot.activeJobId !== null;
+    const report = isOptedOut ? null : jobId === undefined ? snapshot.lastReport : jobReport;
+    const failedJob = jobSnapshot?.state === "failed" ? jobSnapshot.lastFailure : null;
+    const lastFailure = failedJob ?? (jobId === undefined ? snapshot.lastFailure ?? null : null);
+    const jobIsUpdating = jobSnapshot?.state === "queued" || jobSnapshot?.state === "running";
+    const isUpdating = !isOptedOut && (jobId === undefined
+      ? snapshot.activeJobId !== null
+      : jobIsUpdating);
     const state = getPublicState(
       isOptedOut,
       isUpdating,
       report,
-      snapshot.lastFailure,
+      lastFailure,
       checkedAt,
     );
 
@@ -204,16 +234,20 @@ export class PublicScanService {
       hostname,
       enrollment: isOptedOut ? "on_demand" : snapshot.enrollment,
       state,
-      activeJobId: isOptedOut ? null : snapshot.activeJobId,
-      ...(!isOptedOut && isUpdating && snapshot.activeProgress
-        ? { auditProgress: snapshot.activeProgress }
+      activeJobId: isOptedOut
+        ? null
+        : jobId !== undefined ? (jobIsUpdating ? jobSnapshot!.jobId : null) : snapshot.activeJobId,
+      ...(!isOptedOut && isUpdating && (jobId !== undefined ? jobSnapshot!.progress : snapshot.activeProgress)
+        ? { auditProgress: jobId !== undefined ? jobSnapshot!.progress! : snapshot.activeProgress! }
         : {}),
-      failureCode: state === "failed" ? snapshot.lastFailure?.code ?? null : null,
-      failureDiagnostic: state === "failed" ? snapshot.lastFailure?.diagnostic ?? null : null,
+      failureCode: state === "failed" ? lastFailure?.code ?? null : null,
+      failureDiagnostic: state === "failed" ? lastFailure?.diagnostic ?? null : null,
       lastReport: report ? toPublicReport(report, report.hostname === "grumphya.com"
         ? state === "updating" ? "running" : state === "fresh" ? undefined : "review"
         : null) : null,
-      ...(snapshot.hostnameResolution ? { hostnameResolution: snapshot.hostnameResolution } : {}),
+      ...(jobId === undefined && snapshot.hostnameResolution
+        ? { hostnameResolution: snapshot.hostnameResolution }
+        : {}),
       checkedAt: checkedAt.toISOString(),
     };
   }
@@ -286,6 +320,9 @@ export class PublicScanService {
 
     try {
       const result = await scanStore.requestOnDemandScan(hostname, targetUrl);
+      if (result.kind === "queued" || result.kind === "running") {
+        return { hostname, state: result.kind, targetUrl, jobId: result.jobId };
+      }
       return { hostname, state: result.kind, targetUrl };
     } catch {
       this.logger.error(PUBLIC_SCAN_ADMISSION_FAILED);
@@ -317,6 +354,13 @@ function normalizeTargetUrl(input: unknown, hostname: string): string {
     throw new BadRequestException("scan_target_hostname_mismatch");
   }
   return target.targetUrl;
+}
+
+function normalizeJobId(input: unknown): string {
+  if (typeof input !== "string" || !REPORT_ID_PATTERN.test(input)) {
+    throw new BadRequestException("invalid_scan_job_id");
+  }
+  return input;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

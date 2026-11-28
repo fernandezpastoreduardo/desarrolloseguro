@@ -21,34 +21,34 @@ import {
   type HttpsRequestFactory,
 } from "./pinned-https-transport.js";
 
-describe("Grumphya permanent redirect identity", () => {
-  it("uses the observed destination for a permanent hostname redirect in either direction", () => {
-    expect(getCanonicalHostname("www.grumphya.com", "grumphya.com", [
-      { statusCode: 301, from: "www.grumphya.com", to: "grumphya.com" },
-    ])).toBe("grumphya.com");
-    expect(getCanonicalHostname("grumphya.com", "www.grumphya.com", [
-      { statusCode: 308, from: "grumphya.com", to: "www.grumphya.com" },
-    ])).toBe("www.grumphya.com");
+describe("canonical hostname redirect identity", () => {
+  it("uses the observed destination for a permanent exact-www redirect on any host", () => {
+    expect(getCanonicalHostname("www.example.net", "example.net", [
+      { statusCode: 301, from: "www.example.net", to: "example.net" },
+    ])).toBe("example.net");
+    expect(getCanonicalHostname("example.net", "www.example.net", [
+      { statusCode: 308, from: "example.net", to: "www.example.net" },
+    ])).toBe("www.example.net");
   });
 
   it.each([302, 303, 307])("does not treat temporary status %s as canonical evidence", (statusCode) => {
-    expect(getCanonicalHostname("www.grumphya.com", "grumphya.com", [
-      { statusCode, from: "www.grumphya.com", to: "grumphya.com" },
+    expect(getCanonicalHostname("www.example.net", "example.net", [
+      { statusCode, from: "www.example.net", to: "example.net" },
     ])).toBeNull();
   });
 
   it("does not infer equivalence from a same-host or out-of-scope hop", () => {
-    expect(getCanonicalHostname("grumphya.com", "grumphya.com", [
-      { statusCode: 301, from: "grumphya.com", to: "grumphya.com" },
+    expect(getCanonicalHostname("example.net", "example.net", [
+      { statusCode: 301, from: "example.net", to: "example.net" },
     ])).toBeNull();
-    expect(getCanonicalHostname("www.grumphya.com", "outside.example", [
-      { statusCode: 301, from: "www.grumphya.com", to: "outside.example" },
+    expect(getCanonicalHostname("www.example.net", "outside.example", [
+      { statusCode: 301, from: "www.example.net", to: "outside.example" },
     ])).toBeNull();
-    expect(getCanonicalHostname("www.grumphya.com", "www.grumphya.com", [
-      { statusCode: 301, from: "www.grumphya.com", to: "grumphya.com" },
-      { statusCode: 308, from: "grumphya.com", to: "www.grumphya.com" },
+    expect(getCanonicalHostname("www.example.net", "www.example.net", [
+      { statusCode: 301, from: "www.example.net", to: "example.net" },
+      { statusCode: 308, from: "example.net", to: "www.example.net" },
     ])).toBeNull();
-    expect(getCanonicalHostname("grumphya.com", "www.grumphya.com", [])).toBeNull();
+    expect(getCanonicalHostname("example.net", "www.example.net", [])).toBeNull();
   });
 });
 

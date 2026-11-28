@@ -161,6 +161,35 @@ jobs:
           docker pull pgvector/pgvector:0.8.7-pg17-bookworm
       - name: Smoke test production API image
         run: bash scripts/test-development-security-production-smoke.sh "desarrolloseguro-api:${GITHUB_SHA}"
+      - name: Verify isolated production migrations and API startup
+        run: >-
+          bash scripts/run-development-security-public-audit-lab-01.sh
+          "desarrolloseguro-api:${GITHUB_SHA}"
+          desarrolloseguro-postgres:pg19-candidate
+      - name: Build and smoke test public audit lab images
+        shell: bash
+        env:
+          IMAGE_REVISION: ${{ github.sha }}
+          LAB_RUN_ID: gha-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          umask 077
+          lab_certificate_dir="$RUNNER_TEMP/public-audit-lab-images-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          mkdir -m 700 "$lab_certificate_dir"
+          trap 'rm -rf -- "$lab_certificate_dir"' EXIT
+          lab_hostname="scan-${LAB_RUN_ID}.example.net"
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+            -subj "/CN=${lab_hostname}" \
+            -addext "subjectAltName=DNS:${lab_hostname}" \
+            -keyout "$lab_certificate_dir/fixture.key" \
+            -out "$lab_certificate_dir/fixture.pem" >/dev/null 2>&1
+          chmod 0444 "$lab_certificate_dir/fixture.pem"
+          pnpm lab:build-images -- \
+            "$LAB_RUN_ID" \
+            "$lab_certificate_dir/fixture.pem" \
+            "desarrolloseguro-egress-broker:${IMAGE_REVISION}" \
+            "desarrolloseguro-privacy-egress:${IMAGE_REVISION}" \
+            "desarrolloseguro-privacy-browser:${IMAGE_REVISION}"
       - name: Smoke test consent and provider controls in isolated Chromium
         shell: bash
         env:
@@ -170,17 +199,33 @@ jobs:
           docker run --rm \
             --network none \
             --read-only \
-            --user 1000:1000 \
+            --user 1001:1001 \
             --cap-drop ALL \
             --security-opt no-new-privileges \
             --pids-limit 128 \
             --memory 512m \
             --cpus 0.5 \
             --shm-size 128m \
-            --tmpfs /tmp:rw,noexec,nosuid,size=64m,uid=1000,gid=1000 \
+            --tmpfs /tmp:rw,noexec,nosuid,size=64m,uid=1001,gid=1001 \
             --entrypoint node \
             "desarrolloseguro-privacy-browser:${IMAGE_REVISION}" \
             /workspace/apps/desarrollo-seguro/worker/scripts/privacy-browser-fixture-smoke.mjs
+      - name: Run production artifacts through the isolated public audit laboratory
+        shell: bash
+        env:
+          IMAGE_REVISION: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          bash scripts/run-development-security-public-audit-lab-04.sh \
+            "desarrolloseguro-api:${IMAGE_REVISION}" \
+            "desarrolloseguro-web:${IMAGE_REVISION}" \
+            "desarrolloseguro-worker:${IMAGE_REVISION}" \
+            "desarrolloseguro-runtime:${IMAGE_REVISION}" \
+            "desarrolloseguro-executor:${IMAGE_REVISION}" \
+            desarrolloseguro-postgres:pg19-candidate \
+            "desarrolloseguro-egress-broker:${IMAGE_REVISION}" \
+            "desarrolloseguro-privacy-egress:${IMAGE_REVISION}" \
+            "desarrolloseguro-privacy-browser:${IMAGE_REVISION}"
       - name: Smoke test runtime coordinator Docker CLI
         shell: bash
         run: |

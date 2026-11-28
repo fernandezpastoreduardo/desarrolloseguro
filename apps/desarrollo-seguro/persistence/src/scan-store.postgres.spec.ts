@@ -969,6 +969,20 @@ describePostgres.sequential("PostgresScanStore", () => {
       [retriedClaim.id],
     );
     expect(terminal.rows[0]).toEqual({ target_url: null, state: "failed" });
+    const snapshot = await store.readPublicDomainSnapshot(TEST_HOSTNAME, targetUrl);
+    const otherPathSnapshot = await store.readPublicDomainSnapshot(
+      TEST_HOSTNAME,
+      "https://sample.example.net/about?lang=en",
+    );
+    expect(snapshot?.lastFailure).toBeNull();
+    expect(otherPathSnapshot?.lastFailure).toBeNull();
+    await expect(store.readPublicScanJobSnapshot(TEST_HOSTNAME, first.jobId)).resolves.toMatchObject({
+      jobId: first.jobId,
+      state: "failed",
+      lastFailure: { code: "executor_failed" },
+      reportId: null,
+    });
+    await expect(store.readPublicScanJobSnapshot("other.example.net", first.jobId)).resolves.toBeNull();
   });
 
   it("does not let a completed scheduled legacy scan consume an exact URL request cooldown", async () => {

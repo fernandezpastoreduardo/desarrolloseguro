@@ -176,7 +176,19 @@ describe("requestPinnedHttpUpgrade", () => {
       { requestFactory: httpFactory, httpsRequestFactory: httpsFactory, lookupFactory },
     );
 
-    expect(result).toMatchObject({ statusCode: 200, finalScheme: "https", redirectedToHttps: true });
+    expect(result).toMatchObject({
+      statusCode: 200,
+      finalScheme: "https",
+      redirectedToHttps: true,
+      hostnameRedirectEvidence: {
+        requestedHostname: HOSTNAME,
+        finalHostname: `www.${HOSTNAME}`,
+        redirectStatusCode: 301,
+        redirectFromHostname: HOSTNAME,
+        redirectToHostname: `www.${HOSTNAME}`,
+        canonicalHostname: `www.${HOSTNAME}`,
+      },
+    });
     expect(httpsTargets).toEqual([{ host: `www.${HOSTNAME}`, port: 443 }]);
     expect(lookupRequests).toEqual([[HOSTNAME, 80], [`www.${HOSTNAME}`, 443]]);
   });

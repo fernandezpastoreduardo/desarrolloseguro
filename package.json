@@ -25,7 +25,8 @@
     "ci:verify": "bash scripts/ci-verify.sh",
     "quality:check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "quality:sonar": "pnpm test:coverage && node scripts/run-sonarqube-local.mjs",
-    "sandbox:check": "bash scripts/verify-executor-sandbox.sh"
+    "sandbox:check": "bash scripts/verify-executor-sandbox.sh",
+    "lab:build-images": "node apps/desarrollo-seguro/worker/scripts/public-audit-lab/build-public-audit-lab-images.mjs"
   },
   "devDependencies": {
     "@sonar/scan": "5.1.0",

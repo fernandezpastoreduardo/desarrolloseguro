@@ -29,7 +29,6 @@ const MAX_RESPONSE_BYTES = 64 * 1024;
 const REQUEST_TIMEOUT_MS = 10_000;
 const REDIRECT_STATUS_CODES = new Set([301, 302, 303, 307, 308]);
 const PERMANENT_REDIRECT_STATUS_CODES = new Set([301, 308]);
-const GRUMPHYA_HOSTNAMES = new Set(["grumphya.com", "www.grumphya.com"]);
 const BACKSLASH = "\\";
 
 export type PinnedHttpsRequest = {
@@ -180,9 +179,9 @@ export async function requestPinnedHttps(
           : { publicPolicyLinks: result.publicPolicyLinks }),
         requestsCount,
         bytesCount,
-        redirectStatusCode: getGrumphyaHostnameChange(redirectHops)?.statusCode ?? null,
-        redirectFromHostname: getGrumphyaHostnameChange(redirectHops)?.from ?? null,
-        redirectToHostname: getGrumphyaHostnameChange(redirectHops)?.to ?? null,
+        redirectStatusCode: getSingleHostnameChange(redirectHops)?.statusCode ?? null,
+        redirectFromHostname: getSingleHostnameChange(redirectHops)?.from ?? null,
+        redirectToHostname: getSingleHostnameChange(redirectHops)?.to ?? null,
         canonicalHostname: getCanonicalHostname(requestedHostname, currentHostname, redirectHops),
       };
     }
@@ -491,7 +490,6 @@ export function getCanonicalHostname(
   finalHostname: string,
   hops: readonly { statusCode: number; from: string; to: string }[],
 ): string | null {
-  if (!GRUMPHYA_HOSTNAMES.has(requestedHostname) || !GRUMPHYA_HOSTNAMES.has(finalHostname)) return null;
   if (requestedHostname === finalHostname || hops.length === 0) return null;
   let expectedFrom = requestedHostname;
   for (const hop of hops) {
@@ -502,19 +500,16 @@ export function getCanonicalHostname(
   const hostnameChanges = hops.filter((hop) => hop.from !== hop.to);
   if (hostnameChanges.length === 0 || hostnameChanges.some((hop) =>
     !PERMANENT_REDIRECT_STATUS_CODES.has(hop.statusCode) ||
-    !GRUMPHYA_HOSTNAMES.has(hop.from) ||
-    !GRUMPHYA_HOSTNAMES.has(hop.to),
+    !isWwwAliasPair(hop.from, hop.to),
   )) return null;
   return hostnameChanges.at(-1)?.to === finalHostname ? finalHostname : null;
 }
 
-function getGrumphyaHostnameChange(
+function getSingleHostnameChange(
   hops: readonly { statusCode: number; from: string; to: string }[],
 ): { statusCode: number; from: string; to: string } | null {
   const changes = hops.filter((hop) => hop.from !== hop.to);
-  if (changes.length !== 1 || changes.some((hop) =>
-    !GRUMPHYA_HOSTNAMES.has(hop.from) || !GRUMPHYA_HOSTNAMES.has(hop.to),
-  )) return null;
+  if (changes.length !== 1 || changes.some((hop) => !isWwwAliasPair(hop.from, hop.to))) return null;
   return changes[0] ?? null;
 }
 

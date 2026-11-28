@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { assessPrivacy, parsePublicServiceComparison, PRIVACY_CRITERIA } from "@desarrolloseguro/core";
+import { assessPrivacy, parsePublicServiceComparison, PRIVACY_CRITERIA, projectPublicEvidence } from "@desarrolloseguro/core";
 import { PublicScanPortal } from "../index.js";
 
 const DOMAIN_INPUT_NAME = "URL HTTPS que quieres auditar";
@@ -12,6 +12,14 @@ const ANALYSIS_REQUEST_ENDPOINT =
 const REPORT_SUMMARY = "La cabecera de seguridad está presente.";
 const RATE_LIMIT_MESSAGE = "Espera un minuto y vuelve a intentarlo.";
 const REPORT_ID = "123e4567-e89b-42d3-a456-426614174000";
+const JOB_ID = "123e4567-e89b-42d3-a456-426614174123";
+
+function queuedAnalysisResponse(
+  hostname = "example.com",
+  targetUrl = `https://${hostname}/`,
+): Response {
+  return Response.json({ hostname, targetUrl, state: "queued", jobId: JOB_ID }, { status: 202 });
+}
 
 const PUBLIC_REPORT = {
   id: REPORT_ID,
@@ -166,7 +174,7 @@ describe("PublicScanPortal", () => {
     expect(screen.getAllByRole("link", { name: "Fuente oficial" }).length).toBeGreaterThan(0);
   });
 
-  it("shows the two-profile performance score and evidence for domain-v5", async () => {
+  it("keeps both profile scores and transfer evidence above 1 MB in the public report", async () => {
     const performanceEvidence = {
       inspected: true,
       mobileFcpMs: 1_820,
@@ -183,7 +191,7 @@ describe("PublicScanPortal", () => {
       desktopClsMilli: 40,
       desktopTbtMs: 80,
       desktopTtfbMs: 300,
-      desktopTransferBytes: 800_000,
+      desktopTransferBytes: 1_250_000,
       desktopScore: 92,
     };
     const targetPath = "/servicio?plan=pro";
@@ -204,7 +212,7 @@ describe("PublicScanPortal", () => {
           method: "GET",
           summary: "Carga medida en móvil y escritorio.",
           limitation: "Medición propia tipo Lighthouse.",
-          evidence: performanceEvidence,
+          evidence: projectPublicEvidence("DS-QUAL-02", performanceEvidence),
         },
       ],
     };
@@ -234,6 +242,7 @@ describe("PublicScanPortal", () => {
     expect(screen.getByText("0,120")).toBeVisible();
     expect(screen.getByText("Escritorio · puntuación")).toBeVisible();
     expect(screen.getAllByText(/2\.000\.000 bytes/u).length).toBeGreaterThan(1);
+    expect(screen.getAllByText(/1\.250\.000 bytes/u).length).toBeGreaterThan(1);
   });
 
   it("does not invent an aggregate performance score when a required profile metric is missing", async () => {
@@ -360,7 +369,7 @@ describe("PublicScanPortal", () => {
     };
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(Response.json(status))
-      .mockResolvedValueOnce(Response.json({ hostname: "example.com", state: "queued" }, { status: 202 }))
+      .mockResolvedValueOnce(queuedAnalysisResponse())
       .mockResolvedValueOnce(Response.json(completedStatus))
       .mockResolvedValueOnce(Response.json([]));
     vi.stubGlobal("fetch", fetchMock);
@@ -400,7 +409,7 @@ describe("PublicScanPortal", () => {
         }),
       )
       .mockResolvedValueOnce(
-        Response.json({ hostname: "example.com", state: "queued" }, { status: 202 }),
+        queuedAnalysisResponse(),
       );
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
@@ -1034,11 +1043,11 @@ describe("PublicScanPortal", () => {
       .fn()
       .mockResolvedValueOnce(Response.json(status))
       .mockResolvedValueOnce(
-        Response.json({ hostname: "example.com", state: "queued" }, { status: 202 }),
+        queuedAnalysisResponse(),
       )
       .mockResolvedValueOnce(Response.json(status))
       .mockResolvedValueOnce(
-        Response.json({ hostname: "example.com", state: "queued" }, { status: 202 }),
+        queuedAnalysisResponse(),
       );
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
@@ -1479,7 +1488,7 @@ describe("PublicScanPortal", () => {
       )
       .mockResolvedValueOnce(Response.json([]))
       .mockResolvedValueOnce(
-        Response.json({ hostname: "example.com", state: "queued" }, { status: 202 }),
+        queuedAnalysisResponse(),
       );
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
@@ -1514,42 +1523,81 @@ describe("PublicScanPortal", () => {
   });
 
   it("shows a safe failure reason and allows retry when no report was produced", async () => {
+    const unscannedStatus = {
+      hostname: "example.com",
+      enrollment: "on_demand",
+      state: "not_scanned",
+      failureCode: null,
+      activeJobId: null,
+      lastReport: null,
+      checkedAt: "2026-11-03T08:10:00.000Z",
+    };
+    const failedJobStatus = {
+      ...unscannedStatus,
+      state: "failed",
+      failureCode: "egress_failed",
+      failureDiagnostic: { stage: "executor", code: "executor_application_failed" },
+    };
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(
-        Response.json({
-          hostname: "example.com",
-          enrollment: "on_demand",
-          state: "failed",
-          failureCode: "egress_failed",
-          activeJobId: null,
-          lastReport: null,
-          checkedAt: "2026-11-03T08:10:00.000Z",
-        }),
-      )
-      .mockResolvedValueOnce(
-        Response.json({ hostname: "example.com", state: "queued" }, { status: 202 }),
-      );
+      .mockResolvedValueOnce(Response.json(unscannedStatus))
+      .mockResolvedValueOnce(queuedAnalysisResponse())
+      .mockResolvedValueOnce(Response.json(failedJobStatus))
+      .mockResolvedValueOnce(queuedAnalysisResponse());
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
-
     render(<PublicScanPortal />);
-    await user.type(
-      screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }),
-      "https://example.com/",
-    );
+    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "https://example.com/");
     await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
 
-    expect(await screen.findByText(/no se pudo completar la conexión pública/i)).toBeVisible();
-    await user.click(
-      screen.getByRole("checkbox", {
-        name: /tengo autorización para solicitar este análisis/i,
-      }),
-    );
-    await user.click(screen.getByRole("button", { name: "Solicitar análisis" }));
+    expect(await screen.findByRole("progressbar", { name: "Progreso del análisis" })).toHaveAttribute("data-phase", "queued");
+    expect(await screen.findByText(/no se pudo completar la conexión pública/i, {}, { timeout: 7_000 })).toBeVisible();
+    expect(fetchMock.mock.calls[2]?.[0]).toContain(`jobId=${JOB_ID}`);
+    expect(fetchMock.mock.calls[2]?.[0]).not.toContain("targetUrl=");
+    await user.click(screen.getByRole("button", { name: "Volver a solicitar análisis" }));
     expect(await screen.findByRole("progressbar", { name: "Progreso del análisis" }))
       .toHaveAttribute("data-phase", "queued");
-  });
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  }, 10_000);
+
+  it("keeps the previous report visible when a new job fails technically", async () => {
+    const previousReport = { ...SCORED_PUBLIC_REPORT, profileVersion: "domain-v5" };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(Response.json({
+        hostname: "example.com",
+        enrollment: "on_demand",
+        state: "fresh",
+        failureCode: null,
+        activeJobId: null,
+        lastReport: previousReport,
+        checkedAt: "2026-11-03T08:10:00.000Z",
+      }))
+      .mockResolvedValueOnce(queuedAnalysisResponse())
+      .mockResolvedValueOnce(Response.json({
+        hostname: "example.com",
+        enrollment: "on_demand",
+        state: "failed",
+        failureCode: "egress_failed",
+        activeJobId: null,
+        lastReport: null,
+        checkedAt: "2026-11-03T08:11:00.000Z",
+      }));
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<PublicScanPortal />);
+    await user.type(screen.getByRole("textbox", { name: DOMAIN_INPUT_NAME }), "https://example.com/");
+    await user.click(screen.getByRole("button", { name: SEARCH_BUTTON_NAME }));
+    await screen.findByText(/Este informe está vigente/i);
+    await user.click(screen.getByRole("checkbox", { name: /Confirmo que tengo autorización/i }));
+    await user.click(screen.getByRole("button", { name: "Solicitar análisis" }));
+
+    expect(await screen.findByText("No se pudo completar la conexión pública con el dominio.", {}, { timeout: 7_000 }))
+      .toBeVisible();
+    expect(screen.getByText(/El informe anterior sigue disponible como histórico/i)).toBeVisible();
+    expect(screen.getByRole("button", { name: "Volver a solicitar análisis" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Qué significa esta valoración" })).toBeVisible();
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  }, 10_000);
 
   it("shows each pending audit aspect while a domain scan is active", async () => {
     vi.stubGlobal(
@@ -2008,7 +2056,10 @@ describe("PublicScanPortal", () => {
       lastReport: null,
       checkedAt: "2026-11-03T08:00:00.000Z",
     }))
-      .mockResolvedValueOnce(Response.json({ hostname: "cualquierdominio.com", state: "queued" }, { status: 202 }));
+      .mockResolvedValueOnce(queuedAnalysisResponse(
+        "cualquierdominio.com",
+        "https://cualquierdominio.com/ruta?plan=basico",
+      ));
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
 
@@ -2098,7 +2149,7 @@ describe("PublicScanPortal", () => {
       .fn()
       .mockResolvedValueOnce(Response.json(queuedStatus))
       .mockResolvedValueOnce(
-        Response.json({ hostname: "example.com", state: "queued" }, { status: 202 }),
+        queuedAnalysisResponse(),
       )
       .mockImplementation(() => Promise.resolve(Response.json(updatingStatus)));
     vi.stubGlobal("fetch", fetchMock);
@@ -2154,7 +2205,7 @@ describe("PublicScanPortal", () => {
     expect(screen.queryByRole("button", { name: "Solicitar análisis" })).not.toBeInTheDocument();
 
     await act(async () => {
-      resolveRequest(Response.json({ hostname: "example.com", state: "queued" }, { status: 202 }));
+      resolveRequest(queuedAnalysisResponse());
       await Promise.resolve();
     });
   });

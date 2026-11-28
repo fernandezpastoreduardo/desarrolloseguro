@@ -35,7 +35,7 @@ Los activos, límites de confianza, amenazas y evidencia requerida antes de habi
 | DS-DNS-01  | `DNS` sobre `/`                     | `addressClass` (enum), `aRecordCount` y `aaaaRecordCount` (contadores)                                             |
 | DS-TLS-01  | `TLS` sobre `/`                     | `protocol` (TLSv1.2/TLSv1.3), `certificateValid` y `hostnameMatches` (booleanos)                                   |
 | DS-TLS-02  | `TLS` sobre `/`                     | `tls10Accepted`, `tls11Accepted`, `tls12Accepted`, `tls13Accepted` (booleanos)                                     |
-| DS-HTTP-01 | `HEAD` o `GET` sobre ruta del scope | `statusCode` (HTTP 100–599), `redirectedToHttps` (booleano), `finalScheme` (`http`/`https`); para Grumphya, hostname solicitado/final y evidencia acotada del salto entre los dos nombres autorizados |
+| DS-HTTP-01 | `HEAD` o `GET` sobre ruta del scope | `statusCode` (HTTP 100–599), `redirectedToHttps` (booleano), `finalScheme` (`http`/`https`); cuando hay un redirect entre el hostname auditado y su alias literal `www.`, hostname solicitado/final y evidencia acotada del salto validado |
 | DS-HDR-01  | `GET` sobre ruta del scope          | `hsts`, `nosniff`, `frameProtection`, `referrerPolicy`, `csp` (booleanos); v3 añade `finalScheme` (`http`/`https`) |
 | DS-PRIV-01 | `GET` sobre ruta del scope          | `thirdPartyAttempts`, `blockedRequests` (contadores)                                                               |
 | DS-PRIV-02 | `GET` sobre ruta del scope          | `cookieCount`, `insecureCookieCount`, `thirdPartyCookieCount` (contadores), `inspected` (booleano)                 |

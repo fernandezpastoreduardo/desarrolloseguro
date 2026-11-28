@@ -69,6 +69,11 @@ const SAFE_BROKER_STARTUP_FAILURES = new Set([
   "runtime_broker_entrypoint_module_missing",
   "runtime_broker_permission_denied",
   "runtime_broker_file_missing",
+  "runtime_broker_network_missing",
+  "runtime_broker_image_unavailable",
+  "runtime_broker_mount_invalid",
+  "runtime_broker_container_runtime_failed",
+  "runtime_broker_name_conflict",
 ]);
 const IMAGE_REFERENCE = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/u;
 const NETWORK_REFERENCE = /^(?:none|[A-Za-z0-9][A-Za-z0-9_.-]{0,127})$/u;
@@ -144,6 +149,7 @@ export function createDockerRuntimeCoordinatorRunner(
             responseInput,
             request.requestId,
             request.profileVersion,
+            request.targetUrl ? parseScanTargetUrl(request.targetUrl).targetPath : "/",
           );
         } catch (error) {
           throw withRuntimeBoundaryDiagnostic(error, "response_validation", undefined, "executor_response_invalid");
@@ -183,7 +189,7 @@ export function createDockerRuntimeCoordinatorRunner(
         } catch (error) {
           observation = undefined;
           const message = error instanceof Error ? error.message : "";
-          const code = ["executor_response_too_large", "executor_response_invalid", "docker_command_output_too_large"].includes(message)
+          const code = RUNTIME_DIAGNOSTIC_CODES.includes(message as RuntimeDiagnosticCode)
             ? message as RuntimeDiagnosticCode
             : "executor_application_failed";
           diagnostic({ type: "runtime_diagnostic", stage: "privacy_browser_observation", code });
@@ -583,7 +589,7 @@ export function createDockerRuntimeSessionFactory(
             }
             return observation;
           } catch (error) {
-            if (error instanceof Error && ["executor_response_too_large", "executor_response_invalid"].includes(error.message)) throw error;
+            if (error instanceof Error && RUNTIME_DIAGNOSTIC_CODES.includes(error.message as RuntimeDiagnosticCode)) throw error;
             throw new Error("executor_response_invalid", { cause: error });
           }
         },
@@ -671,9 +677,9 @@ function restrictedContainerArguments(network: string): string[] {
 }
 
 function restrictedPrivacyBrowserArguments(network: string): string[] {
-  return ["--network", network, "--read-only", "--user", "1000:1000", "--cap-drop", "ALL",
+  return ["--network", network, "--read-only", "--user", "1001:1001", "--cap-drop", "ALL",
     "--security-opt", "no-new-privileges", "--pids-limit", "128", "--memory", "1024m", "--cpus", "1",
-    "--shm-size", "128m", "--tmpfs", "/tmp:rw,noexec,nosuid,size=64m,uid=1000,gid=1000"];
+    "--shm-size", "128m", "--tmpfs", "/tmp:rw,noexec,nosuid,size=64m,uid=1001,gid=1001"];
 }
 
 async function waitForPrivacyProxy(
@@ -807,6 +813,20 @@ function waitForBrokerReady(
 
 export function classifyBrokerStartupStderr(output: string): string | undefined {
   const normalized = output.toLowerCase();
+  if (normalized.includes("network") && normalized.includes("not found")) {
+    return "runtime_broker_network_missing";
+  }
+  if (normalized.includes("container name") && normalized.includes("already in use")) {
+    return "runtime_broker_name_conflict";
+  }
+  if (normalized.includes("no such image") || normalized.includes("pull access denied") ||
+      normalized.includes("repository does not exist")) {
+    return "runtime_broker_image_unavailable";
+  }
+  if (normalized.includes("invalid mount config") || normalized.includes("mounts denied") ||
+      normalized.includes("mount source path does not exist")) {
+    return "runtime_broker_mount_invalid";
+  }
   if (normalized.includes("@desarrolloseguro/core")) {
     return "runtime_broker_core_package_missing";
   }
@@ -825,6 +845,10 @@ export function classifyBrokerStartupStderr(output: string): string | undefined 
   }
   if (normalized.includes("no such file or directory")) {
     return "runtime_broker_file_missing";
+  }
+  if (normalized.includes("failed to create task") || normalized.includes("failed to start shim") ||
+      normalized.includes("error creating container")) {
+    return "runtime_broker_container_runtime_failed";
   }
   return undefined;
 }

@@ -176,6 +176,19 @@ type AnalysisRequestState =
   | "poll_error"
   | "poll_timeout"
   | "admission_lost";
+type AnalysisRequestResult =
+  | {
+    hostname: string;
+    targetUrl: string;
+    state: "queued" | "running";
+    jobId: string;
+  }
+  | {
+    hostname: string;
+    targetUrl: string;
+    state: Exclude<(typeof ANALYSIS_REQUEST_STATES)[number], "queued" | "running">;
+    jobId?: never;
+  };
 type DomainState = (typeof DOMAIN_STATES)[number];
 type ScanFailureCode = (typeof SCAN_FAILURE_CODES)[number];
 type Enrollment = (typeof ENROLLMENTS)[number];
@@ -415,7 +428,9 @@ export function PublicScanPortal() {
     useState<AnalysisRequestState | null>(null);
   const analysisStatusPollCount = useRef(0);
   const reportBeforeAnalysisId = useRef<string | null>(null);
-  const analysisRequestInFlight = useRef(false);
+  const analysisRequestInFlight = useRef<{ hostname: string; targetUrl: string } | null>(null);
+  const activeTarget = useRef<{ hostname: string; targetUrl: string } | null>(null);
+  const analysisJob = useRef<{ hostname: string; targetUrl: string; jobId: string } | null>(null);
   const retryAuthorization = useRef<{ hostname: string; targetUrl: string } | null>(null);
   const domainInputRef = useRef<HTMLInputElement>(null);
   const scanAnnouncement = useRef<"queued" | "running" | "complete" | "failed" | null>(null);
@@ -437,9 +452,13 @@ export function PublicScanPortal() {
 
   useEffect(() => {
     const pollingHostname = status?.hostname;
+    const currentJob = analysisJob.current;
     if (
       !pollingHostname ||
       !auditTargetUrl ||
+      !currentJob ||
+      currentJob.hostname !== pollingHostname ||
+      currentJob.targetUrl !== auditTargetUrl ||
       (analysisRequestState !== "queued" && analysisRequestState !== "running")
     ) {
       return;
@@ -451,8 +470,9 @@ export function PublicScanPortal() {
     const pollStatus = async () => {
       analysisStatusPollCount.current += 1;
       try {
+        const query = new URLSearchParams({ jobId: currentJob.jobId });
         const response = await fetch(
-          `${API_ROOT}/domains/${encodeURIComponent(pollingHostname)}/status?${new URLSearchParams({ targetUrl: auditTargetUrl })}`,
+          `${API_ROOT}/domains/${encodeURIComponent(pollingHostname)}/status?${query}`,
           {
             method: "GET",
             headers: { Accept: ACCEPT_JSON_HEADER },
@@ -464,9 +484,27 @@ export function PublicScanPortal() {
         if (!response.ok) throw new Error("invalid_status_response");
         const payload: unknown = await readPublicJson(response);
         if (!isDomainStatus(payload)) throw new Error("invalid_status_response");
+        const latestJob = analysisJob.current;
+        if (
+          latestJob?.jobId !== currentJob.jobId ||
+          latestJob.hostname !== pollingHostname ||
+          latestJob.targetUrl !== currentJob.targetUrl
+        ) return;
+
+        if (payload.state === "failed") {
+          setStatus(payload);
+          if (payload.lastReport) setReport(payload.lastReport);
+          announceScanPhase(
+            "failed",
+            "El análisis ha terminado sin generar un informe.",
+          );
+          analysisJob.current = null;
+          setAnalysisRequestState("failed");
+          return;
+        }
 
         setStatus(payload);
-        setReport(payload.lastReport);
+        if (payload.lastReport) setReport(payload.lastReport);
         if (
           payload.lastReport &&
           payload.lastReport.id !== reportBeforeAnalysisId.current
@@ -476,6 +514,7 @@ export function PublicScanPortal() {
             "El análisis ha terminado y el informe está disponible.",
           );
           void loadHistory(payload.hostname);
+          analysisJob.current = null;
           setAnalysisRequestState(null);
           return;
         }
@@ -484,15 +523,8 @@ export function PublicScanPortal() {
             "failed",
             "La dirección no está disponible para este análisis.",
           );
+          analysisJob.current = null;
           setAnalysisRequestState("unavailable");
-          return;
-        }
-        if (payload.state === "failed") {
-          announceScanPhase(
-            "failed",
-            "El análisis ha terminado sin generar un informe.",
-          );
-          setAnalysisRequestState("failed");
           return;
         }
         if (payload.state === "updating") {
@@ -505,6 +537,7 @@ export function PublicScanPortal() {
           payload.activeJobId === null &&
           (payload.lastReport?.id ?? null) === reportBeforeAnalysisId.current
         ) {
+          analysisJob.current = null;
           setAnalysisRequestState("admission_lost");
           return;
         }
@@ -540,6 +573,8 @@ export function PublicScanPortal() {
   }, [analysisRequestState, auditTargetUrl, status?.hostname]);
 
   async function loadReport(id: string) {
+    analysisJob.current = null;
+    activeTarget.current = null;
     setState("loading");
     setMessage("");
     setDomainInputInvalid(false);
@@ -600,16 +635,20 @@ export function PublicScanPortal() {
       setStatus(null);
       setReport(null);
       setAuditTargetUrl("");
+      activeTarget.current = null;
       setHistory([]);
       if (focusOnError) domainInputRef.current?.focus();
       return;
     }
 
     const { hostname, targetUrl } = target;
+    const targetKey = { hostname, targetUrl };
+    activeTarget.current = targetKey;
     setDomain(targetUrl);
     setAuditTargetUrl(targetUrl);
     setDomainInputInvalid(false);
     setAuthorizationConfirmed(false);
+    analysisJob.current = null;
     retryAuthorization.current = null;
     setAnalysisRequestState(null);
     setState("loading");
@@ -635,12 +674,18 @@ export function PublicScanPortal() {
       }
       const payload: unknown = await readPublicJson(response);
       if (!isDomainStatus(payload)) throw new Error("invalid_status_response");
+      if (
+        activeTarget.current?.hostname !== hostname ||
+        activeTarget.current.targetUrl !== targetUrl
+      ) return;
       setStatus(payload);
       setReport(payload.lastReport);
       if (payload.lastReport && payload.lastReport.profileVersion !== "domain-v5") {
         void loadHistory(payload.hostname);
       }
       if (payload.state === "updating") {
+        if (!payload.activeJobId) throw new Error("active_scan_job_id_missing");
+        analysisJob.current = { hostname, targetUrl, jobId: payload.activeJobId };
         reportBeforeAnalysisId.current = payload.lastReport?.id ?? null;
         setAnalysisRequestState("running");
       } else if (payload.state === "not_scanned" && requestMissingReport) {
@@ -652,6 +697,10 @@ export function PublicScanPortal() {
       }
       setState("ready");
     } catch {
+      if (
+        activeTarget.current?.hostname !== targetKey.hostname ||
+        activeTarget.current.targetUrl !== targetKey.targetUrl
+      ) return;
       setStatus(null);
       setReport(null);
       setState("error");
@@ -697,7 +746,8 @@ export function PublicScanPortal() {
       !requestTargetUrl ||
       (!authorizationConfirmed && !automaticallyAuthorized) ||
       (state === "loading" && !automaticallyAuthorized) ||
-      analysisRequestInFlight.current
+      analysisRequestInFlight.current?.hostname === requestStatus.hostname &&
+      analysisRequestInFlight.current?.targetUrl === requestTargetUrl
     ) return;
     if (automaticallyAuthorized) {
       retryAuthorization.current = {
@@ -709,7 +759,8 @@ export function PublicScanPortal() {
     setScanAnnouncementText("");
     scanAnnouncement.current = null;
     reportBeforeAnalysisId.current = requestStatus.lastReport?.id ?? null;
-    analysisRequestInFlight.current = true;
+    const requestKey = { hostname: requestStatus.hostname, targetUrl: requestTargetUrl };
+    analysisRequestInFlight.current = requestKey;
     setAnalysisRequestState("loading");
     try {
       const response = await fetch(
@@ -734,19 +785,32 @@ export function PublicScanPortal() {
       ) {
         throw new Error("invalid_analysis_request_response");
       }
+      if (
+        activeTarget.current?.hostname !== requestKey.hostname ||
+        activeTarget.current.targetUrl !== requestKey.targetUrl
+      ) return;
+      analysisJob.current = payload.state === "queued" || payload.state === "running"
+        ? { hostname: requestStatus.hostname, targetUrl: requestTargetUrl, jobId: payload.jobId }
+        : null;
       announceScanPhase(
         "queued",
         "Tu solicitud está en cola. Te avisaremos cuando empiece la comprobación.",
       );
       setAnalysisRequestState(payload.state);
     } catch {
+      if (
+        activeTarget.current?.hostname !== requestKey.hostname ||
+        activeTarget.current.targetUrl !== requestKey.targetUrl
+      ) return;
       announceScanPhase(
         "failed",
         "No se pudo registrar la solicitud de análisis.",
       );
       setAnalysisRequestState("error");
     } finally {
-      analysisRequestInFlight.current = false;
+      if (analysisRequestInFlight.current === requestKey) {
+        analysisRequestInFlight.current = null;
+      }
     }
   }
 
@@ -2560,6 +2624,7 @@ function isDomainStatus(value: unknown): value is DomainStatus {
       !isOneOf(value.failureCode, SCAN_FAILURE_CODES)) ||
     (value.state === "failed" && value.failureCode === null) ||
     (value.state !== "failed" && value.failureCode !== null) ||
+    (value.state === "updating" && value.activeJobId === null) ||
     (value.activeJobId !== null && !isUuid(value.activeJobId)) ||
     (value.auditProgress !== undefined && parsePublicAuditProgress(value.auditProgress) === null) ||
     (value.lastReport !== null && !isPublicReport(value.lastReport)) ||
@@ -2975,16 +3040,13 @@ function isBoundedScore(value: unknown): value is number {
 
 function isAnalysisRequest(
   value: unknown,
-): value is { hostname: string; targetUrl?: string; state: (typeof ANALYSIS_REQUEST_STATES)[number] } {
-  return (
-    isRecord(value) &&
-    isBoundedString(value.hostname, 253) &&
-    (value.targetUrl === undefined || isBoundedString(value.targetUrl, 2_048)) &&
-    typeof value.state === "string" &&
-    ANALYSIS_REQUEST_STATES.includes(
-      value.state as (typeof ANALYSIS_REQUEST_STATES)[number],
-    )
-  );
+): value is AnalysisRequestResult {
+  if (!isRecord(value) ||
+    !isBoundedString(value.hostname, 253) ||
+    !isBoundedString(value.targetUrl, 2_048) ||
+    !isOneOf(value.state, ANALYSIS_REQUEST_STATES)) return false;
+  if (value.state === "queued" || value.state === "running") return isUuid(value.jobId);
+  return value.jobId === undefined;
 }
 
 function isPublicCheck(value: unknown): value is PublicCheck {

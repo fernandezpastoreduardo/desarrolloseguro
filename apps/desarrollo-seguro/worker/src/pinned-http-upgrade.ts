@@ -39,7 +39,7 @@ export type PinnedHttpUpgradeResult = {
   tlsProtocol?: "TLSv1" | "TLSv1.1" | "TLSv1.2" | "TLSv1.3";
   requestsCount: number;
   bytesCount: number;
-  grumphyaRedirectEvidence?: {
+  hostnameRedirectEvidence?: {
     requestedHostname: string;
     finalHostname: string;
     redirectStatusCode: number | null;
@@ -163,8 +163,8 @@ export async function requestPinnedHttpUpgrade(
       tlsProtocol: httpsResult.tlsProtocol,
       requestsCount: httpResult.requestsCount + httpsResult.requestsCount,
       bytesCount: httpResult.bytesCount + httpsResult.bytesCount,
-      ...(httpsResult.redirectFromHostname && (hostname === "grumphya.com" || hostname === "www.grumphya.com") ? {
-        grumphyaRedirectEvidence: {
+      ...(httpsResult.redirectFromHostname ? {
+        hostnameRedirectEvidence: {
           requestedHostname: hostname,
           finalHostname: httpsResult.finalHostname,
           redirectStatusCode: httpsResult.redirectStatusCode,

@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { PublicScanService } from "./public-scan.service.js";
 
 const REPORT_ID = "8d140e17-68d6-489a-b451-7e87408187ae";
+const JOB_ID = "7d140e17-68d6-489a-b451-7e87408187ae";
 const INTERNAL_STORAGE_ERROR = "postgres password must not escape";
 const PRIVATE_RESPONSE_BODY = "<html>customer-private-content</html>";
 const FIXED_NOW = new Date("2026-11-03T10:00:00.000Z");
@@ -166,7 +167,7 @@ describe("PublicScanService", () => {
   });
 
   it("requires explicit authorization before requesting an on-demand analysis", async () => {
-    const requestOnDemandScan = vi.fn().mockResolvedValue({ kind: "queued" });
+    const requestOnDemandScan = vi.fn().mockResolvedValue({ kind: "queued", jobId: JOB_ID });
     const service = new PublicScanService({
       scanStore: { readPublicDomainSnapshot: vi.fn(), readPublicReport: vi.fn(), requestOnDemandScan },
     });
@@ -178,7 +179,7 @@ describe("PublicScanService", () => {
   });
 
   it("requests the canonical target URL without losing its path or query", async () => {
-    const requestOnDemandScan = vi.fn().mockResolvedValue({ kind: "queued" });
+    const requestOnDemandScan = vi.fn().mockResolvedValue({ kind: "queued", jobId: JOB_ID });
     const service = new PublicScanService({
       scanStore: {
         readPublicDomainSnapshot: vi.fn(),
@@ -193,6 +194,7 @@ describe("PublicScanService", () => {
       hostname: "www.grumphya.com",
       state: "queued",
       targetUrl: "https://www.grumphya.com/politica?lang=es",
+      jobId: JOB_ID,
     });
     expect(requestOnDemandScan).toHaveBeenCalledExactlyOnceWith(
       "www.grumphya.com",
@@ -236,7 +238,12 @@ describe("PublicScanService", () => {
 
     await expect(
       service.requestAnalysis(" EXAMPLE.COM. ", { authorized: true, targetUrl: TARGET_URL }),
-    ).resolves.toEqual({ hostname: "example.com", state: "queued", targetUrl: TARGET_URL });
+    ).resolves.toEqual({
+      hostname: "example.com",
+      state: "queued",
+      targetUrl: TARGET_URL,
+      jobId: "internal-job-id",
+    });
     expect(requestOnDemandScan).toHaveBeenCalledWith("example.com", TARGET_URL);
   });
 
@@ -326,6 +333,104 @@ describe("PublicScanService", () => {
       failureCode: "broker_failed",
       failureDiagnostic: { stage: "broker_start", code: "docker_daemon_unavailable" },
       lastReport: null,
+    });
+  });
+
+  it("returns a technical failure only when the exact job id is supplied, not for another URL on the host", async () => {
+    const readPublicScanJobSnapshot = vi.fn().mockResolvedValue({
+      jobId: JOB_ID,
+      state: "failed",
+      progress: null,
+      reportId: null,
+      lastFailure: {
+        code: "executor_failed",
+        failedAt: FIXED_NOW,
+        diagnostic: { stage: "executor", code: "executor_application_failed" },
+      },
+    });
+    const unrelatedReport = makeReport({
+        id: "123e4567-e89b-42d3-a456-426614174099",
+        profileVersion: "domain-v5",
+        trigger: "requested",
+      });
+    const readPublicDomainSnapshot = vi.fn().mockImplementation((_hostname, targetUrl) => Promise.resolve({
+      hostname: "example.com",
+      enrollment: "on_demand",
+      profileVersion: "domain-v5",
+      optedOut: false,
+      activeJobId: null,
+      lastReport: targetUrl ? null : unrelatedReport,
+      lastFailure: null,
+    }));
+    const service = new PublicScanService({
+      scanStore: { readPublicDomainSnapshot, readPublicReport: vi.fn(), readPublicScanJobSnapshot },
+    });
+
+    await expect(service.getDomainStatus("example.com", TARGET_URL)).resolves.toMatchObject({
+      state: "not_scanned",
+      failureCode: null,
+      failureDiagnostic: null,
+    });
+    expect(readPublicScanJobSnapshot).not.toHaveBeenCalled();
+
+    await expect(service.getDomainStatus("example.com", undefined, JOB_ID)).resolves.toMatchObject({
+      state: "failed",
+      activeJobId: null,
+      failureCode: "executor_failed",
+      failureDiagnostic: { stage: "executor", code: "executor_application_failed" },
+      lastReport: null,
+    });
+    expect(readPublicScanJobSnapshot).toHaveBeenCalledExactlyOnceWith("example.com", JOB_ID);
+  });
+
+  it("keeps failed or incomplete audit criteria inside a completed report, not a retryable job error", async () => {
+    const report = makeReport({
+      profileVersion: "domain-v5",
+      trigger: "requested",
+      verdict: "inconclusive",
+      checks: [{
+        controlId: "DS-PRIV-01",
+        status: "unknown",
+        required: true,
+        severity: "high",
+        observedAt: FIXED_NOW,
+        targetPath: "/legal/privacy",
+        method: "GET",
+        summary: "La comprobación no obtuvo evidencia suficiente.",
+        limitation: "La fase de inventario no pudo completarse.",
+        evidence: {},
+      }],
+    });
+    const service = new PublicScanService({
+      scanStore: {
+        readPublicDomainSnapshot: vi.fn().mockResolvedValue({
+          hostname: "example.com",
+          enrollment: "on_demand",
+          profileVersion: "domain-v5",
+          optedOut: false,
+          activeJobId: null,
+          lastReport: makeReport({
+            id: "123e4567-e89b-42d3-a456-426614174099",
+            profileVersion: "domain-v5",
+            trigger: "requested",
+          }),
+          lastFailure: null,
+        }),
+        readPublicReport: vi.fn().mockResolvedValue(report),
+        readPublicScanJobSnapshot: vi.fn().mockResolvedValue({
+          jobId: JOB_ID,
+          state: "completed",
+          progress: null,
+          reportId: report.id,
+          lastFailure: null,
+        }),
+      },
+    });
+
+    await expect(service.getDomainStatus("example.com", undefined, JOB_ID)).resolves.toMatchObject({
+      state: "fresh",
+      failureCode: null,
+      lastReport: { verdict: "inconclusive", checks: [{ status: "unknown" }] },
     });
   });
 

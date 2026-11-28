@@ -206,24 +206,24 @@ describe("sanitizeScanObservations", () => {
     expect(result.checks.every((check) => check.status === "pass")).toBe(true);
   });
 
-  it("preserves a bounded permanent Grumphya hostname redirect in public evidence", () => {
+  it("preserves a bounded permanent exact-www redirect for a synthetic hostname", () => {
     const checks = makeTransportV1Checks().map((check) =>
       check.controlId === "DS-HTTP-01" && check.method === "GET"
         ? {
             ...check,
             evidence: {
               ...check.evidence,
-              requestedHostname: "www.grumphya.com",
-              finalHostname: "grumphya.com",
+              requestedHostname: "www.example.net",
+              finalHostname: "example.net",
               redirectStatusCode: 301,
-              redirectFromHostname: "www.grumphya.com",
-              redirectToHostname: "grumphya.com",
-              canonicalHostname: "grumphya.com",
+              redirectFromHostname: "www.example.net",
+              redirectToHostname: "example.net",
+              canonicalHostname: "example.net",
             },
           }
         : check,
     );
-    const result = sanitizeScanObservations("www.grumphya.com", "domain-v3", ["/"], [
+    const result = sanitizeScanObservations("www.example.net", "domain-v3", ["/"], [
       ...checks,
       makeUnknownCheck("DS-PRIV-05", "/", "GET"),
       makeUnknownCheck("DS-PRIV-06", "/", "GET"),
@@ -232,11 +232,32 @@ describe("sanitizeScanObservations", () => {
     ]);
     expect(result.checks.find((check) => check.controlId === "DS-HTTP-01" && check.method === "GET")?.evidence)
       .toMatchObject({
-        requestedHostname: "www.grumphya.com",
-        finalHostname: "grumphya.com",
+        requestedHostname: "www.example.net",
+        finalHostname: "example.net",
         redirectStatusCode: 301,
-        canonicalHostname: "grumphya.com",
+        canonicalHostname: "example.net",
       });
+  });
+
+  it("rejects redirect evidence outside the scanned hostname and its exact www alias", () => {
+    const checks = makeTransportV1Checks().map((check) =>
+      check.controlId === "DS-HTTP-01" && check.method === "GET"
+        ? {
+            ...check,
+            evidence: {
+              ...check.evidence,
+              requestedHostname: MONITORED_HOSTNAME,
+              finalHostname: "attacker.example.net",
+              redirectStatusCode: 301,
+              redirectFromHostname: MONITORED_HOSTNAME,
+              redirectToHostname: "attacker.example.net",
+              canonicalHostname: "attacker.example.net",
+            },
+          }
+        : check,
+    );
+    expect(() => sanitizeScanObservations(MONITORED_HOSTNAME, "transport-v1", ["/"], checks))
+      .toThrow("scan_evidence_invalid");
   });
 
   it("rejects a canonical hostname claim without permanent redirect evidence", () => {
@@ -246,17 +267,17 @@ describe("sanitizeScanObservations", () => {
             ...check,
             evidence: {
               ...check.evidence,
-              requestedHostname: "www.grumphya.com",
-              finalHostname: "grumphya.com",
+              requestedHostname: "www.example.net",
+              finalHostname: "example.net",
               redirectStatusCode: 302,
-              redirectFromHostname: "www.grumphya.com",
-              redirectToHostname: "grumphya.com",
-              canonicalHostname: "grumphya.com",
+              redirectFromHostname: "www.example.net",
+              redirectToHostname: "example.net",
+              canonicalHostname: "example.net",
             },
           }
         : check,
     );
-    expect(() => sanitizeScanObservations("www.grumphya.com", "transport-v1", ["/"], checks))
+    expect(() => sanitizeScanObservations("www.example.net", "transport-v1", ["/"], checks))
       .toThrow("scan_evidence_invalid");
   });
 

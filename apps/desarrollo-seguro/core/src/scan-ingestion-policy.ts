@@ -286,7 +286,7 @@ export function sanitizeScanObservations(
 
   const allowedControlIds = PROFILE_CONTROLS[profileVersion];
   const safeChecks = checks.map((check) =>
-    sanitizeCheck(check, safeScope, profileVersion, allowedControlIds),
+    sanitizeCheck(check, safeHostname, safeScope, profileVersion, allowedControlIds),
   );
   const controlPaths = new Set(
     safeChecks.map(
@@ -412,6 +412,7 @@ function sanitizeScope(
 
 function sanitizeCheck(
   check: unknown,
+  scanHostname: string,
   scope: readonly string[],
   profileVersion: ProfileVersion,
   allowedControlIds: readonly string[],
@@ -455,6 +456,7 @@ function sanitizeCheck(
   const evidence = sanitizeEvidence(
     contract,
     controlId,
+    scanHostname,
     profileVersion,
     check.evidence,
   );
@@ -887,6 +889,7 @@ const CONTROL_PASSES: Readonly<Record<string, EvidencePredicate>> = {
 function sanitizeEvidence(
   contract: ControlContract,
   controlId: string,
+  scanHostname: string,
   profileVersion: ProfileVersion,
   evidence: unknown,
 ): Record<string, SafeEvidenceValue> {
@@ -937,8 +940,8 @@ function sanitizeEvidence(
       sanitized[key] = value;
       continue;
     }
-    if (rule === "hostname" && isAuthorizedGrumphyaHostname(value)) {
-      sanitized[key] = value;
+    if (rule === "hostname" && isSafeHostname(value)) {
+      sanitized[key] = normalizeHostname(value);
       continue;
     }
     if (
@@ -951,7 +954,7 @@ function sanitizeEvidence(
     }
     throw new Error("scan_evidence_invalid");
   }
-  if (controlId === "DS-HTTP-01") validateGrumphyaRedirectEvidence(sanitized);
+  if (controlId === "DS-HTTP-01") validateHostnameRedirectEvidence(scanHostname, sanitized);
   return sanitized;
 }
 
@@ -959,24 +962,42 @@ function isSafeIntegerAtLeastZero(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 }
 
-function isAuthorizedGrumphyaHostname(value: unknown): value is string {
-  return value === "grumphya.com" || value === "www.grumphya.com";
+function isSafeHostname(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  try {
+    normalizeHostname(value);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
-function validateGrumphyaRedirectEvidence(evidence: Record<string, SafeEvidenceValue>): void {
+function validateHostnameRedirectEvidence(
+  scanHostname: string,
+  evidence: Record<string, SafeEvidenceValue>,
+): void {
   const hasRedirectIdentity = [
     "requestedHostname", "finalHostname", "redirectStatusCode",
     "redirectFromHostname", "redirectToHostname", "canonicalHostname",
   ].some((key) => Object.hasOwn(evidence, key));
   if (!hasRedirectIdentity) return;
+  const requestedHostname = evidence.requestedHostname;
+  const finalHostname = evidence.finalHostname;
+  const redirectFromHostname = evidence.redirectFromHostname;
+  const redirectToHostname = evidence.redirectToHostname;
+  const wwwAlias = scanHostname.startsWith("www.")
+    ? scanHostname.slice("www.".length)
+    : `www.${scanHostname}`;
+  const allowedHostnames = new Set([scanHostname, wwwAlias]);
   if (
-    !isAuthorizedGrumphyaHostname(evidence.requestedHostname) ||
-    !isAuthorizedGrumphyaHostname(evidence.finalHostname) ||
-    !isAuthorizedGrumphyaHostname(evidence.redirectFromHostname) ||
-    !isAuthorizedGrumphyaHostname(evidence.redirectToHostname) ||
-    evidence.redirectFromHostname !== evidence.requestedHostname ||
-    evidence.redirectToHostname !== evidence.finalHostname ||
-    evidence.redirectFromHostname === evidence.redirectToHostname ||
+    requestedHostname !== scanHostname ||
+    typeof finalHostname !== "string" || !allowedHostnames.has(finalHostname) ||
+    typeof redirectFromHostname !== "string" || !allowedHostnames.has(redirectFromHostname) ||
+    typeof redirectToHostname !== "string" || !allowedHostnames.has(redirectToHostname) ||
+    redirectFromHostname !== requestedHostname ||
+    redirectToHostname !== finalHostname ||
+    redirectFromHostname === redirectToHostname ||
+    !isExactWwwAliasPair(redirectFromHostname, redirectToHostname) ||
     typeof evidence.redirectStatusCode !== "number" ||
     ![301, 302, 303, 307, 308].includes(evidence.redirectStatusCode)
   ) throw new Error("scan_evidence_invalid");
@@ -985,6 +1006,10 @@ function validateGrumphyaRedirectEvidence(evidence: Record<string, SafeEvidenceV
     (isPermanent && evidence.canonicalHostname !== evidence.finalHostname) ||
     (!isPermanent && evidence.canonicalHostname !== undefined)
   ) throw new Error("scan_evidence_invalid");
+}
+
+function isExactWwwAliasPair(left: string, right: string): boolean {
+  return left !== right && (left === `www.${right}` || right === `www.${left}`);
 }
 
 

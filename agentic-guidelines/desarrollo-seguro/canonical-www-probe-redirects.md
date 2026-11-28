@@ -14,6 +14,11 @@ existente para Grumphya conserva sus reglas propias.
 - Se permite solo el par exacto `example.test` / `www.example.test`; no se
   infiere un dominio registrable, no se siguen subdominios arbitrarios y no se
   permite otro hostname, esquema, puerto o credencial.
+- Esta regla es genérica para cada hostname válido que se audita. La evidencia
+  de HTTP→HTTPS y de canonicalización se genera, valida y publica para ese
+  hostname y su alias literal `www.`; el scanner no reserva esa capacidad para
+  Grumphya. La ingesta contrasta cada hostname de evidencia con el hostname
+  analizado y el mismo par exacto, y descarta cualquier evidencia externa.
 - Los redirects continúan sujetos a los límites de saltos, tiempo, DNS fijado,
   validación TLS, rutas permitidas y política de egress del scanner.
 - Las sondas pueden seguir códigos HTTP de redirección ya admitidos; solo una

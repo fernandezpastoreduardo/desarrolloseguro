@@ -1,3 +1,5 @@
+import { normalizeHostname } from "./scan-policy.js";
+
 export type PublicEvidenceValue = string | number | boolean;
 
 const PUBLIC_EVIDENCE_FIELDS: Readonly<Record<string, readonly string[]>> = {
@@ -34,11 +36,6 @@ const PUBLIC_EVIDENCE_ENUMS: Readonly<Record<string, readonly string[]>> = {
   mobileScoreModelVersion: ["lighthouse-13.6.0"],
   mobileDiagnosticCode: ["observation_budget_exhausted", "observation_stopped_early", "request_budget_exceeded", "required_measurement_missing", "browser_timeout", "browser_observation_error"],
   desktopDiagnosticCode: ["observation_budget_exhausted", "observation_stopped_early", "request_budget_exceeded", "required_measurement_missing", "browser_timeout", "browser_observation_error"],
-  requestedHostname: ["grumphya.com", "www.grumphya.com"],
-  finalHostname: ["grumphya.com", "www.grumphya.com"],
-  canonicalHostname: ["grumphya.com", "www.grumphya.com"],
-  redirectFromHostname: ["grumphya.com", "www.grumphya.com"],
-  redirectToHostname: ["grumphya.com", "www.grumphya.com"],
   tls10ProbeError: TLS_PROBE_ERROR_CODES,
   tls11ProbeError: TLS_PROBE_ERROR_CODES,
   tls12ProbeError: TLS_PROBE_ERROR_CODES,
@@ -61,6 +58,14 @@ export function projectPublicEvidence(
   const projected: Record<string, PublicEvidenceValue> = {};
   for (const key of PUBLIC_EVIDENCE_FIELDS[controlId] ?? []) {
     const value = evidence[key];
+    if (isHostnameEvidenceField(key) && typeof value === "string") {
+      try {
+        projected[key] = normalizeHostname(value);
+      } catch {
+        // Hostnames outside the scanner's accepted public hostname syntax are omitted.
+      }
+      continue;
+    }
     if (typeof value === "boolean" && PUBLIC_EVIDENCE_BOOLEANS.has(key)) {
       projected[key] = value;
       continue;
@@ -73,11 +78,20 @@ export function projectPublicEvidence(
     }
     if (key === "statusCode" && value >= 100 && value <= 599) {
       projected[key] = value;
-    } else if (key !== "statusCode" && value >= 0 && value <= 1_000_000) {
-      projected[key] = value;
+    } else if (key !== "statusCode" && value >= 0) {
+      const maximum = key === "mobileTransferBytes" || key === "desktopTransferBytes"
+        ? 64 * 1024 * 1024
+        : 1_000_000;
+      if (value <= maximum) projected[key] = value;
     }
   }
   return projected;
+}
+
+function isHostnameEvidenceField(key: string): boolean {
+  return key === "requestedHostname" || key === "finalHostname" ||
+    key === "canonicalHostname" || key === "redirectFromHostname" ||
+    key === "redirectToHostname";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

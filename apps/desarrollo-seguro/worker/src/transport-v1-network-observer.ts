@@ -191,20 +191,20 @@ export function createTransportV1NetworkObserver(
             statusCode: result.statusCode,
             redirectedToHttps: result.redirectedToHttps,
             finalScheme: result.finalScheme,
-            ...(result.grumphyaRedirectEvidence ? {
-              requestedHostname: result.grumphyaRedirectEvidence.requestedHostname,
-              finalHostname: result.grumphyaRedirectEvidence.finalHostname,
-              ...(result.grumphyaRedirectEvidence.redirectStatusCode !== null
-                ? { redirectStatusCode: result.grumphyaRedirectEvidence.redirectStatusCode }
+            ...(result.hostnameRedirectEvidence ? {
+              requestedHostname: result.hostnameRedirectEvidence.requestedHostname,
+              finalHostname: result.hostnameRedirectEvidence.finalHostname,
+              ...(result.hostnameRedirectEvidence.redirectStatusCode !== null
+                ? { redirectStatusCode: result.hostnameRedirectEvidence.redirectStatusCode }
                 : {}),
-              ...(result.grumphyaRedirectEvidence.redirectFromHostname
-                ? { redirectFromHostname: result.grumphyaRedirectEvidence.redirectFromHostname }
+              ...(result.hostnameRedirectEvidence.redirectFromHostname
+                ? { redirectFromHostname: result.hostnameRedirectEvidence.redirectFromHostname }
                 : {}),
-              ...(result.grumphyaRedirectEvidence.redirectToHostname
-                ? { redirectToHostname: result.grumphyaRedirectEvidence.redirectToHostname }
+              ...(result.hostnameRedirectEvidence.redirectToHostname
+                ? { redirectToHostname: result.hostnameRedirectEvidence.redirectToHostname }
                 : {}),
-              ...(result.grumphyaRedirectEvidence.canonicalHostname
-                ? { canonicalHostname: result.grumphyaRedirectEvidence.canonicalHostname }
+              ...(result.hostnameRedirectEvidence.canonicalHostname
+                ? { canonicalHostname: result.hostnameRedirectEvidence.canonicalHostname }
                 : {}),
             } : {}),
           },
