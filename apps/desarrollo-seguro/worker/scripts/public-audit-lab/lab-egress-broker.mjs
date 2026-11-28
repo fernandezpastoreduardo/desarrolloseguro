@@ -2,6 +2,7 @@ import { Buffer } from "node:buffer";
 import { lstat, readFile, unlink } from "node:fs/promises";
 import { isAbsolute, relative } from "node:path";
 import { X509Certificate } from "node:crypto";
+import { isIPv4 } from "node:net";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
 
@@ -51,6 +52,7 @@ export function parseLabEgressConfiguration(environment, request) {
   if (environment.DS_LAB_FIXTURE_HOST !== fixtureHost) {
     throw new Error("lab_fixture_alias_invalid");
   }
+  const fixtureAddress = readPrivateFixtureAddress(environment.DS_LAB_FIXTURE_ADDRESS);
   const httpsPort = parsePort(environment.DS_LAB_HTTPS_PORT);
   const httpPort = parsePort(environment.DS_LAB_HTTP_PORT);
   if (httpsPort === httpPort) throw new Error("lab_egress_port_invalid");
@@ -67,6 +69,7 @@ export function parseLabEgressConfiguration(environment, request) {
     runId: normalizedRunId,
     hostname: expectedHostname,
     fixtureHost,
+    fixtureAddress,
     httpsPort,
     httpPort,
     certificatePath,
@@ -143,6 +146,7 @@ export async function startLabEgressBroker(configuration, certificatePem) {
   const adapters = createLabEgressAdapters({
     hostname: configuration.hostname,
     fixtureHost: configuration.fixtureHost,
+    fixtureAddress: configuration.fixtureAddress,
     httpsPort: configuration.httpsPort,
     httpPort: configuration.httpPort,
     certificatePem,
@@ -175,6 +179,15 @@ export async function startLabEgressBroker(configuration, certificatePem) {
       await unlink(configuration.brokerSocket).catch(() => undefined);
     },
   };
+}
+
+function readPrivateFixtureAddress(value) {
+  if (typeof value !== "string" || !isIPv4(value)) throw new Error("lab_fixture_address_invalid");
+  const [first, second] = value.split(".").map(Number);
+  if (first !== 10 && !(first === 172 && second >= 16 && second <= 31) && !(first === 192 && second === 168)) {
+    throw new Error("lab_fixture_address_invalid");
+  }
+  return value;
 }
 
 async function main() {

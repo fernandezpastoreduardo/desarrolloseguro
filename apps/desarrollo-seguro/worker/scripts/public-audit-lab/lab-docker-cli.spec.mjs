@@ -42,6 +42,8 @@ describe("public audit lab Docker CLI shim", () => {
       .toThrow("lab_docker_image_scope_invalid");
     expect(() => config({ DS_LAB_PRIVACY_EGRESS_IMAGE: "desarrolloseguro-privacy-egress:local" }))
       .toThrow("lab_docker_image_scope_invalid");
+    expect(() => config({ DS_LAB_FIXTURE_ADDRESS: "203.0.113.9" }))
+      .toThrow("lab_docker_fixture_address_invalid");
   });
 
   it("passes inspection, cleanup and unrelated Docker commands through unchanged", () => {
@@ -123,6 +125,14 @@ describe("public audit lab Docker CLI shim", () => {
       "--label", `${LAB_RESOURCE_LABEL}=${RUN_ID}`,
     ]));
     expect(args.at(-1)).toBe(configuration.privacyEgressImage);
+  });
+
+  it("passes only the private, run-scoped fixture IP to lab containers", () => {
+    const configuration = config({ DS_LAB_FIXTURE_ADDRESS: "172.28.0.4" });
+    const brokerArgs = rewriteLabDockerArguments(["run", "--rm", configuration.brokerImage], configuration);
+    const proxyArgs = rewriteLabDockerArguments(["run", "--rm", configuration.privacyEgressImage], configuration);
+    expect(brokerArgs).toContain("DS_LAB_FIXTURE_ADDRESS=172.28.0.4");
+    expect(proxyArgs).toContain("DS_LAB_FIXTURE_ADDRESS=172.28.0.4");
   });
 
   it("does not inject lab environment into non-lab or similarly named images", () => {

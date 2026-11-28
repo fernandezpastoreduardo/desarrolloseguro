@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
+import { isIPv4 } from "node:net";
 import process from "node:process";
 import { isAbsolute } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -59,6 +60,7 @@ export function resolveLabDockerShimConfiguration(environment) {
 
   const hostname = `scan-${normalizedRunId}.example.net`;
   const fixtureAlias = `public-audit-fixture-${normalizedRunId}`;
+  const fixtureAddress = readPrivateFixtureAddress(environment.DS_LAB_FIXTURE_ADDRESS);
   return Object.freeze({
     runId: normalizedRunId,
     realDockerBinary,
@@ -66,6 +68,7 @@ export function resolveLabDockerShimConfiguration(environment) {
     privacyEgressImage: expectedPrivacyImage,
     hostname,
     fixtureAlias,
+    fixtureAddress,
     certificatePath: LAB_CERTIFICATE_PATH,
     resourceLabel: LAB_RESOURCE_LABEL,
   });
@@ -225,6 +228,7 @@ function labEnvironmentArguments(configuration, kind) {
     ["DS_LAB_FIXTURE_CA_FILE", configuration.certificatePath],
     ["DS_LAB_FIXTURE_HTTPS_PORT", "8443"],
     ["DS_LAB_FIXTURE_HTTP_PORT", "8080"],
+    ...(configuration.fixtureAddress ? [["DS_LAB_FIXTURE_ADDRESS", configuration.fixtureAddress]] : []),
   ];
   const broker = [
     ["DS_LAB_FIXTURE_HOST", configuration.fixtureAlias],
@@ -235,6 +239,16 @@ function labEnvironmentArguments(configuration, kind) {
   const privacy = [["DS_LAB_PRIVACY_PROXY_PORT", "3128"]];
   return [...common, ...(kind === "broker" ? broker : privacy)]
     .flatMap(([name, value]) => ["--env", `${name}=${value}`]);
+}
+
+function readPrivateFixtureAddress(value) {
+  if (value === undefined || value === "") return undefined;
+  if (typeof value !== "string" || !isIPv4(value)) throw new Error("lab_docker_fixture_address_invalid");
+  const [first, second] = value.split(".").map(Number);
+  if (first !== 10 && !(first === 172 && second >= 16 && second <= 31) && !(first === 192 && second === 168)) {
+    throw new Error("lab_docker_fixture_address_invalid");
+  }
+  return value;
 }
 
 /** Executes the real Docker CLI while preserving the runner's stdin/stdout/stderr contract. */

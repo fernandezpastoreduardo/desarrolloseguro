@@ -117,8 +117,10 @@ describe("public audit lab test image builder", () => {
     }
     expect(brokerArgs).toContain(`DS_LAB_CA_FILE=${LAB_CERTIFICATE_PATH}`);
     expect(brokerArgs).toContain(`DS_LAB_FIXTURE_HOST=public-audit-fixture-${RUN_ID}`);
+    expect(brokerArgs).toContain("DS_LAB_FIXTURE_ADDRESS=172.28.0.4");
     expect(proxyArgs).toContain(`DS_LAB_FIXTURE_CA_FILE=${LAB_CERTIFICATE_PATH}`);
     expect(proxyArgs).toContain(`DS_LAB_FIXTURE_ALIAS=public-audit-fixture-${RUN_ID}`);
+    expect(proxyArgs).toContain("DS_LAB_FIXTURE_ADDRESS=172.28.0.4");
     expect(browserArgs).toContain(`DS_LAB_RUN_ID=${RUN_ID}`);
     expect(browserArgs).not.toContain("--user");
     expect(browserArgs).toContain("/tmp:rw,noexec,nosuid,size=64m,uid=1001,gid=1001");

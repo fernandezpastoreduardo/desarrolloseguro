@@ -340,6 +340,17 @@ docker run --detach --name "$FIXTURE_CONTAINER" \
   --entrypoint node "desarrolloseguro-public-audit-lab-broker:${RUN_ID}" \
   "$WORKER_DIR/fixture-container.mjs" >/dev/null
 docker network connect --alias "$FIXTURE_ALIAS" "${PROJECT}-egress" "$FIXTURE_CONTAINER"
+readonly FIXTURE_EGRESS_IP="$(docker inspect "$FIXTURE_CONTAINER" | DS_LAB_EGRESS_NETWORK="${PROJECT}-egress" node -e '
+import { isIPv4 } from "node:net";
+let input = "";
+for await (const chunk of process.stdin) input += chunk;
+const inspected = JSON.parse(input)[0];
+const address = inspected?.NetworkSettings?.Networks?.[process.env.DS_LAB_EGRESS_NETWORK]?.IPAddress;
+const [first, second] = typeof address === "string" ? address.split(".").map(Number) : [];
+const isPrivate = first === 10 || (first === 172 && second >= 16 && second <= 31) || (first === 192 && second === 168);
+if (!isIPv4(address) || !isPrivate) process.exit(1);
+process.stdout.write(address);
+')"
 
 # Check the fixture route directly before involving Chromium or the production
 # privacy proxy. This keeps the probe on the internal egress network and uses
@@ -351,7 +362,7 @@ docker run --rm --name "${PROJECT}-fixture-https-preflight" \
   --memory 128m --cpus 0.25 \
   --tmpfs /tmp:rw,noexec,nosuid,size=8m,uid=1001,gid=1001 \
   --env "DS_LAB_HOSTNAME=${HOSTNAME}" \
-  --env "DS_LAB_FIXTURE_ALIAS=${FIXTURE_ALIAS}" \
+  --env "DS_LAB_FIXTURE_ADDRESS=${FIXTURE_EGRESS_IP}" \
   --env "DS_LAB_RUN_ID=${RUN_ID}" \
   --entrypoint node "desarrolloseguro-public-audit-lab-privacy-browser:${RUN_ID}" \
   --input-type=module -e '
@@ -359,7 +370,6 @@ import { readFile } from "node:fs/promises";
 import { request } from "node:https";
 
 const hostname = process.env.DS_LAB_HOSTNAME;
-const fixtureAlias = process.env.DS_LAB_FIXTURE_ALIAS;
 const runId = process.env.DS_LAB_RUN_ID;
 const certificate = await readFile("/run/public-audit-lab/fixture.pem");
 const transientCodes = new Set(["ECONNREFUSED", "EHOSTUNREACH", "ENETUNREACH", "ENOTFOUND", "ETIMEDOUT"]);
@@ -368,7 +378,7 @@ for (let attempt = 0; attempt < 12; attempt += 1) {
   const result = await new Promise((resolve) => {
     let stage = "connect";
     const req = request({
-      hostname: fixtureAlias,
+      hostname: process.env.DS_LAB_FIXTURE_ADDRESS,
       port: 8443,
       path: `/consent?lab=${encodeURIComponent(runId)}`,
       method: "GET",
@@ -585,6 +595,7 @@ services:
   development-security-runtime-coordinator:
     environment:
       DS_RUNTIME_EGRESS_NETWORK: "${PROJECT}-egress"
+      DS_LAB_FIXTURE_ADDRESS: "${FIXTURE_EGRESS_IP}"
 EOF
 compose up --detach --force-recreate --wait development-security-runtime-coordinator
 # Make an outbound TCP attempt from inside the same internal network used by

@@ -36,6 +36,7 @@ function validEnvironment(overrides = {}) {
     DS_LAB_RUN_ID: RUN_ID,
     DS_LAB_HOSTNAME: HOSTNAME,
     DS_LAB_FIXTURE_ALIAS: FIXTURE_ALIAS,
+    DS_LAB_FIXTURE_ADDRESS: "172.28.0.4",
     DS_LAB_FIXTURE_CA_FILE: certificatePath,
     DS_LAB_PRIVACY_PROXY_PORT: "3128",
     DS_LAB_FIXTURE_HTTPS_PORT: "8443",
@@ -53,6 +54,7 @@ describe("public audit lab privacy egress entrypoint", () => {
       runId: RUN_ID,
       hostname: HOSTNAME,
       fixtureAlias: FIXTURE_ALIAS,
+      fixtureAddress: "172.28.0.4",
       proxyPort: 3128,
       httpsPort: 8443,
       httpPort: 8080,
@@ -93,6 +95,12 @@ describe("public audit lab privacy egress entrypoint", () => {
     await expect(resolveLabPrivacyEgressConfiguration(validEnvironment({
       DS_LAB_FIXTURE_HTTP_PORT: "not-a-port",
     }))).rejects.toThrow("lab_port_invalid");
+  });
+
+  it("accepts only a private Docker fixture address", async () => {
+    await expect(resolveLabPrivacyEgressConfiguration(validEnvironment({
+      DS_LAB_FIXTURE_ADDRESS: "203.0.113.9",
+    }))).rejects.toThrow("lab_fixture_address_invalid");
   });
 
   it("caps bytes to the production privacy budget and rejects invalid values", async () => {

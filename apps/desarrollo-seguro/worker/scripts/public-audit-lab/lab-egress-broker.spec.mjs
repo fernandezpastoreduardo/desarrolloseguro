@@ -13,6 +13,7 @@ const fixtureHost = `${LAB_FIXTURE_HOST}-${runId}`;
 const environment = {
   DS_LAB_RUN_ID: runId,
   DS_LAB_FIXTURE_HOST: fixtureHost,
+  DS_LAB_FIXTURE_ADDRESS: "172.28.0.4",
   DS_LAB_HTTPS_PORT: "8443",
   DS_LAB_HTTP_PORT: "8080",
   DS_LAB_CA_FILE: "/run/public-audit-lab/fixture-ca.pem",
@@ -32,6 +33,7 @@ describe("public audit lab egress broker startup", () => {
       runId,
       hostname,
       fixtureHost,
+      fixtureAddress: "172.28.0.4",
       httpsPort: 8443,
       httpPort: 8080,
       profileVersion: "domain-v5",
@@ -54,6 +56,8 @@ describe("public audit lab egress broker startup", () => {
       .toThrow("lab_egress_run_id_invalid");
     expect(() => parseLabEgressConfiguration({ ...environment, DS_LAB_FIXTURE_HOST: "127.0.0.1" }, request))
       .toThrow("lab_fixture_alias_invalid");
+    expect(() => parseLabEgressConfiguration({ ...environment, DS_LAB_FIXTURE_ADDRESS: "203.0.113.9" }, request))
+      .toThrow("lab_fixture_address_invalid");
     expect(() => parseLabEgressConfiguration({ ...environment, DS_LAB_HTTPS_PORT: "0" }, request))
       .toThrow("lab_egress_port_invalid");
     expect(() => parseLabEgressConfiguration({ ...environment, DS_LAB_HTTP_PORT: "65536" }, request))

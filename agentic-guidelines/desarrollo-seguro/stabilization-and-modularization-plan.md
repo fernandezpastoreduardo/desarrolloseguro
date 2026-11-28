@@ -184,6 +184,12 @@ Descomposición ejecutable de P1:
    cuerpo ni cookie. Si pasa y el proxy sigue sin recibir bytes, el fallo queda
    localizado en la ruta proxy/túnel; si falla, el gate identifica la conectividad
    o TLS de la fixture.
+   Para evitar depender de DNS de alias entre redes Docker, el adaptador de egreso
+   conecta a la IP privada asignada por Docker a la fixture en la red egress de esta
+   corrida. Conserva el hostname sintético para DNS/SNI/Host y valida que la IP
+   proceda de la inspección del contenedor fixture y sea privada; no acepta destinos
+   configurables por el usuario. El preflight directo usa la misma IP y el gate
+   sigue comprobando el flujo DNS de la auditoría por separado.
    Criterio de aceptación adicional: ingestión, sanitización y proyección deben
    manejar hostnames genéricos válidos. Las redirecciones solo pueden permanecer en
    el hostname solicitado o su alias `www` correspondiente; ningún dominio de

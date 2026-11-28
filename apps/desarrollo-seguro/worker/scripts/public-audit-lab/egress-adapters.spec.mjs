@@ -2,11 +2,12 @@ import { describe, expect, it } from "vitest";
 import { createLabEgressAdapters } from "./egress-adapters.mjs";
 
 const hostname = "scan-12345678-1234-1234-1234-123456789abc.example.net";
+const fixtureAddress = "172.28.0.4";
 const certificatePem = "-----BEGIN CERTIFICATE-----\nfixture-cert-for-guard-tests\n-----END CERTIFICATE-----";
 
 describe("public audit lab egress adapters", () => {
   it("resolves only the run-specific synthetic hostname", async () => {
-    const adapters = createLabEgressAdapters({ hostname, certificatePem });
+    const adapters = createLabEgressAdapters({ hostname, fixtureAddress, certificatePem });
 
     expect(await adapters.dnsResolver(hostname)).toEqual([
       { address: adapters.syntheticAddress, family: 4 },
@@ -15,16 +16,18 @@ describe("public audit lab egress adapters", () => {
   });
 
   it("rejects non-synthetic names and fixture endpoints at construction", () => {
-    expect(() => createLabEgressAdapters({ hostname: "talentoypersonas.com", certificatePem }))
+    expect(() => createLabEgressAdapters({ hostname: "talentoypersonas.com", fixtureAddress, certificatePem }))
       .toThrow("lab_egress_hostname_invalid");
-    expect(() => createLabEgressAdapters({ hostname, fixtureHost: "127.0.0.1", certificatePem }))
+    expect(() => createLabEgressAdapters({ hostname, fixtureHost: "127.0.0.1", fixtureAddress, certificatePem }))
       .toThrow("lab_fixture_host_invalid");
-    expect(() => createLabEgressAdapters({ hostname, httpsPort: 0, certificatePem }))
+    expect(() => createLabEgressAdapters({ hostname, httpsPort: 0, fixtureAddress, certificatePem }))
       .toThrow("lab_fixture_port_invalid");
+    expect(() => createLabEgressAdapters({ hostname, fixtureAddress: "203.0.113.9", certificatePem }))
+      .toThrow("lab_fixture_address_invalid");
   });
 
   it("allows requests only for the exact host, scheme, port, and query-bearing path", () => {
-    const adapters = createLabEgressAdapters({ hostname, certificatePem });
+    const adapters = createLabEgressAdapters({ hostname, fixtureAddress, certificatePem });
     const options = {
       hostname,
       port: 443,
@@ -45,7 +48,7 @@ describe("public audit lab egress adapters", () => {
   });
 
   it("maps only the synthetic address and web ports to the internal fixture", () => {
-    const adapters = createLabEgressAdapters({ hostname, certificatePem });
+    const adapters = createLabEgressAdapters({ hostname, fixtureAddress, certificatePem });
     expect(() => adapters.connectPinned("127.0.0.1", 443)).toThrow("lab_egress_destination_blocked");
     expect(() => adapters.connectPinned(adapters.syntheticAddress, 22)).toThrow("lab_egress_destination_blocked");
   });

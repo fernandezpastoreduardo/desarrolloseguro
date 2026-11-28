@@ -165,7 +165,7 @@ export function createLabImageSmokeArguments({ image, runId, kind }) {
     : kind === "privacy-egress"
       ? `const {resolveLabPrivacyEgressConfiguration}=await import("${modulePath}/lab-privacy-egress-entrypoint.mjs");
       const config=await resolveLabPrivacyEgressConfiguration(process.env);
-      if(config.runId!==${JSON.stringify(runId)}||config.hostname!==${JSON.stringify(hostname)}||config.fixtureAlias!==${JSON.stringify(fixtureAlias)}||new X509Certificate(config.certificatePem).checkHost(config.hostname)!==config.hostname||config.certificatePem.includes("PRIVATE KEY"))process.exit(1);`
+      if(config.runId!==${JSON.stringify(runId)}||config.hostname!==${JSON.stringify(hostname)}||config.fixtureAlias!==${JSON.stringify(fixtureAlias)}||config.fixtureAddress!=="172.28.0.4"||new X509Certificate(config.certificatePem).checkHost(config.hostname)!==config.hostname||config.certificatePem.includes("PRIVATE KEY"))process.exit(1);`
       : `const {createLabBrowserLaunchers,parseLabPrivacyBrowserInput}=await import("${modulePath}/lab-privacy-browser-entrypoint.mjs");
       const configuredRunId=process.env.DS_LAB_RUN_ID;
       const configuredHostname="scan-"+configuredRunId+".example.net";
@@ -183,6 +183,7 @@ export function createLabImageSmokeArguments({ image, runId, kind }) {
       `DS_LAB_HOSTNAME=${hostname}`,
       `DS_LAB_FIXTURE_ALIAS=${fixtureAlias}`,
       `DS_LAB_FIXTURE_HOST=${fixtureAlias}`,
+      "DS_LAB_FIXTURE_ADDRESS=172.28.0.4",
       `DS_LAB_CA_FILE=${LAB_CERTIFICATE_PATH}`,
       "DS_LAB_HTTPS_PORT=8443",
       "DS_LAB_HTTP_PORT=8080",
@@ -192,6 +193,7 @@ export function createLabImageSmokeArguments({ image, runId, kind }) {
       `DS_LAB_RUN_ID=${runId}`,
       `DS_LAB_HOSTNAME=${hostname}`,
       `DS_LAB_FIXTURE_ALIAS=${fixtureAlias}`,
+      "DS_LAB_FIXTURE_ADDRESS=172.28.0.4",
       `DS_LAB_FIXTURE_CA_FILE=${LAB_CERTIFICATE_PATH}`,
       "DS_LAB_PRIVACY_PROXY_PORT=3128",
       "DS_LAB_FIXTURE_HTTPS_PORT=8443",

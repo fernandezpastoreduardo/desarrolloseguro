@@ -98,6 +98,15 @@ navegador y los contadores agregados de conexiones/bytes del proxy. Ese registro
 incluye URL, contenido ni valores de cookies y permitirá localizar la frontera de
 red o navegador que falla en el siguiente intento.
 
+El laboratorio identificó luego que CI devolvía `EAI_AGAIN` al resolver el alias
+Docker de la fixture. El runner ahora obtiene de Docker la IP privada de la fixture
+en la red interna y la pasa solo a los contenedores de esa corrida. Las conexiones
+siguen verificando certificado, SNI y cabecera Host con el hostname sintético; la
+comprobación DNS de la auditoría se mantiene separada. Antes del navegador se prueba
+HTTPS directo y, si falla, solo se registran fase y código de error. El recorrido
+LAB-04 completo pasó localmente con este cambio, incluidos retry, cookie inicial,
+aceptación, rechazo, perfiles de rendimiento y publicación del informe.
+
 Las correcciones de P2 hacen que el retry reenvíe la solicitud autorizada de la misma
 URL, que un fallo tardío de Privacidad conserve inventarios previos, que Rendimiento
 retenga métricas parciales y diagnósticos, y que un fallo técnico terminal solo se

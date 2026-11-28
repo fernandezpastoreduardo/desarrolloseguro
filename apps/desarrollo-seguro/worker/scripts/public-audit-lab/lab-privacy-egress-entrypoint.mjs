@@ -1,4 +1,5 @@
 import { X509Certificate } from "node:crypto";
+import { isIPv4 } from "node:net";
 import { lstat, readFile } from "node:fs/promises";
 import { isAbsolute } from "node:path";
 import process from "node:process";
@@ -24,6 +25,7 @@ const SAFE_CONFIGURATION_ERRORS = new Set([
   "lab_byte_limit_invalid",
   "lab_egress_hostname_invalid",
   "lab_fixture_host_invalid",
+  "lab_fixture_address_invalid",
   "lab_fixture_port_invalid",
   "lab_fixture_certificate_required",
 ]);
@@ -33,6 +35,7 @@ export async function resolveLabPrivacyEgressConfiguration(environment = process
   const runId = readRunId(environment.DS_LAB_RUN_ID);
   const hostname = readHostname(environment.DS_LAB_HOSTNAME, runId);
   const fixtureAlias = readFixtureAlias(environment.DS_LAB_FIXTURE_ALIAS, runId);
+  const fixtureAddress = readFixtureAddress(environment.DS_LAB_FIXTURE_ADDRESS);
   const proxyPort = readPort(environment.DS_LAB_PRIVACY_PROXY_PORT, DEFAULT_PROXY_PORT);
   const httpsPort = readPort(environment.DS_LAB_FIXTURE_HTTPS_PORT, DEFAULT_HTTPS_PORT);
   const httpPort = readPort(environment.DS_LAB_FIXTURE_HTTP_PORT, DEFAULT_HTTP_PORT);
@@ -46,6 +49,7 @@ export async function resolveLabPrivacyEgressConfiguration(environment = process
     runId,
     hostname,
     fixtureAlias,
+    fixtureAddress,
     proxyPort,
     httpsPort,
     httpPort,
@@ -60,6 +64,7 @@ export async function createLabPrivacyEgress(environment = process.env) {
   const adapters = createLabEgressAdapters({
     hostname: configuration.hostname,
     fixtureHost: configuration.fixtureAlias,
+    fixtureAddress: configuration.fixtureAddress,
     httpsPort: configuration.httpsPort,
     httpPort: configuration.httpPort,
     certificatePem: configuration.certificatePem,
@@ -122,6 +127,15 @@ function readFixtureAlias(value, runId) {
     throw new Error("lab_fixture_alias_mismatch");
   }
   return expected;
+}
+
+function readFixtureAddress(value) {
+  if (typeof value !== "string" || !isIPv4(value)) throw new Error("lab_fixture_address_invalid");
+  const [first, second] = value.split(".").map(Number);
+  if (first !== 10 && !(first === 172 && second >= 16 && second <= 31) && !(first === 192 && second === 168)) {
+    throw new Error("lab_fixture_address_invalid");
+  }
+  return value;
 }
 
 function readPort(value, fallback) {

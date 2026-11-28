@@ -60,10 +60,13 @@ test("LAB-04 preflights fixture HTTPS on the isolated egress network before brow
   assert.match(probe, /--network "\$\{PROJECT\}-egress"/u);
   assert.match(probe, /servername: hostname/u);
   assert.match(probe, /headers: \{ Host: hostname \}/u);
+  assert.match(probe, /hostname: process\.env\.DS_LAB_FIXTURE_ADDRESS/u);
   assert.match(probe, /res\.headers\["set-cookie"\]/u);
   assert.match(probe, /lab_fixture_https_preflight/u);
   assert.match(probe, /attempt < 12/u);
   assert.match(probe, /stage: result\.stage, code: result\.code/u);
+  assert.match(runner, /DS_LAB_EGRESS_NETWORK=.*node -e/u);
+  assert.match(runner, /DS_LAB_FIXTURE_ADDRESS: "\$\{FIXTURE_EGRESS_IP\}"/u);
   assert.doesNotMatch(probe, /console\.(?:log|error).*?(?:cookie|body|hostname)/iu);
 });
 

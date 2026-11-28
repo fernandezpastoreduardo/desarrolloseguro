@@ -1,4 +1,4 @@
-import { lookup as defaultLookup } from "node:dns";
+import { isIPv4 } from "node:net";
 import { request as httpRequest } from "node:http";
 import { connect as tcpConnect } from "node:net";
 import { request as httpsRequest } from "node:https";
@@ -14,12 +14,14 @@ const SYNTHETIC_HOST_PATTERN = /^scan-[a-z0-9-]{1,48}\.example\.net$/u;
 export function createLabEgressAdapters({
   hostname,
   fixtureHost = "public-audit-fixture",
+  fixtureAddress,
   httpsPort = 8443,
   httpPort = 8080,
   certificatePem,
 }) {
   assertSyntheticHostname(hostname);
   assertSafeFixtureHost(fixtureHost);
+  assertPrivateFixtureAddress(fixtureAddress);
   assertPort(httpsPort);
   assertPort(httpPort);
   if (typeof certificatePem !== "string" || certificatePem.length < 32) {
@@ -50,12 +52,11 @@ export function createLabEgressAdapters({
     const headers = { ...options.headers, host: hostname };
     const fixtureOptions = {
       ...options,
-      hostname: fixtureHost,
-      host: fixtureHost,
+      hostname: fixtureAddress,
+      host: fixtureAddress,
       port: fixturePort,
       path: options.path,
       headers,
-      lookup: defaultLookup,
       ...(scheme === "https:" ? {
         servername: hostname,
         ca: certificatePem,
@@ -71,7 +72,7 @@ export function createLabEgressAdapters({
       throw new Error("lab_egress_destination_blocked");
     }
     return tcpConnect({
-      host: fixtureHost,
+      host: fixtureAddress,
       port: port === 443 ? httpsPort : httpPort,
     });
   };
@@ -97,6 +98,17 @@ function assertSafeFixtureHost(hostname) {
   if (typeof hostname !== "string" || !/^public-audit-fixture(?:-[a-z0-9-]{1,48})?$/u.test(hostname)) {
     throw new Error("lab_fixture_host_invalid");
   }
+}
+
+function assertPrivateFixtureAddress(address) {
+  if (typeof address !== "string" || !isIPv4(address)) {
+    throw new Error("lab_fixture_address_invalid");
+  }
+  const [first, second] = address.split(".").map(Number);
+  const privateAddress = first === 10 ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 192 && second === 168);
+  if (!privateAddress) throw new Error("lab_fixture_address_invalid");
 }
 
 function assertPort(port) {
