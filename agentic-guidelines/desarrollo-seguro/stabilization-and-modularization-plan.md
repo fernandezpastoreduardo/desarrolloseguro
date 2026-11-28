@@ -176,6 +176,12 @@ Descomposición ejecutable de P1:
    de cookies ni dominios de navegación. Esto permite distinguir navegación no
    iniciada de fallo posterior sin convertir evidencia ausente en resultado
    favorable.
+   Antes de iniciar Chromium, LAB-04 verifica también HTTPS directo desde un
+   contenedor temporal en la red interna de egress hasta la fixture: certificado
+   público del laboratorio, SNI y Host sintético, respuesta de consentimiento y
+   cookie analítica sintética. La comprobación no muestra cuerpo ni cookie. Si
+   pasa y el proxy sigue sin recibir bytes, el fallo queda localizado en la ruta
+   proxy/túnel; si falla, el gate identifica la conectividad o TLS de la fixture.
    Criterio de aceptación adicional: ingestión, sanitización y proyección deben
    manejar hostnames genéricos válidos. Las redirecciones solo pueden permanecer en
    el hostname solicitado o su alias `www` correspondiente; ningún dominio de

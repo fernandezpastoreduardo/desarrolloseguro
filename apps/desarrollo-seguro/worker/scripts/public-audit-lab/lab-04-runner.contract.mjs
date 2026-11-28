@@ -52,6 +52,19 @@ test("LAB-04 proves browser retry, persisted cookie phases, and both performance
   assert.match(runner, /--network "\$\{PROJECT\}-egress"/u);
 });
 
+test("LAB-04 preflights fixture HTTPS on the isolated egress network before browser execution", () => {
+  const preflight = runner.indexOf("LAB fixture HTTPS network probe passed");
+  const browser = runner.indexOf('"$WORKER_DIR/ui-runner.mjs" <"$UI_STDIN"');
+  assert.ok(preflight > 0 && preflight < browser);
+  const probe = runner.slice(runner.indexOf("# Check the fixture route directly"), preflight);
+  assert.match(probe, /--network "\$\{PROJECT\}-egress"/u);
+  assert.match(probe, /servername: hostname/u);
+  assert.match(probe, /headers: \{ Host: hostname \}/u);
+  assert.match(probe, /res\.headers\["set-cookie"\]/u);
+  assert.match(probe, /lab_fixture_https_preflight_failed/u);
+  assert.doesNotMatch(probe, /console\.(?:log|error).*?(?:cookie|body|hostname)/iu);
+});
+
 test("LAB-04 privacy proxy keeps the production readiness and stats protocol", () => {
   assert.match(privacyProxy, /event: "privacy_proxy_ready"/u);
   assert.match(privacyProxy, /event: "privacy_proxy_stats"/u);

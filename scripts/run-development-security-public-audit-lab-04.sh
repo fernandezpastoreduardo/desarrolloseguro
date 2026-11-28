@@ -341,6 +341,65 @@ docker run --detach --name "$FIXTURE_CONTAINER" \
   "$WORKER_DIR/fixture-container.mjs" >/dev/null
 docker network connect --alias "$FIXTURE_ALIAS" "${PROJECT}-egress" "$FIXTURE_CONTAINER"
 
+# Check the fixture route directly before involving Chromium or the production
+# privacy proxy. This keeps the probe on the internal egress network and uses
+# only the synthetic hostname and certificate created for this run.
+docker run --rm --name "${PROJECT}-fixture-https-preflight" \
+  --label "${LABEL_KEY}=${RUN_ID}" \
+  --network "${PROJECT}-egress" --read-only \
+  --cap-drop ALL --security-opt no-new-privileges --pids-limit 32 \
+  --memory 128m --cpus 0.25 \
+  --tmpfs /tmp:rw,noexec,nosuid,size=8m,uid=1001,gid=1001 \
+  --env "DS_LAB_HOSTNAME=${HOSTNAME}" \
+  --env "DS_LAB_FIXTURE_ALIAS=${FIXTURE_ALIAS}" \
+  --env "DS_LAB_RUN_ID=${RUN_ID}" \
+  --entrypoint node "desarrolloseguro-public-audit-lab-privacy-browser:${RUN_ID}" \
+  --input-type=module -e '
+import { readFile } from "node:fs/promises";
+import { request } from "node:https";
+
+const hostname = process.env.DS_LAB_HOSTNAME;
+const fixtureAlias = process.env.DS_LAB_FIXTURE_ALIAS;
+const runId = process.env.DS_LAB_RUN_ID;
+const certificate = await readFile("/run/public-audit-lab/fixture.pem");
+const req = request({
+  hostname: fixtureAlias,
+  port: 8443,
+  path: `/consent?lab=${encodeURIComponent(runId)}`,
+  method: "GET",
+  servername: hostname,
+  ca: certificate,
+  headers: { Host: hostname },
+  timeout: 5000,
+}, (res) => {
+  const chunks = [];
+  let size = 0;
+  res.on("data", (chunk) => {
+    size += chunk.length;
+    if (size <= 16384) chunks.push(chunk);
+    else req.destroy(new Error("lab_fixture_response_too_large"));
+  });
+  res.on("end", () => {
+    const body = Buffer.concat(chunks).toString("utf8");
+    const cookies = res.headers["set-cookie"] ?? [];
+    const hasAnalyticsCookie = cookies.some((cookie) => cookie.startsWith("_ga="));
+    if (res.statusCode !== 200 || !hasAnalyticsCookie ||
+        !body.includes("Rechazar no esenciales") || !body.includes("Política de privacidad")) {
+      process.stderr.write("lab_fixture_https_preflight_failed\n");
+      process.exitCode = 1;
+      return;
+    }
+    process.stdout.write("LAB fixture HTTPS network probe passed\n");
+  });
+});
+req.on("timeout", () => req.destroy(new Error("lab_fixture_https_timeout")));
+req.on("error", () => {
+  process.stderr.write("lab_fixture_https_preflight_failed\n");
+  process.exitCode = 1;
+});
+req.end();
+'
+
 cat > "$TEMP_ROOT/ui-runner.mjs" <<'NODE'
 import { chromium } from 'playwright';
 const runId = process.env.DS_LAB_RUN_ID;
