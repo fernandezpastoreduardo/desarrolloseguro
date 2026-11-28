@@ -395,41 +395,58 @@ await page.getByRole('button', { name: 'Volver a solicitar análisis' }).waitFor
 process.stdout.write(`LAB-04 first attempt failed as expected for ${hostname}\n`);
 process.stdout.write('LAB-04_RETRY_READY\n');
 await new Promise((resolve) => process.stdin.once('data', resolve));
-const retryAdmissionResponse = page.waitForResponse(
+const retryAdmissionResponsePromise = page.waitForResponse(
   (response) => new URL(response.url()).pathname.endsWith('/analysis-requests'),
   { timeout: 30_000 },
-).catch(() => null);
+);
 await page.getByRole('button', { name: 'Volver a solicitar análisis' }).click();
-await retryAdmissionResponse;
+const retryAdmissionResponse = await retryAdmissionResponsePromise;
+const retryAdmission = await retryAdmissionResponse.json();
+if (!['queued', 'running'].includes(retryAdmission?.state) || typeof retryAdmission?.jobId !== 'string') {
+  throw new Error(`lab_retry_job_id_missing:${JSON.stringify({ state: retryAdmission?.state, jobId: retryAdmission?.jobId ?? null })}`);
+}
+const retryJobId = retryAdmission.jobId;
 let retryStatus = null;
 const activationDeadline = Date.now() + 30_000;
 while (Date.now() < activationDeadline) {
-  retryStatus = await page.evaluate(async ({ hostname, targetUrl }) => {
-    const response = await fetch(`/api/desarrollo-seguro/v1/domains/${encodeURIComponent(hostname)}/status?${new URLSearchParams({ targetUrl })}`);
+  retryStatus = await page.evaluate(async ({ hostname, targetUrl, jobId }) => {
+    const query = new URLSearchParams({ targetUrl, jobId });
+    const response = await fetch(`/api/desarrollo-seguro/v1/domains/${encodeURIComponent(hostname)}/status?${query}`);
     return response.ok ? response.json() : { diagnosticStatus: response.status };
-  }, { hostname, targetUrl });
-  if (retryStatus.diagnosticStatus || retryStatus.activeJobId || retryStatus.lastReport) break;
+  }, { hostname, targetUrl, jobId: retryJobId });
+  if (retryStatus.diagnosticStatus || retryStatus.state === 'failed' || retryStatus.state === 'fresh' && retryStatus.lastReport) break;
   await page.waitForTimeout(1_000);
 }
-if (!retryStatus?.diagnosticStatus && !retryStatus?.activeJobId && !retryStatus?.lastReport) {
-  process.stderr.write(`LAB-04 retry admission never became active: ${JSON.stringify({ retryStatus, admissionResponses, errors })}\n`);
-  throw new Error('lab_retry_admission_not_active');
-}
 try {
-  await page.locator('.ds-portal__result h2').filter({ hasText: 'Informe vigente' }).waitFor({ timeout: 150_000 });
+  const completionDeadline = Date.now() + 150_000;
+  while (!(retryStatus?.state === 'fresh' && retryStatus.lastReport)) {
+    if (retryStatus?.diagnosticStatus || retryStatus?.state === 'failed') {
+      throw new Error(`lab_retry_job_terminal:${JSON.stringify({ state: retryStatus?.state, failureCode: retryStatus?.failureCode ?? null, failureDiagnostic: retryStatus?.failureDiagnostic ?? null })}`);
+    }
+    if (Date.now() >= completionDeadline) throw new Error('lab_retry_job_timeout');
+    retryStatus = await page.evaluate(async ({ hostname, targetUrl, jobId }) => {
+      const query = new URLSearchParams({ targetUrl, jobId });
+      const response = await fetch(`/api/desarrollo-seguro/v1/domains/${encodeURIComponent(hostname)}/status?${query}`);
+      return response.ok ? response.json() : { diagnosticStatus: response.status };
+    }, { hostname, targetUrl, jobId: retryJobId });
+    await page.waitForTimeout(1_000);
+  }
+  await page.locator('.ds-portal__result h2').filter({ hasText: 'Informe vigente' }).waitFor({ timeout: 30_000 });
 } catch (error) {
-  const diagnostic = await page.evaluate(async ({ hostname, targetUrl }) => {
-    const response = await fetch(`/api/desarrollo-seguro/v1/domains/${encodeURIComponent(hostname)}/status?${new URLSearchParams({ targetUrl })}`);
+  const diagnostic = await page.evaluate(async ({ hostname, targetUrl, jobId }) => {
+    const query = new URLSearchParams({ targetUrl, jobId });
+    const response = await fetch(`/api/desarrollo-seguro/v1/domains/${encodeURIComponent(hostname)}/status?${query}`);
     return response.ok ? response.json() : { diagnosticStatus: response.status };
-  }, { hostname, targetUrl });
+  }, { hostname, targetUrl, jobId: retryJobId });
   process.stderr.write(`LAB-04 retry did not finish: ${JSON.stringify({ visibleText: (await page.locator('body').innerText()).slice(-4000), status: diagnostic, admissionResponses, errors })}\n`);
   throw error;
 }
-const status = await page.evaluate(async ({ hostname, targetUrl }) => {
-  const response = await fetch(`/api/desarrollo-seguro/v1/domains/${encodeURIComponent(hostname)}/status?${new URLSearchParams({ targetUrl })}`);
+const status = await page.evaluate(async ({ hostname, targetUrl, jobId }) => {
+  const query = new URLSearchParams({ targetUrl, jobId });
+  const response = await fetch(`/api/desarrollo-seguro/v1/domains/${encodeURIComponent(hostname)}/status?${query}`);
   if (!response.ok) throw new Error(`status_http_${response.status}`);
   return response.json();
-}, { hostname, targetUrl });
+}, { hostname, targetUrl, jobId: retryJobId });
 const report = status.lastReport;
 if (status.state !== 'fresh' || !report || report.hostname !== hostname) throw new Error('lab_report_not_fresh');
 const cookieAudit = report.privacyAssessment?.evidence?.cookieAudit;
