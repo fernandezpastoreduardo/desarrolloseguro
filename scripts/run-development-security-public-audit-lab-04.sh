@@ -433,7 +433,18 @@ const status = await page.evaluate(async ({ hostname, targetUrl }) => {
 const report = status.lastReport;
 if (status.state !== 'fresh' || !report || report.hostname !== hostname) throw new Error('lab_report_not_fresh');
 const cookieAudit = report.privacyAssessment?.evidence?.cookieAudit;
-if (!cookieAudit?.initial || !cookieAudit?.accept || !cookieAudit?.reject) throw new Error('lab_privacy_cookie_evidence_missing');
+if (!cookieAudit?.initial || !cookieAudit?.accept || !cookieAudit?.reject) {
+  const assessment = report.privacyAssessment;
+  const diagnostic = {
+    assessmentStatus: assessment?.status ?? null,
+    assessmentScore: assessment?.score ?? null,
+    criteria: assessment?.criteria?.map(({ id, status }) => ({ id, status })) ?? [],
+    evidenceKeys: Object.keys(assessment?.evidence ?? {}),
+    checks: report.checks?.map(({ controlId, status }) => ({ controlId, status })) ?? [],
+    reasons: report.reasons ?? [],
+  };
+  throw new Error(`lab_privacy_cookie_evidence_missing:${JSON.stringify(diagnostic).slice(0, 4000)}`);
+}
 for (const [phase, snapshot] of Object.entries({
   initial: cookieAudit.initial,
   acceptBefore: cookieAudit.accept.beforeChoice,
