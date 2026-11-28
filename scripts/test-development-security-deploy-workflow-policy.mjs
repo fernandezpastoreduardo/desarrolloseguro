@@ -37,6 +37,7 @@ const imageBuildJob = workflow.match(
 assert.ok(imageBuildJob, "production image job must be defined");
 assert.match(imageBuildJob, /name: Set up pnpm/u);
 assert.match(imageBuildJob, /name: Set up Node\.js/u);
+assert.match(imageBuildJob, /basicConstraints=critical,CA:FALSE/u);
 assert.doesNotMatch(
   workflow.split("\n  deploy:\n", 1)[0] ?? "",
   /^\s+needs:/mu,

@@ -189,6 +189,7 @@ jobs:
           openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
             -subj "/CN=${lab_hostname}" \
             -addext "subjectAltName=DNS:${lab_hostname}" \
+            -addext 'basicConstraints=critical,CA:FALSE' \
             -keyout "$lab_certificate_dir/fixture.key" \
             -out "$lab_certificate_dir/fixture.pem" >/dev/null 2>&1
           chmod 0444 "$lab_certificate_dir/fixture.pem"
