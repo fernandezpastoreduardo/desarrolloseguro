@@ -107,6 +107,12 @@ HTTPS directo y, si falla, solo se registran fase y código de error. El recorri
 LAB-04 completo pasó localmente con este cambio, incluidos retry, cookie inicial,
 aceptación, rechazo, perfiles de rendimiento y publicación del informe.
 
+El siguiente gate remoto llegó a la IP pero agotó el timeout TCP (`ETIMEDOUT`).
+El runner ahora espera el evento explícito de readiness de la fixture antes de
+probar la ruta y, si falla, registra el estado del contenedor y su evento de
+arranque sintético. El recorrido local volvió a pasar después de añadir esta
+diagnosis; queda por confirmar si elimina el timeout observado solo en CI.
+
 Las correcciones de P2 hacen que el retry reenvíe la solicitud autorizada de la misma
 URL, que un fallo tardío de Privacidad conserve inventarios previos, que Rendimiento
 retenga métricas parciales y diagnósticos, y que un fallo técnico terminal solo se

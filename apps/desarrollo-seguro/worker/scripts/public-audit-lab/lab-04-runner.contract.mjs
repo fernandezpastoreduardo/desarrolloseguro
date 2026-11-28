@@ -67,6 +67,8 @@ test("LAB-04 preflights fixture HTTPS on the isolated egress network before brow
   assert.match(probe, /stage: result\.stage, code: result\.code/u);
   assert.match(runner, /DS_LAB_EGRESS_NETWORK=.*node -e/u);
   assert.match(runner, /DS_LAB_FIXTURE_ADDRESS: "\$\{FIXTURE_EGRESS_IP\}"/u);
+  assert.match(runner, /public_audit_lab_fixture_ready/u);
+  assert.match(runner, /LAB-04 scoped fixture startup \(synthetic endpoint only\)/u);
   assert.doesNotMatch(probe, /console\.(?:log|error).*?(?:cookie|body|hostname)/iu);
 });
 

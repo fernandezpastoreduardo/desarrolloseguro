@@ -109,6 +109,11 @@ cleanup() {
   trap - EXIT INT TERM
   if docker info >/dev/null 2>&1; then
     if (( status != 0 )) && [[ -f $OVERRIDE_FILE ]]; then
+      if docker inspect "$FIXTURE_CONTAINER" >/dev/null 2>&1; then
+        printf 'LAB-04 scoped fixture startup (synthetic endpoint only):\n' >&2
+        docker inspect --format 'container_state={{.State.Status}}' "$FIXTURE_CONTAINER" >&2 || true
+        docker logs --tail 40 "$FIXTURE_CONTAINER" >&2 || true
+      fi
       printf 'LAB-04 scoped failure logs (API, worker, runtime coordinator):\n' >&2
       compose logs --no-color --tail 120 \
         development-security-api development-security-worker development-security-runtime-coordinator >&2 || true
@@ -351,6 +356,19 @@ const isPrivate = first === 10 || (first === 172 && second >= 16 && second <= 31
 if (!isIPv4(address) || !isPrivate) process.exit(1);
 process.stdout.write(address);
 ')"
+fixture_ready=false
+for _ in {1..30}; do
+  if docker logs "$FIXTURE_CONTAINER" 2>&1 | rg -q '"event":"public_audit_lab_fixture_ready"'; then
+    fixture_ready=true
+    break
+  fi
+  sleep 1
+done
+if [[ $fixture_ready != true ]]; then
+  printf 'lab_fixture_readiness_timeout\n' >&2
+  docker logs --tail 40 "$FIXTURE_CONTAINER" >&2 || true
+  exit 1
+fi
 
 # Check the fixture route directly before involving Chromium or the production
 # privacy proxy. This keeps the probe on the internal egress network and uses
