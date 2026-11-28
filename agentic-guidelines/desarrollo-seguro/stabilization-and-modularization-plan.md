@@ -170,6 +170,12 @@ Descomposición ejecutable de P1:
    puedan colisionar con redes locales o con rangos reservados por Docker Desktop.
    Los procesos de proxy del laboratorio conservan el protocolo productivo de
    readiness y estadísticas para que la fixture pruebe la misma integración.
+   Si el job termina pero el navegador no aporta evidencia, la instrumentación
+   del laboratorio registra únicamente el estado de cada flujo y contadores
+   agregados de conexiones/bytes del proxy. No registra URL, contenido, valores
+   de cookies ni dominios de navegación. Esto permite distinguir navegación no
+   iniciada de fallo posterior sin convertir evidencia ausente en resultado
+   favorable.
    Criterio de aceptación adicional: ingestión, sanitización y proyección deben
    manejar hostnames genéricos válidos. Las redirecciones solo pueden permanecer en
    el hostname solicitado o su alias `www` correspondiente; ningún dominio de
@@ -183,7 +189,8 @@ Descomposición ejecutable de P1:
 El coordinador de laboratorio requiere acceso al daemon Docker para crear trabajos
 aislados. Su uso se limita a pruebas con fixture controlado y recursos de la corrida;
 no se apunta a servicios productivos ni a dominios de terceros. La composición
-productiva no se inicia ni se usa para estos tests.
+productiva se usa como definición de base con overrides; no se inician servicios
+productivos ni se reutilizan redes, volúmenes o secretos del despliegue.
 
 Salida: reproducciones fallan por los bugs actuales y pasan únicamente al corregirlos;
 el recorrido no depende de nombres ni resultados esperados de clientes conocidos.

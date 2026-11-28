@@ -565,6 +565,7 @@ export function createDockerRuntimeSessionFactory(
               }
             }
             const proxyStats = await stopPrivacyProxyAndReadStats(dockerBinary, dockerSocketPath, privacyProxyName, privacySignal);
+            writeLabPrivacyObservationDiagnostic(observation, proxyStats);
             if (!proxyStats || proxyStats.receivedBytes > PRIVACY_BROWSER_BUDGET.receivedBytes || proxyStats.budgetExceeded) {
               observation = {
                 ...observation,
@@ -706,7 +707,7 @@ async function stopPrivacyProxyAndReadStats(
   dockerSocketPath: string,
   containerName: string,
   signal: AbortSignal,
-): Promise<{ receivedBytes: number; budgetExceeded: boolean } | null> {
+): Promise<{ openedConnections: number; receivedBytes: number; budgetExceeded: boolean } | null> {
   try {
     await runDocker(dockerBinary, ["stop", "--time", "3", containerName], undefined, signal,
       MAX_BROKER_STARTUP_OUTPUT_BYTES, false, 5_000, dockerSocketPath);
@@ -715,9 +716,14 @@ async function stopPrivacyProxyAndReadStats(
     for (const line of output.split(/\r?\n/u).reverse()) {
       try {
         const value: unknown = JSON.parse(line);
-        if (isRecord(value) && value.event === "privacy_proxy_stats" && Number.isSafeInteger(value.receivedBytes) &&
+        if (isRecord(value) && value.event === "privacy_proxy_stats" && Number.isSafeInteger(value.openedConnections) &&
+            Number.isSafeInteger(value.receivedBytes) &&
             typeof value.budgetExceeded === "boolean") {
-          return { receivedBytes: value.receivedBytes as number, budgetExceeded: value.budgetExceeded };
+          return {
+            openedConnections: value.openedConnections as number,
+            receivedBytes: value.receivedBytes as number,
+            budgetExceeded: value.budgetExceeded,
+          };
         }
       } catch { /* Ignore bounded startup lines. */ }
     }
@@ -948,6 +954,37 @@ async function runDocker(
 function writeLabDockerFailureDiagnostic(command: string | undefined, output: string): void {
   if (!process.env.DS_LAB_RUN_ID) return;
   process.stderr.write(`${JSON.stringify(createLabDockerFailureDiagnostic(command, output))}\n`);
+}
+
+function writeLabPrivacyObservationDiagnostic(
+  observation: PrivacyBrowserObservation,
+  proxyStats: { openedConnections: number; receivedBytes: number; budgetExceeded: boolean } | null,
+): void {
+  if (!process.env.DS_LAB_RUN_ID) return;
+  process.stderr.write(`${JSON.stringify(createLabPrivacyObservationDiagnostic(observation, proxyStats))}\n`);
+}
+
+export function createLabPrivacyObservationDiagnostic(
+  observation: PrivacyBrowserObservation,
+  proxyStats: { openedConnections: number; receivedBytes: number; budgetExceeded: boolean } | null,
+) {
+  const summarizeFlow = (flow: PrivacyBrowserObservation["initial"]) => ({
+    status: flow.status,
+    pageLoaded: flow.pageLoaded,
+    beforeChoiceSnapshotPresent: flow.phaseEvidence.beforeChoice !== null,
+    beforeChoiceCookiesComplete: flow.phaseEvidence.beforeChoice?.cookieReadComplete ?? null,
+    requestCount: flow.phaseEvidence.networkRequests.length,
+  });
+  return {
+    type: "lab_privacy_observation_diagnostic",
+    status: observation.status,
+    flows: {
+      initial: summarizeFlow(observation.initial),
+      accept: summarizeFlow(observation.accept),
+      reject: summarizeFlow(observation.reject),
+    },
+    proxy: proxyStats,
+  } as const;
 }
 
 export function createLabDockerFailureDiagnostic(command: string | undefined, output: string) {

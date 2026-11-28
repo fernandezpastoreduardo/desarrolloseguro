@@ -91,6 +91,13 @@ muestra 1→0→1 cookies al rechazar y recargar. El aviso tiene enlace a polít
 gate exige FCP, LCP, CLS, TBT, TTFB, bytes y puntuación numérica móvil/escritorio. CI
 ejecuta LAB-04 con artefactos del mismo SHA.
 
+El gate encontró dos ejecuciones remotas que completaban el trabajo con inventarios
+de privacidad y rendimiento desconocidos, aunque el mismo recorrido pasó localmente.
+Se añadió al diagnóstico exclusivo del laboratorio el estado de los tres flujos del
+navegador y los contadores agregados de conexiones/bytes del proxy. Ese registro no
+incluye URL, contenido ni valores de cookies y permitirá localizar la frontera de
+red o navegador que falla en el siguiente intento.
+
 Las correcciones de P2 hacen que el retry reenvíe la solicitud autorizada de la misma
 URL, que un fallo tardío de Privacidad conserve inventarios previos, que Rendimiento
 retenga métricas parciales y diagnósticos, y que un fallo técnico terminal solo se

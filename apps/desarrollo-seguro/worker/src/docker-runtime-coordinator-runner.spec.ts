@@ -5,6 +5,7 @@ import type { ScanRunInput } from "@desarrolloseguro/persistence";
 import {
   classifyBrokerStartupStderr,
   createLabDockerFailureDiagnostic,
+  createLabPrivacyObservationDiagnostic,
   createDockerRuntimeCoordinatorRunner,
   createDockerRuntimeSessionFactory,
   runRuntimePhase,
@@ -109,7 +110,7 @@ beforeEach(() => {
       }
     } else if (args[0] === "logs") {
       const output = dockerBehavior.privacyProxyStopped
-        ? '{"event":"privacy_proxy_stats","receivedBytes":321,"budgetExceeded":false}\n'
+        ? '{"event":"privacy_proxy_stats","openedConnections":4,"receivedBytes":321,"budgetExceeded":false}\n'
         : '{"event":"privacy_proxy_ready","port":3128}\n';
       queueMicrotask(() => child.finish(0, output));
     } else if (args[0] === "stop") {
@@ -145,6 +146,28 @@ beforeEach(() => {
 });
 
 let activeBroker: FakeDockerChild | undefined;
+
+describe("createLabPrivacyObservationDiagnostic", () => {
+  it("records only aggregate flow and proxy state without URLs or cookie values", () => {
+    const diagnostic = createLabPrivacyObservationDiagnostic(makePrivacyObservation(), {
+      openedConnections: 4,
+      receivedBytes: 321,
+      budgetExceeded: false,
+    });
+
+    expect(diagnostic).toEqual({
+      type: "lab_privacy_observation_diagnostic",
+      status: "complete",
+      flows: {
+        initial: { status: "evaluated", pageLoaded: true, beforeChoiceSnapshotPresent: false, beforeChoiceCookiesComplete: null, requestCount: 0 },
+        accept: { status: "evaluated", pageLoaded: true, beforeChoiceSnapshotPresent: false, beforeChoiceCookiesComplete: null, requestCount: 0 },
+        reject: { status: "evaluated", pageLoaded: true, beforeChoiceSnapshotPresent: false, beforeChoiceCookiesComplete: null, requestCount: 0 },
+      },
+      proxy: { openedConnections: 4, receivedBytes: 321, budgetExceeded: false },
+    });
+    expect(JSON.stringify(diagnostic)).not.toMatch(/https?:|cookieValue|sessionToken/iu);
+  });
+});
 
 describe("createDockerRuntimeCoordinatorRunner", () => {
   it.each(["service_comparison", "first_entry_policy_access"] as const)(
