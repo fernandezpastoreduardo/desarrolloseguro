@@ -56,12 +56,14 @@ test("LAB-04 preflights fixture HTTPS on the isolated egress network before brow
   const preflight = runner.indexOf("LAB fixture HTTPS network probe passed");
   const browser = runner.indexOf('"$WORKER_DIR/ui-runner.mjs" <"$UI_STDIN"');
   assert.ok(preflight > 0 && preflight < browser);
-  const probe = runner.slice(runner.indexOf("# Check the fixture route directly"), preflight);
+  const probe = runner.slice(runner.indexOf("# Check the fixture route directly"), browser);
   assert.match(probe, /--network "\$\{PROJECT\}-egress"/u);
   assert.match(probe, /servername: hostname/u);
   assert.match(probe, /headers: \{ Host: hostname \}/u);
   assert.match(probe, /res\.headers\["set-cookie"\]/u);
-  assert.match(probe, /lab_fixture_https_preflight_failed/u);
+  assert.match(probe, /lab_fixture_https_preflight/u);
+  assert.match(probe, /attempt < 12/u);
+  assert.match(probe, /stage: result\.stage, code: result\.code/u);
   assert.doesNotMatch(probe, /console\.(?:log|error).*?(?:cookie|body|hostname)/iu);
 });
 

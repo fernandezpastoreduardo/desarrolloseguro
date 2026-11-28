@@ -362,42 +362,61 @@ const hostname = process.env.DS_LAB_HOSTNAME;
 const fixtureAlias = process.env.DS_LAB_FIXTURE_ALIAS;
 const runId = process.env.DS_LAB_RUN_ID;
 const certificate = await readFile("/run/public-audit-lab/fixture.pem");
-const req = request({
-  hostname: fixtureAlias,
-  port: 8443,
-  path: `/consent?lab=${encodeURIComponent(runId)}`,
-  method: "GET",
-  servername: hostname,
-  ca: certificate,
-  headers: { Host: hostname },
-  timeout: 5000,
-}, (res) => {
-  const chunks = [];
-  let size = 0;
-  res.on("data", (chunk) => {
-    size += chunk.length;
-    if (size <= 16384) chunks.push(chunk);
-    else req.destroy(new Error("lab_fixture_response_too_large"));
+const transientCodes = new Set(["ECONNREFUSED", "EHOSTUNREACH", "ENETUNREACH", "ENOTFOUND", "ETIMEDOUT"]);
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+for (let attempt = 0; attempt < 12; attempt += 1) {
+  const result = await new Promise((resolve) => {
+    let stage = "connect";
+    const req = request({
+      hostname: fixtureAlias,
+      port: 8443,
+      path: `/consent?lab=${encodeURIComponent(runId)}`,
+      method: "GET",
+      servername: hostname,
+      ca: certificate,
+      headers: { Host: hostname },
+      timeout: 1200,
+    }, (res) => {
+      stage = "response";
+      const chunks = [];
+      let size = 0;
+      res.on("data", (chunk) => {
+        size += chunk.length;
+        if (size <= 16384) chunks.push(chunk);
+        else req.destroy(Object.assign(new Error("response_too_large"), { code: "RESPONSE_TOO_LARGE" }));
+      });
+      res.on("end", () => {
+        const body = Buffer.concat(chunks).toString("utf8");
+        const cookies = res.headers["set-cookie"] ?? [];
+        const hasAnalyticsCookie = cookies.some((cookie) => cookie.startsWith("_ga="));
+        const valid = res.statusCode === 200 && hasAnalyticsCookie &&
+          body.includes("Rechazar no esenciales") && body.includes("Política de privacidad");
+        resolve(valid ? { ok: true } : { ok: false, stage, code: "UNEXPECTED_RESPONSE" });
+      });
+    });
+    req.on("socket", (socket) => {
+      socket.once("connect", () => { stage = "tls"; });
+      socket.once("secureConnect", () => { stage = "request"; });
+    });
+    req.on("timeout", () => req.destroy(Object.assign(new Error("timeout"), { code: "ETIMEDOUT" })));
+    req.on("error", (error) => resolve({
+      ok: false,
+      stage,
+      code: typeof error.code === "string" && /^[A-Z0-9_]+$/.test(error.code) ? error.code : "UNKNOWN",
+    }));
+    req.end();
   });
-  res.on("end", () => {
-    const body = Buffer.concat(chunks).toString("utf8");
-    const cookies = res.headers["set-cookie"] ?? [];
-    const hasAnalyticsCookie = cookies.some((cookie) => cookie.startsWith("_ga="));
-    if (res.statusCode !== 200 || !hasAnalyticsCookie ||
-        !body.includes("Rechazar no esenciales") || !body.includes("Política de privacidad")) {
-      process.stderr.write("lab_fixture_https_preflight_failed\n");
-      process.exitCode = 1;
-      return;
-    }
+  if (result.ok) {
     process.stdout.write("LAB fixture HTTPS network probe passed\n");
-  });
-});
-req.on("timeout", () => req.destroy(new Error("lab_fixture_https_timeout")));
-req.on("error", () => {
-  process.stderr.write("lab_fixture_https_preflight_failed\n");
-  process.exitCode = 1;
-});
-req.end();
+    break;
+  }
+  if (!transientCodes.has(result.code) || attempt === 11) {
+    process.stderr.write(`${JSON.stringify({ type: "lab_fixture_https_preflight", result: "failed", stage: result.stage, code: result.code })}\n`);
+    process.exitCode = 1;
+    break;
+  }
+  await wait(250);
+}
 '
 
 cat > "$TEMP_ROOT/ui-runner.mjs" <<'NODE'
