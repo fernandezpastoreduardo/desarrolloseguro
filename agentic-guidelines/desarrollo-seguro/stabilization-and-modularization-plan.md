@@ -181,7 +181,9 @@ Descomposición ejecutable de P1:
    egress hasta la fixture con el certificado público del laboratorio, SNI y Host
    sintético, respuesta de consentimiento y cookie analítica sintética. Reintenta
    fallos transitorios de arranque durante unos segundos y, si persisten, registra
-   estado de contenedor, señal de readiness, etapa y código de error. No muestra
+   estado de contenedor, señal de readiness, etapa y código de error. Ejecuta la
+   fixture con el UID/GID del job que posee los archivos TLS temporales y usa
+   herramientas disponibles en el runner, sin depender de `rg`. No muestra
    cuerpo ni cookie. Si pasa y el proxy sigue sin recibir bytes, el fallo queda
    localizado en la ruta proxy/túnel; si falla, el gate identifica la conectividad
    o TLS de la fixture.

@@ -5,8 +5,10 @@ import { URL } from "node:url";
 
 const RUNNER_PATH = new URL("../../../../../scripts/run-development-security-public-audit-lab-04.sh", import.meta.url);
 const PRIVACY_PROXY_PATH = new URL("./lab-privacy-egress-entrypoint.mjs", import.meta.url);
+const FIXTURE_CONTAINER_PATH = new URL("./fixture-container.mjs", import.meta.url);
 const runner = await readFile(RUNNER_PATH, "utf8");
 const privacyProxy = await readFile(PRIVACY_PROXY_PATH, "utf8");
+const fixtureContainer = await readFile(FIXTURE_CONTAINER_PATH, "utf8");
 
 test("LAB-04 is scoped to a unique, internal-only Compose project", () => {
   assert.match(runner, /openssl rand -hex 16/u);
@@ -68,8 +70,18 @@ test("LAB-04 preflights fixture HTTPS on the isolated egress network before brow
   assert.match(runner, /DS_LAB_EGRESS_NETWORK=.*node -e/u);
   assert.match(runner, /DS_LAB_FIXTURE_ADDRESS: "\$\{FIXTURE_EGRESS_IP\}"/u);
   assert.match(runner, /public_audit_lab_fixture_ready/u);
+  assert.match(runner, /\| grep -q /u);
+  assert.doesNotMatch(runner, /\| rg -q /u);
+  assert.match(runner, /--user "\$\{FIXTURE_UID\}:\$\{FIXTURE_GID\}"/u);
+  assert.match(runner, /FIXTURE_UID="\$\(id -u\)"/u);
   assert.match(runner, /LAB-04 scoped fixture startup \(synthetic endpoint only\)/u);
   assert.doesNotMatch(probe, /console\.(?:log|error).*?(?:cookie|body|hostname)/iu);
+});
+
+test("LAB-04 fixture startup diagnostics expose only an allowlisted stage and error code", () => {
+  assert.match(fixtureContainer, /event: "public_audit_lab_fixture_start_failed"/u);
+  assert.match(fixtureContainer, /const knownCodes = new Set\(\["EACCES"/u);
+  assert.doesNotMatch(fixtureContainer, /error\.(?:message|stack)|console\.(?:log|error)/u);
 });
 
 test("LAB-04 privacy proxy keeps the production readiness and stats protocol", () => {

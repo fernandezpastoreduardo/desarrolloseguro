@@ -110,8 +110,14 @@ aceptación, rechazo, perfiles de rendimiento y publicación del informe.
 El siguiente gate remoto llegó a la IP pero agotó el timeout TCP (`ETIMEDOUT`).
 El runner ahora espera el evento explícito de readiness de la fixture antes de
 probar la ruta y, si falla, registra el estado del contenedor y su evento de
-arranque sintético. El recorrido local volvió a pasar después de añadir esta
-diagnosis; queda por confirmar si elimina el timeout observado solo en CI.
+arranque sintético. El siguiente CI mostró que la fixture ni siquiera quedaba
+activa: el runner usaba `rg` (no instalado en GitHub Actions) para buscar readiness,
+y ejecutaba el contenedor con UID 1000 mientras los archivos TLS temporales
+pertenecían al UID del job. Ahora el contenedor usa el UID/GID propietario y `grep`,
+y sus errores de arranque informan una etapa y un código allowlisted, sin mensajes,
+rutas ni datos TLS. Repetí localmente LAB-04 con las imágenes de producción: el
+preflight HTTPS y el recorrido completo pasaron. La confirmación remota sigue
+pendiente.
 
 Las correcciones de P2 hacen que el retry reenvíe la solicitud autorizada de la misma
 URL, que un fallo tardío de Privacidad conserve inventarios previos, que Rendimiento

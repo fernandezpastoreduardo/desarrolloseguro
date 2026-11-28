@@ -37,6 +37,8 @@ readonly COMPOSE_CONFIG="${TEMP_ROOT}/compose.rendered.json"
 readonly FIXTURE_TLS_DIR="${TEMP_ROOT}/fixture-tls"
 readonly FIXTURE_CERT="${FIXTURE_TLS_DIR}/fixture.crt"
 readonly FIXTURE_KEY="${FIXTURE_TLS_DIR}/fixture.key"
+readonly FIXTURE_UID="$(id -u)"
+readonly FIXTURE_GID="$(id -g)"
 readonly POSTGRES_HOST='development-security-database'
 readonly POSTGRES_DB='desarrollo_seguro'
 
@@ -333,9 +335,9 @@ compose ps --all
 docker run --detach --name "$FIXTURE_CONTAINER" \
   --label "${LABEL_KEY}=${RUN_ID}" \
   --network "${PROJECT}-ingress" --network-alias "$FIXTURE_ALIAS" \
-  --read-only --user 1000:1000 --cap-drop ALL --security-opt no-new-privileges \
+  --read-only --user "${FIXTURE_UID}:${FIXTURE_GID}" --cap-drop ALL --security-opt no-new-privileges \
   --pids-limit 32 --memory 128m --cpus 0.25 \
-  --tmpfs /tmp:rw,noexec,nosuid,size=16m,uid=1000,gid=1000 \
+  --tmpfs "/tmp:rw,noexec,nosuid,size=16m,uid=${FIXTURE_UID},gid=${FIXTURE_GID}" \
   --volume "$FIXTURE_TLS_DIR:/run/lab-tls:ro" \
   --volume "$FIXTURE_ENTRYPOINT:$WORKER_DIR/fixture-container.mjs:ro" \
   --volume "$FIXTURE_SOURCE:$WORKER_DIR/https-fixture.mjs:ro" \
@@ -358,7 +360,7 @@ process.stdout.write(address);
 ')"
 fixture_ready=false
 for _ in {1..30}; do
-  if docker logs "$FIXTURE_CONTAINER" 2>&1 | rg -q '"event":"public_audit_lab_fixture_ready"'; then
+  if docker logs "$FIXTURE_CONTAINER" 2>&1 | grep -q '"event":"public_audit_lab_fixture_ready"'; then
     fixture_ready=true
     break
   fi
