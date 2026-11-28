@@ -31,6 +31,12 @@ assert.match(workflow, /^  postgres-integration:$/mu);
 assert.match(workflow, /^  dependency-audit:$/mu);
 assert.match(workflow, /^  build-and-scan-images:$/mu);
 assert.match(workflow, /^  deploy:$/mu);
+const imageBuildJob = workflow.match(
+  /^  build-and-scan-images:\n([\s\S]*?)(?=^  deploy:)/mu,
+)?.[1];
+assert.ok(imageBuildJob, "production image job must be defined");
+assert.match(imageBuildJob, /name: Set up pnpm/u);
+assert.match(imageBuildJob, /name: Set up Node\.js/u);
 assert.doesNotMatch(
   workflow.split("\n  deploy:\n", 1)[0] ?? "",
   /^\s+needs:/mu,
