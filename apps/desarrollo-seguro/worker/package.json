@@ -10,7 +10,7 @@
     "audit:run": "node dist/internal-audit-entrypoint.js",
     "start:processor-auditor": "node dist/processor-auditor-entrypoint.js",
     "start:coordinator": "node dist/runtime-coordinator-entrypoint.js",
-    "pretest": "pnpm --filter @desarrolloseguro/core build && pnpm --filter @desarrolloseguro/persistence build",
+    "pretest": "pnpm --filter @desarrolloseguro/worker build",
     "test": "vitest run src scripts && pnpm test:lab",
     "test:lab": "node --test scripts/public-audit-lab/*.contract.mjs",
     "test:coverage": "vitest run src scripts --coverage --coverage.reporter=lcov --coverage.reporter=text",

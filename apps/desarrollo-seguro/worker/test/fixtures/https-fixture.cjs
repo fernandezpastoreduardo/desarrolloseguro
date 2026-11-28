@@ -25,6 +25,8 @@ function createEphemeralHttpsFixture() {
       `/CN=${fixtureHostname}`,
       "-addext",
       `subjectAltName=DNS:${fixtureHostname}`,
+      "-addext",
+      "basicConstraints=critical,CA:FALSE",
       "-keyout",
       privateKeyPath,
       "-out",
