@@ -36,7 +36,8 @@ test("LAB-04 proves browser retry, persisted cookie phases, and both performance
   assert.match(runner, /docker network connect --alias "\$FIXTURE_ALIAS"/u);
   assert.match(runner, /typeof retryAdmission\?\.jobId !== 'string'/u);
   assert.match(runner, /new URLSearchParams\(\{ targetUrl, jobId \}\)/u);
-  assert.match(runner, /retryStatus\.state === 'fresh' && retryStatus\.lastReport/u);
+  assert.match(runner, /retryStatus\?\.state === 'fresh' && retryStatus\.lastReport/u);
+  assert.match(runner, /page\.waitForTimeout\(waitMs\)/u);
   assert.match(runner, /cookieAudit\?\.initial.*cookieAudit\?\.accept.*cookieAudit\?\.reject/u);
   assert.match(runner, /requiredPerformanceMetrics = \['FcpMs', 'LcpMs', 'ClsMilli', 'TbtMs', 'TtfbMs', 'TransferBytes', 'Score'\]/u);
   assert.match(runner, /lab_performance_metric_missing/u);

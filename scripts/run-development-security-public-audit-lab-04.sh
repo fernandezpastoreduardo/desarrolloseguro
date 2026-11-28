@@ -407,18 +407,8 @@ if (!['queued', 'running'].includes(retryAdmission?.state) || typeof retryAdmiss
 }
 const retryJobId = retryAdmission.jobId;
 let retryStatus = null;
-const activationDeadline = Date.now() + 30_000;
-while (Date.now() < activationDeadline) {
-  retryStatus = await page.evaluate(async ({ hostname, targetUrl, jobId }) => {
-    const query = new URLSearchParams({ targetUrl, jobId });
-    const response = await fetch(`/api/desarrollo-seguro/v1/domains/${encodeURIComponent(hostname)}/status?${query}`);
-    return response.ok ? response.json() : { diagnosticStatus: response.status };
-  }, { hostname, targetUrl, jobId: retryJobId });
-  if (retryStatus.diagnosticStatus || retryStatus.state === 'failed' || retryStatus.state === 'fresh' && retryStatus.lastReport) break;
-  await page.waitForTimeout(1_000);
-}
 try {
-  const completionDeadline = Date.now() + 150_000;
+  const completionDeadline = Date.now() + 180_000;
   while (!(retryStatus?.state === 'fresh' && retryStatus.lastReport)) {
     if (retryStatus?.diagnosticStatus || retryStatus?.state === 'failed') {
       throw new Error(`lab_retry_job_terminal:${JSON.stringify({ state: retryStatus?.state, failureCode: retryStatus?.failureCode ?? null, failureDiagnostic: retryStatus?.failureDiagnostic ?? null })}`);
@@ -427,9 +417,14 @@ try {
     retryStatus = await page.evaluate(async ({ hostname, targetUrl, jobId }) => {
       const query = new URLSearchParams({ targetUrl, jobId });
       const response = await fetch(`/api/desarrollo-seguro/v1/domains/${encodeURIComponent(hostname)}/status?${query}`);
-      return response.ok ? response.json() : { diagnosticStatus: response.status };
+      if (!response.ok) return { diagnosticStatus: response.status, retryAfterSeconds: Number(response.headers.get('retry-after')) || 0 };
+      return response.json();
     }, { hostname, targetUrl, jobId: retryJobId });
-    await page.waitForTimeout(1_000);
+    const waitMs = retryStatus.diagnosticStatus === 429
+      ? Math.max(5_000, retryStatus.retryAfterSeconds * 1_000)
+      : 5_000;
+    if (retryStatus.diagnosticStatus === 429) retryStatus = null;
+    await page.waitForTimeout(waitMs);
   }
   await page.locator('.ds-portal__result h2').filter({ hasText: 'Informe vigente' }).waitFor({ timeout: 30_000 });
 } catch (error) {
