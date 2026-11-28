@@ -12,6 +12,7 @@ const [workflow, deployScript, archiveGateway, compose, provisioner] = await Pro
   readFile("apps/desarrollo-seguro/persistence/src/production-provision-database.ts", "utf8"),
 ]);
 const normalizedDeployScript = deployScript.replace(/\\\n/gu, " ");
+const publicAuditLab04 = await readFile("scripts/run-development-security-public-audit-lab-04.sh", "utf8");
 
 assert.match(workflow, /^name: CI\/CD Desarrollo Seguro$/mu);
 assert.match(workflow, /^  pull_request:$/mu);
@@ -38,6 +39,7 @@ assert.ok(imageBuildJob, "production image job must be defined");
 assert.match(imageBuildJob, /name: Set up pnpm/u);
 assert.match(imageBuildJob, /name: Set up Node\.js/u);
 assert.match(imageBuildJob, /basicConstraints=critical,CA:FALSE/u);
+assert.match(publicAuditLab04, /-addext 'basicConstraints=critical,CA:FALSE'/u);
 assert.doesNotMatch(
   workflow.split("\n  deploy:\n", 1)[0] ?? "",
   /^\s+needs:/mu,

@@ -181,6 +181,7 @@ create_leaf api development-security-api 'DNS:development-security-api,DNS:local
 # This exact keypair is used for both the isolated fixture and test images.
 openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
   -subj "/CN=${HOSTNAME}" -addext "subjectAltName=DNS:${HOSTNAME}" \
+  -addext 'basicConstraints=critical,CA:FALSE' \
   -keyout "$FIXTURE_KEY" -out "$FIXTURE_CERT" >/dev/null 2>&1
 chmod 0600 "$FIXTURE_KEY"
 chmod 0444 "$FIXTURE_CERT" "$TEMP_ROOT/secrets/internal_tls_ca.crt"
