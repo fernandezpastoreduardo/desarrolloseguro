@@ -61,11 +61,6 @@ trap cleanup EXIT
 docker info >/dev/null
 printf 'LAB-01 starting run %s\n' "$RUN_ID"
 [[ -f "$POSTGRES_HBA_FILE" ]] || { printf 'PostgreSQL HBA configuration is missing.\n' >&2; exit 1; }
-[[ -f apps/desarrollo-seguro/persistence/dist/production-provision-database.js ]] || {
-  printf 'Build persistence first: pnpm --filter @desarrolloseguro/persistence build\n' >&2
-  exit 1
-}
-
 mkdir -m 700 "$TEMP_ROOT/tls" "$TEMP_ROOT/secrets"
 readonly ADMIN_PASSWORD="$(openssl rand -hex 24)"
 readonly MIGRATOR_PASSWORD="$(openssl rand -hex 24)"

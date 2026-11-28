@@ -92,6 +92,7 @@ assert.match(auditLab, /DATABASE_HOST=development-security-database/u);
 assert.match(auditLab, /DATABASE_NAME=desarrollo_seguro/u);
 assert.match(auditLab, /DS_PRODUCTION_BOOTSTRAP_ENABLED=1/u);
 assert.match(auditLab, /DS_PRODUCTION_TLS_CA_FILE=/u);
+assert.doesNotMatch(auditLab, /Build persistence first/u);
 assert.doesNotMatch(auditLab, /DS_TEST_POSTGRES_ISOLATED/u);
 assert.doesNotMatch(auditLab, /--publish|docker compose down|docker system prune/u);
 assert.match(auditLab, /resource_name == "\$NETWORK_NAME"/u);
